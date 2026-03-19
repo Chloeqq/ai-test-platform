@@ -1,0 +1,11 @@
+{
+  "summary": "建议类型为 assertion_update，当前阶段仅输出人工修复建议，不自动修改 YAML。",
+  "advice_type": "assertion_update",
+  "target": "product_list_title",
+  "suggestion": "优先核对断言目标是否仍然代表页面稳定结果，必要时仅在现有 target 中替换断言对象。",
+  "confidence": 0.74,
+  "fix_candidates": [
+    "product_list_title",
+    "product_table"
+  ]
+}

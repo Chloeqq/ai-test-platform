@@ -1,0 +1,127 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/cases.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card cases-shell" id="cases-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <section class="cases-layout">
+    <aside class="module-tree-pane">
+      <div class="section-title-row">
+        <h2>模块树</h2>
+      </div>
+      <div id="module-tree" class="module-tree-list"></div>
+    </aside>
+
+    <div class="case-list-pane">
+      <div class="toolbar-grid">
+        <input id="search-input" type="search" placeholder="搜索用例名称/模块">
+        <select id="filter-tag"><option value="">标签（全部）</option></select>
+        <select id="filter-priority"><option value="">优先级（全部）</option></select>
+        <select id="filter-creator"><option value="">创建人（全部）</option></select>
+        <select id="filter-result"><option value="">最后执行结果（全部）</option></select>
+      </div>
+
+      <div class="toolbar-actions">
+        <button id="btn-new-case" class="btn btn-primary">新建用例</button>
+        <button id="btn-export" class="btn">批量导出</button>
+        <button id="btn-delete" class="btn btn-danger">批量删除</button>
+        <button id="btn-tags" class="btn">修改标签</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="case-table">
+          <thead>
+            <tr>
+              <th><input id="check-all" type="checkbox"></th>
+              <th>用例名称</th>
+              <th>产品线</th>
+              <th>模块</th>
+              <th>优先级</th>
+              <th>标签</th>
+              <th>创建人</th>
+              <th>最后执行结果</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="case-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</section>
+
+<dialog id="new-case-dialog" class="case-dialog">
+  <form id="new-case-form" method="dialog">
+    <header>
+      <h3>新建用例（引导式）</h3>
+      <button type="button" class="close-btn" id="btn-close-dialog">×</button>
+    </header>
+
+    <ol class="wizard-steps">
+      <li>1. 选择生成方式</li>
+      <li>2. 填写基本信息</li>
+      <li>3. 提交创建</li>
+    </ol>
+
+    <div class="form-grid">
+      <label>生成方式
+        <select id="new-mode" name="mode">
+          <option value="manual">手动编写</option>
+          <option value="ai">AI生成（从需求解析）</option>
+        </select>
+      </label>
+      <label>用例名称
+        <input id="new-name" name="name" placeholder="例如：商品页筛选条件组合验证">
+      </label>
+      <label>产品线
+        <input id="new-product-line" name="product_line" value="电商平台" required>
+      </label>
+      <label>模块
+        <input id="new-module" name="module" value="商品中心" required>
+      </label>
+      <label>优先级
+        <select id="new-priority" name="priority">
+          <option value="P1">P1</option>
+          <option value="P2" selected>P2</option>
+          <option value="P3">P3</option>
+        </select>
+      </label>
+      <label>标签（逗号分隔）
+        <input id="new-tags" name="tags" placeholder="smoke,search,web">
+      </label>
+      <label>创建人
+        <input id="new-creator" name="creator" value="admin">
+      </label>
+    </div>
+
+    <label id="manual-script-wrap">脚本代码（手动）
+      <textarea id="new-script" name="script_code" rows="8" placeholder="def test_xxx(page): ..."></textarea>
+    </label>
+
+    <label id="ai-requirement-wrap" class="hidden">需求描述（AI）
+      <textarea id="new-requirement" name="requirement" rows="6" placeholder="输入需求，AI将自动生成初始脚本"></textarea>
+    </label>
+
+    <footer>
+      <button type="button" class="btn" id="btn-cancel-dialog">取消</button>
+      <button type="submit" class="btn btn-primary">创建用例</button>
+    </footer>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/cases.js"></script>
+{% endblock %}

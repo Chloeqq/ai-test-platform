@@ -1,0 +1,24 @@
+page: product
+
+elements:
+  product_menu:
+    locator_type: role
+    role: menuitem
+    locator_value: 商品
+
+  product_list_title:
+    locator_type: text
+    locator_value: 商品列表
+
+  search_input:
+    locator_type: css
+    locator_value: input[placeholder*="商品"]
+
+  search_button:
+    locator_type: role
+    role: button
+    locator_value: 查询
+
+  product_table:
+    locator_type: css
+    locator_value: .el-table

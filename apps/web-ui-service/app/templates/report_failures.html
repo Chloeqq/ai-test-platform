@@ -1,0 +1,46 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/report.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card report-shell" id="report-failures-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <nav class="report-tabs">
+    <a href="/report">Overview</a>
+    <a class="active" href="/report/failures">Failures</a>
+    <a href="/report/context">Context</a>
+    <a href="/report/performance">Performance</a>
+    <a href="/report/allure">Allure</a>
+  </nav>
+
+  <section class="report-filters">
+    <input id="rp-filter-case" placeholder="用例ID">
+    <input id="rp-filter-keyword" placeholder="关键词/缺陷ID">
+    <select id="rp-filter-defect">
+      <option value="all">缺陷状态（全部）</option>
+      <option value="linked">已关联</option>
+      <option value="unlinked">未关联</option>
+    </select>
+    <button id="rp-filter-search" class="btn">筛选</button>
+  </section>
+
+  <section class="report-card">
+    <ul id="rp-failure-list" class="failure-list"></ul>
+  </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/report_failures.js"></script>
+{% endblock %}

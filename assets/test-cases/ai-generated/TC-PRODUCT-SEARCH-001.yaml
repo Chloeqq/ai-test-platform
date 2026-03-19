@@ -1,0 +1,26 @@
+version: v4
+id: TC-PRODUCT-SEARCH-001
+title: Verify Product Search Function
+module: product
+priority: P1
+tags:
+  - search
+  - product
+owner: qa-team
+status: automated
+description: Verify user can open the product page and see the product list area.
+requirement:
+  - Verify product search function.
+data: {}
+execution:
+  runner: playwright
+  page: product
+  variables: {}
+  steps:
+    - action: login
+    - action: click
+      target: product_menu
+    - action: wait_for
+      target: product_list_title
+    - action: assert_visible
+      target: product_list_title

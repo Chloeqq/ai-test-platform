@@ -1,0 +1,118 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/dashboard.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card dashboard-shell" id="dashboard-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <section class="dash-card entry-card">
+    <div class="entry-header">
+      <h2>旧工作台入口</h2>
+      <p class="dash-note">用于快速进入已迁移的旧 Flask 功能页面。</p>
+    </div>
+    <div class="entry-grid">
+      <a class="entry-item" href="/workbench">工作台首页</a>
+      <a class="entry-item" href="/workbench/generate">生成页</a>
+      <a class="entry-item" href="/workbench/preview?project=default">预览页</a>
+      <a class="entry-item" href="/workbench/history">历史页</a>
+      <a class="entry-item" href="/report">报告总览</a>
+      <a class="entry-item" href="/report/failures">报告失败</a>
+      <a class="entry-item" href="/report/context">报告上下文</a>
+      <a class="entry-item" href="/report/performance">报告性能</a>
+      <a class="entry-item" href="/report/allure">Allure 报告</a>
+    </div>
+  </section>
+
+  <section class="dashboard-kpi-grid">
+    <a id="risk-card" class="dash-card risk-card risk-low" href="/quality/trends">
+      <div class="dash-card-header">
+        <h2>风险评分</h2>
+        <span id="risk-level-badge" class="level-badge">低</span>
+      </div>
+      <div class="dash-metric-line">
+        <strong id="risk-score">0</strong>
+        <span>风险分</span>
+      </div>
+      <p id="risk-summary" class="dash-note">正在评估当前主分支风险，请稍候。</p>
+      <span class="risk-hint">点击进入风险评估详情</span>
+    </a>
+
+    <article class="dash-card mini-card">
+      <h2>最近24小时通过率</h2>
+      <strong id="summary-pass-rate">-</strong>
+      <p class="dash-note">用于判断当前回归健康度。</p>
+    </article>
+
+    <article class="dash-card mini-card">
+      <h2>最近24小时执行次数</h2>
+      <strong id="summary-execution-count">-</strong>
+      <p class="dash-note">覆盖自动化与门禁触发任务。</p>
+    </article>
+
+    <article class="dash-card mini-card">
+      <h2>待确认问题数</h2>
+      <strong id="summary-pending-issues">-</strong>
+      <p class="dash-note">来自失败归因 Agent 推荐队列。</p>
+    </article>
+  </section>
+
+  <article class="dash-card trend-card">
+    <div class="dash-card-header">
+      <h2>最近24小时执行趋势</h2>
+      <div class="trend-legend">
+        <span><i class="dot pass-dot"></i>通过率</span>
+        <span><i class="dot exec-dot"></i>执行次数</span>
+      </div>
+    </div>
+    <p id="trend-meta" class="dash-note">正在加载趋势数据...</p>
+    <div class="trend-canvas-wrap">
+      <svg id="trend-svg" viewBox="0 0 960 280" preserveAspectRatio="none" aria-label="最近24小时执行趋势图"></svg>
+      <div id="trend-x-axis" class="trend-x-axis"></div>
+    </div>
+  </article>
+
+  <section class="dashboard-two-col">
+    <article class="dash-card">
+      <h2>Top Flaky用例</h2>
+      <ul id="flaky-list" class="flaky-list"></ul>
+    </article>
+
+    <article class="dash-card gate-card">
+      <h2>门禁状态（最近10次拦截）</h2>
+      <div class="gate-table-wrap">
+        <table class="gate-table">
+          <thead>
+            <tr>
+              <th>PR</th>
+              <th>分支</th>
+              <th>状态</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody id="gate-body"></tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+
+  <article class="dash-card">
+    <h2>待处理问题</h2>
+    <ul id="pending-issues-list" class="pending-issues-list"></ul>
+  </article>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/dashboard.js"></script>
+{% endblock %}

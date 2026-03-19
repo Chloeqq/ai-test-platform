@@ -1,0 +1,107 @@
+{
+  "status": "generated",
+  "summary": "Generated test case TC-PRODUCT-GEN-001 for page product. Execution was not requested.",
+  "case_id": "TC-PRODUCT-GEN-001",
+  "case_title": "生成商品用例",
+  "page": "product",
+  "case_path": "/private/var/folders/sv/_mskx0bx6516yzhmb5s7_yth0000gn/T/pytest-of-bettyhuang/pytest-33/test_orchestrator_service_pers0/assets/test-cases/ai-generated/TC-PRODUCT-GEN-001.yaml",
+  "execution_requested": false,
+  "source": "manual",
+  "request_context": {
+    "page": "product",
+    "mode": "generate_only",
+    "source": "manual",
+    "execution_requested": false
+  },
+  "started_at": "2026-03-18T12:19:08.171173+00:00",
+  "finished_at": "2026-03-18T12:19:08.171473+00:00",
+  "runner_exit_code": null,
+  "metrics": {
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "errors": 0
+  },
+  "pytest_results": {
+    "collected": null,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "errors": 0,
+    "runner_exit_code": null,
+    "duration_seconds": null,
+    "has_stderr": false
+  },
+  "failure_reason": "",
+  "self_healing_enabled": false,
+  "self_healing_attempted": false,
+  "evidence": {
+    "screenshots": [],
+    "html_pages": [],
+    "meta_files": [],
+    "analysis_files": [],
+    "suggestion_files": [],
+    "execution_record_files": [],
+    "self_healing_result_files": [],
+    "videos": [],
+    "other_files": [],
+    "total_files": 0
+  },
+  "runner_stdout_excerpt": "",
+  "runner_stderr_excerpt": "",
+  "execution_record": {
+    "run_id": "TC-PRODUCT-GEN-001:2026-03-18T12:19:08.171173+00:00",
+    "case_id": "TC-PRODUCT-GEN-001",
+    "project": "default",
+    "source": "manual",
+    "mode": "generate_only",
+    "status": "generated",
+    "started_at": "2026-03-18T12:19:08.171173+00:00",
+    "finished_at": "2026-03-18T12:19:08.171473+00:00",
+    "step_summary": {
+      "page": "product",
+      "requirement_count": 1,
+      "total_steps": 2,
+      "action_types": [
+        "assert_visible",
+        "login"
+      ]
+    },
+    "evidence_index": {
+      "total_files": 0,
+      "artifact_categories": {
+        "screenshots": 0,
+        "html_pages": 0,
+        "meta_files": 0,
+        "analysis_files": 0,
+        "suggestion_files": 0,
+        "self_healing_result_files": 0,
+        "videos": 0,
+        "other_files": 0
+      },
+      "runner_exit_code": null,
+      "execution_requested": false
+    }
+  },
+  "failure_analysis": {
+    "summary": "No failure analysis needed because the run did not fail.",
+    "failure_category": "unknown",
+    "likely_cause": "",
+    "risk_level": "low",
+    "recommended_action": "No immediate failure action is required.",
+    "confidence": 1.0,
+    "evidence_used": []
+  },
+  "self_healing_advice": {
+    "summary": "Suggested manual remediation path for failure category 'unknown'.",
+    "suggestion_type": "no_change",
+    "suggested_changes": [
+      "Do not modify files automatically. Review the failure details first."
+    ],
+    "rationale": "Not enough information to recommend a safe manual fix.",
+    "confidence": 0.4,
+    "safe_to_apply_manually": true
+  },
+  "self_healing_suggestion_preview": {},
+  "self_healing_execution_preview": {}
+}

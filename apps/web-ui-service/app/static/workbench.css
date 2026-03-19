@@ -1,0 +1,272 @@
+.workbench-shell {
+  max-width: 1280px;
+}
+
+.workbench-quickstart {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.workbench-quickstart h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.workbench-quickstart ol {
+  margin: 0;
+  padding-left: 18px;
+  color: #6c809c;
+  font-size: 12px;
+}
+
+.workbench-toolbar {
+  margin-top: 12px;
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workbench-toolbar label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #6a7f9b;
+}
+
+.workbench-toolbar select,
+.workbench-toolbar input,
+.wb-form-grid input,
+.wb-form-grid select,
+.wb-form textarea,
+#wb-yaml-editor,
+#wb-preview-editor {
+  border: 1px solid #cddaea;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.inline-tip {
+  font-size: 12px;
+  color: #6c809c;
+}
+
+.workbench-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 12px;
+}
+
+.wb-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.wb-card h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: #2a3f5d;
+}
+
+.wb-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wb-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  border: 1px solid #c4d4e6;
+  background: #ffffff;
+  color: #304d72;
+  border-radius: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.btn:hover {
+  background: #eef5ff;
+}
+
+.btn-primary {
+  border-color: #2f79db;
+  background: #2f79db;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #2268c6;
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+.case-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.case-table th,
+.case-table td {
+  border-bottom: 1px solid #e1e8f1;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.case-table th {
+  font-size: 12px;
+  color: #617898;
+  background: #f4f8fd;
+}
+
+.wb-meta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7f9a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wb-path {
+  color: #3c5c86;
+}
+
+.wb-run-status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #5f7594;
+}
+
+.wb-log-viewer {
+  margin: 10px 0 0;
+  border: 1px solid #d5e1ef;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #d7e4f5;
+  padding: 10px;
+  min-height: 220px;
+  max-height: 360px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.wb-analysis-summary {
+  margin-top: 6px;
+  color: #6c809c;
+  font-size: 12px;
+}
+
+.wb-analysis-detail {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  color: #445b7a;
+}
+
+.workbench-reports {
+  margin-top: 12px;
+}
+
+.workbench-reports h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.report-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.report-card {
+  border: 1px solid #d6e2ef;
+  border-radius: 10px;
+  padding: 10px;
+  text-decoration: none;
+  color: #295a9c;
+  background: #f7faff;
+  font-size: 13px;
+  text-align: center;
+}
+
+.report-card:hover {
+  background: #eaf2ff;
+}
+
+.wb-form {
+  display: grid;
+  gap: 12px;
+}
+
+.wb-form-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wb-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #5f7290;
+}
+
+.wb-tip-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #6c809c;
+}
+
+@media (max-width: 1200px) {
+  .workbench-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wb-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .wb-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-cards {
+    grid-template-columns: 1fr;
+  }
+}

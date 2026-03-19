@@ -1,0 +1,203 @@
+import json
+from pathlib import Path
+
+from flask import Flask, Response, jsonify, request, send_from_directory
+from werkzeug.serving import make_server
+
+from asset_service import AssetService
+from orchestrator_service import OrchestratorError, OrchestratorService, OrchestratorValidationError
+
+WEB_CONSOLE_ROOT = Path(__file__).resolve().parents[2] / "web-console" / "static"
+
+
+def create_app(
+    service: OrchestratorService | None = None,
+    asset_service: AssetService | None = None,
+) -> Flask:
+    app = Flask(__name__, static_folder=None)
+    orchestrator_service = service or OrchestratorService()
+    asset_tool_service = asset_service or AssetService()
+
+    @app.errorhandler(OrchestratorError)
+    def handle_orchestrator_error(exc: OrchestratorError):
+        return jsonify(exc.to_response()), exc.status_code
+
+    @app.errorhandler(404)
+    def handle_not_found(_exc):
+        return jsonify({"error": {"code": "not_found", "message": "Route not found"}}), 404
+
+    @app.errorhandler(500)
+    def handle_internal_error(exc):
+        if isinstance(exc, OrchestratorError):
+            return jsonify(exc.to_response()), exc.status_code
+        return jsonify({"error": {"code": "internal_error", "message": str(exc)}}), 500
+
+    @app.get("/health")
+    def health():
+        return jsonify({"status": "ok"})
+
+    @app.get("/")
+    @app.get("/console")
+    def console_index():
+        return send_from_directory(WEB_CONSOLE_ROOT, "index.html", mimetype="text/html")
+
+    @app.get("/console/app.js")
+    def console_app_js():
+        return send_from_directory(
+            WEB_CONSOLE_ROOT,
+            "app.js",
+            mimetype="application/javascript",
+        )
+
+    @app.get("/console/styles.css")
+    def console_styles():
+        return send_from_directory(WEB_CONSOLE_ROOT, "styles.css", mimetype="text/css")
+
+    @app.get("/assets/scaffold/templates")
+    def list_scaffold_templates():
+        return jsonify(asset_tool_service.list_scaffold_templates())
+
+    @app.get("/assets/scaffold/templates/<template_name>")
+    def get_scaffold_template(template_name: str):
+        return jsonify(asset_tool_service.get_scaffold_template(template_name))
+
+    @app.get("/reports/latest")
+    def get_latest_report():
+        return jsonify(orchestrator_service.get_latest_report())
+
+    @app.get("/reports/<case_id>")
+    def get_report(case_id: str):
+        return jsonify(orchestrator_service.get_report(case_id))
+
+    @app.post("/orchestrate")
+    def orchestrate():
+        payload = _read_json_object()
+        requirement = payload.get("requirement", "")
+        page = payload.get("page", "")
+        source = payload.get("source", "manual")
+        mode = _resolve_mode(payload)
+        execute = _resolve_execute_flag(payload, mode)
+
+        result = orchestrator_service.orchestrate(
+            requirement=requirement,
+            page=page,
+            execute=execute,
+            source=source,
+            mode=mode,
+        )
+        return jsonify(orchestrator_service.serialize_result(result)), 201
+
+    @app.post("/healing/preview")
+    def healing_preview():
+        payload = _read_json_object()
+        result = orchestrator_service.preview_self_healing_advice(
+            page=payload.get("page", ""),
+            case=payload.get("case"),
+            failure_reason=payload.get("failure_reason", ""),
+            failure_analysis=payload.get("failure_analysis"),
+        )
+        return jsonify({"self_healing_advice": result})
+
+    @app.post("/assets/page-objects")
+    def create_page_object():
+        payload = _read_json_object()
+        result = asset_tool_service.create_page_object(
+            page=payload.get("page", ""),
+            description=payload.get("description", ""),
+        )
+        return jsonify(result), 201
+
+    @app.post("/assets/page-objects/<page>/elements")
+    def add_page_element(page: str):
+        payload = _read_json_object()
+        result = asset_tool_service.add_page_element(
+            page=page,
+            element_name=payload.get("name", ""),
+            locator_type=payload.get("locator_type", ""),
+            locator_value=payload.get("locator_value", ""),
+            role=payload.get("role"),
+            description=payload.get("description"),
+        )
+        return jsonify(result), 201
+
+    @app.post("/assets/test-cases/sync")
+    def sync_test_case():
+        payload = _read_json_object()
+        result = asset_tool_service.sync_test_case(
+            file_path=payload.get("file", ""),
+            menu_target=payload.get("menu_target"),
+            assert_target=payload.get("assert_target"),
+        )
+        return jsonify(result)
+
+    @app.post("/assets/scaffold")
+    def scaffold_assets():
+        payload = _read_json_object()
+        result = asset_tool_service.scaffold_page_assets(
+            page=payload.get("page", ""),
+            title=payload.get("title", ""),
+            requirement=payload.get("requirement", ""),
+            description=payload.get("description", ""),
+            priority=payload.get("priority", "P1"),
+            menu_label=payload.get("menu_label"),
+            assert_label=payload.get("assert_label"),
+            template=payload.get("template"),
+            elements=payload.get("elements") if payload.get("elements") is not None else None,
+        )
+        return jsonify(result), 201
+
+    def _read_json_object() -> dict:
+        content_type = request.headers.get("Content-Type", "")
+        if "application/json" not in content_type.lower():
+            raise OrchestratorError(
+                code="unsupported_media_type",
+                message="Content-Type must be application/json",
+                status_code=415,
+            )
+        raw_body = request.get_data(cache=False, as_text=True)
+        try:
+            payload = json.loads(raw_body or "{}")
+        except json.JSONDecodeError as exc:
+            raise OrchestratorError(
+                code="invalid_json",
+                message="Request body is not valid JSON",
+                status_code=400,
+            ) from exc
+        if not isinstance(payload, dict):
+            raise OrchestratorError(
+                code="invalid_json",
+                message="JSON body must be an object",
+                status_code=400,
+            )
+        return payload
+
+    app.config["ORCHESTRATOR_SERVICE"] = orchestrator_service
+    app.config["ASSET_SERVICE"] = asset_tool_service
+    return app
+
+
+def create_server(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    service: OrchestratorService | None = None,
+    asset_service: AssetService | None = None,
+):
+    app = create_app(service=service, asset_service=asset_service)
+    return make_server(host, port, app, threaded=True)
+
+
+def _resolve_mode(payload: dict) -> str:
+    mode = payload.get("mode")
+    if mode is None:
+        return "generate_and_run" if bool(payload.get("execute", False)) else "generate_only"
+
+    normalized_mode = str(mode).strip().lower()
+    if normalized_mode in {"generate_only", "generate_and_run"}:
+        return normalized_mode
+    raise OrchestratorValidationError("mode must be one of: generate_only, generate_and_run")
+
+
+def _resolve_execute_flag(payload: dict, mode: str) -> bool:
+    if payload.get("mode") is None:
+        return bool(payload.get("execute", False))
+    return mode == "generate_and_run"

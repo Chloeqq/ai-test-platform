@@ -1,0 +1,3530 @@
+[
+  {
+    "timestamp": "2026-03-18T16:07:33.752426+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T16:07:33.647909+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "b8b1428159784dd2b4b59497be573e9d",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T16:07:33.540678+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "536af9e9adfd4fdbb504777c6578757e",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T16:07:33.479685+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "4b8f3dfe0fc74945a391b6908fbdcb0d",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T16:07:33.341867+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T16:06:27.019302+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T16:06:26.914047+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "d9db838be9624f3ba03479987e401387",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T16:06:26.790260+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "6c79680d30374dfebca0d442ceac907c",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T16:06:26.729876+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "95de984ba99d4033ab1bef3e9d02558c",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T16:06:26.547453+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T16:01:22.270010+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T16:01:22.131112+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "f47f3adbf2c24b0f80ae08411cd469ec",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T16:01:21.920396+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "09eb255ffd944aa7a7076e856471becd",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T16:01:21.826671+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "c14485696ee943579229532d8beea2f0",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T16:01:21.583874+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T15:37:30.132383+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T15:37:30.071279+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "2005ed751ed0467db575c0dc44262b94",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T15:37:29.940042+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "f5ca875bad654574afc81fb7b687453b",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T15:37:29.895210+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "0ce22dbcbeee424e84e969cb41c26029",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T15:37:29.800690+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T15:35:42.281634+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T15:35:42.223086+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "7f39009860eb42b98989b7f756858db3",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T15:35:42.136219+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "c7790730ade443bd8cd3f87cc4309ff1",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T15:35:42.088536+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "d4317a63068c4fa1bc870ce132902965",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T15:35:41.993187+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T15:16:47.662396+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T15:16:47.601078+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "413be43a425642d7b402db25744b08cd",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T15:16:47.506110+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "96b9acc945b7483f935e5215c343ae07",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T15:16:47.458758+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "a4bd47b40a3d4d56a14d211201ba344f",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T15:16:47.352796+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T14:57:52.312426+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T14:57:52.251014+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "cfb495800b374bd9ae06184070b4f45e",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:57:52.220037+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "08e24ff41e754fa5b02dcf268a60c781",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:57:52.160198+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T14:53:57.205896+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T14:53:57.128581+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "e7d79c7747f84ce39edbe6fa7bafae42",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:53:57.094504+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "494387af849e4f27a28a35826d712fd7",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:53:57.016625+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T14:53:23.393145+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T14:53:23.335527+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "bfa24001d3694e2f945e189562d71b52",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:53:23.309034+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "0add493fdb024faab51c61ce98ba397b",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:53:23.252014+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T14:52:49.741080+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T14:52:49.684974+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "3ef4888b4cac4f17914c9e279084cdc7",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:52:49.659516+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "49ffba0ef4de4f90943ae99c84ab1dca",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:52:49.594778+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T14:43:36.434731+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T14:43:36.403914+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "aa04d951fc774611bf3c032c1cd844c7",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:43:36.345484+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T14:37:13.889187+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T14:37:13.855165+00:00",
+    "action": "run_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "run_id": "6bcfb252891941f5a9d4c2becf79e654",
+    "queue_status": "queued"
+  },
+  {
+    "timestamp": "2026-03-18T14:37:13.800899+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T14:36:55.078338+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T14:36:55.032426+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:50:42.157775+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:50:42.122292+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:46:05.531594+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:46:05.486609+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:40:01.413459+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:40:01.368169+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:22:19.489520+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:22:19.451753+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:20:19.994633+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:20:19.961437+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:07:49.603882+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:07:49.582510+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:02:34.900122+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:02:34.874417+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:02:08.285856+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:02:08.259765+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:01:40.965362+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:01:40.943134+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T13:00:48.471518+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T13:00:48.447363+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T12:56:07.930625+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T12:56:07.907833+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T12:52:31.852180+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T12:52:31.828351+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T12:52:13.527000+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T12:52:13.503582+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T12:51:20.077656+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T12:51:20.056127+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T12:47:19.091132+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T12:47:19.067348+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T12:41:39.967596+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T12:41:39.945981+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T12:34:56.910028+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T12:34:56.886978+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T12:34:25.874286+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T12:34:25.845473+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T12:30:23.427629+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T12:30:23.393530+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T11:20:07.955206+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T11:20:07.932689+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T11:09:36.706800+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T11:09:36.674552+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T11:09:18.400131+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T11:09:18.376160+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  },
+  {
+    "timestamp": "2026-03-18T11:04:15.728404+00:00",
+    "action": "self_heal",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml",
+    "artifact_dir": "/tmp/fake-artifact",
+    "status": "success"
+  },
+  {
+    "timestamp": "2026-03-18T11:04:15.705635+00:00",
+    "action": "save_case",
+    "case_id": "TC-PRODUCT-SEARCH-001",
+    "title": "Verify Product Search Function",
+    "generated_from_page": "product",
+    "source_requirement": "Verify product search function.",
+    "point_count": 4,
+    "point_types": [
+      "precondition",
+      "navigation",
+      "assertion"
+    ],
+    "point_keys": [
+      "product-01",
+      "product-02",
+      "product-03",
+      "product-04"
+    ],
+    "test_point_asset_id": "TC-PRODUCT-SEARCH-001",
+    "test_point_version": 1,
+    "point_delta_summary": {
+      "added_count": 0,
+      "removed_count": 0,
+      "changed_count": 0,
+      "added_keys": [],
+      "removed_keys": [],
+      "changed_keys": [],
+      "coverage_before": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      },
+      "coverage_after": {
+        "precondition_count": 1,
+        "navigation_count": 1,
+        "input_count": 0,
+        "assertion_count": 2,
+        "action_count": 0
+      }
+    },
+    "precondition_count": 1,
+    "navigation_count": 1,
+    "input_count": 0,
+    "assertion_count": 2,
+    "action_count": 0,
+    "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml"
+  }
+]

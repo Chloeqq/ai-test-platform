@@ -1,0 +1,71 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/workbench.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card workbench-shell" id="workbench-generate-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <section class="wb-card">
+    <h2>需求输入</h2>
+    <form id="wb-generate-form" class="wb-form">
+      <div class="wb-form-grid">
+        <label>项目
+          <select id="gen-project" name="project"></select>
+        </label>
+        <label>页面
+          <input id="gen-page" name="page" value="product" placeholder="如 product / order">
+        </label>
+        <label>用例ID（可选）
+          <input id="gen-case-id" name="case_id" placeholder="如 TC-PRODUCT-NEW-001">
+        </label>
+        <label>标题
+          <input id="gen-title" name="title" placeholder="例如：商品搜索功能验证">
+        </label>
+        <label>优先级
+          <select id="gen-priority" name="priority">
+            <option value="P0">P0</option>
+            <option value="P1" selected>P1</option>
+            <option value="P2">P2</option>
+            <option value="P3">P3</option>
+          </select>
+        </label>
+        <label>标签（逗号分隔）
+          <input id="gen-tags" name="tags" value="ai-generated,smoke">
+        </label>
+      </div>
+      <label>需求描述
+        <textarea id="gen-requirement" name="requirement" rows="6" placeholder="请输入需求描述"></textarea>
+      </label>
+      <div class="wb-actions">
+        <button type="submit" class="btn btn-primary">生成用例</button>
+        <a class="btn" href="/workbench">返回工作台</a>
+      </div>
+    </form>
+  </section>
+
+  <section class="wb-card">
+    <h2>生成结果</h2>
+    <div id="gen-result" class="wb-analysis-summary">等待生成...</div>
+    <pre id="gen-yaml-preview" class="wb-log-viewer"></pre>
+    <div class="wb-actions">
+      <a id="gen-open-preview" class="btn btn-primary" href="#">进入预览</a>
+    </div>
+  </section>
+
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/workbench_generate.js"></script>
+{% endblock %}

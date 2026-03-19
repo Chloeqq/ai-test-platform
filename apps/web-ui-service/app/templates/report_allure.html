@@ -1,0 +1,42 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/report.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card report-shell" id="report-allure-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <nav class="report-tabs">
+    <a href="/report">Overview</a>
+    <a href="/report/failures">Failures</a>
+    <a href="/report/context">Context</a>
+    <a href="/report/performance">Performance</a>
+    <a class="active" href="/report/allure">Allure</a>
+  </nav>
+
+  <section class="report-card">
+    <div class="wb-card-header">
+      <h2>Allure 报告</h2>
+      <div class="wb-actions">
+        <a class="btn btn-primary" href="/allure/index.html" target="_blank" rel="noreferrer">打开新标签</a>
+      </div>
+    </div>
+    <div id="rp-allure-status" class="wb-analysis-summary">正在检测 Allure 报告可用性...</div>
+    <iframe id="rp-allure-frame" class="allure-frame" title="Allure Report"></iframe>
+  </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/report_allure.js"></script>
+{% endblock %}

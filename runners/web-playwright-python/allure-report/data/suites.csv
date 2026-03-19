@@ -1,0 +1,3 @@
+"Status","Start Time","Stop Time","Duration in ms","Parent Suite","Suite","Sub Suite","Test Class","Test Method","Name","Description"
+"broken","Wed Mar 18 13:13:34 CST 2026","Wed Mar 18 13:13:35 CST 2026","495","tests","test_yaml_ai_generated","","","","test_yaml_ai_generated[chromium-Demo Product Failure For Allure Attachments]",""
+"passed","Wed Mar 18 13:29:38 CST 2026","Wed Mar 18 13:29:38 CST 2026","540","tests","test_yaml_ai_generated","","","","test_yaml_ai_generated[chromium-Verify Product Search Function]",""

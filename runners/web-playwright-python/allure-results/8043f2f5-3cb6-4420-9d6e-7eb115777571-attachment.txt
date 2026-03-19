@@ -1,0 +1,7 @@
+NodeID: tests/test_yaml_ai_generated.py::test_yaml_ai_generated[chromium-Demo Product Failure For Allure Attachments]
+CapturedAt: 2026-03-18T05:13:35.389029+00:00
+URL: http://localhost:5173/login#/home
+Title: mall-admin-web
+Screenshot: /Users/bettyhuang/PycharmProjects/ai-test-platform/runners/web-playwright-python/artifacts/tests_test_yaml_ai_generated_py__test_yaml_ai_generated[chromium-Demo_Product_Failure_For_Allure_Attachments]/failed.png
+HTML: /Users/bettyhuang/PycharmProjects/ai-test-platform/runners/web-playwright-python/artifacts/tests_test_yaml_ai_generated_py__test_yaml_ai_generated[chromium-Demo_Product_Failure_For_Allure_Attachments]/page.html
+Suggestion: /Users/bettyhuang/PycharmProjects/ai-test-platform/runners/web-playwright-python/artifacts/tests_test_yaml_ai_generated_py__test_yaml_ai_generated[chromium-Demo_Product_Failure_For_Allure_Attachments]/suggestion.json

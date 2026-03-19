@@ -1,0 +1,25 @@
+Summary: Execution status is failed; the most likely failure category is authentication.
+Failure Category: authentication
+Likely Cause: The failure likely happened around login state, credentials, or session establishment. Meta context: url=http://localhost:5173/login#/home, title=mall-admin-web
+Risk Level: high
+Recommended Action: Verify the login page, account credentials, and session initialization before rerunning.
+Confidence: 0.75
+Evidence Used: error, current_url, page_html, stderr, screenshots, html_pages, meta_files
+
+{
+  "summary": "Execution status is failed; the most likely failure category is authentication.",
+  "failure_category": "authentication",
+  "likely_cause": "The failure likely happened around login state, credentials, or session establishment. Meta context: url=http://localhost:5173/login#/home, title=mall-admin-web",
+  "risk_level": "high",
+  "recommended_action": "Verify the login page, account credentials, and session initialization before rerunning.",
+  "confidence": 0.75,
+  "evidence_used": [
+    "error",
+    "current_url",
+    "page_html",
+    "stderr",
+    "screenshots",
+    "html_pages",
+    "meta_files"
+  ]
+}

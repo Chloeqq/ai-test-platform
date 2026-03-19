@@ -1,0 +1,98 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/cases.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card detail-shell" id="case-detail-shell" data-case-id="{{ case_id }}">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1 id="detail-title">{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <div class="detail-grid">
+    <section class="detail-card">
+      <h2>基本信息</h2>
+      <dl id="basic-info" class="basic-info-grid"></dl>
+    </section>
+
+    <section class="detail-card">
+      <div class="detail-header-row">
+        <h2>脚本代码</h2>
+        <button id="btn-save-script" class="btn btn-primary">保存脚本</button>
+      </div>
+      <div class="editor-wrap">
+        <textarea id="script-editor" rows="14"></textarea>
+        <pre class="code-preview"><code id="script-highlight"></code></pre>
+      </div>
+    </section>
+
+    <section class="detail-card">
+      <div class="detail-header-row">
+        <h2>关联缺陷</h2>
+        <button id="btn-add-defect" class="btn">添加缺陷</button>
+      </div>
+      <ul id="defect-list" class="detail-list"></ul>
+    </section>
+
+    <section class="detail-card">
+      <h2>执行历史（最近10次）</h2>
+      <div class="table-wrap">
+        <table class="case-table">
+          <thead>
+            <tr>
+              <th>执行时间</th>
+              <th>结果</th>
+              <th>耗时(ms)</th>
+              <th>报告</th>
+            </tr>
+          </thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="detail-card">
+      <div class="detail-header-row">
+        <h2>版本对比</h2>
+        <div class="version-compare-actions">
+          <label>
+            起始版本
+            <select id="version-from"></select>
+          </label>
+          <label>
+            目标版本
+            <select id="version-to"></select>
+          </label>
+          <button id="btn-compare-version" class="btn">开始对比</button>
+        </div>
+      </div>
+      <p id="version-diff-summary" class="version-diff-summary">请选择两个版本进行差异对比。</p>
+      <pre id="version-diff-viewer" class="version-diff-viewer"># unified diff output</pre>
+      <div class="table-wrap">
+        <table class="case-table">
+          <thead>
+            <tr>
+              <th>版本</th>
+              <th>变更摘要</th>
+              <th>变更人</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody id="version-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/case_detail.js"></script>
+{% endblock %}

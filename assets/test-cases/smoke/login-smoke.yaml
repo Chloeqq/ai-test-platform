@@ -1,0 +1,39 @@
+version: v4
+
+id: TC-LOGIN-001
+
+title: 管理员登录验证
+
+module: auth
+
+priority: P0
+
+tags:
+  - smoke
+  - auth
+
+owner: qa-team
+
+status: automated
+
+description: 验证管理员可以成功登录系统
+
+requirement:
+  - 管理员登录功能
+
+data: {}
+
+execution:
+
+  runner: playwright
+
+  page: login
+
+  variables: {}
+
+  steps:
+
+    - action: login
+
+    - action: assert_visible
+      target: home_menu

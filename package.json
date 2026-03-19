@@ -1,0 +1,9 @@
+{
+  "name": "ai-test-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Enterprise AI testing platform monorepo scaffold",
+  "scripts": {
+    "check:console": "node --check apps/web-console/static/app.js"
+  }
+}

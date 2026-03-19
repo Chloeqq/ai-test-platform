@@ -1,0 +1,11 @@
+page: order
+
+elements:
+  order_menu:
+    locator_type: role
+    role: menuitem
+    locator_value: 订单
+
+  order_list_title:
+    locator_type: text
+    locator_value: 订单列表

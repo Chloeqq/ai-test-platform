@@ -1,0 +1,38 @@
+page: home
+description: 商城管理后台首页
+
+elements:
+  home_link:
+    locator_type: text
+    locator_value: 首页
+    description: 首页链接
+
+  sidebar_menu:
+    locator_type: css
+    locator_value: .el-menu--vertical
+    description: 侧边栏菜单容器
+
+  navbar:
+    locator_type: css
+    locator_value: .navbar
+    description: 顶部导航栏
+
+  user_avatar:
+    locator_type: css
+    locator_value: .user-avatar
+    description: 用户头像
+
+  logout_option:
+    locator_type: text
+    locator_value: 退出
+    description: 退出登录选项
+
+  hamburger_btn:
+    locator_type: css
+    locator_value: .hamburger-container
+    description: 侧边栏开关按钮
+
+  today_orders_card:
+    locator_type: text
+    locator_value: 今日订单总数
+    description: 今日订单总数卡片

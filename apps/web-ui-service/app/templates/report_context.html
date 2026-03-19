@@ -1,0 +1,46 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/report.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card report-shell" id="report-context-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <nav class="report-tabs">
+    <a href="/report">Overview</a>
+    <a href="/report/failures">Failures</a>
+    <a class="active" href="/report/context">Context</a>
+    <a href="/report/performance">Performance</a>
+    <a href="/report/allure">Allure</a>
+  </nav>
+
+  <section class="report-grid">
+    <article class="report-card">
+      <h2>Git 信息</h2>
+      <dl class="report-dl" id="rp-git-info"></dl>
+    </article>
+    <article class="report-card">
+      <h2>构建信息</h2>
+      <dl class="report-dl" id="rp-build-info"></dl>
+    </article>
+    <article class="report-card">
+      <h2>执行上下文</h2>
+      <dl class="report-dl" id="rp-exec-info"></dl>
+    </article>
+  </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/report_context.js"></script>
+{% endblock %}

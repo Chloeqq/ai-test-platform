@@ -1,0 +1,27 @@
+version: v4
+id: TC-PRODUCT-SMOKE-001
+title: Verify product page login and list display
+module: product
+priority: P0
+tags:
+- ai-generated
+- smoke
+- product
+owner: qa-team
+status: automated
+description: Verify product page can be opened after login and displays product list
+requirement:
+- Verify product page can be opened after login and displays product list
+data: {}
+execution:
+  runner: playwright
+  page: product
+  variables: {}
+  steps:
+  - action: login
+  - action: click
+    target: product_menu
+  - action: wait_for
+    target: product_table
+  - action: assert_visible
+    target: product_table

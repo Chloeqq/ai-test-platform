@@ -1,0 +1,19 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 0.0.0.0 --port 8013
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite:////app/apps/web-ui-service/dev.db
+      JWT_SECRET_KEY: dev-jwt-secret-change-me
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: "120"
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+      ADMIN_ROLE: admin
+    ports:
+      - "8013:8013"
+    volumes:
+      - .:/app

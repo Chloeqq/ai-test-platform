@@ -1,0 +1,68 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/report.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card report-shell" id="report-overview-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <nav class="report-tabs">
+    <a class="active" href="/report">Overview</a>
+    <a href="/report/failures">Failures</a>
+    <a href="/report/context">Context</a>
+    <a href="/report/performance">Performance</a>
+    <a href="/report/allure">Allure</a>
+  </nav>
+
+  <section class="report-summary-grid">
+    <article class="summary-card">
+      <h2>通过率</h2>
+      <strong id="rp-pass-rate">-</strong>
+    </article>
+    <article class="summary-card">
+      <h2>健康度</h2>
+      <strong id="rp-health-score">-</strong>
+    </article>
+    <article class="summary-card">
+      <h2>高风险失败</h2>
+      <strong id="rp-high-risk">-</strong>
+    </article>
+    <article class="summary-card">
+      <h2>可修复建议</h2>
+      <strong id="rp-actionable">-</strong>
+    </article>
+  </section>
+
+  <section class="report-card">
+    <h2>最近失败</h2>
+    <div class="table-wrap">
+      <table class="case-table">
+        <thead>
+          <tr>
+            <th>用例ID</th>
+            <th>摘要</th>
+            <th>风险</th>
+            <th>缺陷</th>
+            <th>时间</th>
+          </tr>
+        </thead>
+        <tbody id="rp-recent-body"></tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/report_overview.js"></script>
+{% endblock %}

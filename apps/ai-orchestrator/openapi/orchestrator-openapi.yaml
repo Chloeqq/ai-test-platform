@@ -1,0 +1,1261 @@
+openapi: 3.1.0
+info:
+  title: AI Orchestrator API
+  version: 0.1.0
+  description: >
+    Minimal orchestration API for generating YAML test cases via the test-design-agent
+    and optionally dispatching the web-playwright-python runner.
+servers:
+  - url: http://127.0.0.1:8000
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /assets/scaffold/templates:
+    get:
+      summary: List available scaffold templates
+      operationId: getScaffoldTemplates
+      responses:
+        "200":
+          description: Available scaffold templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScaffoldTemplateListResponse"
+        "500":
+          description: Internal template discovery failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /assets/scaffold/templates/{template}:
+    get:
+      summary: Get a scaffold template definition
+      operationId: getScaffoldTemplate
+      parameters:
+        - in: path
+          name: template
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scaffold template details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScaffoldTemplateResponse"
+        "422":
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal template discovery failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /reports/latest:
+    get:
+      summary: Get the latest execution report
+      operationId: getLatestExecutionReport
+      responses:
+        "200":
+          description: Latest execution report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionReportResponse"
+        "422":
+          description: Report lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal report lookup failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /reports/{case_id}:
+    get:
+      summary: Get an execution report by case id
+      operationId: getExecutionReportByCaseId
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Execution report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecutionReportResponse"
+        "422":
+          description: Report lookup failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal report lookup failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orchestrate:
+    post:
+      summary: Generate a test case and optionally execute it
+      operationId: postOrchestrate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrchestrateRequest"
+      responses:
+        "201":
+          description: Test case generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrchestrationResult"
+        "400":
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Runner execution failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal orchestration failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /healing/preview:
+    post:
+      summary: Preview self-healing advice without modifying YAML or page objects
+      operationId: postHealingPreview
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelfHealingPreviewRequest"
+      responses:
+        "200":
+          description: Self-healing advice preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SelfHealingPreviewResponse"
+        "400":
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal self-healing preview failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /assets/page-objects:
+    post:
+      summary: Create a page object asset
+      operationId: postPageObject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePageObjectRequest"
+      responses:
+        "201":
+          description: Page object created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageObjectAssetResponse"
+        "422":
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal asset management failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /assets/page-objects/{page}/elements:
+    post:
+      summary: Add or update an element inside a page object
+      operationId: postPageObjectElement
+      parameters:
+        - in: path
+          name: page
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddPageElementRequest"
+      responses:
+        "201":
+          description: Page object element added or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PageObjectAssetResponse"
+        "422":
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal asset management failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /assets/test-cases/sync:
+    post:
+      summary: Rewrite an existing YAML test case with standard steps inferred from its page object
+      operationId: postSyncTestCase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncTestCaseRequest"
+      responses:
+        "200":
+          description: Test case synchronized successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestCaseAssetResponse"
+        "422":
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal asset management failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /assets/scaffold:
+    post:
+      summary: Create a page object and smoke test case scaffold together
+      operationId: postAssetScaffold
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScaffoldAssetsRequest"
+      responses:
+        "201":
+          description: Asset scaffold created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScaffoldAssetsResponse"
+        "422":
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal asset management failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          const: ok
+    OrchestrateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - requirement
+        - page
+      properties:
+        requirement:
+          type: string
+          minLength: 1
+          description: Natural language requirement to convert into a YAML test case
+        page:
+          type: string
+          minLength: 1
+          description: Target page object name, for example `product`
+        execute:
+          type: boolean
+          default: false
+          description: Whether to execute the generated case immediately
+        mode:
+          type: string
+          enum:
+            - generate_only
+            - generate_and_run
+          description: >
+            Optional explicit execution mode. When provided, it takes precedence over `execute`.
+        source:
+          type: string
+          enum:
+            - manual
+            - ai
+            - regression
+          default: manual
+          description: Optional request source label used for reporting only
+    OrchestrationResult:
+      type: object
+      additionalProperties: false
+      required:
+        - case
+        - test_points
+        - execution_record
+        - case_path
+        - execution_requested
+        - runner_exit_code
+        - runner_stdout
+        - runner_stderr
+        - report
+        - report_json_path
+        - report_markdown_path
+        - report_summary_path
+      properties:
+        case:
+          type: object
+          description: Generated YAML test case as a JSON object
+        test_points:
+          $ref: "#/components/schemas/TestPointPlan"
+        execution_record:
+          $ref: "#/components/schemas/ExecutionRecord"
+        case_path:
+          type: string
+          description: Absolute path to the saved YAML file
+        execution_requested:
+          type: boolean
+        runner_exit_code:
+          type:
+            - integer
+            - "null"
+        runner_stdout:
+          type: string
+        runner_stderr:
+          type: string
+        report:
+          $ref: "#/components/schemas/ExecutionReport"
+        report_json_path:
+          type: string
+          description: Absolute path to the saved JSON report
+        report_markdown_path:
+          type: string
+          description: Absolute path to the saved Markdown report
+        report_summary_path:
+          type: string
+          description: Absolute path to the aggregated report_summary.txt file when execution was requested
+    TestPoint:
+      type: object
+      additionalProperties: false
+      required:
+        - key
+        - point_type
+        - description
+        - action
+      properties:
+        key:
+          type: string
+        point_type:
+          type: string
+        description:
+          type: string
+        action:
+          type: string
+        target:
+          type: string
+        value:
+          type: string
+    TestPointPlan:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - requirement
+        - points
+      properties:
+        page:
+          type: string
+        requirement:
+          type: array
+          items:
+            type: string
+        source_type:
+          type: string
+        source_name:
+          type: string
+        source_ref:
+          type: string
+        priority:
+          type: string
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/TestPoint"
+    ExecutionReport:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - summary
+        - case_id
+        - case_title
+        - page
+        - case_path
+        - execution_requested
+        - source
+        - request_context
+        - started_at
+        - finished_at
+        - runner_exit_code
+        - metrics
+        - pytest_results
+        - failure_reason
+        - self_healing_enabled
+        - self_healing_attempted
+        - failure_analysis
+        - self_healing_advice
+        - self_healing_suggestion_preview
+        - self_healing_execution_preview
+        - execution_record
+        - evidence
+        - runner_stdout_excerpt
+        - runner_stderr_excerpt
+      properties:
+        status:
+          type: string
+          enum:
+            - generated
+            - passed
+            - failed
+        summary:
+          type: string
+        case_id:
+          type: string
+        case_title:
+          type: string
+        page:
+          type: string
+        case_path:
+          type: string
+        execution_requested:
+          type: boolean
+        source:
+          type: string
+          enum:
+            - manual
+            - ai
+            - regression
+        request_context:
+          $ref: "#/components/schemas/ExecutionRequestContext"
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        runner_exit_code:
+          type:
+            - integer
+            - "null"
+        metrics:
+          $ref: "#/components/schemas/ExecutionReportMetrics"
+        pytest_results:
+          $ref: "#/components/schemas/PytestResults"
+        failure_reason:
+          type: string
+        self_healing_enabled:
+          type: boolean
+        self_healing_attempted:
+          type: boolean
+        failure_analysis:
+          $ref: "#/components/schemas/FailureAnalysis"
+        self_healing_advice:
+          $ref: "#/components/schemas/SelfHealingAdvice"
+        self_healing_suggestion_preview:
+          $ref: "#/components/schemas/SelfHealingSuggestionPreview"
+        self_healing_execution_preview:
+          $ref: "#/components/schemas/SelfHealingExecutionPreview"
+        execution_record:
+          $ref: "#/components/schemas/ExecutionRecord"
+        evidence:
+          $ref: "#/components/schemas/ExecutionEvidenceSummary"
+        runner_stdout_excerpt:
+          type: string
+        runner_stderr_excerpt:
+          type: string
+    ExecutionReportMetrics:
+      type: object
+      additionalProperties: false
+      required:
+        - passed
+        - failed
+        - skipped
+        - errors
+      properties:
+        passed:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        skipped:
+          type: integer
+          minimum: 0
+        errors:
+          type: integer
+          minimum: 0
+    ExecutionRequestContext:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - mode
+        - source
+        - execution_requested
+      properties:
+        page:
+          type: string
+        mode:
+          type: string
+          enum:
+            - generate_only
+            - generate_and_run
+        source:
+          type: string
+          enum:
+            - manual
+            - ai
+            - regression
+        execution_requested:
+          type: boolean
+    ExecutionEvidenceSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - screenshots
+        - html_pages
+        - meta_files
+        - analysis_files
+        - suggestion_files
+        - execution_record_files
+        - self_healing_result_files
+        - videos
+        - other_files
+        - total_files
+      properties:
+        screenshots:
+          type: array
+          items:
+            type: string
+        html_pages:
+          type: array
+          items:
+            type: string
+        meta_files:
+          type: array
+          items:
+            type: string
+        analysis_files:
+          type: array
+          items:
+            type: string
+        suggestion_files:
+          type: array
+          items:
+            type: string
+        execution_record_files:
+          type: array
+          items:
+            type: string
+        self_healing_result_files:
+          type: array
+          items:
+            type: string
+        videos:
+          type: array
+          items:
+            type: string
+        other_files:
+          type: array
+          items:
+            type: string
+        total_files:
+          type: integer
+          minimum: 0
+    ExecutionStepSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - requirement_count
+        - total_steps
+        - action_types
+      properties:
+        page:
+          type: string
+        requirement_count:
+          type: integer
+          minimum: 0
+        total_steps:
+          type: integer
+          minimum: 0
+        action_types:
+          type: array
+          items:
+            type: string
+    ExecutionEvidenceIndex:
+      type: object
+      additionalProperties: false
+      required:
+        - total_files
+        - artifact_categories
+        - runner_exit_code
+        - execution_requested
+      properties:
+        total_files:
+          type: integer
+          minimum: 0
+        artifact_categories:
+          type: object
+          additionalProperties:
+            type: integer
+        runner_exit_code:
+          type:
+            - integer
+            - "null"
+        execution_requested:
+          type: boolean
+    ExecutionRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - run_id
+        - case_id
+        - project
+        - source
+        - mode
+        - status
+        - started_at
+        - finished_at
+        - step_summary
+        - evidence_index
+      properties:
+        run_id:
+          type: string
+        case_id:
+          type: string
+        project:
+          type: string
+        source:
+          type: string
+          enum:
+            - manual
+            - ai
+            - regression
+        mode:
+          type: string
+          enum:
+            - generate_only
+            - generate_and_run
+        status:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+        step_summary:
+          $ref: "#/components/schemas/ExecutionStepSummary"
+        evidence_index:
+          $ref: "#/components/schemas/ExecutionEvidenceIndex"
+    PytestResults:
+      type: object
+      additionalProperties: false
+      required:
+        - collected
+        - passed
+        - failed
+        - skipped
+        - errors
+        - runner_exit_code
+        - duration_seconds
+        - has_stderr
+      properties:
+        collected:
+          type:
+            - integer
+            - "null"
+          minimum: 0
+        passed:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        skipped:
+          type: integer
+          minimum: 0
+        errors:
+          type: integer
+          minimum: 0
+        runner_exit_code:
+          type:
+            - integer
+            - "null"
+        duration_seconds:
+          type:
+            - number
+            - "null"
+          minimum: 0
+        has_stderr:
+          type: boolean
+    FailureAnalysis:
+      type: object
+      additionalProperties: false
+      required:
+        - summary
+        - failure_category
+        - likely_cause
+        - risk_level
+        - recommended_action
+        - confidence
+        - evidence_used
+      properties:
+        summary:
+          type: string
+        failure_category:
+          type: string
+          enum:
+            - locator
+            - assertion
+            - timeout
+            - environment
+            - authentication
+            - network
+            - data
+            - unknown
+        likely_cause:
+          type: string
+        risk_level:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - critical
+        recommended_action:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        evidence_used:
+          type: array
+          items:
+            type: string
+    SelfHealingAdvice:
+      type: object
+      additionalProperties: false
+      required:
+        - summary
+        - suggestion_type
+        - suggested_changes
+        - rationale
+        - confidence
+        - safe_to_apply_manually
+      properties:
+        summary:
+          type: string
+        suggestion_type:
+          type: string
+          enum:
+            - locator_update
+            - assertion_update
+            - wait_strategy
+            - data_adjustment
+            - environment_check
+            - no_change
+        suggested_changes:
+          type: array
+          items:
+            type: string
+        rationale:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        safe_to_apply_manually:
+          type: boolean
+    SelfHealingSuggestionPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - summary
+        - advice_type
+        - target
+        - suggestion
+        - confidence
+        - fix_candidates
+      properties:
+        summary:
+          type: string
+        advice_type:
+          type: string
+          enum:
+            - locator_update
+            - assertion_update
+            - wait_strategy
+            - data_adjustment
+            - environment_check
+            - no_change
+        target:
+          type: string
+        suggestion:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        fix_candidates:
+          type: array
+          items:
+            type: string
+    SelfHealingExecutionPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - reason
+        - attempts_used
+        - healed
+        - rolled_back
+        - confidence
+        - plan_path
+        - result_path
+      properties:
+        status:
+          type: string
+        reason:
+          type: string
+        attempts_used:
+          type: integer
+          minimum: 0
+        healed:
+          type: boolean
+        rolled_back:
+          type: boolean
+        confidence:
+          type:
+            - number
+            - "null"
+        plan_path:
+          type: string
+        result_path:
+          type: string
+    ExecutionReportResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - report
+        - execution_record
+        - report_json_path
+        - report_markdown_path
+        - report_summary_path
+        - report_summary_preview
+      properties:
+        report:
+          $ref: "#/components/schemas/ExecutionReport"
+        execution_record:
+          $ref: "#/components/schemas/ExecutionRecord"
+        report_json_path:
+          type: string
+        report_markdown_path:
+          type: string
+        report_summary_path:
+          type: string
+        report_summary_preview:
+          $ref: "#/components/schemas/ReportSummaryPreview"
+    ReportSummaryPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - total_failed_cases
+        - environment_failures
+        - business_failures
+        - high_risk_failures
+        - actionable_self_healing_cases
+        - environment_failure_cases
+        - actionable_self_healing_case_details
+      properties:
+        total_failed_cases:
+          type: integer
+          minimum: 0
+        environment_failures:
+          type: integer
+          minimum: 0
+        business_failures:
+          type: integer
+          minimum: 0
+        high_risk_failures:
+          type: integer
+          minimum: 0
+        actionable_self_healing_cases:
+          type: integer
+          minimum: 0
+        environment_failure_cases:
+          type: array
+          items:
+            type: string
+        actionable_self_healing_case_details:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportSummaryActionableCase"
+    ReportSummaryActionableCase:
+      type: object
+      additionalProperties: false
+      required:
+        - case_id
+        - target
+        - advice_type
+      properties:
+        case_id:
+          type: string
+        target:
+          type: string
+        advice_type:
+          type: string
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - invalid_json
+                - not_found
+                - unsupported_media_type
+                - validation_error
+                - runner_failed
+                - internal_error
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+    SelfHealingPreviewRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+      properties:
+        page:
+          type: string
+          minLength: 1
+        case:
+          type: object
+          description: Optional case context used only for advisory generation
+        failure_reason:
+          type: string
+        failure_analysis:
+          $ref: "#/components/schemas/FailureAnalysis"
+    SelfHealingPreviewResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - self_healing_advice
+      properties:
+        self_healing_advice:
+          $ref: "#/components/schemas/SelfHealingAdvice"
+    CreatePageObjectRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+      properties:
+        page:
+          type: string
+          minLength: 1
+        description:
+          type: string
+    AddPageElementRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - locator_type
+        - locator_value
+      properties:
+        name:
+          type: string
+          minLength: 1
+        locator_type:
+          type: string
+          enum:
+            - placeholder
+            - text
+            - css
+            - role
+        locator_value:
+          type: string
+          minLength: 1
+        role:
+          type: string
+        description:
+          type: string
+    SyncTestCaseRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - file
+      properties:
+        file:
+          type: string
+          minLength: 1
+        menu_target:
+          type: string
+        assert_target:
+          type: string
+    ScaffoldAssetsRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - title
+        - requirement
+      properties:
+        page:
+          type: string
+          minLength: 1
+        title:
+          type: string
+          minLength: 1
+        requirement:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        priority:
+          type: string
+        menu_label:
+          type: string
+        assert_label:
+          type: string
+        template:
+          type: string
+        elements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScaffoldElementTemplate"
+    ScaffoldElementTemplate:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - locator_type
+        - locator_value
+      properties:
+        name:
+          type: string
+          minLength: 1
+        locator_type:
+          type: string
+          enum:
+            - placeholder
+            - text
+            - css
+            - role
+        locator_value:
+          type: string
+          minLength: 1
+        role:
+          type: string
+        smoke_role:
+          type: string
+          enum:
+            - menu
+            - assert
+        description:
+          type: string
+    PageObjectAssetResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - page_object
+        - path
+      properties:
+        page_object:
+          type: object
+        path:
+          type: string
+    TestCaseAssetResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - test_case
+        - path
+      properties:
+        test_case:
+          type: object
+        path:
+          type: string
+    ScaffoldAssetsResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - page_object
+        - page_object_path
+        - test_case
+        - test_case_path
+      properties:
+        page_object:
+          type: object
+        page_object_path:
+          type: string
+        test_case:
+          type: object
+        test_case_path:
+          type: string
+    ScaffoldTemplate:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - summary
+        - page_type
+        - recommended_title
+        - recommended_requirement
+        - elements_count
+        - elements
+      properties:
+        name:
+          type: string
+        summary:
+          type: string
+        page_type:
+          type: string
+        recommended_title:
+          type: string
+        recommended_requirement:
+          type: string
+        elements_count:
+          type: integer
+        elements:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScaffoldElementTemplate"
+    ScaffoldTemplateListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - templates
+      properties:
+        templates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScaffoldTemplate"
+    ScaffoldTemplateResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - template
+      properties:
+        template:
+          $ref: "#/components/schemas/ScaffoldTemplate"

@@ -1,0 +1,64 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.security import create_access_token, get_current_user, hash_password, verify_password
+from app.models.user import User
+from app.schemas.auth import LoginRequest, Token
+from app.schemas.user import UserCreate, UserRead
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _build_token_response(user: User) -> Token:
+    access_token = create_access_token(
+        subject=str(user.id),
+        username=user.username,
+        role=user.role,
+    )
+    return Token(access_token=access_token, user=UserRead.model_validate(user))
+
+
+@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserRead:
+    existing = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="username already exists")
+
+    user = User(
+        username=payload.username.strip(),
+        hashed_password=hash_password(payload.password),
+        role=payload.role.strip().lower() or "viewer",
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return UserRead.model_validate(user)
+
+
+@router.post("/login", response_model=Token)
+def login(payload: LoginRequest, db: Session = Depends(get_db)) -> Token:
+    user = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid username or password")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="user is disabled")
+    return _build_token_response(user)
+
+
+@router.post("/token", response_model=Token)
+def issue_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Token:
+    user = db.execute(select(User).where(User.username == form_data.username)).scalar_one_or_none()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid username or password")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="user is disabled")
+    return _build_token_response(user)
+
+
+@router.get("/me", response_model=UserRead)
+def me(current_user: User = Depends(get_current_user)) -> UserRead:
+    return UserRead.model_validate(current_user)
