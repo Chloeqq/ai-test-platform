@@ -1,0 +1,13 @@
+- name: catalog_search_entry
+  locator_type: role
+  role: menuitem
+  locator_value: 商品目录查询
+  smoke_role: menu
+- name: catalog_results_panel
+  locator_type: css
+  locator_value: .catalog-results
+  smoke_role: assert
+- name: catalog_search_input
+  locator_type: css
+  locator_value: input[name='keyword']
+  description: 搜索输入框

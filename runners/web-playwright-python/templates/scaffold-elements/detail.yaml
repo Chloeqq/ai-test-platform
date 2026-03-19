@@ -1,0 +1,13 @@
+- name: detail_navigation_entry
+  locator_type: role
+  role: menuitem
+  locator_value: 详情
+  smoke_role: menu
+- name: detail_title
+  locator_type: css
+  locator_value: .detail-title
+  smoke_role: assert
+- name: detail_primary_action
+  locator_type: role
+  role: button
+  locator_value: 主要操作

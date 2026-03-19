@@ -1,0 +1,11 @@
+page: permission
+
+elements:
+  permission_menu:
+    locator_type: role
+    role: menuitem
+    locator_value: 权限
+
+  permission_table:
+    locator_type: text
+    locator_value: 权限

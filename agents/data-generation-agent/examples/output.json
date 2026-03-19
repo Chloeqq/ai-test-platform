@@ -1,0 +1,86 @@
+{
+  "cleanup_instructions": [
+    {
+      "record_ids": ["user_seed-001", "user_seed-002"],
+      "requirement_id": "user_seed",
+      "strategy": "delete_by_record_id"
+    },
+    {
+      "record_ids": ["order_seed-001", "order_seed-002"],
+      "requirement_id": "order_seed",
+      "strategy": "delete_by_record_id"
+    }
+  ],
+  "environment": "test",
+  "generated": {
+    "order_seed": [
+      {
+        "data_type": "order",
+        "record_id": "order_seed-001",
+        "relationships": {"user_seed": "user_seed-001"},
+        "requirement_id": "order_seed",
+        "values": {
+          "order_no": "ord-req-product-001-1",
+          "status": "draft"
+        },
+        "warnings": []
+      },
+      {
+        "data_type": "order",
+        "record_id": "order_seed-002",
+        "relationships": {"user_seed": "user_seed-002"},
+        "requirement_id": "order_seed",
+        "values": {
+          "order_no": "ord-req-product-001-2",
+          "status": "paid"
+        },
+        "warnings": []
+      }
+    ],
+    "user_seed": [
+      {
+        "data_type": "user",
+        "record_id": "user_seed-001",
+        "relationships": {},
+        "requirement_id": "user_seed",
+        "values": {
+          "age": 18,
+          "email": "buyer-req-product-001-1@example.test",
+          "username": "user-req-product-001-1"
+        },
+        "warnings": []
+      },
+      {
+        "data_type": "user",
+        "record_id": "user_seed-002",
+        "relationships": {},
+        "requirement_id": "user_seed",
+        "values": {
+          "age": 19,
+          "email": "buyer-req-product-001-2@example.test",
+          "username": "user-req-product-001-2"
+        },
+        "warnings": []
+      }
+    ]
+  },
+  "generation_confidence": 0.95,
+  "project": "default",
+  "request_id": "req-product-001",
+  "validations": [
+    {
+      "errors": [],
+      "passed": true,
+      "requirement_id": "user_seed",
+      "warnings": []
+    },
+    {
+      "errors": [],
+      "passed": true,
+      "requirement_id": "order_seed",
+      "warnings": []
+    }
+  ],
+  "version": "DataGenerationResponseV1",
+  "warnings": []
+}

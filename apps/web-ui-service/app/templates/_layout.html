@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ platform_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/home.css">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  {% macro render_icon(icon_key) %}
+    {% if icon_key == "dashboard" %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 13h8V3H3zM13 21h8V11h-8zM13 3v6h8V3zM3 21h8v-6H3z" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    {% elif icon_key == "assets" %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M4 12h16M4 17h10" stroke-width="1.6" stroke-linecap="round"/></svg>
+    {% elif icon_key == "ai_orchestration" %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 12h6l2-8 4 16 2-8h2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    {% elif icon_key == "execution_records" %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5" stroke-width="1.6" stroke-linecap="round"/></svg>
+    {% elif icon_key == "quality_analysis" %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19h16M7 15V8m5 7V5m5 10v-4" stroke-width="1.6" stroke-linecap="round"/></svg>
+    {% elif icon_key == "gate_config" %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM8.5 9.5l3.5 2 3.5-2" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    {% elif icon_key == "system_settings" %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 8a4 4 0 100 8 4 4 0 000-8zm8 4l-2.2.8-.4 2.3-2.1.7-1.6 1.8-2.2-.9-2.2.9-1.6-1.8-2.1-.7-.4-2.3L4 12l2.2-.8.4-2.3 2.1-.7 1.6-1.8 2.2.9 2.2-.9 1.6 1.8 2.1.7.4 2.3L20 12z" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    {% else %}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8" stroke-width="1.6"/></svg>
+    {% endif %}
+  {% endmacro %}
+
+  <div class="platform-shell">
+    <aside class="sidebar" aria-label="全局导航">
+      <div class="sidebar-brand">
+        <div class="brand-mark">AT</div>
+        <div class="brand-text">
+          <strong>AI Test Platform</strong>
+          <span>企业质量中台</span>
+        </div>
+      </div>
+
+      <nav class="nav-groups">
+        {% for section in nav_sections %}
+          {% if section.children %}
+            <details class="nav-accordion" {% if section.open %}open{% endif %}>
+              <summary class="nav-link {% if section.active %}active{% endif %}">
+                <span class="icon">{{ render_icon(section.icon) }}</span>
+                <span>{{ section.label }}</span>
+              </summary>
+              <div class="submenu">
+                {% for child in section.children %}
+                  <a class="{% if child.active %}active-sub{% endif %}" href="{{ child.href }}">{{ child.label }}</a>
+                {% endfor %}
+              </div>
+            </details>
+          {% else %}
+            <a class="nav-link {% if section.active %}active{% endif %}" href="{{ section.href }}">
+              <span class="icon">{{ render_icon(section.icon) }}</span>
+              <span>{{ section.label }}</span>
+            </a>
+          {% endif %}
+        {% endfor %}
+      </nav>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar-title">{{ platform_name }}</div>
+        <div class="topbar-actions">
+          <button class="icon-button" aria-label="通知">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 17H5l2-3v-4a5 5 0 0110 0v4l2 3h-4m-4 0a2 2 0 004 0h-4z" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <a class="help-link" href="#" aria-label="帮助文档">帮助文档</a>
+          <a class="auth-link" id="platform-auth-link" href="/login?next={{ request.url.path }}" data-login-href="/login?next={{ request.url.path }}" data-logout-href="{{ request.url.path }}">登录</a>
+          <div
+            class="user-box"
+            id="platform-user-box"
+            aria-label="当前用户"
+            data-default-name="{{ user_name }}"
+            data-default-initial="{{ user_initial }}"
+            data-auth-state="server"
+          >
+            <span class="avatar" id="platform-user-avatar">{{ user_initial }}</span>
+            <span class="user-name" id="platform-user-name">{{ user_name }}</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/platform_auth.js"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

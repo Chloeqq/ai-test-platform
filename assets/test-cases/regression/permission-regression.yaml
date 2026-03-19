@@ -1,0 +1,26 @@
+version: v4
+id: TC-PERMISSION-REG-001
+title: 权限页面回归验证
+module: permission
+priority: P1
+tags:
+  - regression
+  - permission
+owner: qa-team
+status: automated
+description: 回归验证权限页面可以正常打开
+requirement:
+  - 权限管理模块
+data: {}
+execution:
+  runner: playwright
+  page: permission
+  variables: {}
+  steps:
+    - action: login
+    - action: click
+      target: permission_menu
+    - action: wait_for
+      target: permission_table
+    - action: assert_visible
+      target: permission_table

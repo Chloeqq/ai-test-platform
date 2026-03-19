@@ -1,0 +1,13 @@
+- name: list_navigation_entry
+  locator_type: role
+  role: menuitem
+  locator_value: 列表
+  smoke_role: menu
+- name: list_table
+  locator_type: css
+  locator_value: .data-table
+  smoke_role: assert
+- name: list_filter_input
+  locator_type: css
+  locator_value: input[name='filter']
+  description: 筛选输入框

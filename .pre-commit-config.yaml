@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: runner-asset-contracts
+        name: runner asset contracts
+        entry: bash -lc 'cd PycharmProjects/ai-test-platform && bash scripts/ci/check_asset_contracts.sh "$@"' --
+        language: system
+        pass_filenames: true
+        files: (^|/)assets/(test-cases|page-objects)/.*\.ya?ml$

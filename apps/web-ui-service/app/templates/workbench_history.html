@@ -1,0 +1,100 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/workbench.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card workbench-shell" id="workbench-history-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+  <div id="wb-history-auth-notice" class="wb-auth-notice wb-auth-notice-anonymous">历史记录支持匿名查看，但确认点记录的“确认人”只有在登录后提交确认时才会绑定真实用户。</div>
+
+  <section class="wb-card">
+    <div class="wb-card-header">
+      <h2>操作历史</h2>
+      <div class="wb-actions">
+        <button id="wb-history-refresh" class="btn">刷新</button>
+        <a class="btn" href="/workbench">返回工作台</a>
+      </div>
+    </div>
+    <div class="workbench-toolbar">
+        <label>
+        动作
+        <select id="wb-history-action">
+          <option value="">全部</option>
+          <option value="review_confirmed">review_confirmed</option>
+          <option value="review_rejected_auth">review_rejected_auth</option>
+          <option value="execution_gate_decision_rejected_auth">execution_gate_decision_rejected_auth</option>
+          <option value="execution_gate_decision_rejected_permission">execution_gate_decision_rejected_permission</option>
+          <option value="execution_gate_decided">execution_gate_decided</option>
+          <option value="execution_gate_approve_rejected_auth">execution_gate_approve_rejected_auth</option>
+          <option value="execution_gate_approved">execution_gate_approved</option>
+          <option value="execution_gate_revoke_rejected_auth">execution_gate_revoke_rejected_auth</option>
+          <option value="execution_gate_revoked">execution_gate_revoked</option>
+        </select>
+      </label>
+      <label>
+        状态
+        <select id="wb-history-status">
+          <option value="">全部</option>
+          <option value="confirmed">confirmed</option>
+          <option value="rejected">rejected</option>
+        </select>
+      </label>
+      <label>
+        风险门禁
+        <select id="wb-history-risk-gate">
+          <option value="">全部</option>
+          <option value="allow">allow</option>
+          <option value="manual_review">manual_review</option>
+          <option value="block">block</option>
+        </select>
+      </label>
+      <label>
+        自愈状态
+        <select id="wb-history-self-healing-status">
+          <option value="">全部</option>
+          <option value="rejected">rejected</option>
+          <option value="success">success</option>
+          <option value="rollback">rollback</option>
+          <option value="not_attempted">not_attempted</option>
+        </select>
+      </label>
+      <label>
+        确认人
+        <input id="wb-history-actor" type="text" placeholder="输入用户名筛选">
+      </label>
+    </div>
+    <div id="wb-history-summary" class="wb-history-summary">治理汇总等待加载...</div>
+    <div class="table-wrap">
+      <table class="case-table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>动作</th>
+            <th>用例ID</th>
+            <th>页面</th>
+            <th>确认人</th>
+            <th>状态</th>
+            <th>详情</th>
+            <th>路径/Run ID</th>
+          </tr>
+        </thead>
+        <tbody id="wb-history-body"></tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/workbench_history.js"></script>
+{% endblock %}

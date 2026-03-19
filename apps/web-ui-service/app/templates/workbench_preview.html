@@ -1,0 +1,49 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/workbench.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card workbench-shell" id="workbench-preview-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <section class="wb-card">
+    <div class="wb-card-header">
+      <h2>用例预览</h2>
+      <div class="wb-actions">
+        <button id="wb-preview-save" class="btn">保存</button>
+        <button id="wb-preview-run" class="btn btn-primary">Run Test</button>
+        <a id="wb-preview-workbench" class="btn" href="/workbench" aria-disabled="true">查看工作台结果</a>
+        <a class="btn" href="/workbench">返回工作台</a>
+      </div>
+    </div>
+    <div class="wb-meta">
+      <span>用例ID：</span><strong id="wb-preview-case">-</strong>
+      <span class="wb-path" id="wb-preview-path"></span>
+    </div>
+    <textarea id="wb-preview-editor" rows="18" placeholder="等待载入 YAML"></textarea>
+  </section>
+
+  <section class="wb-card">
+    <h2>提示</h2>
+    <ul class="wb-tip-list">
+      <li>可直接修改 YAML 后保存到资产库。</li>
+      <li>Run Test 会基于当前 YAML 执行。</li>
+      <li>建议在保存后再执行以确保一致性。</li>
+    </ul>
+  </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/workbench_preview.js"></script>
+{% endblock %}

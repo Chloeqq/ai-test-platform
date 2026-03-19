@@ -1,0 +1,123 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/pagination.component.css?v=20260322-1">
+<link rel="stylesheet" href="/static/workbench.css?v=20260322-5">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card workbench-shell" id="workbench-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+  <div id="wb-auth-notice" class="wb-auth-notice wb-auth-notice-anonymous">当前若未登录，平台仍允许查看、生成与执行；但涉及审计的确认动作会要求先登录后再提交。</div>
+
+  <section class="workbench-quickstart">
+    <h2>Quick Start</h2>
+    <ol>
+      <li>选择项目与用例</li>
+      <li>编辑 YAML 或生成新用例</li>
+      <li>点击 Run Test 执行</li>
+      <li>查看实时日志与失败分析</li>
+      <li>必要时一键修复并重跑</li>
+    </ol>
+  </section>
+
+  <section class="workbench-toolbar">
+    <label>
+      项目
+      <select id="wb-project"></select>
+    </label>
+    <button id="wb-refresh" class="btn">刷新用例</button>
+    <a class="btn btn-primary" href="/workbench/generate">AI 生成用例</a>
+    <a class="btn" href="/workbench/generate?sample=returnapply">returnApply 样板</a>
+    <a class="btn" href="/workbench/history">操作历史</a>
+    <div class="toolbar-spacer"></div>
+    <div class="inline-tip">提示：选择用例后可直接在线编辑 YAML。</div>
+  </section>
+
+  <section class="workbench-grid workbench-grid-main">
+    <article class="wb-card">
+      <h2>用例列表</h2>
+      <div class="table-wrap">
+        <table class="case-table">
+          <thead>
+            <tr>
+              <th>用例ID</th>
+              <th>标题</th>
+              <th>页面</th>
+              <th>优先级</th>
+              <th>更新时间</th>
+            </tr>
+          </thead>
+          <tbody id="wb-case-body"></tbody>
+        </table>
+      </div>
+      <div class="case-pagination" id="wb-case-pagination"></div>
+    </article>
+
+    <article class="wb-card">
+      <div class="wb-card-header">
+        <h2>YAML 编辑</h2>
+        <div class="wb-actions">
+          <button id="wb-save" class="btn">保存</button>
+          <button id="wb-run" class="btn btn-primary">Run Test</button>
+        </div>
+      </div>
+      <textarea id="wb-yaml-editor" rows="18" placeholder="选择用例后载入 YAML，或直接粘贴带 id 的 YAML 再保存/运行"></textarea>
+      <div class="wb-meta">
+        <span>当前用例：</span><strong id="wb-current-case">未选择</strong>
+        <span class="wb-path" id="wb-current-path"></span>
+      </div>
+    </article>
+  </section>
+
+  <section class="workbench-grid">
+    <article class="wb-card">
+      <div class="wb-card-header">
+        <h2>Realtime Logs</h2>
+        <div class="wb-actions">
+          <button id="wb-download-log" class="btn">下载日志</button>
+        </div>
+      </div>
+      <div id="wb-run-status" class="wb-run-status">等待执行...</div>
+      <pre id="wb-log-viewer" class="wb-log-viewer"></pre>
+    </article>
+
+    <article class="wb-card">
+      <div class="wb-card-header">
+        <h2>Failure Analysis</h2>
+        <div class="wb-actions">
+          <button id="wb-heal" class="btn">一键修复+重跑</button>
+          <button id="wb-rerun" class="btn">重跑</button>
+        </div>
+      </div>
+      <div id="wb-analysis-summary" class="wb-analysis-summary">暂无失败分析数据。</div>
+      <div id="wb-analysis-detail" class="wb-analysis-detail"></div>
+      <div id="wb-audit-timeline" class="wb-audit-panel wb-review-empty">运行后将在这里展示审计时间线。</div>
+    </article>
+  </section>
+
+  <section class="workbench-reports">
+    <h2>报告导航</h2>
+    <div class="report-cards">
+      <a class="report-card" href="/report">报告总览</a>
+      <a class="report-card" href="/report/failures">失败详情</a>
+      <a class="report-card" href="/report/context">资产与集成</a>
+      <a class="report-card" href="/report/performance">性能耗时</a>
+      <a class="report-card" href="/report/allure">Allure 报告</a>
+    </div>
+  </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/pagination.component.js?v=20260322-1"></script>
+<script src="/static/workbench.js?v=20260322-5"></script>
+{% endblock %}

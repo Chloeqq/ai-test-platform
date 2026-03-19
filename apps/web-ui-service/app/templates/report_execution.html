@@ -1,0 +1,46 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/cases.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card detail-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+
+  <div class="detail-grid">
+    <section class="detail-card">
+      <h2>执行摘要</h2>
+      <dl class="basic-info-grid">
+        <dt>执行ID</dt>
+        <dd>#{{ report.execution_id }}</dd>
+        <dt>关联用例</dt>
+        <dd><a href="/assets/cases/{{ report.case_id }}">{{ report.case_name }}</a></dd>
+        <dt>执行结果</dt>
+        <dd><span class="result-pill result-{{ (report.status or 'unknown') | lower }}">{{ report.status }}</span></dd>
+        <dt>执行耗时</dt>
+        <dd>{{ report.duration_ms }} ms</dd>
+        <dt>执行时间</dt>
+        <dd>{{ report.executed_at }}</dd>
+      </dl>
+    </section>
+
+    <section class="detail-card">
+      <h2>留痕信息</h2>
+      <ul class="detail-list">
+        <li>本报告为平台内置留痕页，可作为执行记录的标准入口。</li>
+        <li>后续可扩展截图、日志、网络请求与AI失败分析摘要。</li>
+        <li>当前保留执行元数据，确保历史记录链接可稳定访问。</li>
+      </ul>
+    </section>
+  </div>
+</section>
+{% endblock %}

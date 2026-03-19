@@ -1,0 +1,13 @@
+page: payment
+
+elements:
+  payment_menu:
+    locator_type: role
+    role: menuitem
+    locator_value: 支付
+    description: 支付菜单
+
+  payment_list_title:
+    locator_type: text
+    locator_value: 支付列表
+    description: 支付列表标题

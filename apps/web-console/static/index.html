@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Test Platform Console</title>
+    <link rel="stylesheet" href="/console/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">AI Test Platform</p>
+        <h1>Scaffold Console</h1>
+        <p class="lede">
+          浏览可用模板，填写页面信息，并直接调用 orchestrator 生成 page object 和 smoke case。
+        </p>
+      </section>
+
+      <section class="panel panel-grid">
+        <div class="panel-block">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Templates</h2>
+              <p class="panel-subtitle">模板列表，选择页面骨架类型</p>
+            </div>
+            <button id="reload-templates" class="ghost">Refresh</button>
+          </div>
+          <p class="action-subtitle">点击刷新模板列表，重新读取后端提供的最新模板。</p>
+          <div id="template-list" class="template-list"></div>
+        </div>
+
+        <div class="panel-block">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Template Detail</h2>
+              <p class="panel-subtitle">查看模板说明、推荐值与元素结构</p>
+            </div>
+          </div>
+          <pre id="template-detail" class="detail-card">Select a template to inspect.</pre>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <h2>Scaffold Request</h2>
+            <p class="panel-subtitle">填写表单并发起测试资产骨架请求</p>
+          </div>
+        </div>
+        <form id="scaffold-form" class="form-grid">
+          <label>
+            <span><strong class="field-label-main">Page</strong><em class="field-label-sub">页面标识，例如 product / catalog</em></span>
+            <input name="page" placeholder="catalog" required />
+          </label>
+          <label>
+            <span><strong class="field-label-main">Title</strong><em class="field-label-sub">页面中文标题，用于生成用例标题</em></span>
+            <input id="title-input" name="title" placeholder="商品目录" required />
+          </label>
+          <label>
+            <span><strong class="field-label-main">Requirement</strong><em class="field-label-sub">需求摘要，用于生成测试资产</em></span>
+            <input id="requirement-input" name="requirement" placeholder="商品目录页面展示" required />
+          </label>
+          <label>
+            <span><strong class="field-label-main">Template</strong><em class="field-label-sub">可选模板名，决定默认骨架结构</em></span>
+            <input id="template-input" name="template" placeholder="catalog" />
+          </label>
+          <label>
+            <span><strong class="field-label-main">Description</strong><em class="field-label-sub">本次 scaffold 的补充说明</em></span>
+            <input name="description" placeholder="创建目录页骨架" />
+          </label>
+          <label>
+            <span><strong class="field-label-main">Priority</strong><em class="field-label-sub">优先级，例如 P1 / P2</em></span>
+            <input name="priority" value="P1" />
+          </label>
+          <label class="wide">
+            <span><strong class="field-label-main">Extra Elements JSON</strong><em class="field-label-sub">补充页面元素定义，使用 JSON 数组</em></span>
+            <textarea
+              name="elements"
+              rows="8"
+              placeholder='[{"name":"catalog_search_input","locator_type":"css","locator_value":"input[name=''keyword'']"}]'
+            ></textarea>
+          </label>
+          <div class="actions wide">
+            <button type="submit">Create Scaffold</button>
+          </div>
+          <p class="action-subtitle wide">提交前会先显示预览与校验结果，确认后才真正发送请求。</p>
+          <div id="request-preview" class="request-preview wide is-hidden">
+            <div class="panel-head">
+              <div class="panel-title">
+                <h2>Request Preview</h2>
+                <p class="panel-subtitle">发送前预览请求内容与本地校验结果</p>
+              </div>
+              <button id="cancel-preview" type="button" class="ghost">Cancel</button>
+            </div>
+            <div id="request-preview-summary" class="summary-grid">
+              <div class="summary-item">
+                <strong>Source</strong>
+                <span>Pending</span>
+              </div>
+              <div class="summary-item">
+                <strong>Changed Fields</strong>
+                <span>0</span>
+              </div>
+            </div>
+            <div>
+              <h3 class="subhead">Preflight Checks</h3>
+              <ul id="request-preview-checks" class="check-list">
+                <li class="check-item">No checks yet.</li>
+              </ul>
+            </div>
+            <pre id="request-preview-body" class="detail-card">{}</pre>
+            <div>
+              <h3 class="subhead">Diff From Last Request</h3>
+              <pre id="request-preview-diff" class="detail-card">No previous request to compare.</pre>
+            </div>
+            <div class="actions">
+              <button id="confirm-preview" type="button">Confirm Request</button>
+            </div>
+            <p class="action-subtitle">确认后会创建 page object 和 smoke case，不会自动修改历史资产。</p>
+          </div>
+          <p id="autofill-hint" class="autofill-hint wide">Select a template to auto-fill recommended values. 选择模板后会自动填入推荐值。</p>
+        </form>
+      </section>
+
+      <section class="panel panel-grid">
+        <div class="panel-block">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Result</h2>
+              <p class="panel-subtitle">展示本次 scaffold 生成摘要</p>
+            </div>
+          </div>
+          <div id="result-summary" class="summary-card">No scaffold created yet. 还没有生成新的测试骨架。</div>
+        </div>
+        <div class="panel-block">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Status</h2>
+              <p class="panel-subtitle">显示当前加载、提交与复制状态</p>
+            </div>
+          </div>
+          <div id="status" class="status-card">Loading templates... 正在加载模板。</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <h2>Latest Report Summary</h2>
+            <p class="panel-subtitle">查看最新执行报告的摘要与关键路径</p>
+          </div>
+          <div class="toolbar-actions">
+            <button id="reload-report-summary" class="ghost">Refresh</button>
+          </div>
+        </div>
+        <p class="action-subtitle">可复制摘要路径、报告路径和建议路径，便于贴到缺陷单或群消息。</p>
+        <div id="latest-report-summary" class="summary-card">No report loaded yet. 还没有读取到最新报告。</div>
+        <pre id="latest-report-raw" class="detail-card compact-card">No latest report payload yet. 还没有原始报告数据。</pre>
+      </section>
+
+      <section class="panel panel-grid">
+        <div class="panel-block">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Latest Report Analysis</h2>
+              <p class="panel-subtitle">查看失败原因、风险等级与分析摘要</p>
+            </div>
+          </div>
+          <div id="latest-report-analysis" class="summary-card">No analysis loaded yet. 还没有失败分析结果。</div>
+        </div>
+        <div class="panel-block">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Self-Healing Advice</h2>
+              <p class="panel-subtitle">查看只读修复建议，不自动修改 YAML</p>
+            </div>
+          </div>
+          <div id="latest-report-healing" class="summary-card">No self-healing advice loaded yet. 还没有修复建议。</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <h2>Self-Healing Execution</h2>
+            <p class="panel-subtitle">查看自动修复闭环是否成功、是否回滚以及结果文件路径</p>
+          </div>
+        </div>
+        <div id="latest-report-healing-execution" class="summary-card">No self-healing execution result loaded yet. 还没有自动修复执行结果。</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <h2>Management Summary</h2>
+            <p class="panel-subtitle">查看失败总数、环境问题、业务问题与可修复建议数量</p>
+          </div>
+        </div>
+        <div id="latest-report-management" class="summary-card">No management summary loaded yet. 还没有管理摘要。</div>
+        <div class="panel-grid report-management-grid">
+          <div class="panel-block">
+            <div class="panel-head">
+              <div class="panel-title">
+                <h2>Environment Failure Cases</h2>
+                <p class="panel-subtitle">优先排查环境、网络、认证相关失败</p>
+              </div>
+            </div>
+            <div id="environment-failure-cases" class="summary-card">No environment failure cases loaded yet. 还没有环境失败列表。</div>
+          </div>
+          <div class="panel-block">
+            <div class="panel-head">
+              <div class="panel-title">
+                <h2>Actionable Self-Healing Cases</h2>
+                <p class="panel-subtitle">优先查看可人工修复的建议目标</p>
+              </div>
+            </div>
+            <div id="actionable-healing-cases" class="summary-card">No actionable self-healing cases loaded yet. 还没有可修复建议列表。</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <h2>Favorites</h2>
+            <p class="panel-subtitle">固定常用骨架，便于快速复用</p>
+          </div>
+        </div>
+        <div id="favorite-list" class="recent-list">
+          <div class="empty-state">No favorite scaffolds yet.</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <h2>Recent Scaffolds</h2>
+            <p class="panel-subtitle">查看最近创建记录并重复操作</p>
+          </div>
+          <div class="toolbar-actions">
+            <button id="export-history" class="ghost">Export JSON</button>
+            <button id="clear-history" class="ghost">Clear All</button>
+          </div>
+        </div>
+        <p class="action-subtitle">可导出本地历史记录，也可以一键清空当前浏览器中的缓存记录。</p>
+        <div id="recent-list" class="recent-list">
+          <div class="empty-state">No scaffold history yet.</div>
+        </div>
+      </section>
+
+      <section class="panel panel-grid">
+        <div class="panel-block">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Generated Steps</h2>
+              <p class="panel-subtitle">展示生成后的测试步骤顺序</p>
+            </div>
+          </div>
+          <ol id="step-list" class="step-list">
+            <li class="empty-state">No generated steps yet.</li>
+          </ol>
+        </div>
+        <div class="panel-block">
+          <div class="panel-head">
+            <div class="panel-title">
+              <h2>Page Elements</h2>
+              <p class="panel-subtitle">展示页面对象中的元素与定位信息</p>
+            </div>
+          </div>
+          <div id="element-list" class="element-list">
+            <div class="empty-state">No generated elements yet.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div class="panel-title">
+            <h2>Raw Response</h2>
+            <p class="panel-subtitle">原始接口返回，便于排查与调试</p>
+          </div>
+        </div>
+        <pre id="result" class="detail-card">No scaffold created yet. 还没有原始 scaffold 返回。</pre>
+      </section>
+    </main>
+    <script src="/console/app.js" defer></script>
+  </body>
+</html>

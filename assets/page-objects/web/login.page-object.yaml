@@ -1,0 +1,20 @@
+page: login
+
+elements:
+  username_input:
+    locator_type: placeholder
+    locator_value: 请输入用户名
+
+  password_input:
+    locator_type: placeholder
+    locator_value: 请输入密码
+
+  login_button:
+    locator_type: role
+    role: button
+    locator_value: 登录
+
+  home_menu:
+    locator_type: role
+    role: menuitem
+    locator_value: 首页

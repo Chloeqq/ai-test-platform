@@ -1,0 +1,45 @@
+version: v4
+
+id: TC-PERMISSION-001
+
+title: 权限管理页面加载
+
+module: permission
+
+priority: P0
+
+tags:
+  - smoke
+  - permission
+
+owner: qa-team
+
+status: automated
+
+description: 登录后进入权限管理页面
+
+requirement:
+  - 权限管理模块
+
+data: {}
+
+execution:
+
+  runner: playwright
+
+  page: permission
+
+  variables: {}
+
+  steps:
+
+    - action: login
+
+    - action: click
+      target: permission_menu
+
+    - action: wait_for
+      target: permission_table
+
+    - action: assert_visible
+      target: permission_table

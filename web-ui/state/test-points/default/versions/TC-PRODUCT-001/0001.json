@@ -1,0 +1,77 @@
+{
+  "asset_id": "TC-PRODUCT-001",
+  "version": 1,
+  "updated_at": "2026-03-18T11:04:15.616047+00:00",
+  "title": "Verify product page login and list display",
+  "page": "product",
+  "requirement": [
+    "Verify product page access and list display."
+  ],
+  "priority": "P1",
+  "source_type": "yaml_case",
+  "source_name": "TC-PRODUCT-001",
+  "source_ref": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-001.yaml",
+  "point_count": 4,
+  "point_types": [
+    "precondition",
+    "navigation",
+    "assertion"
+  ],
+  "point_keys": [
+    "product-01",
+    "product-02",
+    "product-03",
+    "product-04"
+  ],
+  "references": [
+    {
+      "kind": "case_yaml",
+      "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-001.yaml",
+      "case_id": "TC-PRODUCT-001"
+    }
+  ],
+  "plan": {
+    "page": "product",
+    "requirement": [
+      "Verify product page access and list display."
+    ],
+    "source_type": "yaml_case",
+    "source_name": "TC-PRODUCT-001",
+    "source_ref": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-001.yaml",
+    "priority": "P1",
+    "points": [
+      {
+        "key": "product-01",
+        "point_type": "precondition",
+        "description": "Use the shared login entry step.",
+        "action": "login"
+      },
+      {
+        "key": "product-02",
+        "point_type": "navigation",
+        "description": "Navigate with target 'product_menu'.",
+        "action": "click",
+        "target": "product_menu"
+      },
+      {
+        "key": "product-03",
+        "point_type": "assertion",
+        "description": "Verify target 'product_table' is ready or visible.",
+        "action": "wait_for",
+        "target": "product_table"
+      },
+      {
+        "key": "product-04",
+        "point_type": "assertion",
+        "description": "Verify target 'product_table' is ready or visible.",
+        "action": "assert_visible",
+        "target": "product_table"
+      }
+    ]
+  },
+  "precondition_count": 1,
+  "navigation_count": 1,
+  "input_count": 0,
+  "assertion_count": 2,
+  "action_count": 0
+}

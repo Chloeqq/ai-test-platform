@@ -1,0 +1,40 @@
+page: product
+elements:
+  product_menu:
+    locator_type: role
+    role: menuitem
+    locator_value: 商品
+    description: 商品父菜单
+  product_title:
+    locator_type: text
+    locator_value: 商品列表
+    description: 商品列表标题
+  list_navigation_entry:
+    locator_type: role
+    locator_value: 列表
+    role: menuitem
+  list_table:
+    locator_type: css
+    locator_value: .data-table
+  list_filter_input:
+    locator_type: css
+    locator_value: input[name='filter']
+    description: 筛选输入框
+  login_button:
+    locator_type: role
+    role: button
+    locator_value: 登录
+  product_list_title:
+    locator_type: text
+    locator_value: 商品列表
+  search_input:
+    locator_type: css
+    locator_value: input[placeholder*='商品']
+  search_button:
+    locator_type: role
+    role: button
+    locator_value: 查询
+  product_table:
+    locator_type: css
+    locator_value: .el-table
+description: 自动生成测试

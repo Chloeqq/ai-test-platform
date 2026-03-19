@@ -1,0 +1,155 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: /bin/sh -c "cd /app/apps/web-ui-service && python scripts/bootstrap_database.py && cd /app && python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 0.0.0.0 --port 8013"
+    restart: unless-stopped
+    environment:
+      APP_ENV: docker
+      DATABASE_URL: postgresql+psycopg2://aitest:aitest@postgres:5432/ai_test_platform
+      DATABASE_AUTO_CREATE_TABLES: "false"
+      WORKBENCH_STATE_BACKEND: database
+      REDIS_URL: redis://redis:6379/0
+      REDIS_ENABLED: "true"
+      REDIS_PREFIX: aitest
+      ORCHESTRATOR_URL: http://orchestrator:8000
+      JWT_SECRET_KEY: dev-jwt-secret-change-me
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: "120"
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin123
+      ADMIN_ROLE: admin
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+      LOG_FILE_PATH: /var/log/ai-test-platform/web-ui-service.log
+      BASE_URL: http://192.168.65.254:5173/login#/login
+      TEST_USERNAME: admin
+      TEST_PASSWORD: macro123
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8013:8013"
+    volumes:
+      - .:/app
+      - platform_logs:/var/log/ai-test-platform
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      orchestrator:
+        condition: service_started
+    networks:
+      - platform
+
+  orchestrator:
+    build:
+      context: .
+      dockerfile: apps/ai-orchestrator/Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: docker
+      LOG_LEVEL: INFO
+      LOG_FORMAT: json
+      LOG_FILE_PATH: /var/log/ai-test-platform/ai-orchestrator.log
+      PYTHONPATH: /app:/app/apps/ai-orchestrator/src
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - platform_logs:/var/log/ai-test-platform
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - platform
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_test_platform
+      POSTGRES_USER: aitest
+      POSTGRES_PASSWORD: aitest
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aitest -d ai_test_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - platform
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - platform
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.3
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "${ELASTICSEARCH_HOST_PORT:-19200}:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 20
+    networks:
+      - platform
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.3
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "${KIBANA_HOST_PORT:-15601}:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - platform
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.3
+    restart: unless-stopped
+    volumes:
+      - ./deploy/elk/logstash/pipeline:/usr/share/logstash/pipeline
+      - platform_logs:/var/log/ai-test-platform:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - platform
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+  platform_logs:
+
+networks:
+  platform:
+    driver: bridge

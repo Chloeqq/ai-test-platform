@@ -1,0 +1,104 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Test suite to run
+        required: true
+        default: contract
+        type: choice
+        options:
+          - contract
+          - e2e-smoke
+          - e2e-generated
+          - all
+
+jobs:
+  contract-and-integration:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'contract' || inputs.suite == 'all'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install root dev dependencies
+        run: make install-dev
+
+      - name: Run OpenAPI contract tests
+        run: make test-openapi
+
+      - name: Run contract and integration tests
+        run: make test
+
+  e2e-smoke:
+    if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'e2e-smoke' || inputs.suite == 'all')
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ secrets.BASE_URL }}
+      TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+      TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install root dev dependencies
+        run: make install-dev
+
+      - name: Install Playwright browser
+        run: .venv/bin/playwright install --with-deps chromium
+
+      - name: Verify E2E secrets
+        run: |
+          test -n "$BASE_URL"
+          test -n "$TEST_USERNAME"
+          test -n "$TEST_PASSWORD"
+
+      - name: Run smoke E2E tests
+        run: make test-e2e-smoke
+
+  e2e-generated:
+    if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'e2e-generated' || inputs.suite == 'all')
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ secrets.BASE_URL }}
+      TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+      TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install root dev dependencies
+        run: make install-dev
+
+      - name: Install Playwright browser
+        run: .venv/bin/playwright install --with-deps chromium
+
+      - name: Verify E2E secrets
+        run: |
+          test -n "$BASE_URL"
+          test -n "$TEST_USERNAME"
+          test -n "$TEST_PASSWORD"
+
+      - name: Run generated E2E tests
+        run: make test-e2e-generated

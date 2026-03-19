@@ -1,0 +1,45 @@
+version: v4
+
+id: TC-ORDER-001
+
+title: 订单列表页面加载
+
+module: order
+
+priority: P0
+
+tags:
+  - smoke
+  - order
+
+owner: qa-team
+
+status: automated
+
+description: 登录后进入订单列表页面
+
+requirement:
+  - 订单列表展示
+
+data: {}
+
+execution:
+
+  runner: playwright
+
+  page: order
+
+  variables: {}
+
+  steps:
+
+    - action: login
+
+    - action: click
+      target: order_menu
+
+    - action: wait_for
+      target: order_list_title
+
+    - action: assert_visible
+      target: order_list_title

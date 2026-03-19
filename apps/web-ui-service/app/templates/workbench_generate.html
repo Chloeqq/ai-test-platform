@@ -1,0 +1,168 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/workbench.css">
+{% endblock %}
+
+{% block content %}
+<section class="hero-card workbench-shell" id="workbench-generate-shell">
+  <p class="breadcrumb">
+    {% for item in breadcrumbs %}
+      <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+    {% endfor %}
+  </p>
+  <h1>{{ page_title }}</h1>
+  <p>{{ page_description }}</p>
+  <div id="gen-auth-notice" class="wb-auth-notice wb-auth-notice-anonymous">登录后，确认点会绑定到真实用户；未登录时仍可生成和执行，但确认动作会被引导去登录。</div>
+  <section class="workbench-quickstart">
+    <h2>一键自动测试</h2>
+    <ol>
+      <li>输入被测页面 URL，可一次输入一个或多个页面。</li>
+      <li>需求描述现在是可选项；不填写时，系统会根据页面自动生成默认测试目标。</li>
+      <li>点击“一键自动生成并执行”，系统会自动完成测试点、页面对象、用例、执行与报告刷新。</li>
+    </ol>
+  </section>
+
+  <section class="workbench-returnflow" id="gen-returnflow-panel">
+    <h2>returnApply 回流路径</h2>
+    <div class="workbench-returnflow-grid">
+      <article class="workbench-returnflow-step">
+        <strong>1. 从首页进入样板</strong>
+        <p>仪表盘和工作台都提供 <code>returnApply 样板</code> 入口，方便直接复现主链路。</p>
+      </article>
+      <article class="workbench-returnflow-step">
+        <strong>2. 载入后先预览</strong>
+        <p>样板会自动填充页面 URL、标题、优先级、标签和回归目标，便于先检查字段是否符合预期。</p>
+      </article>
+      <article class="workbench-returnflow-step">
+        <strong>3. 生成后回工作台</strong>
+        <p>生成成功后可以直接进入预览，也能回到工作台定位同一个用例，继续看 YAML、日志和结果。</p>
+      </article>
+      <article class="workbench-returnflow-step">
+        <strong>4. 执行后看 run 回流</strong>
+        <p>如果是自动执行，工作台会带着 <code>run_id</code> 回流，继续查看实时日志、失败分析和审计时间线。</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="wb-card">
+    <h2>URL 驱动生成</h2>
+    <form id="wb-generate-form" class="wb-form">
+      <label>页面 URL 列表
+        <textarea id="gen-page-urls" name="page_urls" rows="5" placeholder="http://localhost:5173/#/pms/product&#10;http://localhost:5173/#/pms/addProduct&#10;http://localhost:5173/#/oms/order"></textarea>
+        <span class="inline-tip">每行一个 URL。只填这里也可以直接启动自动测试。</span>
+      </label>
+      <label>业务目标 / 需求描述（可选）
+        <textarea id="gen-requirement" name="requirement" rows="5" placeholder="例如：验证页面可访问、查询区可用、列表结果正常展示。未填写时系统会自动生成默认测试目标。"></textarea>
+      </label>
+      <div class="wb-actions">
+        <button type="button" class="btn btn-primary" id="gen-auto-run">一键自动生成并执行</button>
+        <button type="button" class="btn" id="gen-preview-points">预览测试点</button>
+        <button type="button" class="btn" id="gen-load-returnapply">载入 returnApply 样板</button>
+        <button type="submit" class="btn">仅生成用例</button>
+        <a class="btn" href="/workbench">返回工作台</a>
+      </div>
+      <details class="wb-advanced">
+        <summary>高级配置</summary>
+        <p class="inline-tip">这里保留项目、页面、优先级、多输入源等高级选项；常规一键测试通常不需要展开。</p>
+        <div class="wb-form-grid">
+        <label>项目
+          <select id="gen-project" name="project"></select>
+        </label>
+        <label>页面
+          <input id="gen-page" name="page" value="" placeholder="可留空，系统会根据 URL 自动识别">
+        </label>
+        <label>标题
+          <input id="gen-title" name="title" placeholder="可留空，系统自动生成">
+        </label>
+        <label>优先级
+          <select id="gen-priority" name="priority">
+            <option value="P0">P0</option>
+            <option value="P1" selected>P1</option>
+            <option value="P2">P2</option>
+            <option value="P3">P3</option>
+          </select>
+        </label>
+        <label>来源
+          <select id="gen-source" name="source">
+            <option value="manual" selected>manual</option>
+            <option value="ai">ai</option>
+            <option value="regression">regression</option>
+          </select>
+        </label>
+        <label>标签（逗号分隔）
+          <input id="gen-tags" name="tags" value="ai-generated,smoke">
+        </label>
+        </div>
+        <section class="wb-card wb-subcard">
+          <h3>多输入源（可选）</h3>
+          <p>可选填任意一个来源：PRD、用户故事、OpenAPI、Git Diff、缺陷单、运行日志、JSON 文件。</p>
+          <div class="wb-form-grid">
+          <label>PRD 文本
+            <textarea id="gen-prd-text" name="prd_text" rows="4" placeholder="粘贴 PRD 片段"></textarea>
+          </label>
+          <label>PRD 文档 URL（PDF/Word）
+            <input id="gen-prd-url" name="prd_url" placeholder="https://example.com/requirement.pdf">
+          </label>
+          <label>用户故事
+            <textarea id="gen-user-story" name="user_story" rows="4" placeholder="如：作为运营，我希望..."></textarea>
+          </label>
+          <label>Git Diff
+            <textarea id="gen-git-diff" name="git_diff" rows="4" placeholder="粘贴 diff 内容"></textarea>
+          </label>
+          <label>Git Diff 本地路径
+            <input id="gen-git-diff-path" name="git_diff_path" placeholder="/Users/.../changes.diff">
+          </label>
+          <label>缺陷单
+            <textarea id="gen-defect-ticket" name="defect_ticket" rows="4" placeholder="如：BUG-1001..."></textarea>
+          </label>
+          <label>运行日志
+            <textarea id="gen-runtime-logs" name="runtime_logs" rows="4" placeholder="粘贴失败日志"></textarea>
+          </label>
+          <label>OpenAPI JSON（Swagger）
+            <textarea id="gen-openapi-spec" name="openapi_spec" rows="6" placeholder='{"openapi":"3.0.0","paths":{...}}'></textarea>
+          </label>
+          <label>OpenAPI URL（JSON/YAML）
+            <input id="gen-openapi-url" name="openapi_url" placeholder="https://example.com/openapi.yaml">
+          </label>
+          <label>附加输入源 JSON（数组）
+            <textarea id="gen-input-sources" name="input_sources" rows="4" placeholder='[{"source_type":"postman","content":"..."}]'></textarea>
+          </label>
+          <label>导入 JSON 文件
+            <input id="gen-json-file" name="json_file" type="file" accept=".json,application/json">
+          </label>
+          </div>
+        </section>
+      </details>
+    </form>
+    <div id="gen-auto-result" class="wb-analysis-summary">自动链路未启动。</div>
+    <div id="gen-review-summary" class="wb-analysis-summary">确认点尚未触发。</div>
+    <div id="gen-review-panel" class="wb-review-panel wb-review-empty">执行后将在这里展示低置信度元素与待确认测试点。</div>
+    <div id="gen-audit-timeline" class="wb-audit-panel wb-review-empty">执行后将在这里展示确认、拒绝与风险决策的审计时间线。</div>
+    <pre id="gen-auto-output" class="wb-log-viewer"></pre>
+  </section>
+
+  <section class="wb-card">
+    <h2>测试点预览</h2>
+    <div id="gen-intent-summary" class="wb-analysis-summary">等待预览...</div>
+    <pre id="gen-intent-preview" class="wb-log-viewer"></pre>
+  </section>
+
+    <section class="wb-card">
+      <h2>生成结果</h2>
+      <div id="gen-result" class="wb-analysis-summary">等待生成...</div>
+      <pre id="gen-yaml-preview" class="wb-log-viewer"></pre>
+      <div class="wb-actions">
+        <a id="gen-open-preview" class="btn btn-primary" href="#">进入预览</a>
+        <a id="gen-open-workbench" class="btn" href="/workbench" aria-disabled="true">查看工作台结果</a>
+      </div>
+    </section>
+
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/workbench_generate.js"></script>
+{% endblock %}

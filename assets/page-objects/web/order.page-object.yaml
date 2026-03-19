@@ -1,0 +1,39 @@
+page: order
+elements:
+  order_menu:
+    locator_type: role
+    role: menuitem
+    locator_value: 订单列表
+  order_title:
+    locator_type: text
+    locator_value: 订单列表
+    description: 订单列表标题
+  list_navigation_entry:
+    locator_type: role
+    locator_value: 列表
+    role: menuitem
+  list_table:
+    locator_type: css
+    locator_value: .data-table
+  list_filter_input:
+    locator_type: css
+    locator_value: input[name='filter']
+    description: 筛选输入框
+  login_button:
+    locator_type: role
+    role: button
+    locator_value: 登录
+  order_list_title:
+    locator_type: text
+    locator_value: 订单列表
+  order_table:
+    locator_type: css
+    locator_value: .el-table
+  search_input:
+    locator_type: placeholder
+    locator_value: 订单编号
+  search_button:
+    locator_type: role
+    role: button
+    locator_value: 查询搜索
+description: 自动生成测试

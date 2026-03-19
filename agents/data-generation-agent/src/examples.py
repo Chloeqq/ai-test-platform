@@ -1,0 +1,27 @@
+EXAMPLE_INPUT = {
+    "request_id": "req-product-001",
+    "project": "default",
+    "environment": "test",
+    "requirements": [
+        {
+            "requirement_id": "user_seed",
+            "data_type": "user",
+            "quantity": 2,
+            "fields": [
+                {"name": "username", "type": "string", "prefix": "user", "unique": True},
+                {"name": "email", "type": "email", "prefix": "buyer", "unique": True},
+                {"name": "age", "type": "integer", "min_value": 18, "max_value": 60},
+            ],
+        },
+        {
+            "requirement_id": "order_seed",
+            "data_type": "order",
+            "quantity": 2,
+            "relationships": ["user_seed"],
+            "fields": [
+                {"name": "order_no", "type": "string", "prefix": "ord", "unique": True},
+                {"name": "status", "type": "enum", "options": ["draft", "paid"]},
+            ],
+        },
+    ],
+}
