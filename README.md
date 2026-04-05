@@ -202,11 +202,13 @@ make allure-open
     - `e2e-generated`
     - `all`
 
-手动跑 E2E 时，CI 需要以下 GitHub Secrets：
+手动跑 E2E 时（`self-hosted` runner），CI 需要以下 GitHub Secrets：
 
 - `BASE_URL`
 - `TEST_USERNAME`
 - `TEST_PASSWORD`
+
+`deploy-staging` 当前改为仅手动触发（`workflow_dispatch`）。
 
 Staging 发布所需 Secrets/Variables、回滚方式、故障排查见：
 

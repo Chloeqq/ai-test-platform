@@ -1,15 +1,6 @@
 name: Deploy Staging
 
 on:
-  workflow_run:
-    workflows:
-      - Build Image
-    types:
-      - completed
-    branches:
-      - dev
-      - main
-      - master
   workflow_dispatch:
     inputs:
       image_ref:
@@ -30,7 +21,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,25 +29,17 @@ jobs:
       - name: Compute deployment image reference
         id: image_ref
         env:
-          EVENT_NAME: ${{ github.event_name }}
           REPO_OWNER: ${{ github.repository_owner }}
           DISPATCH_IMAGE_REF: ${{ inputs.image_ref }}
           DISPATCH_SHA: ${{ github.sha }}
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           owner="$(echo "${REPO_OWNER}" | tr '[:upper:]' '[:lower:]')"
           image_repo="ghcr.io/${owner}/ai-test-platform-web"
-          image_ref=""
-
-          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
-            if [[ -n "${DISPATCH_IMAGE_REF}" ]]; then
-              image_ref="${DISPATCH_IMAGE_REF}"
-            else
-              image_ref="${image_repo}:sha-${DISPATCH_SHA}"
-            fi
+          if [[ -n "${DISPATCH_IMAGE_REF}" ]]; then
+            image_ref="${DISPATCH_IMAGE_REF}"
           else
-            image_ref="${image_repo}:sha-${WORKFLOW_RUN_SHA}"
+            image_ref="${image_repo}:sha-${DISPATCH_SHA}"
           fi
 
           echo "image_ref=${image_ref}" >> "${GITHUB_OUTPUT}"

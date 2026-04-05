@@ -2,30 +2,36 @@
 
 本文档用于把当前仓库的 CI/CD 流程快速跑通，覆盖镜像构建、staging 部署、健康检查与回滚。
 
+如果你使用本地服务器开发，推荐先采用“本地模式”：
+
+- GitHub 默认只跑 `static-baseline`
+- E2E 在 `self-hosted` runner 上手动触发
+- `deploy-staging` 改为仅手动触发（不自动触发）
+
 ## 1. 工作流概览
 
 当前 GitHub Actions 工作流：
 
 - [tests.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/tests.yml)
-  - 质量门与 E2E 手动触发
+  - 质量门（云端）+ E2E 手动触发（`self-hosted` runner）
 - [build-image.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/build-image.yml)
   - 构建并推送 `ghcr.io/<owner>/ai-test-platform-web`
 - [deploy-staging.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/deploy-staging.yml)
-  - 在 staging 主机拉取镜像并重启容器
+  - 手动触发后，在 staging 主机拉取镜像并重启容器
   - 自动输出部署摘要（image/container/healthcheck）到 GitHub Step Summary
   - 失败时自动抓取远端 `docker ps` 与 `docker logs` 诊断信息
 
 ## 2. GitHub Secrets / Variables
 
-### 2.1 必需 Secrets
+### 2.1 必需 Secrets（本地模式最小集）
 
 `tests.yml`（E2E 手动执行）：
 
-- `BASE_URL`
+- `BASE_URL`（必须是 self-hosted runner 可访问地址，不要填 GitHub 云端看不到的 `localhost`）
 - `TEST_USERNAME`
 - `TEST_PASSWORD`
 
-`deploy-staging.yml`（staging 部署）：
+`deploy-staging.yml`（仅在你要用 Actions 做远端部署时才需要）：
 
 - `STAGING_SSH_HOST`
 - `STAGING_SSH_USER`
@@ -45,15 +51,13 @@
 - `STAGING_EXTRA_DOCKER_ARGS`（例如 `--network host`）
 - `STAGING_HEALTHCHECK_URL`（默认自动拼为 `http://<host>:<port>/health/ready`）
 
-## 3. 首次跑通顺序
+## 3. 首次跑通顺序（本地模式）
 
 1. 推送 `dev`，确认 [tests.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/tests.yml) 的 `static-baseline` 通过。
-2. 手动触发 `tests.yml` 的 `e2e-smoke`，验证 E2E 凭据有效。
-3. 触发 [build-image.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/build-image.yml)（可 push 触发，也可手动触发）。
-4. 等 `Build Image` 成功后，触发 [deploy-staging.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/deploy-staging.yml)：
-   - 可自动由 `workflow_run` 触发；
-   - 也可 `workflow_dispatch` 手动指定 `image_ref`。
-5. 检查 `Deploy Staging` 最后一步健康检查成功。
+2. 在本机配置并启动 GitHub `self-hosted` runner。
+3. 手动触发 `tests.yml` 的 `e2e-smoke`，验证 E2E 凭据有效。
+4. 如需镜像构建，触发 [build-image.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/build-image.yml)。
+5. 如需远端部署，再手动触发 [deploy-staging.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/deploy-staging.yml)。
 
 ## 4. 手工部署（不经 Actions）
 

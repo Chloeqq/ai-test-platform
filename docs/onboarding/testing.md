@@ -177,6 +177,11 @@ PYTHONPATH=runners/web-playwright-python .venv/bin/python -m pytest -m "e2e and 
     - `e2e-generated`
     - `all`
 
+说明：
+
+- `e2e-smoke/e2e-generated` 在 GitHub Actions 中使用 `self-hosted` runner 执行（便于访问本地/内网环境）。
+- `deploy-staging` 当前仅支持手动触发（`workflow_dispatch`）。
+
 发布流程（镜像构建、staging 部署、健康检查、回滚）见：
 
 - [release-runbook.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/onboarding/release-runbook.md)

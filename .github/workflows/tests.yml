@@ -41,7 +41,7 @@ jobs:
 
   e2e-smoke:
     if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'e2e-smoke' || inputs.suite == 'all')
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       BASE_URL: ${{ secrets.BASE_URL }}
       TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
@@ -59,7 +59,7 @@ jobs:
         run: make install-dev
 
       - name: Install Playwright browser
-        run: .venv/bin/playwright install --with-deps chromium
+        run: .venv/bin/playwright install chromium
 
       - name: Verify E2E secrets
         run: |
@@ -72,7 +72,7 @@ jobs:
 
   e2e-generated:
     if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'e2e-generated' || inputs.suite == 'all')
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       BASE_URL: ${{ secrets.BASE_URL }}
       TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
@@ -90,7 +90,7 @@ jobs:
         run: make install-dev
 
       - name: Install Playwright browser
-        run: .venv/bin/playwright install --with-deps chromium
+        run: .venv/bin/playwright install chromium
 
       - name: Verify E2E secrets
         run: |
