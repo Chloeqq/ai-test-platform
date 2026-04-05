@@ -49,18 +49,20 @@ jobs:
       HOME: ${{ github.workspace }}/.home
       PIP_CACHE_DIR: ${{ github.workspace }}/.pip-cache
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+      RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-tool-cache
+      RUNNER_TEMP: ${{ github.workspace }}/.runner-temp
+      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-tool-cache
     steps:
+      - name: Prepare writable local directories
+        run: |
+          mkdir -p "$HOME" "$PIP_CACHE_DIR" "$PLAYWRIGHT_BROWSERS_PATH" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare writable local directories
+      - name: Show Python version on self-hosted runner
         run: |
-          mkdir -p "$HOME" "$PIP_CACHE_DIR" "$PLAYWRIGHT_BROWSERS_PATH"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
+          python3 --version
 
       - name: Install root dev dependencies
         run: make install-dev
@@ -87,18 +89,20 @@ jobs:
       HOME: ${{ github.workspace }}/.home
       PIP_CACHE_DIR: ${{ github.workspace }}/.pip-cache
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+      RUNNER_TOOL_CACHE: ${{ github.workspace }}/.runner-tool-cache
+      RUNNER_TEMP: ${{ github.workspace }}/.runner-temp
+      AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/.runner-tool-cache
     steps:
+      - name: Prepare writable local directories
+        run: |
+          mkdir -p "$HOME" "$PIP_CACHE_DIR" "$PLAYWRIGHT_BROWSERS_PATH" "$RUNNER_TOOL_CACHE" "$RUNNER_TEMP"
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare writable local directories
+      - name: Show Python version on self-hosted runner
         run: |
-          mkdir -p "$HOME" "$PIP_CACHE_DIR" "$PLAYWRIGHT_BROWSERS_PATH"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
+          python3 --version
 
       - name: Install root dev dependencies
         run: make install-dev
