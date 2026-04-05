@@ -1,118 +1,58 @@
-.risk-low {
-  border-color: #cfe8d6;
-  background: linear-gradient(180deg, #f2fbf4 0%, #ffffff 100%);
+.dashboard-section-card {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
 }
 
-.risk-low .level-badge {
-  background: #def5e3;
-  color: #1f6b39;
-}
-
-.risk-medium {
-  border-color: #f0deb5;
-  background: linear-gradient(180deg, #fff8eb 0%, #ffffff 100%);
-}
-
-.risk-medium .level-badge {
-  background: #f8e5ba;
-  color: #81591a;
-}
-
-.risk-high {
-  border-color: #edc7c7;
-  background: linear-gradient(180deg, #fff3f3 0%, #ffffff 100%);
-}
-
-.risk-high .level-badge {
-  background: #f5d3d3;
-  color: #9b3434;
+.dashboard-focus-grid,
+.dashboard-action-grid {
+  margin-top: 16px;
 }
 
 .dashboard-trend-wrap {
-  margin-top: 12px;
-  border: 1px solid #d8e5f5;
-  border-radius: 12px;
-  background: #f8fbff;
-  padding: 10px;
+  display: grid;
+  gap: 10px;
 }
 
-.trend-canvas-wrap {
-  margin-top: 8px;
-}
-
-#trend-svg {
-  width: 100%;
-  height: 280px;
-  display: block;
-}
-
-.trend-x-axis {
-  margin-top: 6px;
+.section-link-row {
   display: flex;
-  justify-content: space-between;
-  gap: 6px;
-  font-size: 11px;
-  color: #6d87a8;
-}
-
-.manager-summary-card {
-  padding: 16px;
-}
-
-.manager-summary-grid {
-  margin-top: 10px;
-}
-
-.pending-item-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
-.pending-item-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #1e436e;
-}
-
-.pending-item-meta {
-  margin-top: 5px;
-  font-size: 12px;
-  color: #5f7f9f;
-}
-
-.pending-item-note {
-  margin-top: 7px;
-  font-size: 12px;
-  color: #5e7998;
-  line-height: 1.55;
-}
-
-.pill {
-  padding: 2px 8px;
+.section-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #d7e2ef;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  border: 1px solid #d6e3f3;
-  background: #f4f8ff;
-  color: #345c8c;
+  background: #f8fbff;
+  color: #34557e;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
 }
 
-.pill-high {
-  color: #893434;
-  background: #fff0f0;
-  border-color: #f2cccc;
+.section-link:hover {
+  border-color: #b9cde4;
+  background: #eef5fd;
 }
 
-.pill-medium {
-  color: #8a5f16;
-  background: #fff7e9;
-  border-color: #f0ddb6;
+.dashboard-subsection {
+  display: grid;
+  gap: 10px;
 }
 
-.pill-low {
-  color: #255f33;
-  background: #eef9f1;
-  border-color: #ccead4;
+.dashboard-subsection h3 {
+  margin: 0;
+  color: #243a58;
+  font-size: 15px;
+}
+
+@media (max-width: 960px) {
+  .section-link-row {
+    justify-content: flex-start;
+  }
 }

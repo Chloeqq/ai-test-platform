@@ -1,9 +1,7 @@
 services:
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    command: /bin/sh -c "cd /app/apps/web-ui-service && python scripts/bootstrap_database.py && cd /app && python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 0.0.0.0 --port 8013"
+    image: ai-test-platform-web-ui
+    command: /bin/sh -c "cd /app && python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 0.0.0.0 --port 8013"
     restart: unless-stopped
     environment:
       APP_ENV: docker

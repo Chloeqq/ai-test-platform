@@ -1,73 +1,192 @@
+.cases-toolbar-card {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid #edf2f7;
+  border-radius: 0;
+  background: #ffffff;
+  padding: 12px 18px 14px;
+}
+
 .cases-search-help {
+  margin-top: 2px;
+}
+
+.cases-search-help summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #5f7898;
   font-size: 12px;
-  color: #5f7694;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.cases-search-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.cases-search-help summary::after {
+  content: "▼";
+  font-size: 10px;
+  color: currentColor;
+}
+
+.cases-search-help[open] summary::after {
+  content: "▲";
 }
 
 .cases-search-help p {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
+  color: #6b7e95;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.cases-search-help code {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #f5f7fb;
+  color: #304862;
+  font-size: 12px;
 }
 
 .cases-search-context {
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 10px;
+  margin: 0 18px 12px;
+  padding: 12px 0 14px;
+  border-bottom: 1px solid #edf2f7;
 }
 
-.cases-search-context .pill {
+.cases-context-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.cases-context-meta span {
+  color: #304862;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cases-context-meta-actions {
+  display: flex;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.cases-context-meta p {
+  margin: 0;
+  color: #71839a;
+  font-size: 12px;
+}
+
+.cases-context-clear {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid #d7e2ee;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #52667f;
+  font-size: 12px;
   cursor: pointer;
 }
 
-.cases-table-wrap {
-  margin-top: 10px;
-  overflow: auto;
+.cases-context-clear:hover,
+.cases-context-clear:focus-visible {
+  border-color: #c5d3e4;
+  background: #f7f9fc;
+  color: #304862;
 }
 
-.cases-grid-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.cases-grid-table th,
-.cases-grid-table td {
-  border-bottom: 1px solid #e2eaf4;
-  padding: 8px;
-  font-size: 13px;
-  text-align: left;
-  vertical-align: top;
-}
-
-.cases-grid-table th {
-  background: #f4f8fd;
-  color: #607895;
-  font-size: 12px;
-}
-
-.cases-col-check {
-  width: 36px;
-}
-
-.cases-col-handle {
-  width: 24px;
-}
-
-.row-actions-col {
-  width: 150px;
-}
-
-.cases-row-actions {
+.cases-context-pills {
   display: flex;
-  gap: 6px;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
-.cases-row-quick {
-  color: #2e5f99;
-  text-decoration: none;
+.cases-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #dde6f0;
+  border-radius: 999px;
+  background: #f7f9fc;
+  color: #52667f;
   font-size: 12px;
 }
 
-.cases-row-quick:hover {
-  text-decoration: underline;
+.cases-context-pill strong {
+  color: #304862;
+}
+
+.cases-context-remove {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #7a8ea8;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cases-context-remove:hover,
+.cases-context-remove:focus-visible {
+  background: rgba(31, 122, 224, 0.08);
+  color: #304862;
+}
+
+.cases-btn-primary {
+  border-color: #2f79db;
+  background: #2f79db;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.cases-btn-primary:hover {
+  background: #2268c6;
+  border-color: #2268c6;
+}
+
+.cases-btn-secondary {
+  border-color: #d4deea;
+  color: #415774;
+}
+
+.cases-table-header {
+  padding: 14px 18px 10px;
+}
+
+.cases-table-copy {
+  gap: 4px;
+}
+
+.cases-table-copy h2 {
+  font-size: 16px;
+}
+
+.cases-section-note {
+  max-width: 700px;
+  line-height: 1.55;
+}
+
+@media (max-width: 1120px) {
+  .cases-search-context {
+    margin-bottom: 10px;
+  }
 }

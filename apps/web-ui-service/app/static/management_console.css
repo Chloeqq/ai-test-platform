@@ -1,0 +1,220 @@
+.management-shell {
+  max-width: 1320px;
+}
+
+.management-panel-shell {
+  margin-top: 14px;
+}
+
+.management-layout {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.management-list-card,
+.management-detail-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  padding: 16px;
+}
+
+.management-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.management-card-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #22354f;
+}
+
+.management-check-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #60758f;
+  font-size: 12px;
+}
+
+.management-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+  min-height: 240px;
+}
+
+.management-list-item {
+  border: 1px solid #d7e4f1;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.management-list-item.is-active {
+  border-color: #2f79db;
+  background: #edf5ff;
+  box-shadow: 0 0 0 1px rgba(47, 121, 219, 0.12);
+}
+
+.management-list-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.management-item-trigger {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.management-list-title {
+  color: #203652;
+  font-weight: 700;
+}
+
+.management-list-meta,
+.management-list-time {
+  color: #6a7f9b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.management-list-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.management-list-tags .tag-pill {
+  border-radius: 999px;
+  border: 1px solid #d8e4f1;
+  background: #fff;
+  color: #44617f;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.management-list-side {
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 8px;
+}
+
+.management-detail-card {
+  min-height: 420px;
+}
+
+.management-detail-empty {
+  min-height: 100%;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  color: #6a7f9b;
+  gap: 8px;
+}
+
+.management-detail-empty h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #22354f;
+}
+
+.management-detail-panel h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #22354f;
+}
+
+.management-detail-panel > p {
+  margin: 10px 0 0;
+  color: #55708d;
+  line-height: 1.75;
+}
+
+.management-detail-badges {
+  margin-top: 12px;
+}
+
+.management-detail-list {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: #55708d;
+  line-height: 1.8;
+}
+
+.management-detail-sections {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.management-detail-section {
+  border: 1px solid #d9e3ef;
+  border-radius: 12px;
+  background: #f8fbff;
+  padding: 12px;
+}
+
+.management-detail-section strong {
+  display: block;
+  color: #22354f;
+  font-size: 13px;
+}
+
+.management-detail-section p {
+  margin: 6px 0 0;
+  color: #5a7390;
+  line-height: 1.7;
+}
+
+.management-detail-panel .button-row {
+  margin-top: 14px;
+}
+
+.management-list .empty-state {
+  min-height: 220px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.management-list .empty-state strong {
+  font-size: 16px;
+  color: #22354f;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media (max-width: 960px) {
+  .management-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .management-list-item {
+    grid-template-columns: 1fr;
+  }
+
+  .management-list-side {
+    justify-items: start;
+  }
+}

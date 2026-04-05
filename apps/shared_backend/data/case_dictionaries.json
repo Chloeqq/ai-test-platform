@@ -1,0 +1,90 @@
+{
+  "project": [
+    {
+      "code": "atp",
+      "name": "AI Test Platform",
+      "enabled": true,
+      "aliases": ["ai-test-platform", "platform"]
+    }
+  ],
+  "client": [
+    {"code": "web", "name": "Web端", "enabled": true, "aliases": ["pc", "browser"]},
+    {"code": "app", "name": "App端", "enabled": true, "aliases": ["mobile"]},
+    {"code": "api", "name": "接口层", "enabled": true, "aliases": ["service"]},
+    {"code": "admin", "name": "管理后台", "enabled": true, "aliases": ["backend"]},
+    {"code": "h5", "name": "H5页面", "enabled": true, "aliases": []}
+  ],
+  "page": [
+    {"code": "login", "name": "登录页", "enabled": true, "aliases": ["auth", "signin"]},
+    {"code": "home", "name": "首页", "enabled": true, "aliases": ["index", "dashboard-home"]},
+    {"code": "catalog", "name": "商品目录页", "enabled": true, "aliases": ["catalog"]},
+    {"code": "search", "name": "搜索页", "enabled": true, "aliases": ["search"]},
+    {"code": "prod", "name": "商品页", "enabled": true, "aliases": ["product"]},
+    {"code": "prodlist", "name": "商品列表页", "enabled": true, "aliases": ["product-list", "tc-product"]},
+    {"code": "addprod", "name": "新增商品页", "enabled": true, "aliases": ["addproduct"]},
+    {"code": "ord", "name": "订单页", "enabled": true, "aliases": ["order"]},
+    {"code": "ret", "name": "退货申请页", "enabled": true, "aliases": ["returnapply", "oms-return-apply"]},
+    {"code": "ref", "name": "退款页", "enabled": true, "aliases": ["refund"]},
+    {"code": "pay", "name": "支付页", "enabled": true, "aliases": ["payment"]},
+    {"code": "perm", "name": "权限管理页", "enabled": true, "aliases": ["permission"]},
+    {"code": "brand", "name": "品牌管理页", "enabled": true, "aliases": ["sms-brand"]},
+    {"code": "coupon", "name": "优惠券管理页", "enabled": true, "aliases": ["sms-coupon"]},
+    {"code": "flash", "name": "秒杀活动页", "enabled": true, "aliases": ["flash-sale"]},
+    {"code": "oset", "name": "订单设置页", "enabled": true, "aliases": ["oms-order-setting"]},
+    {"code": "bill", "name": "账单页", "enabled": true, "aliases": ["billing"]},
+    {"code": "common", "name": "通用页面", "enabled": true, "aliases": ["general", "core"]}
+  ],
+  "module": [
+    {"code": "auth", "name": "登录认证", "enabled": true, "aliases": ["permission", "signin"]},
+    {"code": "list", "name": "列表展示", "enabled": true, "aliases": ["catalog", "product", "order", "brand", "coupon", "flash", "sms-brand", "sms-coupon"]},
+    {"code": "query", "name": "查询检索", "enabled": true, "aliases": ["returnapply", "oms-return-apply", "billing", "search", "filter"]},
+    {"code": "detail", "name": "详情展示", "enabled": true, "aliases": ["info"]},
+    {"code": "subm", "name": "提交申请", "enabled": true, "aliases": ["addproduct", "submit", "apply", "form"]},
+    {"code": "upld", "name": "图片上传", "enabled": true, "aliases": ["upload", "image", "picture"]},
+    {"code": "calc", "name": "金额计算", "enabled": true, "aliases": ["amount", "price", "refund"]},
+    {"code": "conf", "name": "配置管理", "enabled": true, "aliases": ["oms-order-setting", "setting", "config"]},
+    {"code": "core", "name": "核心流程", "enabled": true, "aliases": ["common", "general"]},
+    {"code": "pay", "name": "支付处理", "enabled": true, "aliases": ["payment"]}
+  ],
+  "case_type": [
+    {"code": "sm", "name": "冒烟测试", "enabled": true},
+    {"code": "rg", "name": "回归测试", "enabled": true},
+    {"code": "fn", "name": "功能测试", "enabled": true},
+    {"code": "ex", "name": "异常测试", "enabled": true},
+    {"code": "int", "name": "集成测试", "enabled": true},
+    {"code": "e2e", "name": "端到端测试", "enabled": true}
+  ],
+  "source": [
+    {"code": "ai", "name": "AI自动生成", "enabled": true, "aliases": ["ai-generated", "generated"]},
+    {"code": "mn", "name": "人工编写", "enabled": true, "aliases": ["manual"]},
+    {"code": "cv", "name": "AI生成后人工复核", "enabled": true, "aliases": ["manual-reviewed", "review"]},
+    {"code": "imp", "name": "历史迁移导入", "enabled": true, "aliases": ["legacy", "import"]},
+    {"code": "fb", "name": "平台回退生成", "enabled": true, "aliases": ["fallback"]}
+  ],
+  "case_status": [
+    {"code": "draft", "name": "草稿", "enabled": true},
+    {"code": "review", "name": "待审核", "enabled": true},
+    {"code": "ready", "name": "可执行", "enabled": true},
+    {"code": "deprecated", "name": "已废弃", "enabled": true},
+    {"code": "automated", "name": "已自动化", "enabled": true}
+  ],
+  "run_status": [
+    {"code": "queued", "name": "排队中", "enabled": true},
+    {"code": "running", "name": "执行中", "enabled": true},
+    {"code": "passed", "name": "通过", "enabled": true},
+    {"code": "failed", "name": "失败", "enabled": true},
+    {"code": "blocked", "name": "阻断", "enabled": true},
+    {"code": "skipped", "name": "跳过", "enabled": true},
+    {"code": "generated", "name": "仅生成", "enabled": true}
+  ],
+  "ai_status": [
+    {"code": "generated", "name": "已生成", "enabled": true},
+    {"code": "reviewed", "name": "已复核", "enabled": true},
+    {"code": "accepted", "name": "已接纳", "enabled": true},
+    {"code": "rejected", "name": "已拒绝", "enabled": true}
+  ],
+  "migration_status": [
+    {"code": "migrated", "name": "已迁移", "enabled": true},
+    {"code": "need_review", "name": "待人工复核", "enabled": true}
+  ]
+}

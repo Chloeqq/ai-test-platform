@@ -1,21 +1,261 @@
+/**
+ * 分页组件样式
+ */
+
 .pagination {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
+  padding: 16px 0;
+  font-size: 14px;
+  color: #495057;
   flex-wrap: wrap;
 }
 
-.pagination-meta {
-  font-size: 12px;
-  color: #6682a3;
+/* 总数显示 */
+.pagination-total {
+  font-size: 13px;
+  color: #6c757d;
 }
 
-.pagination-size {
-  height: 30px;
-  border: 1px solid #cddceb;
-  border-radius: 8px;
-  background: #fff;
-  color: #2d4d73;
+.pagination-total strong {
+  color: #007bff;
+  font-weight: 600;
+}
+
+/* 每页数量选择器 */
+.pagination-page-size select {
+  padding: 6px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #495057;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination-page-size select:hover {
+  border-color: #007bff;
+}
+
+.pagination-page-size select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+/* 页码导航 */
+.pagination-pager {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
   padding: 0 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: white;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  border-color: #007bff;
+  background: #f8f9fa;
+  color: #007bff;
+}
+
+.pagination-btn:active:not(:disabled) {
+  background: #e9ecef;
+}
+
+.pagination-btn.active {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f8f9fa;
+}
+
+.pagination-btn.first,
+.pagination-btn.last {
   font-size: 12px;
+  font-weight: 600;
+}
+
+.pagination-btn.prev,
+.pagination-btn.next {
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* 省略号 */
+.pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  color: #6c757d;
+  font-size: 14px;
+}
+
+/* 快速跳转 */
+.pagination-jumper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6c757d;
+}
+
+.page-jumper-input {
+  width: 60px;
+  padding: 6px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.page-jumper-input:hover {
+  border-color: #007bff;
+}
+
+.page-jumper-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.page-jumper-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  background: #007bff;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-jumper-btn:hover {
+  background: #0056b3;
+}
+
+.page-jumper-btn:active {
+  background: #004085;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .pagination {
+    justify-content: center;
+    gap: 12px;
+  }
+  
+  .pagination-total {
+    order: 1;
+    width: 100%;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  
+  .pagination-page-size {
+    order: 2;
+  }
+  
+  .pagination-pager {
+    order: 3;
+  }
+  
+  .pagination-jumper {
+    order: 4;
+  }
+  
+  .pagination-btn {
+    min-width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+}
+
+/* 空状态 */
+.pagination:empty {
+  display: none;
+}
+
+/* 深色模式支持 */
+@media (prefers-color-scheme: dark) {
+  .pagination {
+    color: #e9ecef;
+  }
+  
+  .pagination-total {
+    color: #adb5bd;
+  }
+  
+  .pagination-total strong {
+    color: #4dabf7;
+  }
+  
+  .pagination-page-size select {
+    background: #343a40;
+    border-color: #495057;
+    color: #e9ecef;
+  }
+  
+  .pagination-btn {
+    background: #343a40;
+    border-color: #495057;
+    color: #e9ecef;
+  }
+  
+  .pagination-btn:hover:not(:disabled) {
+    border-color: #4dabf7;
+    background: #495057;
+    color: #4dabf7;
+  }
+  
+  .pagination-btn.active {
+    background: #4dabf7;
+    border-color: #4dabf7;
+    color: #212529;
+  }
+  
+  .pagination-btn:disabled {
+    background: #495057;
+    opacity: 0.5;
+  }
+  
+  .page-jumper-input {
+    background: #343a40;
+    border-color: #495057;
+    color: #e9ecef;
+  }
+  
+  .page-jumper-btn {
+    background: #4dabf7;
+    color: #212529;
+  }
+  
+  .page-jumper-btn:hover {
+    background: #339af0;
+  }
 }

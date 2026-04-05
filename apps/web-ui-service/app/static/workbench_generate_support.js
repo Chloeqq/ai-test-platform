@@ -1,71 +1,74 @@
 (function () {
-  function hasText(node) {
-    return String(node?.value || "").trim().length > 0;
+  function hasText(value) {
+    return Boolean(String(value || "").trim());
   }
 
-  function parseJsonArrayLike(node) {
-    const text = String(node?.value || "").trim();
-    if (!text) return true;
-    try {
-      const parsed = JSON.parse(text);
-      return Array.isArray(parsed) || (parsed && typeof parsed === "object");
-    } catch (_error) {
-      return false;
-    }
+  function hasJsonFile(input) {
+    return Boolean(input && input.files && input.files.length);
   }
 
   function inputStepStatus(els, shared, method) {
-    const normalizedMethod = shared.normalizeMethod(method);
-    if (normalizedMethod === "url") {
-      if (!hasText(els.pageUrlsInput)) return { ok: false, message: "请至少填写一个页面 URL。" };
-      return { ok: true, message: "URL 输入已就绪，可进入候选预览。" };
+    const currentMethod = shared.normalizeMethod(method);
+    if (currentMethod === "url") {
+      const urls = shared.splitLines(els.pageUrlsInput?.value || "");
+      return urls.length
+        ? { ok: true, message: `已填写 ${urls.length} 个页面 URL，可进入候选预览。` }
+        : { ok: false, message: "请至少填写 1 个页面 URL，再进入候选预览。" };
     }
-    if (normalizedMethod === "prd") {
-      if (!hasText(els.prdTextInput) && !hasText(els.prdUrlInput)) return { ok: false, message: "请填写 PRD 文本或 PRD 文档 URL。" };
-      return { ok: true, message: "PRD 输入已就绪，可进入候选预览。" };
+    if (currentMethod === "prd") {
+      const hasContent = hasText(els.prdTextInput?.value) || hasText(els.prdUrlInput?.value);
+      return hasContent
+        ? { ok: true, message: "已提供 PRD 输入，可进入候选预览。" }
+        : { ok: false, message: "请填写 PRD 文本或 PRD 文档 URL。" };
     }
-    if (normalizedMethod === "api") {
-      if (!hasText(els.openapiSpecInput) && !hasText(els.openapiUrlInput)) return { ok: false, message: "请填写 OpenAPI JSON 或 OpenAPI URL。" };
-      return { ok: true, message: "API 输入已就绪，可进入候选预览。" };
+    if (currentMethod === "api") {
+      const hasContent = hasText(els.openapiSpecInput?.value) || hasText(els.openapiUrlInput?.value);
+      return hasContent
+        ? { ok: true, message: "已提供接口契约输入，可进入候选预览。" }
+        : { ok: false, message: "请填写 OpenAPI JSON 或 OpenAPI URL。" };
     }
-    if (normalizedMethod === "story") {
-      if (!hasText(els.userStoryInput)) return { ok: false, message: "请填写用户故事内容。" };
-      return { ok: true, message: "用户故事输入已就绪，可进入候选预览。" };
+    if (currentMethod === "story") {
+      return hasText(els.userStoryInput?.value)
+        ? { ok: true, message: "已填写用户故事，可进入候选预览。" }
+        : { ok: false, message: "请先填写用户故事。" };
     }
-    if (!hasText(els.customRequirementInput) && !hasText(els.inputSourcesInput)) {
-      return { ok: false, message: "请填写自定义需求描述或附加输入源。" };
-    }
-    if (!parseJsonArrayLike(els.inputSourcesInput)) {
-      return { ok: false, message: "附加输入源 JSON 格式不正确。" };
-    }
-    return { ok: true, message: "输入已就绪，可进入候选预览。" };
+    const hasCustomContent =
+      hasText(els.customRequirementInput?.value) ||
+      hasText(els.inputSourcesInput?.value) ||
+      hasJsonFile(els.jsonFileInput);
+    return hasCustomContent
+      ? { ok: true, message: "已提供自定义上下文，可进入候选预览。" }
+      : { ok: false, message: "请填写自定义需求、输入源 JSON 或导入 JSON 文件。" };
   }
 
   function previewStepStatus(state) {
-    const count = Array.isArray(state?.previewCandidates) ? state.previewCandidates.length : 0;
-    if (count > 0) return { ok: true, message: "候选预览已生成，可确认提交。" };
-    return { ok: false, message: "请先生成候选预览，再确认提交。" };
+    const count = Array.isArray(state.previewCandidates) ? state.previewCandidates.length : 0;
+    return count
+      ? { ok: true, message: `已生成 ${count} 个候选 Draft，可以提交正式生成。` }
+      : { ok: false, message: "请先生成候选预览，确认后再提交 Draft。" };
   }
 
   function canProceed(currentStep, nextStep, els, state, shared) {
-    if (nextStep <= currentStep) return true;
-    if (nextStep <= 2) return true;
-    if (nextStep === 3) return inputStepStatus(els, shared, state.method).ok;
-    if (nextStep === 4) return previewStepStatus(state).ok;
+    if (currentStep === 2 && nextStep === 3) {
+      return inputStepStatus(els, shared, state.method).ok;
+    }
+    if (currentStep === 3 && nextStep === 4) {
+      return false;
+    }
     return true;
   }
 
   function resolveInitialStep(search) {
     const params = new URLSearchParams(search || "");
-    const step = Number(params.get("step") || 1);
-    if (!Number.isFinite(step)) return 1;
-    return Math.min(4, Math.max(1, step));
+    const rawStep = Number(params.get("step") || 1);
+    if (!Number.isFinite(rawStep)) return 1;
+    return Math.min(3, Math.max(1, rawStep));
   }
 
   window.WorkbenchGenerateSupport = {
-    canProceed: canProceed,
-    inputStepStatus: inputStepStatus,
-    previewStepStatus: previewStepStatus,
-    resolveInitialStep: resolveInitialStep,
+    canProceed,
+    inputStepStatus,
+    previewStepStatus,
+    resolveInitialStep,
   };
 })();

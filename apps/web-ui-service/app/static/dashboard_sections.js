@@ -7,263 +7,259 @@
       .replaceAll('"', "&quot;");
   }
 
-  function safeHref(value) {
-    const text = String(value || "").trim();
-    if (!text) return "#";
-    if (text.startsWith("/") && !text.startsWith("//")) return text;
-    return "#";
+  function formatTime(value) {
+    if (typeof window.platformFormatDateTime === "function") {
+      return window.platformFormatDateTime(value);
+    }
+    return String(value || "").trim() || "-";
   }
 
-  function toNumber(value, fallback) {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : fallback;
+  function riskClass(level) {
+    if (level === "高") return "risk-high";
+    if (level === "中") return "risk-medium";
+    return "risk-low";
   }
 
-  function asText(value, fallback) {
-    const text = String(value ?? "").trim();
-    return text || fallback;
+  function riskAdvice(level) {
+    if (level === "高") return "优先处理";
+    if (level === "中") return "持续关注";
+    return "可推进回归";
   }
 
-  function levelKey(level) {
-    const normalized = asText(level, "低").toLowerCase();
-    if (normalized === "high" || normalized === "高") return "high";
-    if (normalized === "medium" || normalized === "中") return "medium";
-    return "low";
+  function toPolylinePoints(values, min, max, width, height, padLeft, padRight, padTop, padBottom) {
+    const count = values.length;
+    if (!count) return "";
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    const safeMax = max <= min ? min + 1 : max;
+    return values
+      .map((value, idx) => {
+        const x = padLeft + (count === 1 ? plotW / 2 : (plotW * idx) / (count - 1));
+        const y = padTop + ((safeMax - value) / (safeMax - min)) * plotH;
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(" ");
   }
 
-  function levelLabel(level) {
-    const key = levelKey(level);
-    if (key === "high") return "高";
-    if (key === "medium") return "中";
-    return "低";
+  function buildPointCoordinates(values, min, max, width, height, padLeft, padRight, padTop, padBottom) {
+    const count = values.length;
+    if (!count) return [];
+    const plotW = width - padLeft - padRight;
+    const plotH = height - padTop - padBottom;
+    const safeMax = max <= min ? min + 1 : max;
+    return values.map((value, idx) => {
+      const x = padLeft + (count === 1 ? plotW / 2 : (plotW * idx) / (count - 1));
+      const y = padTop + ((safeMax - value) / (safeMax - min)) * plotH;
+      return { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) };
+    });
   }
 
-  function formatPercent(value) {
-    const num = toNumber(value, 0);
-    return num.toFixed(1).replace(/\.0$/, "") + "%";
-  }
-
-  function formatAsOf(value) {
-    if (typeof window.platformFormatDateTime === "function") return window.platformFormatDateTime(value);
-    return asText(value, "-");
-  }
-
-  function clearRiskClass(card) {
-    if (!card) return;
-    card.classList.remove("risk-low", "risk-medium", "risk-high");
+  function renderIssueList(element, rows, emptyText) {
+    if (!element) return;
+    if (!rows.length) {
+      element.innerHTML = `<li class="empty-line">${escapeHtml(emptyText)}</li>`;
+      return;
+    }
+    element.innerHTML = rows
+      .map(
+        (item) => `
+          <li class="issue-item">
+            <div class="issue-top">
+              <span class="issue-title">${escapeHtml(item.title || "-")}</span>
+              ${item.status ? `<span class="issue-status">${escapeHtml(item.status)}</span>` : ""}
+            </div>
+            ${item.meta ? `<p class="issue-meta">${escapeHtml(item.meta)}</p>` : ""}
+            <p class="issue-recommendation">${escapeHtml(item.summary || "-")}</p>
+            ${item.href ? `<a class="issue-link" href="${escapeHtml(item.href)}">进入对应页面</a>` : ""}
+          </li>
+        `
+      )
+      .join("");
   }
 
   function renderRisk(els, risk) {
-    const safeRisk = risk && typeof risk === "object" ? risk : {};
-    const key = levelKey(safeRisk.level);
-    const label = levelLabel(safeRisk.level);
-    const score = Math.max(0, Math.round(toNumber(safeRisk.score, 0)));
-
+    const level = risk.level || "待评估";
     if (els.riskCard) {
-      clearRiskClass(els.riskCard);
-      els.riskCard.classList.add("risk-" + key);
-      if (safeRisk.detail_url) {
-        els.riskCard.href = String(safeRisk.detail_url);
-      }
+      els.riskCard.classList.remove("risk-low", "risk-medium", "risk-high");
+      els.riskCard.classList.add(riskClass(level));
+      els.riskCard.href = risk.detail_url || "/quality/trends";
     }
-    if (els.riskLevelBadge) els.riskLevelBadge.textContent = label;
-    if (els.dashboardRiskLevel) els.dashboardRiskLevel.textContent = label;
-    if (els.riskScore) els.riskScore.textContent = String(score);
-    if (els.riskSummary) els.riskSummary.textContent = asText(safeRisk.summary, "暂无风险摘要。");
+    if (els.riskLevelBadge) els.riskLevelBadge.textContent = level;
+    if (els.riskScore) els.riskScore.textContent = String(risk.score ?? 0);
+    if (els.riskSummary) els.riskSummary.textContent = risk.summary || "暂无风险说明。";
+    if (els.dashboardRiskLevel) els.dashboardRiskLevel.textContent = level;
+    if (els.riskStripPassRate) els.riskStripPassRate.textContent = "-";
+    if (els.riskStripExecutionCount) els.riskStripExecutionCount.textContent = "-";
+    if (els.riskStripPendingIssues) els.riskStripPendingIssues.textContent = "-";
+    if (els.dashboardRiskAdvice) els.dashboardRiskAdvice.textContent = level === "待评估" ? "等待数据" : riskAdvice(level);
   }
 
   function renderSummary(els, summary) {
-    const safeSummary = summary && typeof summary === "object" ? summary : {};
-    if (els.summaryPassRate) els.summaryPassRate.textContent = formatPercent(safeSummary.pass_rate_24h);
-    if (els.summaryExecutionCount) els.summaryExecutionCount.textContent = String(toNumber(safeSummary.execution_count_24h, 0));
-    if (els.summaryInterceptedLast10) els.summaryInterceptedLast10.textContent = String(toNumber(safeSummary.intercepted_last10, 0));
-    if (els.summaryPendingIssues) els.summaryPendingIssues.textContent = String(toNumber(safeSummary.pending_issues, 0));
+    const passRateText = summary.pass_rate_24h === null || summary.pass_rate_24h === undefined ? "暂无数据" : `${summary.pass_rate_24h}%`;
+    const executionCountText = summary.execution_count_24h === null || summary.execution_count_24h === undefined ? "暂无数据" : String(summary.execution_count_24h);
+    const pendingIssuesText = summary.pending_issues === null || summary.pending_issues === undefined ? "暂无数据" : String(summary.pending_issues);
 
-    if (els.riskStripPassRate) els.riskStripPassRate.textContent = formatPercent(safeSummary.pass_rate_24h);
-    if (els.riskStripExecutionCount) els.riskStripExecutionCount.textContent = String(toNumber(safeSummary.execution_count_24h, 0));
-    if (els.riskStripPendingIssues) els.riskStripPendingIssues.textContent = String(toNumber(safeSummary.pending_issues, 0));
-
-    if (els.dashboardAsOf) els.dashboardAsOf.textContent = formatAsOf(safeSummary.as_of);
+    if (els.summaryPassRate) els.summaryPassRate.textContent = passRateText;
+    if (els.summaryExecutionCount) els.summaryExecutionCount.textContent = executionCountText;
+    if (els.summaryInterceptedLast10) {
+      els.summaryInterceptedLast10.textContent = summary.intercepted_last10 === null || summary.intercepted_last10 === undefined ? "暂无数据" : String(summary.intercepted_last10);
+    }
+    if (els.summaryPendingIssues) els.summaryPendingIssues.textContent = pendingIssuesText;
+    if (els.riskStripPassRate) els.riskStripPassRate.textContent = passRateText;
+    if (els.riskStripExecutionCount) els.riskStripExecutionCount.textContent = executionCountText;
+    if (els.riskStripPendingIssues) els.riskStripPendingIssues.textContent = pendingIssuesText;
+    if (els.dashboardAsOf) els.dashboardAsOf.textContent = summary.as_of ? formatTime(summary.as_of) : "暂无更新";
   }
 
   function renderTrend(els, points) {
-    const rows = Array.isArray(points) ? points : [];
-    if (!els.trendSvg || !rows.length) {
-      if (els.trendMeta) els.trendMeta.textContent = "暂无趋势数据。";
-      if (els.trendSvg) els.trendSvg.innerHTML = "";
-      if (els.trendXAxis) els.trendXAxis.innerHTML = "";
+    if (!els.trendMeta || !els.trendSvg || !els.trendXAxis) return;
+    if (!points || !points.length) {
+      els.trendMeta.textContent = "暂无趋势数据。";
+      els.trendSvg.innerHTML = "";
+      els.trendXAxis.innerHTML = "";
       return;
     }
 
-    const maxX = Math.max(rows.length - 1, 1);
-    const maxY = 100;
     const width = 960;
     const height = 280;
-    const paddingX = 24;
-    const paddingY = 24;
-    const innerWidth = width - paddingX * 2;
-    const innerHeight = height - paddingY * 2;
+    const padLeft = 42;
+    const padRight = 16;
+    const padTop = 18;
+    const padBottom = 34;
+    const plotH = height - padTop - padBottom;
+    const plotW = width - padLeft - padRight;
+    const passRates = points.map((item) => Number(item.pass_rate) || 0);
+    const execCounts = points.map((item) => Number(item.execution_count) || 0);
+    const execMax = Math.max(...execCounts, 1);
+    const execScaled = execCounts.map((item) => (item / execMax) * 100);
 
-    const coords = rows.map((item, index) => {
-      const x = paddingX + (index / maxX) * innerWidth;
-      const yRate = Math.min(100, Math.max(0, toNumber(item.pass_rate, 0)));
-      const y = paddingY + (1 - yRate / maxY) * innerHeight;
-      return { x: x, y: y, label: asText(item.hour, "--"), passRate: yRate };
-    });
-
-    const path = coords
-      .map((item, idx) => (idx === 0 ? "M " : "L ") + item.x.toFixed(2) + " " + item.y.toFixed(2))
-      .join(" ");
-
-    const circles = coords
-      .filter((_, idx) => idx % 4 === 0 || idx === coords.length - 1)
-      .map((item) => {
-        return '<circle cx="' + item.x.toFixed(2) + '" cy="' + item.y.toFixed(2) + '" r="3" fill="#2f79db"></circle>';
-      })
-      .join("");
-
-    const guides = [0, 25, 50, 75, 100]
+    const passPoints = toPolylinePoints(passRates, 0, 100, width, height, padLeft, padRight, padTop, padBottom);
+    const execPoints = toPolylinePoints(execScaled, 0, 100, width, height, padLeft, padRight, padTop, padBottom);
+    const pointCoords = buildPointCoordinates(passRates, 0, 100, width, height, padLeft, padRight, padTop, padBottom);
+    const gridYValues = [0, 25, 50, 75, 100];
+    const gridLines = gridYValues
       .map((value) => {
-        const y = paddingY + (1 - value / 100) * innerHeight;
-        return '<line x1="' + paddingX + '" y1="' + y.toFixed(2) + '" x2="' + (width - paddingX) + '" y2="' + y.toFixed(2) + '" stroke="#dde7f3" stroke-width="1"></line>';
+        const y = padTop + ((100 - value) / 100) * plotH;
+        return `<line x1="${padLeft}" y1="${y}" x2="${padLeft + plotW}" y2="${y}" stroke="#d7e2ef" stroke-width="1" stroke-dasharray="4 4"></line>`;
       })
       .join("");
 
-    els.trendSvg.innerHTML =
-      guides +
-      '<path d="' +
-      path +
-      '" fill="none" stroke="#2f79db" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>' +
-      circles;
-
-    if (els.trendXAxis) {
-      const labelIndexes = [0, Math.floor(maxX * 0.25), Math.floor(maxX * 0.5), Math.floor(maxX * 0.75), maxX];
-      const uniqueIndexes = Array.from(new Set(labelIndexes));
-      els.trendXAxis.innerHTML = uniqueIndexes
-        .map((idx) => '<span>' + asText(rows[idx]?.hour, "--") + "</span>")
-        .join("");
-    }
-
-    const latest = rows[rows.length - 1] || {};
-    if (els.trendMeta) {
-      els.trendMeta.textContent =
-        "最近时段通过率 " +
-        formatPercent(latest.pass_rate) +
-        "，执行 " +
-        String(toNumber(latest.execution_count, 0)) +
-        " 次。";
-    }
-  }
-
-  function renderPendingIssues(els, pendingIssues) {
-    const rows = Array.isArray(pendingIssues) ? pendingIssues : [];
-    if (!els.pendingIssuesList) return;
-    if (!rows.length) {
-      els.pendingIssuesList.innerHTML = "<li>当前没有待确认问题。</li>";
-      return;
-    }
-
-    els.pendingIssuesList.innerHTML = rows
-      .slice(0, 6)
-      .map((item) => {
-        const title = asText(item.title, "待确认问题");
-        const agent = asText(item.agent, "系统");
-        const confidence = toNumber(item.confidence, 0);
-        const note = asText(item.recommendation, "");
-        const detailUrl = safeHref(asText(item.detail_url, "#"));
-        return (
-          '<li><div class="pending-item-head"><a class="pending-item-title" href="' +
-          escapeHtml(detailUrl) +
-          '">' +
-          escapeHtml(title) +
-          '</a><span class="pill">' +
-          Math.round(confidence * 100) +
-          '%</span></div><div class="pending-item-meta">来源：' +
-          escapeHtml(agent) +
-          '</div><p class="pending-item-note">' +
-          escapeHtml(note) +
-          "</p></li>"
-        );
-      })
-      .join("");
-  }
-
-  function renderWeeklyFocus(els, governance) {
-    const manager = governance?.manager_summary && typeof governance.manager_summary === "object" ? governance.manager_summary : {};
-    if (els.managerHeadline) els.managerHeadline.textContent = asText(manager.headline, "正在汇总治理摘要...");
-    if (els.managerReleaseReadiness) els.managerReleaseReadiness.textContent = asText(manager.release_readiness, "-");
-    if (els.managerTraceabilityStatus) els.managerTraceabilityStatus.textContent = asText(manager.traceability_status, "-");
-    if (els.managerMultisourceStatus) els.managerMultisourceStatus.textContent = asText(manager.multisource_status, "-");
-    if (els.managerWeeklyFocus) els.managerWeeklyFocus.textContent = asText(manager.weekly_focus || manager.top_theme, "-");
-
-    if (!els.managerHighlightsList) return;
-    const highlights = Array.isArray(manager.highlights) ? manager.highlights : [];
-    if (!highlights.length) {
-      els.managerHighlightsList.innerHTML = "<li>暂无本周重点摘要。</li>";
-      return;
-    }
-    els.managerHighlightsList.innerHTML = highlights
-      .slice(0, 6)
-      .map((item) => "<li>" + escapeHtml(asText(item, "")) + "</li>")
-      .join("");
-  }
-
-  function renderActionItems(els, governance) {
-    const actionItems = Array.isArray(governance?.action_items) ? governance.action_items : [];
-    if (!els.governanceActionsList) return;
-    if (!actionItems.length) {
-      els.governanceActionsList.innerHTML = "<li>当前没有新增治理行动建议。</li>";
-    } else {
-      els.governanceActionsList.innerHTML = actionItems
-        .slice(0, 8)
-        .map((item) => {
-          const title = asText(item.title, "治理建议");
-          const status = asText(item.status, "持续跟进");
-          const summary = asText(item.summary, "");
-          const href = safeHref(asText(item.href, "#"));
-          const level = levelKey(item.level);
-          return (
-            '<li><div class="pending-item-head"><a class="pending-item-title" href="' +
-            escapeHtml(href) +
-            '">' +
-            escapeHtml(title) +
-            '</a><span class="pill pill-' +
-            level +
-            '">' +
-            escapeHtml(status) +
-            '</span></div><p class="pending-item-note">' +
-            escapeHtml(summary) +
-            "</p></li>"
-          );
+    els.trendSvg.innerHTML = `
+      ${gridLines}
+      <polyline fill="none" stroke="#2f79db" stroke-width="3" points="${passPoints}"></polyline>
+      <polyline fill="none" stroke="#de8a23" stroke-width="2.5" points="${execPoints}"></polyline>
+      ${pointCoords
+        .map((point, idx) => {
+          const item = points[idx] || {};
+          const passRate = Number(item.pass_rate || 0);
+          const execCount = Number(item.execution_count || 0);
+          return `
+            <circle class="chart-point chart-point-pass" cx="${point.x}" cy="${point.y}" r="4" tabindex="0">
+              <title>${escapeHtml(`${item.hour || "-"} | 通过率 ${passRate}% | 执行 ${execCount} 次`)}</title>
+            </circle>
+          `;
         })
-        .join("");
+        .join("")}
+      <text x="${padLeft}" y="${padTop - 4}" fill="#7489a7" font-size="11">通过率 %</text>
+      <text x="${width - 74}" y="${padTop - 4}" fill="#7489a7" font-size="11">执行次数(归一化)</text>
+    `;
+
+    const labelIndexes = [0, 4, 8, 12, 16, 20, points.length - 1].filter((idx, pos, arr) => idx < points.length && arr.indexOf(idx) === pos);
+    els.trendXAxis.innerHTML = labelIndexes.map((idx) => `<span>${escapeHtml(points[idx]?.hour || "")}</span>`).join("");
+    const latest = points[points.length - 1] || {};
+    els.trendMeta.textContent = `当前时段通过率 ${latest.pass_rate || 0}% ，执行次数 ${latest.execution_count || 0} 次。`;
+  }
+
+  function renderWeeklyFocus(els, governancePayload) {
+    const managerSummary = governancePayload && governancePayload.manager_summary && typeof governancePayload.manager_summary === "object"
+      ? governancePayload.manager_summary
+      : {};
+    const topRisks = governancePayload && Array.isArray(governancePayload.top_governance_risks)
+      ? governancePayload.top_governance_risks
+      : [];
+    const highlights = Array.isArray(managerSummary.highlights) ? [...managerSummary.highlights] : [];
+
+    if (topRisks.length) {
+      highlights.push(`高风险任务 ${topRisks[0].task_id || "-"}：${topRisks[0].governance_risk_reason || "请进入执行任务页处理。"}`);
     }
+
+    if (els.managerHeadline) {
+      const headline = managerSummary.headline || "当前重点正在汇总。";
+      const topTheme = managerSummary.top_theme ? ` 本周主题：${managerSummary.top_theme}。` : "";
+      els.managerHeadline.textContent = `${headline}${topTheme}`;
+    }
+    if (els.managerReleaseReadiness) els.managerReleaseReadiness.textContent = managerSummary.release_readiness || "-";
+    if (els.managerTraceabilityStatus) els.managerTraceabilityStatus.textContent = managerSummary.traceability_status || "-";
+    if (els.managerMultisourceStatus) els.managerMultisourceStatus.textContent = managerSummary.multisource_status || "-";
+    if (els.managerWeeklyFocus) els.managerWeeklyFocus.textContent = managerSummary.weekly_focus || managerSummary.top_theme || "-";
+
+    renderIssueList(
+      els.managerHighlightsList,
+      highlights.map((item) => ({ title: "本周重点", summary: item })),
+      "暂无本周重点。"
+    );
+  }
+
+  function renderActionItems(els, governancePayload) {
+    const risk = governancePayload && governancePayload.risk && typeof governancePayload.risk === "object"
+      ? governancePayload.risk
+      : {};
+    const degradedSources = governancePayload && Array.isArray(governancePayload.degraded_sources)
+      ? governancePayload.degraded_sources
+      : [];
+    const actions = governancePayload && Array.isArray(governancePayload.action_items)
+      ? governancePayload.action_items
+      : [];
 
     if (els.governanceMeta) {
-      const degraded = Array.isArray(governance?.degraded_sources) && governance.degraded_sources.length > 0;
-      if (degraded) {
-        els.governanceMeta.textContent = "部分治理数据源降级，已展示可用结果。";
-      } else {
-        els.governanceMeta.textContent = "已同步治理建议，可下钻到对应页面继续处理。";
-      }
+      let text = risk.summary || "暂无治理摘要。";
+      if (degradedSources.length) text += ` 当前有 ${degradedSources.join("、")} 数据源处于降级状态。`;
+      els.governanceMeta.textContent = text;
     }
+
+    renderIssueList(
+      els.governanceActionsList,
+      actions.map((item) => ({
+        title: item.title || "-",
+        status: item.status || "",
+        summary: item.summary || "-",
+        href: item.href || "/execution/runs",
+      })),
+      "暂无治理行动建议。"
+    );
+  }
+
+  function renderPendingIssues(els, rows) {
+    renderIssueList(
+      els.pendingIssuesList,
+      (rows || []).map((item) => ({
+        title: `${item.issue_key || "-"} · ${item.title || "-"}`,
+        status: item.status || "",
+        meta: `${item.agent || "-"} 推荐，置信度 ${((Number(item.confidence || 0) || 0) * 100).toFixed(0)}%`,
+        summary: item.recommendation || "-",
+        href: item.detail_url || "#",
+      })),
+      "暂无待确认问题。"
+    );
   }
 
   function renderLoadError(els) {
-    if (els.trendMeta) els.trendMeta.textContent = "仪表盘加载失败，请稍后重试。";
-    if (els.governanceMeta) els.governanceMeta.textContent = "待处理事项加载失败，请稍后重试。";
-    if (els.pendingIssuesList) els.pendingIssuesList.innerHTML = "<li>加载失败，请稍后刷新重试。</li>";
-    if (els.governanceActionsList) els.governanceActionsList.innerHTML = "<li>加载失败，请稍后刷新重试。</li>";
-    if (els.managerHighlightsList) els.managerHighlightsList.innerHTML = "<li>加载失败，请稍后刷新重试。</li>";
+    if (els.riskSummary) els.riskSummary.textContent = "仪表盘加载失败，请检查服务状态与日志。";
+    if (els.trendMeta) els.trendMeta.textContent = "平台概览加载失败。";
+    if (els.managerHeadline) els.managerHeadline.textContent = "本周重点加载失败。";
+    if (els.governanceMeta) els.governanceMeta.textContent = "待处理事项加载失败。";
+    renderIssueList(els.managerHighlightsList, [], "本周重点加载失败。");
+    renderIssueList(els.governanceActionsList, [], "治理行动建议加载失败。");
+    renderIssueList(els.pendingIssuesList, [], "待确认问题加载失败。");
   }
 
   window.dashboardSections = {
-    renderRisk: renderRisk,
-    renderSummary: renderSummary,
-    renderTrend: renderTrend,
-    renderPendingIssues: renderPendingIssues,
-    renderWeeklyFocus: renderWeeklyFocus,
-    renderActionItems: renderActionItems,
-    renderLoadError: renderLoadError,
+    renderRisk,
+    renderSummary,
+    renderTrend,
+    renderWeeklyFocus,
+    renderActionItems,
+    renderPendingIssues,
+    renderLoadError,
   };
 })();

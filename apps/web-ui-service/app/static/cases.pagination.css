@@ -1,31 +1,125 @@
+.cases-selection-bar,
 .case-list-footer {
-  margin-top: 10px;
-  border-top: 1px solid #dde7f4;
-  padding-top: 10px;
+  border-top: 1px solid #edf2f7;
+  background: #ffffff;
+}
+
+.cases-selection-bar {
+  padding: 12px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
+  color: #5b708b;
+  font-size: 12px;
+}
+
+.cases-selection-bar strong {
+  color: #1f3653;
+}
+
+.cases-selection-actions {
+  display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cases-inline-btn {
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.cases-inline-danger {
+  border-color: #efc9c9;
+  background: #fff7f7;
+  color: #b45050;
+}
+
+.case-list-footer {
+  padding: 12px 18px 16px;
+  display: grid;
+  gap: 10px;
 }
 
 .case-list-footer-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 6px;
+  color: #6b7f98;
   font-size: 12px;
-  color: #6480a3;
 }
 
 .case-list-footer-sep {
-  color: #92a9c5;
+  color: #a3b2c3;
 }
 
 .case-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
+  margin-top: 0;
+}
+
+.case-pagination .pagination {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+}
+
+.case-pagination .pagination-total {
+  color: #617794;
+}
+
+.case-pagination .pagination-total strong {
+  color: #2f79db;
+}
+
+.case-pagination .pagination-page-size select,
+.case-pagination .page-jumper-input,
+.case-pagination .page-jumper-btn,
+.case-pagination .pagination-btn {
+  border-radius: 10px;
+}
+
+.case-pagination .pagination-page-size select,
+.case-pagination .page-jumper-input {
+  min-height: 34px;
+  border-color: #d4deea;
+  color: #435974;
+}
+
+.case-pagination .pagination-btn {
+  min-width: 34px;
+  height: 34px;
+  border-color: #d4deea;
+  color: #435974;
+}
+
+.case-pagination .pagination-btn:hover:not(:disabled) {
+  border-color: #c4d8f4;
+  background: #f4f8ff;
+  color: #2f79db;
+}
+
+.case-pagination .pagination-btn.active,
+.case-pagination .page-jumper-btn {
+  background: #2f79db;
+  border-color: #2f79db;
+}
+
+.case-pagination .page-jumper-btn:hover {
+  background: #2268c6;
+}
+
+@media (max-width: 980px) {
+  .cases-selection-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cases-selection-actions,
+  .case-pagination .pagination {
+    justify-content: flex-start;
+  }
 }

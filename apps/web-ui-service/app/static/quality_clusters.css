@@ -1,0 +1,143 @@
+.quality-clusters-shell {
+  gap: 18px;
+}
+
+.quality-clusters-grid {
+  align-items: start;
+}
+
+.cluster-gate-stat-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cluster-section-head {
+  display: grid;
+  gap: 6px;
+}
+
+.cluster-section-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--gp-text);
+}
+
+.cluster-section-head p {
+  margin: 0;
+  color: var(--gp-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.cluster-alert-section {
+  display: grid;
+  gap: 10px;
+}
+
+.cluster-alert-list,
+.cluster-sample-list,
+.cluster-pill-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.cluster-alert-item,
+.cluster-sample-item {
+  border: 1px solid var(--gp-line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: var(--gp-panel-soft);
+}
+
+.cluster-alert-item {
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.cluster-alert-item:hover {
+  border-color: rgba(31, 122, 224, 0.32);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.cluster-alert-item.is-active {
+  border-color: rgba(31, 122, 224, 0.38);
+  background: #edf5ff;
+}
+
+.cluster-card-head,
+.cluster-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cluster-card-head strong {
+  color: var(--gp-text);
+  font-size: 14px;
+}
+
+.cluster-card-meta {
+  margin-top: 8px;
+  color: var(--gp-muted);
+  font-size: 12px;
+}
+
+.cluster-pill-list {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.cluster-pill {
+  border: 1px solid var(--gp-line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fbfdff;
+}
+
+.cluster-pill span {
+  display: block;
+  color: var(--gp-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cluster-pill strong,
+.cluster-pill p {
+  display: block;
+  margin-top: 6px;
+}
+
+.cluster-pill p {
+  margin-bottom: 0;
+  color: var(--gp-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.cluster-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cluster-empty-inline {
+  color: var(--gp-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1080px) {
+  .cluster-gate-stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .cluster-card-head,
+  .cluster-card-meta {
+    align-items: flex-start;
+  }
+}

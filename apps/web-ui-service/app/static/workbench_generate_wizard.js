@@ -1,68 +1,65 @@
 (function () {
+  const shell = document.getElementById("workbench-generate-shell");
+  if (!shell) return;
+
+  const panels = Array.from(shell.querySelectorAll("[data-step-panel]"));
+  const markers = Array.from(shell.querySelectorAll("[data-step-marker]"));
+  const prevButton = document.getElementById("gen-step-prev");
+  const nextButton = document.getElementById("gen-step-next");
+  if (!panels.length || !markers.length || !prevButton || !nextButton) return;
+
   let currentStep = 1;
-  let canProceedGuard = null;
-  let initialized = false;
+  const maxStep = panels.length;
+  let canProceed = null;
 
-  function markers() {
-    return Array.from(document.querySelectorAll("[data-step-marker]"));
+  function nextStepBlocked() {
+    if (currentStep === maxStep) return true;
+    if (typeof canProceed !== "function") return false;
+    return canProceed(currentStep, currentStep + 1) === false;
   }
 
-  function panels() {
-    return Array.from(document.querySelectorAll("[data-step-panel]"));
-  }
-
-  function updateUi() {
-    markers().forEach((node) => {
-      const step = Number(node.getAttribute("data-step-marker") || 0);
-      node.classList.toggle("is-active", step === currentStep);
-      node.classList.toggle("is-complete", step < currentStep);
+  function sync() {
+    panels.forEach((panel) => {
+      panel.classList.toggle("is-active", Number(panel.dataset.stepPanel) === currentStep);
     });
-    panels().forEach((node) => {
-      const step = Number(node.getAttribute("data-step-panel") || 0);
-      node.classList.toggle("is-active", step === currentStep);
+    markers.forEach((marker) => {
+      marker.classList.toggle("is-active", Number(marker.dataset.stepMarker) === currentStep);
+      marker.classList.toggle("is-complete", Number(marker.dataset.stepMarker) < currentStep);
     });
-
-    const prevButton = document.getElementById("gen-step-prev");
-    const nextButton = document.getElementById("gen-step-next");
-    if (prevButton) prevButton.disabled = currentStep <= 1;
-    if (nextButton) {
-      nextButton.disabled = currentStep >= 4;
-      nextButton.textContent = currentStep >= 4 ? "已完成" : "下一步";
+    prevButton.disabled = currentStep === 1;
+    nextButton.disabled = nextStepBlocked();
+    if (currentStep === maxStep) {
+      nextButton.textContent = "已到最后一步";
+    } else if (nextButton.disabled) {
+      nextButton.textContent = "请先完成当前步骤";
+    } else {
+      nextButton.textContent = "下一步";
     }
   }
 
-  function goTo(step) {
-    const nextStep = Math.min(4, Math.max(1, Number(step || 1)));
-    if (typeof canProceedGuard === "function" && !canProceedGuard(currentStep, nextStep)) return false;
-    currentStep = nextStep;
-    updateUi();
-    return true;
-  }
+  prevButton.addEventListener("click", () => {
+    currentStep = Math.max(1, currentStep - 1);
+    sync();
+  });
 
-  function setCanProceed(fn) {
-    canProceedGuard = typeof fn === "function" ? fn : null;
-  }
-
-  function init() {
-    if (initialized) return;
-    initialized = true;
-    const prevButton = document.getElementById("gen-step-prev");
-    const nextButton = document.getElementById("gen-step-next");
-
-    prevButton?.addEventListener("click", () => {
-      goTo(currentStep - 1);
-    });
-    nextButton?.addEventListener("click", () => {
-      goTo(currentStep + 1);
-    });
-
-    updateUi();
-  }
-
-  init();
+  nextButton.addEventListener("click", () => {
+    currentStep = Math.min(maxStep, currentStep + 1);
+    sync();
+  });
 
   window.WorkbenchGenerateWizard = {
-    goTo: goTo,
-    setCanProceed: setCanProceed,
+    currentStep() {
+      return currentStep;
+    },
+    goTo(step) {
+      currentStep = Math.min(maxStep, Math.max(1, Number(step) || 1));
+      sync();
+    },
+    setCanProceed(callback) {
+      canProceed = typeof callback === "function" ? callback : null;
+      sync();
+    },
   };
+
+  sync();
 })();

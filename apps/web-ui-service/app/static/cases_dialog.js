@@ -1,43 +1,56 @@
 (function () {
+  const dialog = document.getElementById("new-case-dialog");
+  const api = window.CasesApi;
+  if (!dialog || !api) return;
+
+  const els = {
+    form: document.getElementById("new-case-form"),
+    close: document.getElementById("btn-close-dialog"),
+    cancel: document.getElementById("btn-cancel-dialog"),
+  };
+
   function openDialog() {
-    const name = window.prompt("请输入新用例名称：", "");
-    if (name == null) return;
-    const trimmedName = String(name).trim();
-    if (!trimmedName) {
-      window.alert("用例名称不能为空");
-      return;
-    }
-    const productLine = window.prompt("请输入产品线（例如：电商平台）：", "电商平台");
-    if (productLine == null) return;
-    const moduleName = window.prompt("请输入模块（例如：商品中心）：", "商品中心");
-    if (moduleName == null) return;
-
-    const payload = {
-      name: trimmedName,
-      product_line: String(productLine || "").trim() || "默认产品线",
-      module: String(moduleName || "").trim() || "默认模块",
-      priority: "P2",
-      test_type: "ui",
-      tags: ["manual-draft"],
-      creator: "admin",
-      status: "active",
-    };
-
-    if (!window.CasesApi || typeof window.CasesApi.create !== "function") {
-      window.alert("创建接口不可用，请稍后重试。");
-      return;
-    }
-
-    window.CasesApi.create(payload)
-      .then(() => {
-        window.dispatchEvent(new CustomEvent("cases:reload"));
-      })
-      .catch((error) => {
-        window.alert(error?.message || "创建失败");
-      });
+    dialog.showModal();
   }
 
-  window.CasesDialog = {
-    openDialog: openDialog,
-  };
+  function closeDialog() {
+    dialog.close();
+  }
+
+  function splitComma(value) {
+    return String(value || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  async function submitForm(event) {
+    event.preventDefault();
+    const payload = {
+      mode: "manual",
+      name: document.getElementById("new-name").value.trim(),
+      product_line: document.getElementById("new-product-line").value.trim(),
+      module: document.getElementById("new-module").value.trim(),
+      priority: document.getElementById("new-priority").value,
+      test_type: document.getElementById("new-test-type").value,
+      tags: splitComma(document.getElementById("new-tags").value),
+      markers: splitComma(document.getElementById("new-markers").value),
+      creator: document.getElementById("new-creator").value.trim(),
+      pytest_path: document.getElementById("new-pytest-path").value.trim(),
+      status: document.getElementById("new-status").value,
+      script_code: document.getElementById("new-script").value,
+      requirement: "",
+      data_config: { enabled: false, parameters: [], rows: [] },
+    };
+    await api.create(payload);
+    closeDialog();
+    window.dispatchEvent(new CustomEvent("cases:reload"));
+  }
+
+  els.form.addEventListener("submit", (event) => {
+    submitForm(event).catch((error) => window.alert(error.message || "创建失败"));
+  });
+  els.close.addEventListener("click", closeDialog);
+  els.cancel.addEventListener("click", closeDialog);
+  window.CasesDialog = { openDialog };
 })();

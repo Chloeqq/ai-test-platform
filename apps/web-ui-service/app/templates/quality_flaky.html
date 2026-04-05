@@ -1,0 +1,125 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/governance_pages.css?v=20260403-flaky-4">
+{% endblock %}
+
+{% block content %}
+<section class="governance-shell" id="quality-flaky-shell">
+  <section class="page-hero">
+    <div class="page-hero-head">
+      <div class="page-hero-copy">
+        <p class="breadcrumb">
+          {% for item in breadcrumbs %}
+            <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+          {% endfor %}
+        </p>
+        <h1>{{ page_title }}</h1>
+        <p>{{ page_description }}</p>
+        <div class="page-hero-actions">
+          <a class="btn btn-primary" href="/quality/failure-clusters">查看失败聚类</a>
+          <a class="btn btn-soft" href="/execution/runs">去执行中心</a>
+        </div>
+      </div>
+      <aside class="hero-side-note">
+        <h2>使用建议</h2>
+        <p>这页优先用于筛出“经常波动、又和高风险变更重叠”的任务，帮助我们把有限的治理精力放在真正回报最高的点上。</p>
+      </aside>
+    </div>
+    {% if active_filters %}
+    <div class="filter-pills">
+      {% for item in active_filters %}
+      <span class="filter-pill"><strong>{{ item.label }}</strong>{{ item.value }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="hero-kpis">
+      <article class="hero-kpi"><span>Flaky 项数量</span><strong id="qf-total-items">-</strong></article>
+      <article class="hero-kpi"><span>风险重叠项</span><strong id="qf-linked-count">-</strong></article>
+      <article class="hero-kpi"><span>平均稳定分</span><strong id="qf-stability-score">-</strong></article>
+      <article class="hero-kpi"><span>建议动作</span><strong id="qf-next-action">-</strong></article>
+    </div>
+  </section>
+
+  <section class="page-grid-2">
+    <article class="panel">
+      <div class="panel-head"><div><h2>Flaky 列表</h2><p>按 flaky rate、稳定分和变更重叠优先排序。</p></div></div>
+      <input id="qf-sort-key" type="hidden" value="flaky_rate">
+      <input id="qf-sort-dir" type="hidden" value="desc">
+      <div class="list-toolbar">
+        <div class="list-search-row">
+          <label class="list-search-field" for="qf-filter-keyword">
+            <span class="list-search-icon">搜</span>
+            <input id="qf-filter-keyword" placeholder="搜索用例 ID、标题或原因">
+            <button id="qf-search-clear" class="list-search-clear" type="button" aria-label="清空搜索" hidden>×</button>
+          </label>
+          <button id="qf-search" class="btn btn-primary" type="button">搜索</button>
+        </div>
+        <div class="list-filter-row">
+          <div class="list-filter-strip">
+            <label class="toolbar-field"><span>页面</span><input id="qf-filter-page" placeholder="如 product"></label>
+          </div>
+          <details class="list-more-filters toolbar-advanced" id="qf-advanced-filters">
+            <summary>更多筛选</summary>
+            <div class="toolbar-advanced-grid">
+              <label class="toolbar-field"><span>模块</span><input id="qf-filter-module" placeholder="如 list"></label>
+              <label class="toolbar-field"><span>来源类型</span><input id="qf-filter-source-type" placeholder="如 openapi / jira"></label>
+              <label class="toolbar-field"><span>变更域</span><input id="qf-filter-changed-area" placeholder="如 api_contract"></label>
+            </div>
+          </details>
+        </div>
+        <div class="list-filter-actions">
+          <button id="qf-apply-filters" class="btn btn-primary" type="button">应用筛选</button>
+          <button id="qf-refresh" class="btn" type="button">重新加载</button>
+          <button id="qf-reset" class="btn" type="button">重置筛选</button>
+        </div>
+      </div>
+      <div class="toolbar-meta">
+        <span id="qf-filter-summary">当前按默认规则展示全部 flaky 项。</span>
+        <span id="qf-last-updated">最后刷新：-</span>
+      </div>
+      <div class="selection-bar" id="qf-selection-bar" hidden>
+        <span class="selection-bar-copy" id="qf-selection-copy">已选择 0 项</span>
+        <div class="button-row">
+          <button id="qf-copy-selection" class="btn" type="button">复制用例 ID</button>
+          <a class="btn btn-soft" href="/quality/failure-clusters">查看失败聚类</a>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="selection-col"><input id="qf-check-all" type="checkbox" aria-label="全选当前页"></th>
+              <th><button class="sort-button" data-sort-key="name" data-sort-default="asc" type="button">用例</button></th>
+              <th>模块</th>
+              <th><button class="sort-button" data-sort-key="flaky_rate" data-sort-default="desc" type="button">Flaky Rate</button></th>
+              <th><button class="sort-button" data-sort-key="stability_score" data-sort-default="desc" type="button">稳定分</button></th>
+              <th><button class="sort-button" data-sort-key="matched_risk_task_count" data-sort-default="desc" type="button">风险重叠</button></th>
+              <th class="row-actions-col">操作</th>
+            </tr>
+          </thead>
+          <tbody id="qf-tbody">
+            <tr><td colspan="7" class="loading-state">正在加载 flaky 分析...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-footer" id="qf-footer"></div>
+    </article>
+
+    <aside class="stack">
+      <article class="panel">
+        <div class="panel-head"><div><h2>选中项详情</h2><p>点击左侧行，查看它和风险、变更域、执行记录的关系。</p></div></div>
+        <div class="panel-body stack" id="qf-selected-panel">
+          <div class="empty-state">先选择一条 flaky 记录。</div>
+        </div>
+      </article>
+    </aside>
+  </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/quality_flaky.js?v=20260403-flaky-4"></script>
+{% endblock %}

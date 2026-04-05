@@ -1,78 +1,25 @@
 (function () {
-  function statusClass(status) {
-    const value = String(status || "").trim().toLowerCase();
-    if (value === "failed" || value === "rejected" || value === "error") return "failed";
-    if (value === "passed" || value === "confirmed" || value === "success") return "passed";
-    return "unknown";
+  function renderRows(rows, selectedKey, selectedIds, detailHelper) {
+    return rows.map((item) => {
+      const rowId = detailHelper.rowKey(item);
+      const checked = selectedIds.has(rowId) ? "checked" : "";
+      const riskGate = (item.risk_summary && typeof item.risk_summary === "object" ? item.risk_summary.gate_decision : "") || "";
+      const selfHealing = (item.self_healing_summary && typeof item.self_healing_summary === "object" ? item.self_healing_summary.status : "") || "";
+      return `
+        <tr class="${rowId === selectedKey ? "is-active" : ""}" data-history-row="${detailHelper.escapeHtml(rowId)}">
+          <td class="selection-col"><input class="wb-history-check" type="checkbox" data-history-row="${detailHelper.escapeHtml(rowId)}" ${checked} aria-label="选择记录"></td>
+          <td>${detailHelper.escapeHtml(detailHelper.formatTime(item.timestamp))}</td>
+          <td>${detailHelper.buildActionLink(item)}</td>
+          <td><div class="table-title">${detailHelper.escapeHtml(detailHelper.displayCaseId(item.case_id || "-"))}</div><div class="table-subtitle mono">${detailHelper.escapeHtml(detailHelper.displayRunId(item.run_id || "-"))}</div></td>
+          <td>${detailHelper.escapeHtml(item.page || "-")}</td>
+          <td>${detailHelper.renderBadge(item.status || "unknown", "unknown")}</td>
+          <td>${detailHelper.escapeHtml(item.actor_display || item.confirmed_by || "-")}</td>
+          <td>${riskGate ? detailHelper.renderBadge(riskGate, "unknown") : "-"}</td>
+          <td>${selfHealing ? detailHelper.renderBadge(selfHealing, "unknown") : "-"}</td>
+        </tr>
+      `;
+    }).join("");
   }
 
-  function safeText(value, helper) {
-    const text = String(value || "").trim();
-    return helper.escapeHtml(text || "-");
-  }
-
-  function renderRows(rows, selectedKey, selectedIds, helper) {
-    return rows
-      .map((item) => {
-        const key = helper.rowKey(item);
-        const activeClass = key === selectedKey ? " wb-history-row-active" : "";
-        const checked = selectedIds.has(key) ? " checked" : "";
-        const status = String(item.status || "").trim();
-        const runId = String(item.run_id || "").trim();
-        const caseId = String(item.case_id || "").trim();
-        const page = String(item.page || "").trim();
-        const actor = String(item.actor || item.reviewer || "").trim();
-        const riskGate = String(item.risk_gate_decision || item.risk_gate || "-").trim();
-        const selfHealing = String(item.self_healing_status || "-").trim();
-        const statusHtml =
-          '<span class="wb-history-status ' + statusClass(status) + '">' + helper.escapeHtml(status || "unknown") + "</span>";
-        return (
-          '<tr data-history-row="' +
-          helper.escapeHtml(key) +
-          '" class="' +
-          activeClass.trim() +
-          '">' +
-          '<td><input class="wb-history-check" type="checkbox" data-history-row="' +
-          helper.escapeHtml(key) +
-          '"' +
-          checked +
-          "></td>" +
-          "<td>" +
-          safeText(item.timestamp || item.created_at, helper) +
-          "</td>" +
-          "<td>" +
-          safeText(item.action, helper) +
-          "</td>" +
-          "<td>" +
-          '<div class="wb-history-inline-meta">' +
-          "Case: " +
-          safeText(caseId, helper) +
-          "<br>Run: " +
-          safeText(runId, helper) +
-          "</div>" +
-          "</td>" +
-          "<td>" +
-          safeText(page, helper) +
-          "</td>" +
-          "<td>" +
-          statusHtml +
-          "</td>" +
-          "<td>" +
-          safeText(actor, helper) +
-          "</td>" +
-          "<td>" +
-          safeText(riskGate, helper) +
-          "</td>" +
-          "<td>" +
-          safeText(selfHealing, helper) +
-          "</td>" +
-          "</tr>"
-        );
-      })
-      .join("");
-  }
-
-  window.WorkbenchHistoryTable = {
-    renderRows: renderRows,
-  };
+  window.WorkbenchHistoryTable = { renderRows };
 })();

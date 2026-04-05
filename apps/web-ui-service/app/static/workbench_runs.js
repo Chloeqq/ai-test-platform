@@ -1,35 +1,36 @@
 (function () {
   const shared = window.WorkbenchShared;
+  if (!shared) return;
 
-  function createController(config) {
-    const state = config.state;
-    const els = config.els;
-    const authFetch = config.authFetch;
-    const loadCases = config.loadCases;
-    const loadCase = config.loadCase;
-    const saveEditorCase = config.saveEditorCase;
-    const onRunStatusChange = typeof config.onRunStatusChange === "function" ? config.onRunStatusChange : () => {};
-
+  function createController({
+    state,
+    els,
+    authFetch,
+    focusReviewType,
+    loadCases,
+    loadCase,
+    saveEditorCase,
+    onRunStatusChange,
+  }) {
     function setRunStatus(text) {
-      if (els.runStatus) els.runStatus.textContent = String(text || "等待执行...");
-      onRunStatusChange(String(text || "等待执行..."));
+      els.runStatus.textContent = String(text || "");
+      if (typeof onRunStatusChange === "function") {
+        onRunStatusChange(String(text || ""));
+      }
     }
 
     function resetLogs() {
       state.logLines = [];
-      if (els.logViewer) els.logViewer.textContent = "";
+      els.logViewer.textContent = "";
     }
 
     function appendLog(line) {
-      state.logLines.push(String(line || ""));
-      if (state.logLines.length > 500) state.logLines = state.logLines.slice(-500);
-      if (els.logViewer) els.logViewer.textContent = state.logLines.join("\n");
-    }
-
-    function clearAnalysis() {
-      if (els.analysisSummary) els.analysisSummary.textContent = "暂无失败分析数据。";
-      if (els.analysisDetail) els.analysisDetail.innerHTML = "";
-      if (els.auditTimeline) els.auditTimeline.innerHTML = '<div class="wb-review-empty">运行后将在这里展示审计时间线。</div>';
+      state.logLines.push(line);
+      if (state.logLines.length > 400) {
+        state.logLines.shift();
+      }
+      els.logViewer.textContent = state.logLines.join("\n");
+      els.logViewer.scrollTop = els.logViewer.scrollHeight;
     }
 
     function closeEventSource() {
@@ -39,208 +40,223 @@
       }
     }
 
-    function renderAuditTimeline(entries) {
-      const rows = Array.isArray(entries) ? entries : [];
-      if (!els.auditTimeline) return;
-      if (!rows.length) {
-        els.auditTimeline.innerHTML = '<div class="wb-review-empty">暂无审计时间线。</div>';
-        return;
-      }
-      els.auditTimeline.innerHTML = rows
-        .slice(0, 20)
-        .map((item) => {
-          return (
-            '<div class="wb-audit-line">' +
-            "<strong>" +
-            shared.escapeHtml(item.action || item.title || "事件") +
-            "</strong>" +
-            '<div class="wb-audit-meta">' +
-            "<span>" +
-            shared.escapeHtml(shared.formatTime(item.timestamp || item.created_at)) +
-            "</span>" +
-            "<span>" +
-            shared.escapeHtml(item.actor || item.reviewer || "") +
-            "</span>" +
-            "</div>" +
-            (item.note ? '<p class="wb-audit-note">' + shared.escapeHtml(item.note) + "</p>" : "") +
-            "</div>"
-          );
-        })
-        .join("");
+    function clearAnalysis() {
+      els.analysisSummary.textContent = "暂无失败分析数据。";
+      els.analysisDetail.innerHTML = "";
+      shared.renderAuditTimeline(els.auditTimeline, [], focusReviewType);
     }
 
-    function renderAnalysis(payload) {
-      const items = Array.isArray(payload?.items) ? payload.items : [];
-      const summary = payload?.failure_source_summary || {};
-      if (els.analysisSummary) {
-        els.analysisSummary.textContent =
-          "失败样本 " + Number(summary.total_failures || items.length || 0) + " 条，主因 " + String(summary.top_source || "unknown");
-      }
-      if (els.analysisDetail) {
-        if (!items.length) {
-          els.analysisDetail.innerHTML = '<div class="wb-review-empty">暂无失败样本。</div>';
-        } else {
-          els.analysisDetail.innerHTML = items
-            .slice(0, 10)
-            .map((item) => {
-              return (
-                '<div class="wb-review-card">' +
-                "<strong>" +
-                shared.escapeHtml(item.failure_source || "unknown") +
-                "</strong>" +
-                "<p>" +
-                shared.escapeHtml(item.summary || item.reason || "暂无摘要") +
-                "</p>" +
-                "</div>"
-              );
-            })
-            .join("");
-        }
-      }
-    }
-
-    async function loadAnalysis(runId) {
-      const payload = await shared.requestJson(authFetch, "/api/workbench/runs/" + encodeURIComponent(runId) + "/analysis", { method: "GET" });
-      renderAnalysis(payload);
-    }
-
-    async function loadRunContext(runId) {
-      const payload = await shared.requestJson(authFetch, "/api/workbench/runs/" + encodeURIComponent(runId), { method: "GET" });
-      const item = payload.item && typeof payload.item === "object" ? payload.item : payload;
-      state.currentRunId = String(item.run_id || runId);
-      setRunStatus("运行状态：" + String(item.status || "unknown"));
-      if (els.currentRunHeader) {
-        els.currentRunHeader.textContent = String(item.status || "unknown");
-      }
-      if (item.case_id) {
-        state.currentCaseId = String(item.case_id);
-        if (!state.currentCasePath) {
-          state.currentCasePath = String(item.case_path || "");
-        }
-      }
-      if (state.currentCaseId) {
-        loadCase(state.currentCaseId).catch(() => {});
-      }
-      renderAuditTimeline(item.review_audit_timeline || []);
-      await loadAnalysis(state.currentRunId).catch(() => {
-        clearAnalysis();
-      });
-      return item;
-    }
-
-    function connectEventStream(runId) {
+    function openEventStream(runId) {
       closeEventSource();
-      const streamUrl = "/api/workbench/runs/" + encodeURIComponent(runId) + "/events";
-      const source = new EventSource(streamUrl);
+      const source = new EventSource(`/api/workbench/runs/${encodeURIComponent(runId)}/events`);
       state.eventSource = source;
-
       source.onmessage = (event) => {
-        appendLog(event.data || "");
-        let payload = {};
         try {
-          payload = JSON.parse(event.data || "{}");
+          const payload = JSON.parse(event.data);
+          if (payload.event === "complete") {
+            appendLog(`[run] status=${payload.status}`);
+            setRunStatus(`执行完成：${payload.status}`);
+            closeEventSource();
+            loadAnalysis(runId);
+            return;
+          }
+          if (payload.line) {
+            appendLog(payload.line);
+          }
         } catch (_error) {
-          payload = {};
-        }
-        const status = String(payload.status || payload.event || "").trim();
-        if (status) {
-          setRunStatus("运行状态：" + status);
-        }
-        if (status === "passed" || status === "failed" || status === "complete" || payload.event === "complete") {
-          loadRunContext(runId).catch(() => {});
-          closeEventSource();
-          if (typeof loadCases === "function") loadCases(state.casePage, state.casePageSize).catch(() => {});
+          appendLog(event.data);
         }
       };
-
       source.onerror = () => {
+        appendLog("[stream] connection closed");
         closeEventSource();
       };
     }
 
-    async function startRun() {
-      if (!state.currentCaseId) throw new Error("请先选择用例");
-      await saveEditorCase().catch(() => {});
+    async function loadAnalysis(runId) {
+      if (!runId) return;
+      const [analysisResp, runResp] = await Promise.all([
+        authFetch(`/api/workbench/runs/${encodeURIComponent(runId)}/analysis`),
+        authFetch(`/api/workbench/runs/${encodeURIComponent(runId)}`),
+      ]);
+      if (!analysisResp.ok && !runResp.ok) return;
+      const payload = analysisResp.ok ? await analysisResp.json() : { items: [] };
+      const runPayload = runResp.ok ? await runResp.json() : { item: {} };
+      const items = payload.items || [];
+      const runItem = runPayload.item || {};
+      const reviewSummaryHtml = shared.renderReviewSummary(runItem.review_state);
+      const reviewAuditHtml = shared.renderReviewAuditSummary(runItem.review_audit_summary);
+      const executionGateHtml = shared.renderExecutionGateSummary(runItem.execution_gate);
+      shared.renderAuditTimeline(els.auditTimeline, runItem.review_audit_timeline, focusReviewType);
+      if (!items.length) {
+        const pageLabel = runItem.page ? `页面 ${runItem.page}` : "当前运行";
+        els.analysisSummary.textContent = `${pageLabel} 暂无失败分析数据。`;
+        els.analysisDetail.innerHTML = `${reviewSummaryHtml}${executionGateHtml}${reviewAuditHtml}`;
+        return;
+      }
+      const entry = items[0];
+      const analysis = entry.analysis || {};
+      const suggestion = entry.suggestion || {};
+      els.analysisSummary.textContent = `${analysis.summary || "失败分析已生成"}（风险：${analysis.risk_level || "-"}）`;
+      els.analysisDetail.innerHTML = `
+        ${reviewSummaryHtml}
+        ${executionGateHtml}
+        ${reviewAuditHtml}
+        <div>失败类型：${shared.escapeHtml(analysis.failure_category || "-")}</div>
+        <div>失败来源：${shared.escapeHtml(analysis.failure_source || "-")}</div>
+        <div>来源依据：${shared.escapeHtml(analysis.failure_source_reason || "-")}</div>
+        <div>来源证据：${shared.escapeHtml(shared.renderSourceEvidence(analysis.source_evidence))}</div>
+        <div>需人工复核：${shared.escapeHtml(analysis.requires_manual_review ? "是" : "否")}</div>
+        <div>可能原因：${shared.escapeHtml(analysis.likely_cause || "-")}</div>
+        <div>建议动作：${shared.escapeHtml(analysis.recommended_action || "-")}</div>
+        <div>置信度：${shared.escapeHtml(analysis.confidence || "-")}</div>
+        <div>修复建议：${shared.escapeHtml(suggestion.summary || suggestion.suggestion || "-")}</div>
+        <div>证据目录：<code>${shared.escapeHtml(entry.artifact_dir || "-")}</code></div>
+      `;
+    }
+
+    async function runCase() {
+      const savedCaseId = await saveEditorCase({ announce: false });
+      if (!savedCaseId) return;
       resetLogs();
       clearAnalysis();
-      setRunStatus("提交运行中...");
-      const body = await shared.requestJson(authFetch, "/api/workbench/run", {
+      setRunStatus("排队中...");
+      const resp = await authFetch("/api/workbench/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          project: String(state.project || "default"),
-          case_id: String(state.currentCaseId),
-          case_path: String(state.currentCasePath || ""),
+          project: state.project,
+          case_id: savedCaseId,
+          case_path: state.currentCasePath,
           source: "manual",
         }),
       });
-      const item = body.item && typeof body.item === "object" ? body.item : body;
-      const runId = String(item.run_id || body.run_id || "").trim();
-      if (!runId) throw new Error("未返回 run_id");
-      state.currentRunId = runId;
-      appendLog("run_id=" + runId);
-      connectEventStream(runId);
-      await loadRunContext(runId).catch(() => {});
+      if (!resp.ok) {
+        const error = await resp.json().catch(() => ({}));
+        window.alert(`启动失败：${error.detail || resp.statusText}`);
+        setRunStatus("启动失败");
+        return;
+      }
+      const payload = await resp.json();
+      const job = payload.item || {};
+      state.currentRunId = job.run_id || "";
+      setRunStatus(`运行中：${state.currentRunId}`);
+      openEventStream(state.currentRunId);
     }
 
-    async function rerunCurrent() {
-      if (!state.currentRunId) throw new Error("请先执行一次用例");
-      const body = await shared.requestJson(authFetch, "/api/workbench/runs/" + encodeURIComponent(state.currentRunId) + "/rerun", {
+    async function healRun() {
+      if (!state.currentRunId) {
+        window.alert("暂无可修复的运行记录。");
+        return;
+      }
+      setRunStatus("修复并重跑中...");
+      const resp = await authFetch(`/api/workbench/runs/${encodeURIComponent(state.currentRunId)}/heal-and-rerun`, {
         method: "POST",
       });
-      const item = body.item && typeof body.item === "object" ? body.item : body;
-      const runId = String(item.run_id || body.run_id || state.currentRunId);
-      state.currentRunId = runId;
-      resetLogs();
-      connectEventStream(runId);
-      await loadRunContext(runId).catch(() => {});
+      if (!resp.ok) {
+        const error = await resp.json().catch(() => ({}));
+        window.alert(`修复并重跑失败：${error.detail?.message || error.detail || resp.statusText}`);
+        return;
+      }
+      const payload = await resp.json();
+      const item = payload.item || {};
+      const heal = item.heal || {};
+      const rerun = item.rerun || {};
+      const rerunRunId = rerun.run_id || "";
+      if (rerunRunId) {
+        state.currentRunId = rerunRunId;
+      }
+      const healText = heal.ok ? `修复完成（${heal.item?.status || "ok"}）` : "修复未成功，已直接重跑";
+      const rerunStatus = rerun.status || "running";
+      els.analysisSummary.textContent = `${healText}；重跑状态：${rerunStatus}`;
+      els.analysisDetail.innerHTML = `<pre><code>${shared.escapeHtml(JSON.stringify(item, null, 2))}</code></pre>`;
+      shared.renderAuditTimeline(els.auditTimeline, [], focusReviewType);
+      if (rerunStatus === "running") {
+        openEventStream(state.currentRunId);
+        return;
+      }
+      setRunStatus(`执行完成：${rerunStatus}`);
+      loadAnalysis(state.currentRunId);
     }
 
-    async function healAndRerun() {
-      if (!state.currentRunId) throw new Error("请先执行一次用例");
-      const body = await shared.requestJson(
-        authFetch,
-        "/api/workbench/runs/" + encodeURIComponent(state.currentRunId) + "/heal-and-rerun?wait_seconds=180",
-        { method: "POST" }
-      );
-      const item = body.item && typeof body.item === "object" ? body.item : body;
-      const runId = String(item.run_id || body.run_id || state.currentRunId);
-      state.currentRunId = runId;
+    async function rerunCase() {
+      if (!state.currentRunId) {
+        window.alert("暂无可重跑的运行记录。");
+        return;
+      }
+      const resp = await authFetch(`/api/workbench/runs/${encodeURIComponent(state.currentRunId)}/rerun`, {
+        method: "POST",
+      });
+      if (!resp.ok) {
+        const error = await resp.json().catch(() => ({}));
+        window.alert(`重跑失败：${error.detail || resp.statusText}`);
+        return;
+      }
+      const payload = await resp.json();
+      const job = payload.item || {};
+      state.currentRunId = job.run_id || "";
       resetLogs();
-      connectEventStream(runId);
-      await loadRunContext(runId).catch(() => {});
+      setRunStatus(`重跑中：${state.currentRunId}`);
+      openEventStream(state.currentRunId);
+    }
+
+    function downloadLog() {
+      if (!state.currentRunId) {
+        window.alert("暂无日志可下载。");
+        return;
+      }
+      window.open(`/api/workbench/download-log/${encodeURIComponent(state.currentRunId)}`, "_blank");
+    }
+
+    async function loadRunContext(runId) {
+      const response = await authFetch(`/api/workbench/runs/${encodeURIComponent(runId)}`);
+      if (!response.ok) {
+        throw new Error("load run failed");
+      }
+      const payload = await response.json().catch(() => ({}));
+      const item = payload.item || {};
+      if (item.project && item.project !== state.project) {
+        state.project = item.project;
+        els.projectSelect.value = state.project;
+      }
+      if (item.case_id) {
+        await loadCases(state.casePage, state.casePageSize, item.case_id);
+        await loadCase(item.case_id);
+      } else {
+        await loadCases(state.casePage, state.casePageSize);
+      }
+      state.currentRunId = item.run_id || runId;
+      setRunStatus(`已定位运行：${state.currentRunId}（${item.status || "unknown"}）`);
+      await loadAnalysis(state.currentRunId);
+      if (state.currentRunId) {
+        openEventStream(state.currentRunId);
+      }
+      els.analysisSummary.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 
     function bindEvents() {
-      els.runBtn?.addEventListener("click", () => {
-        startRun().catch((error) => window.alert(error?.message || "执行失败"));
+      els.runBtn.addEventListener("click", () => {
+        runCase().catch((error) => window.alert(error.message || "执行失败"));
       });
-      els.rerunBtn?.addEventListener("click", () => {
-        rerunCurrent().catch((error) => window.alert(error?.message || "重跑失败"));
+      els.healBtn.addEventListener("click", () => {
+        healRun().catch((error) => window.alert(error.message || "修复失败"));
       });
-      els.healBtn?.addEventListener("click", () => {
-        healAndRerun().catch((error) => window.alert(error?.message || "自愈重跑失败"));
+      els.rerunBtn.addEventListener("click", () => {
+        rerunCase().catch((error) => window.alert(error.message || "重跑失败"));
       });
-      els.downloadBtn?.addEventListener("click", () => {
-        if (!state.currentRunId) {
-          window.alert("暂无可下载日志");
-          return;
-        }
-        window.open("/api/workbench/download-log/" + encodeURIComponent(state.currentRunId), "_blank", "noopener,noreferrer");
-      });
+      els.downloadBtn.addEventListener("click", downloadLog);
     }
 
     return {
-      bindEvents: bindEvents,
-      clearAnalysis: clearAnalysis,
-      closeEventSource: closeEventSource,
-      loadRunContext: loadRunContext,
-      resetLogs: resetLogs,
-      setRunStatus: setRunStatus,
+      bindEvents,
+      clearAnalysis,
+      closeEventSource,
+      loadAnalysis,
+      loadRunContext,
+      resetLogs,
+      setRunStatus,
     };
   }
 
-  window.WorkbenchRuns = {
-    createController: createController,
-  };
+  window.WorkbenchRuns = { createController };
 })();

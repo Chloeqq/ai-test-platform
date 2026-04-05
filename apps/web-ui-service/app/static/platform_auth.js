@@ -1,195 +1,195 @@
 (function () {
-  const STORAGE_KEY = "platform_access_token";
-  const state = {
-    token: "",
-    currentUser: null,
-    authState: "anonymous",
+  const STORAGE_KEYS = ["ai_test_platform.access_token", "access_token", "auth_token", "token", "jwt"];
+  const shell = {
+    box: document.getElementById("platform-user-box"),
+    avatar: document.getElementById("platform-user-avatar"),
+    name: document.getElementById("platform-user-name"),
+    authLink: document.getElementById("platform-auth-link"),
   };
 
-  function safeStorageGet() {
-    try {
-      return String(window.localStorage.getItem(STORAGE_KEY) || "");
-    } catch (_error) {
-      return "";
+  const state = {
+    user: null,
+    authState: "unknown",
+  };
+
+  function firstDefined(values) {
+    for (const value of values) {
+      if (value !== null && value !== undefined) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  function readTokenFrom(storage) {
+    if (!storage) return "";
+    for (const key of STORAGE_KEYS) {
+      try {
+        const value = String(storage.getItem(key) || "").trim();
+        if (value) return value;
+      } catch (_error) {
+        return "";
+      }
+    }
+    return "";
+  }
+
+  function getStoredToken() {
+    return readTokenFrom(window.localStorage) || readTokenFrom(window.sessionStorage) || "";
+  }
+
+  function buildInitial(name, fallback) {
+    const value = String(name || "").trim();
+    if (!value) return String(fallback || "?").slice(0, 1);
+    return value.slice(0, 1).toUpperCase();
+  }
+
+  function setUserBox(name, initial, authState) {
+    if (!shell.box || !shell.avatar || !shell.name) return;
+    const resolvedName = String(name || shell.box.dataset.defaultName || "访客").trim() || "访客";
+    const resolvedInitial = buildInitial(initial || resolvedName, shell.box.dataset.defaultInitial || "访");
+    shell.box.dataset.authState = String(authState || "unknown");
+    shell.avatar.textContent = resolvedInitial;
+    shell.name.textContent = resolvedName;
+  }
+
+  function updateAuthLink(authState) {
+    if (!shell.authLink) return;
+    const stateValue = String(authState || "anonymous");
+    shell.authLink.dataset.authState = stateValue;
+    if (stateValue === "authenticated" || stateValue === "token") {
+      shell.authLink.textContent = "退出登录";
+      shell.authLink.href = shell.authLink.dataset.logoutHref || window.location.pathname || "/";
+    } else {
+      shell.authLink.textContent = "登录";
+      shell.authLink.href = shell.authLink.dataset.loginHref || "/login";
     }
   }
 
-  function safeStorageSet(token) {
-    try {
-      if (!token) window.localStorage.removeItem(STORAGE_KEY);
-      else window.localStorage.setItem(STORAGE_KEY, token);
-    } catch (_error) {
-      // Ignore storage errors.
-    }
+  function applyAnonymousState() {
+    state.user = null;
+    state.authState = "anonymous";
+    setUserBox("访客", "访", "anonymous");
+    updateAuthLink("anonymous");
+    window.dispatchEvent(new CustomEvent("platform-auth-changed", { detail: { authState: state.authState, user: null } }));
   }
 
-  function parseJwtPayload(token) {
-    if (!token || !token.includes(".")) return null;
-    try {
-      const payload = token.split(".")[1];
-      const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-      const decoded = window.atob(normalized);
-      const obj = JSON.parse(decoded);
-      return obj && typeof obj === "object" ? obj : null;
-    } catch (_error) {
-      return null;
-    }
-  }
-
-  function getFallbackUser() {
-    const payload = parseJwtPayload(state.token);
-    if (!payload) return null;
-    const username = String(payload.username || payload.sub || "").trim();
-    if (!username) return null;
-    return {
-      id: payload.sub || "",
-      username: username,
-      role: payload.role || "",
-      name: username,
-    };
-  }
-
-  function initialOf(name) {
-    const text = String(name || "").trim();
-    if (!text) return "访";
-    return text.slice(0, 1).toUpperCase();
-  }
-
-  function applyAuthUi() {
-    const authLink = document.getElementById("platform-auth-link");
-    const userBox = document.getElementById("platform-user-box");
-    const userName = document.getElementById("platform-user-name");
-    const userAvatar = document.getElementById("platform-user-avatar");
-    if (!authLink || !userBox || !userName || !userAvatar) return;
-
-    if (state.authState === "authenticated" || state.authState === "token") {
-      const user = state.currentUser || getFallbackUser() || {};
-      const displayName = String(user.username || user.name || "当前用户").trim();
-      const logoutHref = String(authLink.dataset.logoutHref || window.location.pathname || "/");
-      authLink.textContent = "退出登录";
-      authLink.href = logoutHref;
-      authLink.dataset.authState = "authenticated";
-      userBox.dataset.authState = "authenticated";
-      userName.textContent = displayName;
-      userAvatar.textContent = initialOf(displayName);
+  function applyUser(user, authState) {
+    const username = String(firstDefined([user?.username, user?.name]) || "").trim();
+    if (!username) {
+      applyAnonymousState();
       return;
     }
-
-    const defaultName = String(userBox.dataset.defaultName || "访客").trim() || "访客";
-    const defaultInitial = String(userBox.dataset.defaultInitial || "访").trim() || "访";
-    const loginHref = String(authLink.dataset.loginHref || "/login").trim() || "/login";
-    authLink.textContent = "登录";
-    authLink.href = loginHref;
-    authLink.dataset.authState = "anonymous";
-    userBox.dataset.authState = "anonymous";
-    userName.textContent = defaultName;
-    userAvatar.textContent = defaultInitial.slice(0, 1);
+    state.user = user;
+    state.authState = String(authState || "authenticated");
+    setUserBox(username, buildInitial(username, "访"), state.authState);
+    updateAuthLink(state.authState);
+    window.dispatchEvent(new CustomEvent("platform-auth-changed", { detail: { authState: state.authState, user: state.user } }));
   }
 
-  function emitAuthChange() {
-    window.dispatchEvent(
-      new CustomEvent("platform-auth-changed", {
-        detail: {
-          auth_state: state.authState,
-          current_user: state.currentUser,
-        },
-      })
-    );
+  function shouldAttachToken(url) {
+    const value = typeof url === "string" ? url : String(url?.url || "");
+    if (!value) return true;
+    return value.startsWith("/") || value.startsWith(window.location.origin);
   }
 
-  async function authFetch(input, init) {
-    const requestInit = { ...(init || {}) };
-    const headers = new Headers(requestInit.headers || {});
-    if (state.token) {
-      headers.set("Authorization", "Bearer " + state.token);
+  async function authFetch(url, options) {
+    const nextOptions = options && typeof options === "object" ? { ...options } : {};
+    const headers = new Headers(nextOptions.headers || {});
+    const token = getStoredToken();
+    if (token && shouldAttachToken(url) && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
     }
-    requestInit.headers = headers;
-    return window.fetch(input, requestInit);
+    nextOptions.headers = headers;
+    return fetch(url, nextOptions);
   }
 
   async function refreshCurrentUser() {
-    if (!state.token) {
-      state.currentUser = null;
-      state.authState = "anonymous";
-      applyAuthUi();
-      emitAuthChange();
+    const token = getStoredToken();
+    if (!token) {
+      applyAnonymousState();
       return null;
     }
     try {
-      const response = await authFetch("/api/auth/me", { method: "GET" });
+      const response = await authFetch("/api/auth/me", { cache: "no-store" });
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          clearToken();
-        }
-        state.currentUser = getFallbackUser();
-        state.authState = state.currentUser ? "token" : "anonymous";
-        applyAuthUi();
-        emitAuthChange();
-        return state.currentUser;
+        applyAnonymousState();
+        return null;
       }
       const payload = await response.json();
-      state.currentUser = payload && typeof payload === "object" ? payload : getFallbackUser();
-      state.authState = "authenticated";
-      applyAuthUi();
-      emitAuthChange();
-      return state.currentUser;
+      applyUser(payload, "token");
+      return payload;
     } catch (_error) {
-      state.currentUser = getFallbackUser();
-      state.authState = state.currentUser ? "token" : "anonymous";
-      applyAuthUi();
-      emitAuthChange();
-      return state.currentUser;
+      applyAnonymousState();
+      return null;
     }
   }
 
-  function setToken(token) {
-    const nextToken = String(token || "").trim();
-    state.token = nextToken;
-    safeStorageSet(nextToken);
-    state.currentUser = null;
-    state.authState = nextToken ? "token" : "anonymous";
-    applyAuthUi();
-    emitAuthChange();
-  }
-
-  function clearToken() {
-    setToken("");
-  }
-
-  function initAuthLinkBehavior() {
-    const authLink = document.getElementById("platform-auth-link");
-    if (!authLink) return;
-    authLink.addEventListener("click", (event) => {
-      const isAuthenticated = state.authState === "authenticated" || state.authState === "token";
-      if (!isAuthenticated) return;
-      event.preventDefault();
-      clearToken();
-      const next = String(authLink.dataset.logoutHref || window.location.pathname || "/");
-      window.location.href = next;
+  function setToken(token, persistTo) {
+    const storage = persistTo === "session" ? window.sessionStorage : window.localStorage;
+    STORAGE_KEYS.forEach((key, index) => {
+      try {
+        if (index === 0) {
+          storage.setItem(key, String(token || ""));
+        } else {
+          storage.removeItem(key);
+        }
+      } catch (_error) {
+        return;
+      }
     });
   }
 
-  state.token = safeStorageGet();
-  state.authState = state.token ? "token" : "anonymous";
-  state.currentUser = getFallbackUser();
-  applyAuthUi();
-  emitAuthChange();
-  initAuthLinkBehavior();
-  refreshCurrentUser().catch(() => {});
+  function clearToken() {
+    [window.localStorage, window.sessionStorage].forEach((storage) => {
+      STORAGE_KEYS.forEach((key) => {
+        try {
+          storage.removeItem(key);
+        } catch (_error) {
+          return;
+        }
+      });
+    });
+    applyAnonymousState();
+  }
 
-  window.platformAuthFetch = authFetch;
+  function bindAuthActions() {
+    if (!shell.authLink) return;
+    shell.authLink.addEventListener("click", function (event) {
+      const stateValue = String(state.authState || "").toLowerCase();
+      if (stateValue !== "authenticated" && stateValue !== "token") {
+        return;
+      }
+      event.preventDefault();
+      clearToken();
+      const target = shell.authLink.dataset.loginHref || "/login";
+      if (window.location.pathname === "/login") {
+        window.location.reload();
+        return;
+      }
+      window.location.href = target;
+    });
+  }
+
   window.platformAuth = {
-    clearToken: clearToken,
-    getAuthState: function getAuthState() {
+    getToken: getStoredToken,
+    getCurrentUser: function () {
+      return state.user;
+    },
+    getAuthState: function () {
       return state.authState;
     },
-    getCurrentUser: function getCurrentUser() {
-      return state.currentUser;
-    },
-    getToken: function getToken() {
-      return state.token;
-    },
-    refreshCurrentUser: refreshCurrentUser,
-    setToken: setToken,
+    authFetch,
+    refreshCurrentUser,
+    setToken,
+    clearToken,
   };
+  window.platformAuthFetch = authFetch;
+
+  if (shell.box) {
+    setUserBox(shell.box.dataset.defaultName || "访客", shell.box.dataset.defaultInitial || "访", shell.box.dataset.authState || "server");
+  }
+  updateAuthLink("anonymous");
+  bindAuthActions();
+  refreshCurrentUser();
 })();
