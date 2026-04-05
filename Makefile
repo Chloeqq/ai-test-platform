@@ -96,7 +96,11 @@ test-e2e:
 
 test-e2e-smoke:
 	$(CHECK_BASE_URL)
-	PYTHONPATH=runners/web-playwright-python $(PYTEST) -m "e2e and smoke" runners/web-playwright-python/tests
+	PYTHONPATH=runners/web-playwright-python $(PYTEST) -m "e2e and smoke" \
+		runners/web-playwright-python/tests/test_login_smoke.py \
+		runners/web-playwright-python/tests/test_order_smoke.py \
+		runners/web-playwright-python/tests/test_product_quick.py \
+		runners/web-playwright-python/tests/test_product_smoke.py
 
 test-e2e-generated:
 	$(CHECK_BASE_URL)
@@ -116,7 +120,12 @@ test-e2e-open-report:
 
 test-e2e-smoke-open-report:
 	$(CHECK_BASE_URL)
-	PYTHONPATH=runners/web-playwright-python $(PYTEST) -m "e2e and smoke" runners/web-playwright-python/tests --alluredir runners/web-playwright-python/allure-results
+	PYTHONPATH=runners/web-playwright-python $(PYTEST) -m "e2e and smoke" \
+		runners/web-playwright-python/tests/test_login_smoke.py \
+		runners/web-playwright-python/tests/test_order_smoke.py \
+		runners/web-playwright-python/tests/test_product_quick.py \
+		runners/web-playwright-python/tests/test_product_smoke.py \
+		--alluredir runners/web-playwright-python/allure-results
 	$(MAKE) allure-generate
 	$(MAKE) allure-open
 
