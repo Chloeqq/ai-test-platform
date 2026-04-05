@@ -63,6 +63,30 @@ jobs:
           echo "image_ref=${image_ref}" >> "${GITHUB_OUTPUT}"
           echo "Resolved image_ref=${image_ref}"
 
+      - name: Resolve deployment settings
+        id: deploy_settings
+        env:
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_CONTAINER_NAME: ${{ vars.STAGING_CONTAINER_NAME }}
+          STAGING_HEALTHCHECK_URL: ${{ vars.STAGING_HEALTHCHECK_URL }}
+          STAGING_HOST_PORT_INPUT: ${{ inputs.host_port }}
+          STAGING_HOST_PORT_VAR: ${{ vars.STAGING_HOST_PORT }}
+          STAGING_ENV_FILE: ${{ vars.STAGING_ENV_FILE }}
+          STAGING_EXTRA_DOCKER_ARGS: ${{ vars.STAGING_EXTRA_DOCKER_ARGS }}
+        run: |
+          set -euo pipefail
+          host_port="${STAGING_HOST_PORT_INPUT:-${STAGING_HOST_PORT_VAR:-8013}}"
+          container_name="${STAGING_CONTAINER_NAME:-ai-test-platform-web-staging}"
+          env_file="${STAGING_ENV_FILE:-}"
+          extra_docker_args="${STAGING_EXTRA_DOCKER_ARGS:-}"
+          healthcheck_url="${STAGING_HEALTHCHECK_URL:-http://${STAGING_SSH_HOST}:${host_port}/health/ready}"
+
+          echo "host_port=${host_port}" >> "${GITHUB_OUTPUT}"
+          echo "container_name=${container_name}" >> "${GITHUB_OUTPUT}"
+          echo "env_file=${env_file}" >> "${GITHUB_OUTPUT}"
+          echo "extra_docker_args=${extra_docker_args}" >> "${GITHUB_OUTPUT}"
+          echo "healthcheck_url=${healthcheck_url}" >> "${GITHUB_OUTPUT}"
+
       - name: Prepare SSH key
         env:
           STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
@@ -91,6 +115,7 @@ jobs:
           ssh-keyscan -p "${ssh_port}" "${STAGING_SSH_HOST}" >> ~/.ssh/known_hosts
 
       - name: Deploy on staging host
+        id: deploy_remote
         env:
           IMAGE_REF: ${{ steps.image_ref.outputs.image_ref }}
           STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
@@ -98,11 +123,10 @@ jobs:
           STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
           STAGING_GHCR_USERNAME: ${{ secrets.STAGING_GHCR_USERNAME }}
           STAGING_GHCR_TOKEN: ${{ secrets.STAGING_GHCR_TOKEN }}
-          STAGING_CONTAINER_NAME: ${{ vars.STAGING_CONTAINER_NAME }}
-          STAGING_ENV_FILE: ${{ vars.STAGING_ENV_FILE }}
-          STAGING_HOST_PORT_INPUT: ${{ inputs.host_port }}
-          STAGING_HOST_PORT_VAR: ${{ vars.STAGING_HOST_PORT }}
-          STAGING_EXTRA_DOCKER_ARGS: ${{ vars.STAGING_EXTRA_DOCKER_ARGS }}
+          DEPLOY_CONTAINER_NAME: ${{ steps.deploy_settings.outputs.container_name }}
+          DEPLOY_ENV_FILE: ${{ steps.deploy_settings.outputs.env_file }}
+          DEPLOY_HOST_PORT: ${{ steps.deploy_settings.outputs.host_port }}
+          DEPLOY_EXTRA_DOCKER_ARGS: ${{ steps.deploy_settings.outputs.extra_docker_args }}
         run: |
           set -euo pipefail
 
@@ -120,10 +144,10 @@ jobs:
           fi
 
           ssh_port="${STAGING_SSH_PORT:-22}"
-          host_port="${STAGING_HOST_PORT_INPUT:-${STAGING_HOST_PORT_VAR:-8013}}"
-          container_name="${STAGING_CONTAINER_NAME:-ai-test-platform-web-staging}"
-          env_file="${STAGING_ENV_FILE:-}"
-          extra_docker_args="${STAGING_EXTRA_DOCKER_ARGS:-}"
+          host_port="${DEPLOY_HOST_PORT}"
+          container_name="${DEPLOY_CONTAINER_NAME}"
+          env_file="${DEPLOY_ENV_FILE}"
+          extra_docker_args="${DEPLOY_EXTRA_DOCKER_ARGS}"
 
           q_image_ref="$(printf '%q' "${IMAGE_REF}")"
           q_ghcr_username="$(printf '%q' "${STAGING_GHCR_USERNAME}")"
@@ -139,18 +163,98 @@ jobs:
             < scripts/deploy/deploy_staging.sh
 
       - name: Health check
+        id: healthcheck
         env:
-          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
-          STAGING_HEALTHCHECK_URL: ${{ vars.STAGING_HEALTHCHECK_URL }}
-          STAGING_HOST_PORT_INPUT: ${{ inputs.host_port }}
-          STAGING_HOST_PORT_VAR: ${{ vars.STAGING_HOST_PORT }}
+          HEALTHCHECK_URL: ${{ steps.deploy_settings.outputs.healthcheck_url }}
         run: |
           set -euo pipefail
-          host_port="${STAGING_HOST_PORT_INPUT:-${STAGING_HOST_PORT_VAR:-8013}}"
-          healthcheck_url="${STAGING_HEALTHCHECK_URL:-http://${STAGING_SSH_HOST}:${host_port}/health/ready}"
-
-          HEALTHCHECK_URL="${healthcheck_url}" \
           HEALTHCHECK_RETRIES=30 \
           HEALTHCHECK_INTERVAL_SECONDS=5 \
           HEALTHCHECK_TIMEOUT_SECONDS=3 \
           scripts/deploy/healthcheck.sh
+
+      - name: Read remote deployment metadata
+        id: remote_meta
+        if: ${{ success() }}
+        env:
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_SSH_PORT: ${{ secrets.STAGING_SSH_PORT }}
+          STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh_port="${STAGING_SSH_PORT:-22}"
+          metadata="$(
+            ssh -i ~/.ssh/staging_key -p "${ssh_port}" -o StrictHostKeyChecking=yes \
+              "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" \
+              "cat /tmp/ai-test-platform-staging-deploy.last 2>/dev/null || true"
+          )"
+
+          if [[ -n "${metadata}" ]]; then
+            echo "${metadata}"
+            deployed_image="$(printf '%s\n' "${metadata}" | awk -F= '/^image_ref=/{print $2; exit}')"
+            previous_image="$(printf '%s\n' "${metadata}" | awk -F= '/^previous_image=/{print $2; exit}')"
+            deployed_state="$(printf '%s\n' "${metadata}" | awk -F= '/^state=/{print $2; exit}')"
+            started_at="$(printf '%s\n' "${metadata}" | awk -F= '/^started_at=/{print $2; exit}')"
+            echo "deployed_image=${deployed_image}" >> "${GITHUB_OUTPUT}"
+            echo "previous_image=${previous_image}" >> "${GITHUB_OUTPUT}"
+            echo "deployed_state=${deployed_state}" >> "${GITHUB_OUTPUT}"
+            echo "started_at=${started_at}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "No remote metadata found."
+          fi
+
+      - name: Collect remote diagnostics on failure
+        if: ${{ failure() }}
+        env:
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_SSH_PORT: ${{ secrets.STAGING_SSH_PORT }}
+          STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          DEPLOY_CONTAINER_NAME: ${{ steps.deploy_settings.outputs.container_name }}
+        run: |
+          set +e
+          ssh_port="${STAGING_SSH_PORT:-22}"
+          echo "=== remote metadata ==="
+          ssh -i ~/.ssh/staging_key -p "${ssh_port}" -o StrictHostKeyChecking=yes \
+            "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" \
+            "cat /tmp/ai-test-platform-staging-deploy.last 2>/dev/null || true"
+          echo "=== docker ps ==="
+          ssh -i ~/.ssh/staging_key -p "${ssh_port}" -o StrictHostKeyChecking=yes \
+            "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" \
+            "docker ps -a --filter name=^/${DEPLOY_CONTAINER_NAME}$ --no-trunc || true"
+          echo "=== container logs (tail 200) ==="
+          ssh -i ~/.ssh/staging_key -p "${ssh_port}" -o StrictHostKeyChecking=yes \
+            "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" \
+            "docker logs --tail 200 ${DEPLOY_CONTAINER_NAME} 2>&1 || true"
+
+      - name: Publish deployment summary
+        if: ${{ always() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+          IMAGE_REF: ${{ steps.image_ref.outputs.image_ref }}
+          HEALTHCHECK_URL: ${{ steps.deploy_settings.outputs.healthcheck_url }}
+          CONTAINER_NAME: ${{ steps.deploy_settings.outputs.container_name }}
+          DEPLOYED_IMAGE: ${{ steps.remote_meta.outputs.deployed_image }}
+          PREVIOUS_IMAGE: ${{ steps.remote_meta.outputs.previous_image }}
+          DEPLOYED_STATE: ${{ steps.remote_meta.outputs.deployed_state }}
+          STARTED_AT: ${{ steps.remote_meta.outputs.started_at }}
+        run: |
+          {
+            echo "## Staging Deployment Summary"
+            echo ""
+            echo "- Result: ${JOB_STATUS}"
+            echo "- Requested image: ${IMAGE_REF}"
+            echo "- Container: ${CONTAINER_NAME}"
+            echo "- Healthcheck URL: ${HEALTHCHECK_URL}"
+            if [[ -n "${DEPLOYED_IMAGE}" ]]; then
+              echo "- Deployed image: ${DEPLOYED_IMAGE}"
+            fi
+            if [[ -n "${PREVIOUS_IMAGE}" ]]; then
+              echo "- Previous image: ${PREVIOUS_IMAGE}"
+            fi
+            if [[ -n "${DEPLOYED_STATE}" ]]; then
+              echo "- Container state: ${DEPLOYED_STATE}"
+            fi
+            if [[ -n "${STARTED_AT}" ]]; then
+              echo "- Started at: ${STARTED_AT}"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"

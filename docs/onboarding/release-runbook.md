@@ -12,6 +12,8 @@
   - 构建并推送 `ghcr.io/<owner>/ai-test-platform-web`
 - [deploy-staging.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/deploy-staging.yml)
   - 在 staging 主机拉取镜像并重启容器
+  - 自动输出部署摘要（image/container/healthcheck）到 GitHub Step Summary
+  - 失败时自动抓取远端 `docker ps` 与 `docker logs` 诊断信息
 
 ## 2. GitHub Secrets / Variables
 
@@ -75,6 +77,12 @@ HEALTHCHECK_URL="http://<staging-host>:8013/health/ready" \
 scripts/deploy/healthcheck.sh
 ```
 
+部署脚本会在远端写入最近一次部署元数据（默认路径）：
+
+```bash
+/tmp/ai-test-platform-staging-deploy.last
+```
+
 ## 5. 回滚策略
 
 `deploy_staging.sh` 内置“单步失败回滚”：
@@ -103,3 +111,4 @@ scripts/deploy/healthcheck.sh
 - 检查 `STAGING_ENV_FILE` 是否存在、内容是否完整。
 - 登录主机执行 `docker logs <container_name>` 查看启动错误。
 - 检查 `STAGING_HEALTHCHECK_URL` 是否匹配真实对外地址。
+- 查看 `Deploy Staging` workflow 的失败诊断步骤输出（已自动包含远端 `docker ps` 与日志 tail）。

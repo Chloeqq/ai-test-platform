@@ -17,6 +17,7 @@ CONTAINER_NAME="${CONTAINER_NAME:-ai-test-platform-web-staging}"
 HOST_PORT="${HOST_PORT:-8013}"
 ENV_FILE="${ENV_FILE:-}"
 EXTRA_DOCKER_ARGS="${EXTRA_DOCKER_ARGS:-}"
+DEPLOY_METADATA_PATH="${DEPLOY_METADATA_PATH:-/tmp/ai-test-platform-staging-deploy.last}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "[deploy-staging] docker is required on remote host." >&2
@@ -53,7 +54,8 @@ run_new_container() {
 }
 
 echo "[deploy-staging] Starting new container ${CONTAINER_NAME}..."
-if ! run_new_container "${IMAGE_REF}" >/dev/null; then
+container_id=""
+if ! container_id="$(run_new_container "${IMAGE_REF}")"; then
   echo "[deploy-staging] Failed to start new container from ${IMAGE_REF}." >&2
   if [[ -n "${previous_image}" ]]; then
     echo "[deploy-staging] Rolling back to previous image: ${previous_image}"
@@ -64,4 +66,21 @@ if ! run_new_container "${IMAGE_REF}" >/dev/null; then
   exit 1
 fi
 
+running_image="$(docker inspect --format '{{.Config.Image}}' "${CONTAINER_NAME}")"
+running_status="$(docker inspect --format '{{.State.Status}}' "${CONTAINER_NAME}")"
+running_started_at="$(docker inspect --format '{{.State.StartedAt}}' "${CONTAINER_NAME}")"
+short_container_id="${container_id:0:12}"
+
+cat > "${DEPLOY_METADATA_PATH}" <<EOF
+container_name=${CONTAINER_NAME}
+container_id=${container_id}
+image_ref=${running_image}
+previous_image=${previous_image}
+host_port=${HOST_PORT}
+started_at=${running_started_at}
+state=${running_status}
+EOF
+
 echo "[deploy-staging] Deployment succeeded."
+echo "[deploy-staging] container=${CONTAINER_NAME} id=${short_container_id} image=${running_image} state=${running_status} port=${HOST_PORT}->8013"
+echo "[deploy-staging] metadata=${DEPLOY_METADATA_PATH}"
