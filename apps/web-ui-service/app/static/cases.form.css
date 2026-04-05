@@ -1,0 +1,67 @@
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #5f7390;
+}
+
+.form-grid input,
+.form-grid select,
+.form-grid textarea,
+.editor-wrap textarea {
+  border: 1px solid #cbd8e9;
+  border-radius: 8px;
+  background: #fff;
+  color: #29425f;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.editor-wrap {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.code-preview {
+  margin: 0;
+  border: 1px solid #d9e4f1;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #d7e1f3;
+  font-size: 12px;
+  overflow: auto;
+  min-height: 300px;
+  padding: 10px;
+}
+
+.code-preview .kw {
+  color: #8ed0ff;
+  font-weight: 700;
+}
+
+.code-preview .fn {
+  color: #ffd68a;
+}
+
+.code-preview .str {
+  color: #9be89b;
+}
+
+.muted {
+  color: #6b829f;
+  font-size: 12px;
+}
+
+@media (max-width: 960px) {
+  .form-grid,
+  .editor-wrap {
+    grid-template-columns: 1fr;
+  }
+}

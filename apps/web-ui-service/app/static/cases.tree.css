@@ -1,0 +1,97 @@
+.cases-tree-toolbar {
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cases-tree-ops {
+  border: 1px solid #d6e2f0;
+  border-radius: 10px;
+  padding: 6px 8px;
+  background: #f8fbff;
+  font-size: 12px;
+  color: #526d8d;
+}
+
+.cases-tree-ops summary {
+  cursor: pointer;
+}
+
+.cases-tree-ops-menu {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cases-tree-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cases-tree-head h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.cases-tree-total {
+  min-width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eaf3ff;
+  color: #2d5f98;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cases-tree {
+  display: grid;
+  gap: 8px;
+}
+
+.cases-tree-group {
+  border: 1px solid #dde7f3;
+  border-radius: 10px;
+  padding: 8px;
+  background: #fbfdff;
+}
+
+.cases-tree-product {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 700;
+  color: #29435f;
+  cursor: pointer;
+}
+
+.cases-tree-modules {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cases-tree-module {
+  border: 1px solid #d1dff0;
+  border-radius: 999px;
+  background: #fff;
+  color: #395c86;
+  font-size: 12px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.cases-tree-product.is-active,
+.cases-tree-module.is-active {
+  color: #1f4d85;
+  background: #e9f2ff;
+  border-color: #c6daf6;
+}

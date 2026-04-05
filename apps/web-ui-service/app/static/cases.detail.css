@@ -1,0 +1,142 @@
+.detail-shell {
+  max-width: 1280px;
+}
+
+.detail-grid {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.detail-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 12px;
+}
+
+.detail-card h2 {
+  margin: 0;
+  font-size: 15px;
+  color: #28415f;
+}
+
+.detail-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.detail-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: #4f6685;
+  font-size: 13px;
+}
+
+.basic-info-grid {
+  margin: 10px 0 0;
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 6px 10px;
+  font-size: 13px;
+}
+
+.basic-info-grid dt {
+  color: #607895;
+  font-weight: 600;
+}
+
+.basic-info-grid dd {
+  margin: 0;
+  color: #2b4564;
+}
+
+.data-config-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.data-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.data-config-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #4f6889;
+}
+
+.data-config-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.data-config-table-wrap {
+  overflow: auto;
+}
+
+.data-config-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-config-table th,
+.data-config-table td {
+  border-bottom: 1px solid #e2eaf3;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-config-table input {
+  width: 100%;
+}
+
+.ddt-empty {
+  color: #6e829d;
+  font-size: 12px;
+}
+
+.ddt-row-action {
+  width: 80px;
+}
+
+.version-compare-actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.version-diff-summary {
+  margin: 10px 0 8px;
+  color: #5f7898;
+  font-size: 12px;
+}
+
+.version-diff-viewer {
+  margin: 0 0 8px;
+  border: 1px solid #d8e3f1;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #d5def1;
+  min-height: 160px;
+  max-height: 340px;
+  overflow: auto;
+  padding: 10px;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .basic-info-grid {
+    grid-template-columns: 1fr;
+  }
+}

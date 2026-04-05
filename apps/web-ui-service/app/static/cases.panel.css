@@ -1,0 +1,32 @@
+.cases-selection-bar {
+  margin-top: 10px;
+  border: 1px solid #c9dcf7;
+  border-radius: 10px;
+  background: #eef6ff;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cases-selection-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cases-inline-btn {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.cases-inline-danger {
+  border-color: #e7b7b7;
+  color: #a33d3d;
+}
+
+.cases-btn-secondary {
+  background: #f7faff;
+}

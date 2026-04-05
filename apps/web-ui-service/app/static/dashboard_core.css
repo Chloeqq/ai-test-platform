@@ -1,0 +1,272 @@
+.dashboard-shell {
+  max-width: 1320px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(290px, 0.9fr);
+  gap: 14px;
+}
+
+.dashboard-hero-copy,
+.dashboard-hero-side {
+  min-width: 0;
+}
+
+.hero-kicker {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.hero-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #446388;
+  background: #eaf3ff;
+}
+
+.hero-pill-primary {
+  background: #d8e9ff;
+  color: #1f4f89;
+  font-weight: 700;
+}
+
+.hero-description {
+  max-width: 88ch;
+  line-height: 1.7;
+}
+
+.hero-metrics {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.hero-metric {
+  border: 1px solid #d7e4f3;
+  border-radius: 12px;
+  background: #f9fbff;
+  padding: 10px;
+}
+
+.hero-metric span {
+  font-size: 12px;
+  color: #6a809d;
+}
+
+.hero-metric strong {
+  margin-top: 6px;
+  display: block;
+  font-size: 16px;
+  color: #183a63;
+}
+
+.dash-card {
+  border: 1px solid #d7e3f2;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.06);
+}
+
+.dash-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.card-eyebrow {
+  margin: 0;
+  color: #7390b3;
+  font-size: 12px;
+}
+
+.dash-card h2 {
+  margin: 4px 0 0;
+  font-size: 18px;
+  color: #1d385a;
+}
+
+.risk-card {
+  min-height: 100%;
+  padding: 16px;
+  color: inherit;
+  text-decoration: none;
+  display: grid;
+  gap: 10px;
+}
+
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dash-metric-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dash-metric-line strong {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.dash-note {
+  margin: 0;
+  color: #667f9f;
+  font-size: 13px;
+}
+
+.risk-metric-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.risk-metric-strip span {
+  border: 1px solid #d9e5f3;
+  border-radius: 10px;
+  padding: 8px 9px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.risk-metric-strip strong {
+  display: block;
+  font-size: 16px;
+}
+
+.risk-metric-strip em {
+  font-style: normal;
+  font-size: 11px;
+  color: #5f7e9f;
+}
+
+.risk-hint {
+  font-size: 12px;
+  color: #6b84a3;
+}
+
+.dashboard-section-card {
+  margin-top: 14px;
+  padding: 16px;
+}
+
+.section-link-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.section-link {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid #d2dff0;
+  border-radius: 999px;
+  color: #2c568b;
+  text-decoration: none;
+  font-size: 12px;
+  background: #f8fbff;
+}
+
+.section-link:hover {
+  background: #ebf4ff;
+}
+
+.dashboard-kpi-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mini-card {
+  padding: 12px;
+  box-shadow: none;
+}
+
+.mini-card h2 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.mini-card strong {
+  margin-top: 8px;
+  display: block;
+  font-size: 24px;
+  color: #113761;
+}
+
+.dashboard-two-col {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-subsection {
+  border: 1px solid #dde7f4;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.dashboard-subsection h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #234970;
+}
+
+.pending-issues-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.pending-issues-list li {
+  border: 1px solid #d8e5f4;
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: #fff;
+}
+
+.pending-issues-list a {
+  color: #23579a;
+  text-decoration: none;
+}
+
+.pending-issues-list a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-kpi-grid,
+  .hero-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .dashboard-hero,
+  .dashboard-two-col {
+    grid-template-columns: 1fr;
+  }
+}

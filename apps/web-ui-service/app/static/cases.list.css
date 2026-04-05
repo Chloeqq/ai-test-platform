@@ -1,0 +1,73 @@
+.cases-search-help {
+  font-size: 12px;
+  color: #5f7694;
+}
+
+.cases-search-help p {
+  margin: 8px 0 0;
+}
+
+.cases-search-context {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cases-search-context .pill {
+  cursor: pointer;
+}
+
+.cases-table-wrap {
+  margin-top: 10px;
+  overflow: auto;
+}
+
+.cases-grid-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cases-grid-table th,
+.cases-grid-table td {
+  border-bottom: 1px solid #e2eaf4;
+  padding: 8px;
+  font-size: 13px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.cases-grid-table th {
+  background: #f4f8fd;
+  color: #607895;
+  font-size: 12px;
+}
+
+.cases-col-check {
+  width: 36px;
+}
+
+.cases-col-handle {
+  width: 24px;
+}
+
+.row-actions-col {
+  width: 150px;
+}
+
+.cases-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cases-row-quick {
+  color: #2e5f99;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.cases-row-quick:hover {
+  text-decoration: underline;
+}

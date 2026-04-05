@@ -69,7 +69,7 @@
       const panelMethod = shared.normalizeMethod(panel.dataset.methodPanel);
       panel.classList.toggle("is-active", panelMethod === state.method);
     });
-    setText(els.methodSummary, `当前方式：${shared.generationMethodLabel(state.method)}`);
+    presenter.setText(els.methodSummary, `当前方式：${shared.generationMethodLabel(state.method)}`);
     refreshWizardState();
   }
 

@@ -1,0 +1,62 @@
+.workbench-history-shell {
+  max-width: 1360px;
+}
+
+.workbench-history-grid {
+  align-items: start;
+}
+
+.toolbar-advanced {
+  min-width: 240px;
+}
+
+.toolbar-advanced summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #4d6d92;
+}
+
+.toolbar-actions {
+  margin-left: auto;
+}
+
+.wb-history-row-active td {
+  background: #edf5ff;
+}
+
+.wb-history-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #eaf2ff;
+  color: #315c90;
+}
+
+.wb-history-status.failed,
+.wb-history-status.rejected {
+  background: #ffe9e9;
+  color: #a13c3c;
+}
+
+.wb-history-status.passed,
+.wb-history-status.confirmed {
+  background: #e9f8ee;
+  color: #2a7a45;
+}
+
+.wb-history-inline-meta {
+  font-size: 12px;
+  color: #607b9c;
+}
+
+.wb-history-link {
+  color: #245fbd;
+  text-decoration: none;
+}
+
+.wb-history-link:hover {
+  text-decoration: underline;
+}

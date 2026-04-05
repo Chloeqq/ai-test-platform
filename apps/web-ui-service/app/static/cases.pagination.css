@@ -1,0 +1,31 @@
+.case-list-footer {
+  margin-top: 10px;
+  border-top: 1px solid #dde7f4;
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.case-list-footer-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #6480a3;
+}
+
+.case-list-footer-sep {
+  color: #92a9c5;
+}
+
+.case-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
