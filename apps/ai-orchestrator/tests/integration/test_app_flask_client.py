@@ -13,7 +13,7 @@ SRC_ROOT = PROJECT_ROOT / "apps" / "ai-orchestrator" / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from app import app as asgi_app, create_app
+from app import app as asgi_app, create_app  # noqa: E402
 
 
 class FakeService:

@@ -21,7 +21,7 @@ make static-baseline
 make static-baseline-fast
 ```
 
-说明：当前 CI 在 `pull_request/push` 默认执行 `make static-baseline`，本地提前执行可避免命令口径不一致导致的回归。
+说明：当前 CI 在 `pull_request/push` 默认执行 `make static-baseline`（当前范围：`ruff` + scoped `mypy` + `pytest -q agents`），本地提前执行可避免命令口径不一致导致的回归。
 
 如果改动涉及以下内容，要求额外检查：
 

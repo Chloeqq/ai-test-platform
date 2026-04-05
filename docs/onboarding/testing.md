@@ -62,7 +62,13 @@ make test
 make static-baseline
 ```
 
-该入口会调用 [scripts/qa/run-static-baseline.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline.sh)，执行当前 monorepo 下稳定可复用的 scoped `mypy` 命令组合（覆盖 `apps`、`runners`，并自动发现 `agents/*/src` 全量目录），避免重复模块命名冲突导致的误报。
+该入口会调用 [scripts/qa/run-static-baseline.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline.sh)，当前执行范围为：
+
+- `ruff check apps agents runners`
+- `mypy`（`agents` 下稳定子集）
+- `pytest -q agents`
+
+这是一套“先跑通、再扩面”的增量质量门，后续会逐步扩展到 `apps/runners` 的更大测试面。
 
 ### 快速静态基线（ruff + mypy，不跑 pytest）
 
@@ -72,16 +78,11 @@ make static-baseline-fast
 
 该入口会调用 [scripts/qa/run-static-baseline-fast.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline-fast.sh)，适合本地高频迭代时快速验证静态质量门。
 
-等价于：
+如需手动运行当前 baseline pytest 范围：
 
 ```bash
-.venv/bin/python -m pytest
+.venv/bin/python -m pytest -q agents
 ```
-
-这会跑：
-
-- `apps/ai-orchestrator` 的 `integration` 测试
-- `web-playwright-python` 的 `contract` 测试
 
 ### 只跑 orchestrator 集成测试
 

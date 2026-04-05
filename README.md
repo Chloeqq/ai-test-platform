@@ -169,6 +169,7 @@ make allure-open
 - `make check-console` 会对 `apps/web-console/static/app.js` 做 Node 语法检查
 - `make static-baseline-fast` 会执行静态基线脚本 [scripts/qa/run-static-baseline-fast.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline-fast.sh)
 - `make static-baseline` 会执行跨模块静态基线脚本 [scripts/qa/run-static-baseline.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline.sh)
+  - 当前质量门范围：`ruff check apps agents runners` + scoped `mypy`（agents 稳定子集）+ `pytest -q agents`
 - `make test-e2e` 会跑需要真实业务环境的浏览器端到端测试
 - `make test-e2e-smoke` 会跑人工维护的 smoke 浏览器测试
 - `make test-e2e-generated` 会跑 AI 生成的 YAML 浏览器测试
@@ -184,11 +185,9 @@ make allure-open
 
 ## 6. CI 分阶段策略
 
-仓库已增加 GitHub Actions 工作流：
+当前仓库已启用 GitHub Actions 工作流：
 
 - [tests.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/tests.yml)
-- [build-image.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/build-image.yml)
-- [deploy-staging.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/deploy-staging.yml)
 
 当前策略：
 
@@ -207,9 +206,7 @@ make allure-open
 - `TEST_USERNAME`
 - `TEST_PASSWORD`
 
-Staging 部署所需 secrets 与回滚方式见：
-
-- [release-runbook.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/onboarding/release-runbook.md)
+当前分支尚未落地 `build-image/deploy-staging` 工作流；建议按“先 CI 稳定、再 CD 上线”的节奏推进（可参考本文后续“计划安排表”）。
 
 ## 7. 测试手册
 

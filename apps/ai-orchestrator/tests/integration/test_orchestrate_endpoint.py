@@ -14,8 +14,8 @@ SRC_ROOT = PROJECT_ROOT / "apps" / "ai-orchestrator" / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from app import create_app, create_server
-from orchestrator_service import OrchestratorValidationError, RunnerExecutionError
+from app import create_app, create_server  # noqa: E402
+from orchestrator_service import OrchestratorValidationError, RunnerExecutionError  # noqa: E402
 
 
 pytestmark = [pytest.mark.integration]

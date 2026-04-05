@@ -12,8 +12,8 @@ SRC_ROOT = PROJECT_ROOT / "apps" / "ai-orchestrator" / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from asset_service import AssetService
-from orchestrator_service import OrchestratorValidationError
+from asset_service import AssetService  # noqa: E402
+from orchestrator_service import OrchestratorValidationError  # noqa: E402
 
 
 def test_scaffold_page_assets_accepts_element_templates(tmp_path: Path):
