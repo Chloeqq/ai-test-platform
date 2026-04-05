@@ -51,6 +51,14 @@ for target in "${MYPY_TARGETS[@]}"; do
   fi
 done
 
+echo "[static-baseline-fast] mypy runners utility tools"
+if ! PYTHONPATH=runners/web-playwright-python \
+  "${PYTHON_BIN}" -m mypy \
+  runners/web-playwright-python/tools/manage_allure.py \
+  runners/web-playwright-python/tools/check_base_url.py; then
+  MYPY_FAILED=1
+fi
+
 if [[ "${MYPY_FAILED}" -ne 0 ]]; then
   echo "[static-baseline-fast] mypy reported errors." >&2
   exit 2

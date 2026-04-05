@@ -169,7 +169,7 @@ make allure-open
 - `make check-console` 会对 `apps/web-console/static/app.js` 做 Node 语法检查
 - `make static-baseline-fast` 会执行静态基线脚本 [scripts/qa/run-static-baseline-fast.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline-fast.sh)
 - `make static-baseline` 会执行跨模块静态基线脚本 [scripts/qa/run-static-baseline.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline.sh)
-  - 当前质量门范围：`ruff check apps agents runners` + scoped `mypy`（agents 稳定子集）+ `pytest -q agents`
+  - 当前质量门范围：`ruff check apps agents runners` + scoped `mypy`（agents 稳定子集 + runners 工具链 `manage_allure/check_base_url`）+ `pytest -q agents` + `runners` 工具链稳定测试集 + `ai-orchestrator` OpenAPI 合约测试
 - `make test-e2e` 会跑需要真实业务环境的浏览器端到端测试
 - `make test-e2e-smoke` 会跑人工维护的 smoke 浏览器测试
 - `make test-e2e-generated` 会跑 AI 生成的 YAML 浏览器测试

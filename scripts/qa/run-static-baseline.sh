@@ -19,4 +19,16 @@ echo "[static-baseline] Running pytest..."
 # Incremental stable test scope for CI baseline.
 "${PYTHON_BIN}" -m pytest -q agents
 
+echo "[static-baseline] Running stable runner utility tests..."
+PYTHONPATH=runners/web-playwright-python \
+  "${PYTHON_BIN}" -m pytest -q \
+  runners/web-playwright-python/tests/test_manage_allure.py \
+  runners/web-playwright-python/tests/test_report_summary.py \
+  runners/web-playwright-python/tests/test_base_url_check.py
+
+echo "[static-baseline] Running stable orchestrator API contract tests..."
+PYTHONPATH=apps/ai-orchestrator/src \
+  "${PYTHON_BIN}" -m pytest -q \
+  apps/ai-orchestrator/tests/integration/test_openapi_contract.py
+
 echo "[static-baseline] Completed."

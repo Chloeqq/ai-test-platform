@@ -65,8 +65,10 @@ make static-baseline
 该入口会调用 [scripts/qa/run-static-baseline.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline.sh)，当前执行范围为：
 
 - `ruff check apps agents runners`
-- `mypy`（`agents` 下稳定子集）
+- `mypy`（`agents` 下稳定子集 + `runners` 工具链 `manage_allure/check_base_url`）
 - `pytest -q agents`
+- `PYTHONPATH=runners/web-playwright-python pytest -q`（`test_manage_allure.py`、`test_report_summary.py`、`test_base_url_check.py`）
+- `PYTHONPATH=apps/ai-orchestrator/src pytest -q apps/ai-orchestrator/tests/integration/test_openapi_contract.py`
 
 这是一套“先跑通、再扩面”的增量质量门，后续会逐步扩展到 `apps/runners` 的更大测试面。
 
@@ -82,6 +84,12 @@ make static-baseline-fast
 
 ```bash
 .venv/bin/python -m pytest -q agents
+PYTHONPATH=runners/web-playwright-python .venv/bin/python -m pytest -q \
+  runners/web-playwright-python/tests/test_manage_allure.py \
+  runners/web-playwright-python/tests/test_report_summary.py \
+  runners/web-playwright-python/tests/test_base_url_check.py
+PYTHONPATH=apps/ai-orchestrator/src .venv/bin/python -m pytest -q \
+  apps/ai-orchestrator/tests/integration/test_openapi_contract.py
 ```
 
 ### 只跑 orchestrator 集成测试
@@ -215,3 +223,21 @@ make install-hooks
   如果仅需快速静态检查，可先跑 `make static-baseline-fast`
 4. 改动涉及真实页面交互时，再额外跑 `make test-e2e-smoke`
 5. 需要验证 AI 生成链路时，跑 `make test-e2e-generated`
+
+## 10. 质量门扩面阻塞清单（Phase 5 Batch 2）
+
+当前以下测试/类型检查暂未并入默认 baseline，主要因为存在结构性导入缺口：
+
+- `apps/ai-orchestrator` 全量 integration：
+  - 缺少 `services.execution_report_support` 等模块（导入路径与现有文件布局不一致）
+- `runners` 资产契约测试：
+  - 缺少 `runner.url_utils`
+  - 缺少 `shared_backend.case_ids`
+- `runners` 工具链 `report_summary.py` 的 mypy：
+  - `shared_backend.schemas` 对外符号与调用端预期不一致（`normalize_evidence_manifest_v1` 未暴露）
+
+建议下一批按以下顺序处理：
+
+1. 先补齐 `shared_backend`/`runner` 缺失模块的最小可用实现，恢复导入链路。
+2. 再恢复 `runners/test_asset_contracts.py` 与 `test_asset_toolkit.py` 到 baseline。
+3. 最后处理 `ai-orchestrator` 的 `services.*` 导入布局，放开 integration 全量。
