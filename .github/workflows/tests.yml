@@ -46,9 +46,16 @@ jobs:
       BASE_URL: ${{ secrets.BASE_URL }}
       TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
       TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+      HOME: ${{ github.workspace }}/.home
+      PIP_CACHE_DIR: ${{ github.workspace }}/.pip-cache
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare writable local directories
+        run: |
+          mkdir -p "$HOME" "$PIP_CACHE_DIR" "$PLAYWRIGHT_BROWSERS_PATH"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -77,9 +84,16 @@ jobs:
       BASE_URL: ${{ secrets.BASE_URL }}
       TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
       TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+      HOME: ${{ github.workspace }}/.home
+      PIP_CACHE_DIR: ${{ github.workspace }}/.pip-cache
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare writable local directories
+        run: |
+          mkdir -p "$HOME" "$PIP_CACHE_DIR" "$PLAYWRIGHT_BROWSERS_PATH"
 
       - name: Set up Python
         uses: actions/setup-python@v5
