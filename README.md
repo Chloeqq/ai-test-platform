@@ -188,6 +188,8 @@ make allure-open
 当前仓库已启用 GitHub Actions 工作流：
 
 - [tests.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/tests.yml)
+- [build-image.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/build-image.yml)
+- [deploy-staging.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/deploy-staging.yml)
 
 当前策略：
 
@@ -206,7 +208,9 @@ make allure-open
 - `TEST_USERNAME`
 - `TEST_PASSWORD`
 
-当前分支尚未落地 `build-image/deploy-staging` 工作流；建议按“先 CI 稳定、再 CD 上线”的节奏推进（可参考本文后续“计划安排表”）。
+Staging 发布所需 Secrets/Variables、回滚方式、故障排查见：
+
+- [release-runbook.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/onboarding/release-runbook.md)
 
 ## 7. 测试手册
 

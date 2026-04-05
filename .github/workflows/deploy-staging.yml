@@ -1,0 +1,156 @@
+name: Deploy Staging
+
+on:
+  workflow_run:
+    workflows:
+      - Build Image
+    types:
+      - completed
+    branches:
+      - dev
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      image_ref:
+        description: Optional full image ref (for example ghcr.io/org/ai-test-platform-web:sha-...)
+        required: false
+        type: string
+      host_port:
+        description: Optional staging host port mapped to container 8013
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute deployment image reference
+        id: image_ref
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          DISPATCH_IMAGE_REF: ${{ inputs.image_ref }}
+          DISPATCH_SHA: ${{ github.sha }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          owner="$(echo "${REPO_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          image_repo="ghcr.io/${owner}/ai-test-platform-web"
+          image_ref=""
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            if [[ -n "${DISPATCH_IMAGE_REF}" ]]; then
+              image_ref="${DISPATCH_IMAGE_REF}"
+            else
+              image_ref="${image_repo}:sha-${DISPATCH_SHA}"
+            fi
+          else
+            image_ref="${image_repo}:sha-${WORKFLOW_RUN_SHA}"
+          fi
+
+          echo "image_ref=${image_ref}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved image_ref=${image_ref}"
+
+      - name: Prepare SSH key
+        env:
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${STAGING_SSH_KEY}" ]]; then
+            echo "Missing required secret: STAGING_SSH_KEY" >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${STAGING_SSH_KEY}" > ~/.ssh/staging_key
+          chmod 600 ~/.ssh/staging_key
+
+      - name: Add staging host to known_hosts
+        env:
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_SSH_PORT: ${{ secrets.STAGING_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${STAGING_SSH_HOST}" ]]; then
+            echo "Missing required secret: STAGING_SSH_HOST" >&2
+            exit 1
+          fi
+          ssh_port="${STAGING_SSH_PORT:-22}"
+          ssh-keyscan -p "${ssh_port}" "${STAGING_SSH_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Deploy on staging host
+        env:
+          IMAGE_REF: ${{ steps.image_ref.outputs.image_ref }}
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_SSH_PORT: ${{ secrets.STAGING_SSH_PORT }}
+          STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          STAGING_GHCR_USERNAME: ${{ secrets.STAGING_GHCR_USERNAME }}
+          STAGING_GHCR_TOKEN: ${{ secrets.STAGING_GHCR_TOKEN }}
+          STAGING_CONTAINER_NAME: ${{ vars.STAGING_CONTAINER_NAME }}
+          STAGING_ENV_FILE: ${{ vars.STAGING_ENV_FILE }}
+          STAGING_HOST_PORT_INPUT: ${{ inputs.host_port }}
+          STAGING_HOST_PORT_VAR: ${{ vars.STAGING_HOST_PORT }}
+          STAGING_EXTRA_DOCKER_ARGS: ${{ vars.STAGING_EXTRA_DOCKER_ARGS }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${STAGING_SSH_USER}" ]]; then
+            echo "Missing required secret: STAGING_SSH_USER" >&2
+            exit 1
+          fi
+          if [[ -z "${STAGING_GHCR_USERNAME}" ]]; then
+            echo "Missing required secret: STAGING_GHCR_USERNAME" >&2
+            exit 1
+          fi
+          if [[ -z "${STAGING_GHCR_TOKEN}" ]]; then
+            echo "Missing required secret: STAGING_GHCR_TOKEN" >&2
+            exit 1
+          fi
+
+          ssh_port="${STAGING_SSH_PORT:-22}"
+          host_port="${STAGING_HOST_PORT_INPUT:-${STAGING_HOST_PORT_VAR:-8013}}"
+          container_name="${STAGING_CONTAINER_NAME:-ai-test-platform-web-staging}"
+          env_file="${STAGING_ENV_FILE:-}"
+          extra_docker_args="${STAGING_EXTRA_DOCKER_ARGS:-}"
+
+          q_image_ref="$(printf '%q' "${IMAGE_REF}")"
+          q_ghcr_username="$(printf '%q' "${STAGING_GHCR_USERNAME}")"
+          q_ghcr_token="$(printf '%q' "${STAGING_GHCR_TOKEN}")"
+          q_container_name="$(printf '%q' "${container_name}")"
+          q_host_port="$(printf '%q' "${host_port}")"
+          q_env_file="$(printf '%q' "${env_file}")"
+          q_extra_args="$(printf '%q' "${extra_docker_args}")"
+
+          ssh -i ~/.ssh/staging_key -p "${ssh_port}" -o StrictHostKeyChecking=yes \
+            "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" \
+            "IMAGE_REF=${q_image_ref} GHCR_USERNAME=${q_ghcr_username} GHCR_TOKEN=${q_ghcr_token} CONTAINER_NAME=${q_container_name} HOST_PORT=${q_host_port} ENV_FILE=${q_env_file} EXTRA_DOCKER_ARGS=${q_extra_args} bash -s" \
+            < scripts/deploy/deploy_staging.sh
+
+      - name: Health check
+        env:
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_HEALTHCHECK_URL: ${{ vars.STAGING_HEALTHCHECK_URL }}
+          STAGING_HOST_PORT_INPUT: ${{ inputs.host_port }}
+          STAGING_HOST_PORT_VAR: ${{ vars.STAGING_HOST_PORT }}
+        run: |
+          set -euo pipefail
+          host_port="${STAGING_HOST_PORT_INPUT:-${STAGING_HOST_PORT_VAR:-8013}}"
+          healthcheck_url="${STAGING_HEALTHCHECK_URL:-http://${STAGING_SSH_HOST}:${host_port}/health/ready}"
+
+          HEALTHCHECK_URL="${healthcheck_url}" \
+          HEALTHCHECK_RETRIES=30 \
+          HEALTHCHECK_INTERVAL_SECONDS=5 \
+          HEALTHCHECK_TIMEOUT_SECONDS=3 \
+          scripts/deploy/healthcheck.sh

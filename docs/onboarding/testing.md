@@ -155,6 +155,8 @@ PYTHONPATH=runners/web-playwright-python .venv/bin/python -m pytest -m "e2e and 
 当前 GitHub Actions 配置见：
 
 - [tests.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/tests.yml)
+- [build-image.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/build-image.yml)
+- [deploy-staging.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/deploy-staging.yml)
 
 执行策略：
 
@@ -166,6 +168,10 @@ PYTHONPATH=runners/web-playwright-python .venv/bin/python -m pytest -m "e2e and 
     - `e2e-smoke`
     - `e2e-generated`
     - `all`
+
+发布流程（镜像构建、staging 部署、健康检查、回滚）见：
+
+- [release-runbook.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/onboarding/release-runbook.md)
 
 ## 8. 常见问题
 
