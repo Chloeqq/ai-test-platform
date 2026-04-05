@@ -1,17 +1,29 @@
+# mypy: ignore-errors
+
 import os
 import re
 import subprocess
 import sys
 import json
-import hashlib
-import tempfile
 import logging
+import importlib.util
 from datetime_compat import UTC
 from datetime import datetime
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
+
+from services.execution_report_support import ExecutionReportSupport
+from services.multisource_support import MultisourceSupport
+from services.analytics_query_support import AnalyticsQuerySupport
+from services.agent_execution_support import AgentExecutionSupport
+from services.failure_healing_support import FailureHealingSupport
+from services.orchestration_flow_support import OrchestrationFlowSupport
+from services.requirement_parse_support import RequirementParseSupport
+from services.requirement_testpoint_support import RequirementTestPointSupport
+from services.runner_registry_support import RunnerRegistrySupport
+from shared_backend.observability import build_ai_trace_context
 
 
 class OrchestratorError(Exception):
@@ -143,6 +155,9 @@ class OrchestratorService:
         self.telemetry_root = self.repo_root / "reports" / "telemetry"
         self.requirement_parse_telemetry_log = self.telemetry_root / "requirement-parse-events.jsonl"
         self.generated_scripts_root = self.report_root / "generated-scripts"
+        self.schemas_root = self.repo_root / "apps" / "ai-orchestrator" / "src" / "schemas"
+        self.tools_root = self.repo_root / "apps" / "ai-orchestrator" / "src" / "tools"
+        self._runtime_module_cache: dict[str, Any] = {}
         self.execution_record_compat_builder_enabled = self._env_bool(
             "EXECUTION_RECORD_COMPAT_BUILDER_ENABLED",
             default=True,
@@ -172,6 +187,117 @@ class OrchestratorService:
             default=0.5,
         )
         self.logger = logging.getLogger(__name__)
+        self._runner_registry_support = RunnerRegistrySupport(repo_root=self.repo_root)
+        self._multisource_support = MultisourceSupport(
+            load_runtime_module=self._load_runtime_module,
+            infer_page_from_text=self._infer_page_from_text,
+            build_source_id=self._build_source_id,
+            slug_token=self._slug_token,
+            dedup_strings=self._dedup_strings,
+            logger=self.logger,
+            tools_root=self.tools_root,
+        )
+        self._execution_report_support = ExecutionReportSupport(
+            ensure_runner_import_path=self._ensure_runner_import_path,
+            normalize_execution_record=self._normalize_execution_record,
+            normalize_evidence_manifest=self._normalize_evidence_manifest,
+            ensure_change_impact_explainability=self._ensure_change_impact_explainability,
+            build_summary_text=self._build_summary_text,
+            extract_runner_metrics=self._extract_runner_metrics,
+            build_pytest_results=self._build_pytest_results,
+            extract_failure_reason=self._extract_failure_reason,
+            analyze_failure=self._analyze_failure,
+            triage_failure=self._triage_failure,
+            enrich_failure_triage_with_history=self._enrich_failure_triage_with_history,
+            build_self_healing_advice=self._build_self_healing_advice,
+            load_self_healing_suggestion_preview=self._load_self_healing_suggestion_preview,
+            load_self_healing_execution_preview=self._load_self_healing_execution_preview,
+            evaluate_risk_report=self._evaluate_risk_report,
+            agent_pipeline_order=self.agent_pipeline_order,
+            logger=self.logger,
+            runner_root=self.runner_root,
+            execution_record_compat_builder_enabled=self.execution_record_compat_builder_enabled,
+        )
+        self._analytics_query_support = AnalyticsQuerySupport(
+            now=self._now,
+            iter_recent_reports=self._iter_recent_reports,
+            load_self_healing_suggestion_preview=self._load_self_healing_suggestion_preview,
+            load_report_summary_preview=self._load_report_summary_preview,
+            get_report_root=lambda: self.report_root,
+            get_runner_root=lambda: self.runner_root,
+            get_requirement_parse_telemetry_log=lambda: self.requirement_parse_telemetry_log,
+        )
+        self._failure_healing_support = FailureHealingSupport(
+            now=self._now,
+            iter_recent_reports=self._iter_recent_reports,
+            run_failure_analysis_agent=lambda payload: self._run_failure_analysis_agent(payload),
+            run_self_healing_advisor_agent=lambda payload: self._run_self_healing_advisor_agent(payload),
+            load_available_targets=lambda page_name: self._load_available_targets(page_name),
+            risk_evaluation_root=self.risk_evaluation_root,
+            failure_triage_root=self.failure_triage_root,
+        )
+        self._requirement_parse_support = RequirementParseSupport(
+            repo_root=self.repo_root,
+            requirement_parser_root=self.requirement_parser_root,
+            build_fallback_multisource_context=self._build_fallback_multisource_context,
+            harmonize_requirement_spec=self._harmonize_requirement_spec,
+            infer_page_from_text=self._infer_page_from_text,
+            rank_page_candidates=self._rank_page_candidates,
+        )
+        self._requirement_testpoint_support = RequirementTestPointSupport(
+            now=self._now,
+            normalize_test_point_plan=self._normalize_test_point_plan,
+            build_test_point_traceability_summary=self._build_test_point_traceability_summary,
+            agent_root=self.agent_root,
+            requirement_quality_gate_enabled=self.requirement_quality_gate_enabled,
+            requirement_min_parse_confidence=self.requirement_min_parse_confidence,
+            requirement_min_test_intents=self.requirement_min_test_intents,
+            requirement_block_high_ambiguity=self.requirement_block_high_ambiguity,
+            requirement_max_coverage_gap_ratio=self.requirement_max_coverage_gap_ratio,
+            blocker_catalog=self.REQUIREMENT_QUALITY_BLOCKER_CATALOG,
+        )
+        self._agent_execution_support = AgentExecutionSupport(
+            agent_root=self.agent_root,
+            script_generation_root=self.script_generation_root,
+            execution_planner_root=self.execution_planner_root,
+            generated_scripts_root=self.generated_scripts_root,
+            test_point_steps_authoritative=self.test_point_steps_authoritative,
+        )
+        self._orchestration_flow_support = OrchestrationFlowSupport(
+            orchestration_result_cls=OrchestrationResult,
+            validation_error_cls=OrchestratorValidationError,
+            runner_execution_error_cls=RunnerExecutionError,
+            allowed_sources=self.ALLOWED_SOURCES,
+            now=self._now,
+            resolve_runner_profile=self._resolve_runner_profile,
+            parse_requirement_spec=lambda **kwargs: self._parse_requirement_spec(**kwargs),
+            enforce_requirement_quality_gate=lambda requirement_spec, stage: self._enforce_requirement_quality_gate(
+                requirement_spec,
+                stage=stage,
+            ),
+            record_requirement_parse_telemetry=lambda **kwargs: self._record_requirement_parse_telemetry(**kwargs),
+            generate_case=lambda **kwargs: self._generate_case(**kwargs),
+            build_design_generation=lambda case: self._build_design_generation(case),
+            merge_case_requirements=lambda raw_requirement, requirement_spec: self._merge_case_requirements(
+                raw_requirement,
+                requirement_spec,
+            ),
+            generate_script_bundle=lambda **kwargs: self._generate_script_bundle(**kwargs),
+            build_execution_plan=lambda **kwargs: self._build_execution_plan(**kwargs),
+            build_test_points_preview=lambda **kwargs: self._build_test_points_preview(**kwargs),
+            render_case_steps_from_test_points=lambda **kwargs: self._render_case_steps_from_test_points(**kwargs),
+            prepare_generated_case_for_assets=lambda case: self._prepare_generated_case_for_assets(case),
+            save_case=lambda case: self._save_case(case),
+            agent_pipeline_order=self.agent_pipeline_order,
+            build_execution_record=lambda **kwargs: self._build_execution_record(**kwargs),
+            empty_evidence_manifest=self._empty_evidence_manifest,
+            build_execution_record_metadata=lambda **kwargs: self._build_execution_record_metadata(**kwargs),
+            snapshot_evidence_files=self._snapshot_evidence_files,
+            run_case=lambda case_id, case_path: self._run_case(case_id, case_path),
+            build_evidence_manifest=lambda before, after: self._build_evidence_manifest(before, after),
+            build_and_save_report=lambda **kwargs: self._build_and_save_report(**kwargs),
+            build_report_summary_path=self._build_report_summary_path,
+        )
 
     @staticmethod
     def _env_bool(name: str, default: bool) -> bool:
@@ -190,6 +316,39 @@ class OrchestratorService:
         except Exception:
             return default
 
+    def _load_runtime_module(self, *, cache_key: str, module_path: Path) -> Any:
+        cached = self._runtime_module_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        if not module_path.exists():
+            raise FileNotFoundError(f"module file not found: {module_path}")
+        spec = importlib.util.spec_from_file_location(cache_key, str(module_path))
+        if spec is None or spec.loader is None:
+            raise ImportError(f"unable to load module spec: {module_path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._runtime_module_cache[cache_key] = module
+        return module
+
+    def _build_fallback_multisource_context(
+        self,
+        *,
+        input_sources: list[dict[str, Any]] | None = None,
+        openapi_spec: dict[str, Any] | None = None,
+        openapi_url: str = "",
+        git_diff: str = "",
+        git_diff_path: str = "",
+        defect_ticket: str = "",
+    ) -> dict[str, Any]:
+        return self._multisource_support.build_fallback_multisource_context(
+            input_sources=input_sources,
+            openapi_spec=openapi_spec,
+            openapi_url=openapi_url,
+            git_diff=git_diff,
+            git_diff_path=git_diff_path,
+            defect_ticket=defect_ticket,
+        )
+
     @staticmethod
     def _env_int(name: str, default: int) -> int:
         raw = os.getenv(name)
@@ -199,6 +358,230 @@ class OrchestratorService:
             return int(str(raw).strip())
         except Exception:
             return default
+
+    @staticmethod
+    def _slug_token(value: Any, *, default: str = "item") -> str:
+        text = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
+        return text or default
+
+    def _build_source_id(self, *, source_type: str, hint: str, index: int) -> str:
+        normalized_type = self._slug_token(source_type, default="source")
+        normalized_hint = self._slug_token(hint, default=f"{normalized_type}-{index:02d}")
+        return f"{normalized_type}.{normalized_hint}"
+
+    def _normalize_multisource_source_inputs(
+        self,
+        source_inputs: list[dict[str, Any]] | None,
+    ) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
+        return self._multisource_support.normalize_multisource_source_inputs(source_inputs)
+
+    @staticmethod
+    def _dedup_strings(values: list[Any]) -> list[str]:
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for item in values:
+            text = str(item or "").strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            normalized.append(text)
+        return normalized
+
+    def _rank_page_candidates(
+        self,
+        *,
+        fallback_context: dict[str, Any],
+        source_inputs: list[dict[str, Any]],
+        current_page: str = "",
+    ) -> list[dict[str, Any]]:
+        return self._multisource_support.rank_page_candidates(
+            fallback_context=fallback_context,
+            source_inputs=source_inputs,
+            current_page=current_page,
+        )
+
+    def _resolve_source_ids(
+        self,
+        *,
+        raw_source_ids: list[Any] | None,
+        source_ids_by_type: dict[str, list[str]],
+        fallback_types: list[str] | None = None,
+        fallback_to_all: bool = False,
+    ) -> list[str]:
+        return self._multisource_support.resolve_source_ids(
+            raw_source_ids=raw_source_ids,
+            source_ids_by_type=source_ids_by_type,
+            fallback_types=fallback_types,
+            fallback_to_all=fallback_to_all,
+        )
+
+    def _normalize_business_rules(
+        self,
+        *,
+        business_rules: list[dict[str, Any]] | None,
+        source_ids_by_type: dict[str, list[str]],
+    ) -> list[dict[str, Any]]:
+        return self._multisource_support.normalize_business_rules(
+            business_rules=business_rules,
+            source_ids_by_type=source_ids_by_type,
+        )
+
+    def _normalize_test_intents_for_multisource(
+        self,
+        *,
+        intents: list[dict[str, Any]] | None,
+        source_ids_by_type: dict[str, list[str]],
+    ) -> list[dict[str, Any]]:
+        return self._multisource_support.normalize_test_intents_for_multisource(
+            intents=intents,
+            source_ids_by_type=source_ids_by_type,
+        )
+
+    def _normalize_coverage_matrix_for_multisource(
+        self,
+        *,
+        coverage_matrix: list[dict[str, Any]] | None,
+        test_intents: list[dict[str, Any]],
+        source_ids_by_type: dict[str, list[str]],
+        requirement_text: str,
+    ) -> list[dict[str, Any]]:
+        return self._multisource_support.normalize_coverage_matrix_for_multisource(
+            coverage_matrix=coverage_matrix,
+            test_intents=test_intents,
+            source_ids_by_type=source_ids_by_type,
+            requirement_text=requirement_text,
+        )
+
+    def _normalize_change_impact_for_multisource(
+        self,
+        *,
+        change_impact: dict[str, Any] | None,
+        fallback_context: dict[str, Any],
+        test_intents: list[dict[str, Any]],
+        source_ids_by_type: dict[str, list[str]],
+    ) -> dict[str, Any]:
+        return self._multisource_support.normalize_change_impact_for_multisource(
+            change_impact=change_impact,
+            fallback_context=fallback_context,
+            test_intents=test_intents,
+            source_ids_by_type=source_ids_by_type,
+        )
+
+    def _ensure_change_impact_explainability(self, change_impact: dict[str, Any] | None) -> dict[str, Any]:
+        return self._multisource_support.ensure_change_impact_explainability(change_impact)
+
+    def _build_page_resolution_summary(
+        self,
+        *,
+        page: str,
+        fallback_context: dict[str, Any],
+        source_inputs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return self._multisource_support.build_page_resolution_summary(
+            page=page,
+            fallback_context=fallback_context,
+            source_inputs=source_inputs,
+        )
+
+    def _harmonize_requirement_spec(
+        self,
+        *,
+        requirement_spec: dict[str, Any],
+        source: str,
+        requirement: str,
+        fallback_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        spec = dict(requirement_spec) if isinstance(requirement_spec, dict) else {}
+        normalized_source_inputs, source_ids_by_type = self._normalize_multisource_source_inputs(
+            spec.get("source_inputs") if isinstance(spec.get("source_inputs"), list) else fallback_context.get("source_inputs")
+        )
+        spec["source_inputs"] = normalized_source_inputs
+        spec["test_intents"] = self._normalize_test_intents_for_multisource(
+            intents=spec.get("test_intents") if isinstance(spec.get("test_intents"), list) else [],
+            source_ids_by_type=source_ids_by_type,
+        )
+        spec["business_rules"] = self._normalize_business_rules(
+            business_rules=spec.get("business_rules") if isinstance(spec.get("business_rules"), list) else fallback_context.get("business_rules"),
+            source_ids_by_type=source_ids_by_type,
+        )
+        spec["coverage_matrix"] = self._normalize_coverage_matrix_for_multisource(
+            coverage_matrix=spec.get("coverage_matrix") if isinstance(spec.get("coverage_matrix"), list) else [],
+            test_intents=spec["test_intents"],
+            source_ids_by_type=source_ids_by_type,
+            requirement_text=str(spec.get("raw_requirement", "")).strip() or str(requirement).strip() or str(spec.get("design_input", "")).strip(),
+        )
+        spec["change_impact"] = self._normalize_change_impact_for_multisource(
+            change_impact=spec.get("change_impact") if isinstance(spec.get("change_impact"), dict) else {},
+            fallback_context=fallback_context,
+            test_intents=spec["test_intents"],
+            source_ids_by_type=source_ids_by_type,
+        )
+        spec["parameter_constraints"] = [
+            {
+                **item,
+                "source_id": str(item.get("source_id", "")).strip() or self._resolve_source_ids(
+                    raw_source_ids=[item.get("source_id")] if item.get("source_id") else ["openapi"],
+                    source_ids_by_type=source_ids_by_type,
+                    fallback_types=["openapi"],
+                    fallback_to_all=False,
+                )[0] if self._resolve_source_ids(
+                    raw_source_ids=[item.get("source_id")] if item.get("source_id") else ["openapi"],
+                    source_ids_by_type=source_ids_by_type,
+                    fallback_types=["openapi"],
+                    fallback_to_all=False,
+                ) else "",
+            }
+            for item in (spec.get("parameter_constraints") if isinstance(spec.get("parameter_constraints"), list) else fallback_context.get("parameter_constraints", []))
+            if isinstance(item, dict) and str(item.get("name", "")).strip()
+        ][:40]
+        parser_runtime = spec.get("parser_runtime") if isinstance(spec.get("parser_runtime"), dict) else {}
+        llm_trace = parser_runtime.get("llm_trace") if isinstance(parser_runtime.get("llm_trace"), dict) else {}
+        parser_runtime["llm_trace"] = {
+            "attempted": bool(llm_trace.get("attempted", False)),
+            "succeeded": bool(llm_trace.get("succeeded", False)),
+            "fallback_used": bool(llm_trace.get("fallback_used", False) or parser_runtime.get("mode") == "rule_based"),
+            "reason_code": str(llm_trace.get("reason_code", "")).strip() or ("fallback_rule_based" if parser_runtime.get("mode") == "rule_based" else "llm_parse"),
+            "latency_ms": int(llm_trace.get("latency_ms", 0) or 0),
+            "overlay_key_count": len(normalized_source_inputs),
+            "total_tokens": llm_trace.get("total_tokens"),
+        }
+        parser_runtime["source_summary"] = {
+            "source_count": len(normalized_source_inputs),
+            "source_types": sorted(source_ids_by_type.keys()),
+            "has_multisource_inputs": len(normalized_source_inputs) > 1,
+        }
+        if not isinstance(parser_runtime.get("ai_trace"), dict):
+            parser_runtime["ai_trace"] = build_ai_trace_context(
+                page=str(spec.get("page", "")).strip(),
+                prompt_version=str(parser_runtime.get("prompt_version", "")).strip(),
+                model=str(parser_runtime.get("model", "")).strip(),
+                source=str(source).strip(),
+                fallback_used=bool(parser_runtime["llm_trace"].get("fallback_used", False)),
+                fallback_reason=str(parser_runtime["llm_trace"].get("reason_code", "")).strip(),
+                instructions_version=str(parser_runtime.get("instructions_version", "")).strip(),
+            )
+        parser_runtime["trace_id"] = str(parser_runtime.get("trace_id", "")).strip() or str(
+            parser_runtime["ai_trace"].get("trace_id", "")
+        ).strip()
+        parser_runtime["page_resolution"] = self._build_page_resolution_summary(
+            page=str(spec.get("page", "")).strip(),
+            fallback_context=fallback_context,
+            source_inputs=normalized_source_inputs,
+        )
+        spec["parser_runtime"] = parser_runtime
+        spec["source_type"] = str(spec.get("source_type", "")).strip() or source
+        return spec
+
+    def _build_test_point_traceability_summary(
+        self,
+        *,
+        requirement_spec: dict[str, Any],
+        test_points: dict[str, Any],
+    ) -> dict[str, Any]:
+        return self._multisource_support.build_test_point_traceability_summary(
+            requirement_spec=requirement_spec,
+            test_points=test_points,
+        )
 
     def orchestrate(
         self,
@@ -217,37 +600,14 @@ class OrchestratorService:
         openapi_url: str = "",
         defect_ticket: str = "",
         runtime_logs: str = "",
+        runner: str = "playwright",
     ) -> OrchestrationResult:
-        normalized_requirement = requirement.strip()
-        if not normalized_requirement:
-            has_multisource_inputs = any(
-                [
-                    isinstance(input_sources, list) and bool(input_sources),
-                    isinstance(openapi_spec, dict) and bool(openapi_spec),
-                    bool(prd_text.strip()),
-                    bool(prd_url.strip()),
-                    bool(user_story.strip()),
-                    bool(git_diff.strip()),
-                    bool(git_diff_path.strip()),
-                    bool(openapi_url.strip()),
-                    bool(defect_ticket.strip()),
-                    bool(runtime_logs.strip()),
-                ]
-            )
-            if not has_multisource_inputs:
-                raise OrchestratorValidationError("requirement must not be empty")
-
-        normalized_source = source.strip().lower()
-        if normalized_source not in self.ALLOWED_SOURCES:
-            raise OrchestratorValidationError("source must be one of: manual, ai, regression")
-        normalized_mode = mode.strip().lower() if isinstance(mode, str) and mode.strip() else None
-        if normalized_mode is None:
-            normalized_mode = "generate_and_run" if execute else "generate_only"
-
-        requirement_spec = self._parse_requirement_spec(
+        return self._orchestration_flow_support.orchestrate(
             requirement=requirement,
-            page=page.strip(),
-            source=normalized_source,
+            page=page,
+            execute=execute,
+            source=source,
+            mode=mode,
             input_sources=input_sources,
             openapi_spec=openapi_spec,
             prd_text=prd_text,
@@ -258,159 +618,8 @@ class OrchestratorService:
             openapi_url=openapi_url,
             defect_ticket=defect_ticket,
             runtime_logs=runtime_logs,
+            runner=runner,
         )
-        resolved_page = str(requirement_spec.get("page", "")).strip() or page.strip()
-        if not resolved_page:
-            resolved_page = "product"
-            requirement_spec["page"] = resolved_page
-        else:
-            requirement_spec["page"] = resolved_page
-
-        try:
-            self._enforce_requirement_quality_gate(requirement_spec, stage="orchestrate")
-            self._record_requirement_parse_telemetry(
-                requirement_spec=requirement_spec,
-                stage="orchestrate",
-                source=normalized_source,
-                outcome="allow",
-            )
-        except OrchestratorValidationError:
-            self._record_requirement_parse_telemetry(
-                requirement_spec=requirement_spec,
-                stage="orchestrate",
-                source=normalized_source,
-                outcome="block",
-            )
-            raise
-
-        design_requirement = str(requirement_spec.get("design_input", "")).strip() or normalized_requirement
-        if not design_requirement:
-            design_requirement = str(requirement_spec.get("normalized_requirement", "")).strip() or "基础流程验证"
-
-        case = self._generate_case(requirement=design_requirement, page=resolved_page)
-        design_generation = self._build_design_generation(case)
-        case["requirement"] = self._merge_case_requirements(
-            raw_requirement=requirement or design_requirement,
-            requirement_spec=requirement_spec,
-        )
-        generated_script = self._generate_script_bundle(case=case, framework="playwright", language="python")
-        execution_plan = self._build_execution_plan(
-            case=case,
-            execution_requested=execute,
-            source=normalized_source,
-            execution_config={},
-        )
-        test_points = self._build_test_points_preview(
-            case=case,
-            requirement_spec=requirement_spec,
-        )
-        case = self._render_case_steps_from_test_points(case=case, test_points=test_points)
-        case = self._prepare_generated_case_for_assets(case)
-        case_path = self._save_case(case)
-        started_at = self._now()
-
-        result = OrchestrationResult(
-            requirement_spec=requirement_spec,
-            case=case,
-            generated_script=generated_script,
-            execution_plan=execution_plan,
-            design_generation=design_generation,
-            risk_report={},
-            failure_triage={},
-            agent_pipeline=self.agent_pipeline_order(),
-            test_points=test_points,
-            execution_record=self._build_execution_record(
-                case=case,
-                execution_requested=execute,
-                source=normalized_source,
-                mode=normalized_mode,
-                started_at=started_at,
-                finished_at="",
-                status="running" if execute else "generated",
-                runner_exit_code=None,
-                evidence_manifest=self._empty_evidence_manifest(),
-            ),
-            case_path=str(case_path),
-            execution_requested=execute,
-        )
-
-        completed = None
-        evidence_manifest = self._empty_evidence_manifest()
-        if execute:
-            evidence_before = self._snapshot_evidence_files()
-            completed = self._run_case(case_id=case["id"], case_path=case_path)
-            evidence_manifest = self._build_evidence_manifest(evidence_before, self._snapshot_evidence_files())
-            result.runner_exit_code = completed.returncode
-            result.runner_stdout = completed.stdout
-            result.runner_stderr = completed.stderr
-            result.execution_record = self._build_execution_record(
-                case=case,
-                execution_requested=execute,
-                source=normalized_source,
-                mode=normalized_mode,
-                started_at=started_at,
-                finished_at=self._now(),
-                status="passed" if completed.returncode == 0 else "failed",
-                runner_exit_code=completed.returncode,
-                evidence_manifest=evidence_manifest,
-            )
-            if completed.returncode != 0:
-                report_payload, report_json_path, report_markdown_path = self._build_and_save_report(
-                    requirement_spec=requirement_spec,
-                    case=case,
-                    test_points=test_points,
-                    generated_script=generated_script,
-                    execution_plan=execution_plan,
-                    design_generation=design_generation,
-                    case_path=case_path,
-                    execution_requested=execute,
-                    completed=completed,
-                    evidence_manifest=evidence_manifest,
-                    started_at=started_at,
-                    finished_at=self._now(),
-                    source=normalized_source,
-                    mode=normalized_mode,
-                )
-                report_summary_path = self._build_report_summary_path() if execute else ""
-                raise RunnerExecutionError(
-                    "Runner execution failed",
-                    details={
-                        "runner_exit_code": completed.returncode,
-                        "runner_stdout": completed.stdout,
-                        "runner_stderr": completed.stderr,
-                        "report": report_payload,
-                        "report_json_path": str(report_json_path),
-                        "report_markdown_path": str(report_markdown_path),
-                        "report_summary_path": report_summary_path,
-                    },
-                )
-
-        report_payload, report_json_path, report_markdown_path = self._build_and_save_report(
-            requirement_spec=requirement_spec,
-            case=case,
-            test_points=test_points,
-            generated_script=generated_script,
-            execution_plan=execution_plan,
-            design_generation=design_generation,
-            case_path=case_path,
-            execution_requested=execute,
-            completed=completed,
-            evidence_manifest=evidence_manifest,
-            started_at=started_at,
-            finished_at=self._now(),
-            source=normalized_source,
-            mode=normalized_mode,
-        )
-        result.report = report_payload
-        result.report_json_path = str(report_json_path)
-        result.report_markdown_path = str(report_markdown_path)
-        result.report_summary_path = self._build_report_summary_path() if execute else ""
-        result.risk_report = report_payload.get("risk_report", {})
-        result.failure_triage = report_payload.get("failure_triage", {})
-        if not execute:
-            result.execution_record = report_payload["execution_record"]
-
-        return result
 
     def _parse_requirement_spec(
         self,
@@ -429,111 +638,21 @@ class OrchestratorService:
         defect_ticket: str = "",
         runtime_logs: str = "",
     ) -> dict[str, Any]:
-        try:
-            payload = {
-                "requirement": requirement,
-                "page": page,
-                "source_type": source,
-                "input_sources": input_sources or [],
-                "openapi_spec": openapi_spec or {},
-                "prd_text": prd_text,
-                "prd_url": prd_url,
-                "user_story": user_story,
-                "git_diff": git_diff,
-                "git_diff_path": git_diff_path,
-                "openapi_url": openapi_url,
-                "defect_ticket": defect_ticket,
-                "runtime_logs": runtime_logs,
-            }
-            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as temp_file:
-                temp_path = Path(temp_file.name)
-                temp_file.write(json.dumps(payload, ensure_ascii=False))
-            pythonpath_entries = [str(self.repo_root), str(self.requirement_parser_root)]
-            existing_pythonpath = str(os.environ.get("PYTHONPATH", "")).strip()
-            if existing_pythonpath:
-                pythonpath_entries.append(existing_pythonpath)
-            env = dict(os.environ)
-            env["PYTHONPATH"] = os.pathsep.join(entry for entry in pythonpath_entries if entry)
-            completed = subprocess.run(
-                [sys.executable, "-m", "src.index", "--input", str(temp_path)],
-                cwd=str(self.requirement_parser_root),
-                env=env,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            try:
-                temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            if completed.returncode != 0:
-                raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "requirement parser failed")
-            parsed = json.loads(completed.stdout.strip() or "{}")
-            if not isinstance(parsed, dict):
-                raise RuntimeError("requirement parser returned non-object payload")
-            if not isinstance(parsed.get("parser_runtime"), dict):
-                parsed["parser_runtime"] = self._build_requirement_parser_runtime_fallback(
-                    source="subprocess",
-                    detail="missing parser_runtime in parser output",
-                )
-            return parsed
-        except Exception:
-            normalized = requirement.strip()
-            resolved_page = page or self._infer_page_from_text(
-                requirement=requirement,
-                prd_text=prd_text,
-                user_story=user_story,
-                git_diff=git_diff,
-                defect_ticket=defect_ticket,
-                runtime_logs=runtime_logs,
-                openapi_spec=openapi_spec,
-                input_sources=input_sources,
-            )
-            return {
-                "version": "RequirementSpecV1",
-                "source_type": source,
-                "page": resolved_page,
-                "raw_requirement": requirement,
-                "normalized_requirement": normalized,
-                "source_inputs": [],
-                "entities": [],
-                "test_intents": [
-                    {
-                        "intent_id": "intent-01",
-                        "title": normalized[:80] or "基础流程验证",
-                        "intent_type": "functional",
-                        "priority": "P1",
-                        "steps_hint": ["smoke", "assert"],
-                        "dependencies": [],
-                    }
-                ],
-                "coverage_matrix": [
-                    {
-                        "requirement_id": "REQ-001",
-                        "requirement_text": normalized[:200],
-                        "intent_ids": ["intent-01"],
-                        "coverage_ratio": 1.0,
-                    }
-                ],
-                "dependency_graph": [{"intent_id": "intent-01", "depends_on": []}],
-                "business_rules": [],
-                "ambiguities": [],
-                "change_impact": {
-                    "changed_modules": [],
-                    "changed_files": [],
-                    "affected_intent_ids": ["intent-01"],
-                    "suggested_regression_scope": [resolved_page],
-                    "risk_hint": "fallback",
-                },
-                "historical_patterns": [],
-                "priority": "P1",
-                "design_input": requirement or normalized or "基础流程验证",
-                "parse_confidence": 0.72 if normalized else 0.5,
-                "parser_runtime": self._build_requirement_parser_runtime_fallback(
-                    source="orchestrator_fallback",
-                    detail="requirement parser subprocess failed; fallback spec used",
-                ),
-            }
+        return self._requirement_parse_support.parse_requirement_spec(
+            requirement=requirement,
+            page=page,
+            source=source,
+            input_sources=input_sources,
+            openapi_spec=openapi_spec,
+            prd_text=prd_text,
+            prd_url=prd_url,
+            user_story=user_story,
+            git_diff=git_diff,
+            git_diff_path=git_diff_path,
+            openapi_url=openapi_url,
+            defect_ticket=defect_ticket,
+            runtime_logs=runtime_logs,
+        )
 
     @staticmethod
     def _infer_page_from_text(
@@ -547,186 +666,26 @@ class OrchestratorService:
         openapi_spec: dict[str, Any] | None = None,
         input_sources: list[dict[str, Any]] | None = None,
     ) -> str:
-        parts = [
-            str(requirement or ""),
-            str(prd_text or ""),
-            str(user_story or ""),
-            str(git_diff or ""),
-            str(defect_ticket or ""),
-            str(runtime_logs or ""),
-        ]
-        if isinstance(openapi_spec, dict):
-            parts.append(json.dumps(openapi_spec, ensure_ascii=False))
-        if isinstance(input_sources, list):
-            for item in input_sources:
-                if not isinstance(item, dict):
-                    continue
-                parts.append(str(item.get("content", "") or ""))
-                parts.append(str(item.get("source_type", "") or ""))
-        text = "\n".join(part for part in parts if str(part).strip())
-        mapping = (
-            ("returnapply", ("退货", "退货申请", "refund", "return-apply")),
-            ("order", ("订单", "order")),
-            ("permission", ("权限", "permission")),
-            ("payment", ("支付", "payment")),
-            ("login", ("登录", "login")),
-            ("home", ("首页", "home")),
-            ("addproduct", ("添加商品", "add product", "addproduct")),
-            ("product", ("商品", "product", "catalog", "目录")),
+        return RequirementParseSupport.infer_page_from_text(
+            requirement=requirement,
+            prd_text=prd_text,
+            user_story=user_story,
+            git_diff=git_diff,
+            defect_ticket=defect_ticket,
+            runtime_logs=runtime_logs,
+            openapi_spec=openapi_spec,
+            input_sources=input_sources,
         )
-        lower_text = text.lower()
-        for page_name, keywords in mapping:
-            for keyword in keywords:
-                if keyword.lower() in lower_text:
-                    return page_name
-        return "product"
 
     @staticmethod
     def _build_requirement_parser_runtime_fallback(*, source: str, detail: str) -> dict[str, Any]:
-        return {
-            "agent": "requirement-parser-agent",
-            "pipeline": "requirement->test_points",
-            "generated_at": datetime.now(UTC).isoformat(),
-            "mode": "rule_based",
-            "llm_enabled": False,
-            "model": "rule-engine",
-            "prompt_name": "requirement-parser-system",
-            "prompt_version": "requirement-parser.prompt.unknown",
-            "prompt_fingerprint": "",
-            "instructions_version": "requirement-parser.instructions.unknown",
-            "source": source,
-            "detail": detail,
-        }
+        return RequirementParseSupport.build_requirement_parser_runtime_fallback(source=source, detail=detail)
 
     def _build_requirement_quality_gate(self, requirement_spec: dict[str, Any], *, stage: str) -> dict[str, Any]:
-        intents = requirement_spec.get("test_intents")
-        intent_list = intents if isinstance(intents, list) else []
-        ambiguities = requirement_spec.get("ambiguities")
-        ambiguity_list = ambiguities if isinstance(ambiguities, list) else []
-        coverage_matrix = requirement_spec.get("coverage_matrix")
-        coverage_list = coverage_matrix if isinstance(coverage_matrix, list) else []
-
-        high_ambiguity_count = 0
-        medium_ambiguity_count = 0
-        for item in ambiguity_list:
-            if not isinstance(item, dict):
-                continue
-            severity = str(item.get("severity", "medium")).strip().lower()
-            if severity in {"high", "critical"}:
-                high_ambiguity_count += 1
-            elif severity == "medium":
-                medium_ambiguity_count += 1
-
-        coverage_gap_count = 0
-        for row in coverage_list:
-            if not isinstance(row, dict):
-                continue
-            intent_ids = row.get("intent_ids")
-            traceability = str(row.get("traceability_status", "")).strip().lower()
-            has_links = isinstance(intent_ids, list) and bool(intent_ids)
-            if traceability == "gap" or not has_links:
-                coverage_gap_count += 1
-        coverage_gap_ratio = (
-            round(coverage_gap_count / max(1, len(coverage_list)), 2)
-            if coverage_list
-            else (1.0 if not intent_list else 0.0)
-        )
-
-        parse_confidence = requirement_spec.get("parse_confidence", 0.0)
-        try:
-            parse_confidence_value = float(parse_confidence)
-        except Exception:
-            parse_confidence_value = 0.0
-
-        has_design_input = bool(str(requirement_spec.get("design_input", "")).strip())
-        has_page = bool(str(requirement_spec.get("page", "")).strip())
-
-        blockers: list[dict[str, Any]] = []
-        if len(intent_list) < max(1, self.requirement_min_test_intents):
-            blockers.append(
-                self._build_requirement_quality_blocker(
-                    code="insufficient_test_intents",
-                    message=f"test_intents below threshold: {len(intent_list)} < {max(1, self.requirement_min_test_intents)}",
-                    value=len(intent_list),
-                    threshold=max(1, self.requirement_min_test_intents),
-                )
-            )
-        if parse_confidence_value < self.requirement_min_parse_confidence:
-            blockers.append(
-                self._build_requirement_quality_blocker(
-                    code="low_parse_confidence",
-                    message=f"parse_confidence below threshold: {round(parse_confidence_value, 2)} < {self.requirement_min_parse_confidence}",
-                    value=round(parse_confidence_value, 2),
-                    threshold=self.requirement_min_parse_confidence,
-                )
-            )
-        if self.requirement_block_high_ambiguity and high_ambiguity_count > 0:
-            blockers.append(
-                self._build_requirement_quality_blocker(
-                    code="high_ambiguity_present",
-                    message=f"high ambiguity present: {high_ambiguity_count}",
-                    value=high_ambiguity_count,
-                    threshold=0,
-                )
-            )
-        if coverage_gap_ratio > self.requirement_max_coverage_gap_ratio:
-            blockers.append(
-                self._build_requirement_quality_blocker(
-                    code="coverage_gap_ratio_high",
-                    message=f"coverage_gap_ratio above threshold: {coverage_gap_ratio} > {self.requirement_max_coverage_gap_ratio}",
-                    value=coverage_gap_ratio,
-                    threshold=self.requirement_max_coverage_gap_ratio,
-                )
-            )
-        if not has_design_input:
-            blockers.append(
-                self._build_requirement_quality_blocker(
-                    code="missing_design_input",
-                    message="design_input is empty",
-                    value=has_design_input,
-                    threshold=True,
-                )
-            )
-        if not has_page:
-            blockers.append(
-                self._build_requirement_quality_blocker(
-                    code="missing_page_resolution",
-                    message="page is empty",
-                    value=has_page,
-                    threshold=True,
-                )
-            )
-
-        return {
-            "version": "RequirementQualityGateV1",
-            "stage": stage,
-            "gate_enabled": bool(self.requirement_quality_gate_enabled),
-            "decision": "block" if blockers else "allow",
-            "blockers": blockers,
-            "metrics": {
-                "parse_confidence": round(parse_confidence_value, 2),
-                "intent_count": len(intent_list),
-                "high_ambiguity_count": high_ambiguity_count,
-                "medium_ambiguity_count": medium_ambiguity_count,
-                "coverage_row_count": len(coverage_list),
-                "coverage_gap_count": coverage_gap_count,
-                "coverage_gap_ratio": coverage_gap_ratio,
-                "has_design_input": has_design_input,
-                "has_page": has_page,
-                "blocker_codes": [str(item.get("code", "")).strip() for item in blockers if isinstance(item, dict)],
-            },
-            "thresholds": {
-                "min_parse_confidence": self.requirement_min_parse_confidence,
-                "min_test_intents": max(1, self.requirement_min_test_intents),
-                "block_high_ambiguity": bool(self.requirement_block_high_ambiguity),
-                "max_coverage_gap_ratio": self.requirement_max_coverage_gap_ratio,
-            },
-        }
+        return self._requirement_testpoint_support.build_requirement_quality_gate(requirement_spec, stage=stage)
 
     def _attach_requirement_quality_gate(self, requirement_spec: dict[str, Any], *, stage: str) -> dict[str, Any]:
-        gate = self._build_requirement_quality_gate(requirement_spec, stage=stage)
-        requirement_spec["quality_gate"] = gate
-        return gate
+        return self._requirement_testpoint_support.attach_requirement_quality_gate(requirement_spec, stage=stage)
 
     def _build_requirement_quality_blocker(
         self,
@@ -736,23 +695,16 @@ class OrchestratorService:
         value: Any = None,
         threshold: Any = None,
     ) -> dict[str, Any]:
-        catalog = self.REQUIREMENT_QUALITY_BLOCKER_CATALOG.get(code, {})
-        blocker: dict[str, Any] = {
-            "code": code,
-            "message": message,
-            "category": str(catalog.get("category", "unknown")),
-            "severity": str(catalog.get("severity", "medium")),
-            "alert_code": str(catalog.get("alert_code", f"REQQG_{code.upper()}")),
-            "metric_key": str(catalog.get("metric_key", "")),
-        }
-        if value is not None:
-            blocker["value"] = value
-        if threshold is not None:
-            blocker["threshold"] = threshold
-        return blocker
+        return self._requirement_testpoint_support.build_requirement_quality_blocker(
+            code=code,
+            message=message,
+            value=value,
+            threshold=threshold,
+        )
 
     def _enforce_requirement_quality_gate(self, requirement_spec: dict[str, Any], *, stage: str) -> None:
-        gate = self._attach_requirement_quality_gate(requirement_spec, stage=stage)
+        gate = self._requirement_testpoint_support.enforce_requirement_quality_gate(requirement_spec, stage=stage)
+        requirement_spec["quality_gate"] = gate
         if not gate.get("gate_enabled", False):
             return
         if str(gate.get("decision", "")).strip().lower() != "block":
@@ -764,24 +716,7 @@ class OrchestratorService:
 
     @staticmethod
     def _merge_case_requirements(raw_requirement: str, requirement_spec: dict[str, Any]) -> list[str]:
-        items: list[str] = []
-        normalized_raw = str(raw_requirement).strip()
-        if normalized_raw:
-            items.append(normalized_raw)
-
-        intents = requirement_spec.get("test_intents") or []
-        if isinstance(intents, list):
-            for intent in intents[:5]:
-                if not isinstance(intent, dict):
-                    continue
-                title = str(intent.get("title", "")).strip()
-                priority = str(intent.get("priority", "")).strip()
-                if not title:
-                    continue
-                line = f"测试点({priority or 'P1'}): {title}"
-                if line not in items:
-                    items.append(line)
-        return items or [normalized_raw or "基础流程验证"]
+        return RequirementTestPointSupport.merge_case_requirements(raw_requirement, requirement_spec)
 
     def _generate_script_bundle(
         self,
@@ -790,52 +725,11 @@ class OrchestratorService:
         framework: str,
         language: str,
     ) -> dict[str, Any]:
-        payload = {
-            "framework": framework,
-            "language": language,
-            "case": case,
-        }
-        try:
-            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as temp_file:
-                temp_path = Path(temp_file.name)
-                temp_file.write(json.dumps(payload, ensure_ascii=False))
-            completed = subprocess.run(
-                [sys.executable, "-m", "src.index", "--input", str(temp_path)],
-                cwd=str(self.script_generation_root),
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            try:
-                temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            if completed.returncode != 0:
-                raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "script generation failed")
-            parsed = json.loads(completed.stdout.strip() or "{}")
-            if not isinstance(parsed, dict):
-                raise RuntimeError("script generation returned non-object payload")
-            script_code = str(parsed.get("script_code", "")).strip()
-            filename = str(parsed.get("filename", "")).strip()
-            if script_code and filename:
-                self.generated_scripts_root.mkdir(parents=True, exist_ok=True)
-                output_path = self.generated_scripts_root / filename
-                output_path.write_text(script_code + "\n", encoding="utf-8")
-                parsed["script_path"] = str(output_path)
-            return parsed
-        except Exception as exc:
-            return {
-                "version": "GeneratedScriptV1",
-                "framework": framework,
-                "language": language,
-                "case_id": str(case.get("id", "")).strip(),
-                "page": str((case.get("execution") or {}).get("page", "")).strip(),
-                "filename": "",
-                "entrypoint": "",
-                "script_code": "",
-                "script_path": "",
-                "metadata": {"error": str(exc)},
-            }
+        return self._agent_execution_support.generate_script_bundle(
+            case=case,
+            framework=framework,
+            language=language,
+        )
 
     def _build_execution_plan(
         self,
@@ -845,46 +739,12 @@ class OrchestratorService:
         source: str,
         execution_config: dict[str, Any],
     ) -> dict[str, Any]:
-        payload = {
-            "case": case,
-            "execution_requested": execution_requested,
-            "source": source,
-            "execution_config": execution_config,
-        }
-        try:
-            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as temp_file:
-                temp_path = Path(temp_file.name)
-                temp_file.write(json.dumps(payload, ensure_ascii=False))
-            completed = subprocess.run(
-                [sys.executable, "-m", "src.index", "--input", str(temp_path)],
-                cwd=str(self.execution_planner_root),
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            try:
-                temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            if completed.returncode != 0:
-                raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "execution planner failed")
-            parsed = json.loads(completed.stdout.strip() or "{}")
-            if not isinstance(parsed, dict):
-                raise RuntimeError("execution planner returned non-object payload")
-            return parsed
-        except Exception as exc:
-            return {
-                "version": "ExecutionPlanV1",
-                "run_mode": "generate_and_run" if execution_requested else "generate_only",
-                "source": source,
-                "priority": str(case.get("priority", "P1")).strip() or "P1",
-                "environment": "test",
-                "parallelism": 1,
-                "retry_policy": {"enabled": bool(execution_requested), "max_retries": 1, "backoff_seconds": 5},
-                "stages": [],
-                "scheduling_hints": {"queue": "normal", "expected_total_seconds": 60, "resource_profile": "default"},
-                "metadata": {"error": str(exc)},
-            }
+        return self._agent_execution_support.build_execution_plan(
+            case=case,
+            execution_requested=execution_requested,
+            source=source,
+            execution_config=execution_config,
+        )
 
     def _evaluate_risk_report(
         self,
@@ -895,46 +755,13 @@ class OrchestratorService:
         failure_analysis: dict[str, Any],
         failure_triage: dict[str, Any],
     ) -> dict[str, Any]:
-        payload = {
-            "requirement_spec": requirement_spec,
-            "execution_plan": execution_plan,
-            "execution_record": execution_record,
-            "failure_analysis": failure_analysis,
-            "failure_triage": failure_triage,
-        }
-        try:
-            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as temp_file:
-                temp_path = Path(temp_file.name)
-                temp_file.write(json.dumps(payload, ensure_ascii=False))
-            completed = subprocess.run(
-                [sys.executable, "-m", "src.index", "--input", str(temp_path)],
-                cwd=str(self.risk_evaluation_root),
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            try:
-                temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            if completed.returncode != 0:
-                raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "risk evaluation failed")
-            parsed = json.loads(completed.stdout.strip() or "{}")
-            if not isinstance(parsed, dict):
-                raise RuntimeError("risk evaluation returned non-object payload")
-            return parsed
-        except Exception as exc:
-            status = str(execution_record.get("status", "generated")).lower()
-            fallback_decision = "allow" if status in {"passed", "generated"} else "manual_review"
-            return {
-                "version": "RiskReportV1",
-                "risk_score": 55 if fallback_decision == "manual_review" else 30,
-                "risk_level": "medium" if fallback_decision == "manual_review" else "low",
-                "gate_decision": fallback_decision,
-                "recommendation": "风险评估代理暂不可用，建议人工复核。",
-                "factors": [{"factor": "agent_unavailable", "score": 20, "reason": str(exc)}],
-                "metadata": {"fallback": True},
-            }
+        return self._failure_healing_support.evaluate_risk_report(
+            requirement_spec=requirement_spec,
+            execution_plan=execution_plan,
+            execution_record=execution_record,
+            failure_analysis=failure_analysis,
+            failure_triage=failure_triage,
+        )
 
     def _triage_failure(
         self,
@@ -944,62 +771,12 @@ class OrchestratorService:
         evidence_manifest: dict[str, Any],
         report: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        payload = {
-            "failure_analysis": failure_analysis,
-            "execution_record": execution_record,
-            "evidence_manifest": evidence_manifest,
-            "report": report or {},
-        }
-        try:
-            with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as temp_file:
-                temp_path = Path(temp_file.name)
-                temp_file.write(json.dumps(payload, ensure_ascii=False))
-            completed = subprocess.run(
-                [sys.executable, "-m", "src.index", "--input", str(temp_path)],
-                cwd=str(self.failure_triage_root),
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            try:
-                temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            if completed.returncode != 0:
-                raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "failure triage failed")
-            parsed = json.loads(completed.stdout.strip() or "{}")
-            if not isinstance(parsed, dict):
-                raise RuntimeError("failure triage returned non-object payload")
-            return parsed
-        except Exception as exc:
-            category = str(failure_analysis.get("failure_category", "unknown")).strip().lower() or "unknown"
-            risk_level = str(failure_analysis.get("risk_level", "medium")).strip().lower() or "medium"
-            status = str(execution_record.get("status", "generated")).strip().lower() or "generated"
-            return {
-                "version": "FailureTriageV1",
-                "triage_label": f"{category}:{risk_level}:{status}",
-                "failure_class": category,
-                "severity": "S2" if status == "failed" else "S4",
-                "owner_team": "qa-triage",
-                "queue": "manual-triage",
-                "bucket_key": f"{category}|fallback",
-                "duplicate_of": "",
-                "requires_manual_review": True,
-                "confidence": 0.3,
-                "signals": {
-                    "status": status,
-                    "risk_level": risk_level,
-                    "evidence_total_files": int(evidence_manifest.get("total_files", 0) or 0),
-                },
-                "actions": [
-                    {
-                        "action": "create_ticket:manual-triage",
-                        "owner": "qa-triage",
-                        "reason": "分诊代理不可用，回退到人工分诊。",
-                    }
-                ],
-                "metadata": {"fallback": True, "error": str(exc)},
-            }
+        return self._failure_healing_support.triage_failure(
+            failure_analysis=failure_analysis,
+            execution_record=execution_record,
+            evidence_manifest=evidence_manifest,
+            report=report,
+        )
 
     def _enrich_failure_triage_with_history(
         self,
@@ -1009,69 +786,12 @@ class OrchestratorService:
         page: str,
         started_at: str,
     ) -> dict[str, Any]:
-        if not isinstance(triage, dict):
-            triage = {}
-        current_case_id = str(case_id).strip()
-        current_page = str(page).strip()
-        current_bucket = str(triage.get("bucket_key", "")).strip().lower()
-        current_class = str(triage.get("failure_class", "unknown")).strip().lower() or "unknown"
-        current_started_at = str(started_at).strip() or self._now()
-
-        similarity_candidates: list[dict[str, Any]] = []
-        for report in self._iter_recent_reports(limit=200):
-            candidate_case_id = str(report.get("case_id", "")).strip()
-            if not candidate_case_id or candidate_case_id == current_case_id:
-                continue
-            candidate_status = str(report.get("status", "")).strip().lower()
-            if candidate_status not in {"failed", "broken", "coverage_gap"}:
-                continue
-
-            candidate_triage = report.get("failure_triage", {})
-            if not isinstance(candidate_triage, dict):
-                continue
-            candidate_bucket = str(candidate_triage.get("bucket_key", "")).strip().lower()
-            candidate_class = str(candidate_triage.get("failure_class", "unknown")).strip().lower()
-            candidate_page = str(report.get("page", "")).strip()
-            same_bucket = bool(current_bucket and candidate_bucket and current_bucket == candidate_bucket)
-            same_class_page = candidate_class == current_class and candidate_page == current_page and bool(current_page)
-            if not same_bucket and not same_class_page:
-                continue
-
-            similarity_candidates.append(
-                {
-                    "case_id": candidate_case_id,
-                    "status": candidate_status,
-                    "started_at": str(report.get("started_at", "")).strip(),
-                    "risk_level": str((report.get("risk_report", {}) or {}).get("risk_level", "")).strip(),
-                    "bucket_key": candidate_bucket,
-                }
-            )
-
-        similarity_candidates.sort(key=lambda item: item.get("started_at", ""))
-        similar_cases = similarity_candidates[-10:]
-        duplicate_of = str(triage.get("duplicate_of", "")).strip()
-        if not duplicate_of and similar_cases:
-            duplicate_of = similar_cases[-1]["case_id"]
-
-        cluster_seed = current_bucket or f"{current_class}|{current_page or 'unknown-page'}"
-        cluster_id = f"cluster-{hashlib.sha1(cluster_seed.encode('utf-8')).hexdigest()[:12]}"
-        occurrence_count = len(similarity_candidates) + 1
-        first_seen_at = similarity_candidates[0]["started_at"] if similarity_candidates and similarity_candidates[0].get("started_at") else current_started_at
-        last_seen_at = current_started_at
-
-        triage["cluster_id"] = cluster_id
-        triage["occurrence_count"] = occurrence_count
-        triage["first_seen_at"] = first_seen_at
-        triage["last_seen_at"] = last_seen_at
-        triage["similar_cases"] = similar_cases
-        triage["duplicate_of"] = duplicate_of
-        metadata = triage.get("metadata", {})
-        if not isinstance(metadata, dict):
-            metadata = {}
-        metadata["history_enriched"] = True
-        metadata["history_sample_size"] = len(similarity_candidates)
-        triage["metadata"] = metadata
-        return triage
+        return self._failure_healing_support.enrich_failure_triage_with_history(
+            triage=triage,
+            case_id=case_id,
+            page=page,
+            started_at=started_at,
+        )
 
     def _iter_recent_reports(self, *, limit: int = 200) -> list[dict[str, Any]]:
         report_files = sorted(
@@ -1098,8 +818,19 @@ class OrchestratorService:
                 self.logger.warning("test_point_plan normalization warning: %s", warning)
             return normalized
         except Exception as exc:
-            self.logger.warning("test_point_plan normalization unavailable, keep raw payload: %s", exc)
-            return payload if isinstance(payload, dict) else {}
+            self.logger.warning("shared test_point_plan normalization unavailable, fallback to local schema: %s", exc)
+            try:
+                module = self._load_runtime_module(
+                    cache_key="ai_orchestrator_test_point_schema",
+                    module_path=self.schemas_root / "test-point.schema.py",
+                )
+                normalized, warnings = module.normalize_test_point_plan(payload, strict=strict)
+                for warning in warnings:
+                    self.logger.warning("local test_point_plan normalization warning: %s", warning)
+                return normalized
+            except Exception as fallback_exc:
+                self.logger.warning("test_point_plan normalization unavailable, keep raw payload: %s", fallback_exc)
+                return payload if isinstance(payload, dict) else {}
 
     def _normalize_execution_record(self, payload: dict[str, Any], *, strict: bool = False) -> dict[str, Any]:
         try:
@@ -1126,79 +857,18 @@ class OrchestratorService:
             return payload if isinstance(payload, dict) else {}
 
     def _generate_case(self, requirement: str, page: str) -> dict[str, Any]:
-        if str(self.agent_root) not in sys.path:
-            sys.path.insert(0, str(self.agent_root))
+        return self._agent_execution_support.generate_case(requirement, page)
 
-        from src.agent import TestDesignAgent
-        from src.tools.yaml_writer import save_yaml  # noqa: F401
-
-        agent = TestDesignAgent()
-        normalized_page = str(page).strip() or "product"
-        try:
-            generated = agent.generate(requirement=requirement, page=normalized_page)
-            if isinstance(generated, dict) and generated:
-                return generated
-        except Exception as exc:
-            return self._build_design_fallback_case(
-                requirement=requirement,
-                page=normalized_page,
-                reason=str(exc),
-            )
-        return self._build_design_fallback_case(
+    def _build_design_fallback_case(self, *, requirement: str, page: str, reason: str, runner: str = "playwright") -> dict[str, Any]:
+        return AgentExecutionSupport.build_design_fallback_case(
             requirement=requirement,
-            page=normalized_page,
-            reason="test-design-agent returned empty payload",
+            page=page,
+            reason=reason,
+            runner=runner,
         )
 
-    def _build_design_fallback_case(self, *, requirement: str, page: str, reason: str) -> dict[str, Any]:
-        normalized_page = str(page).strip() or "product"
-        case_id = f"SMOKE-{normalized_page.upper()}-{datetime.now(UTC).strftime('%H%M%S')}"
-        menu_target = f"{normalized_page}_menu"
-        title_target = f"{normalized_page}_list_title"
-        safe_requirement = str(requirement or "").strip() or f"{normalized_page} 页面核心流程验证"
-        return {
-            "version": "v4",
-            "id": case_id,
-            "title": f"SMOKE-{normalized_page.upper()}-FALLBACK",
-            "module": normalized_page,
-            "priority": "P1",
-            "tags": ["ai-generated", "smoke", normalized_page, "fallback"],
-            "owner": "qa-team",
-            "status": "automated",
-            "description": f"Fallback case generated because test-design-agent failed: {reason[:200]}",
-            "requirement": [safe_requirement],
-            "data": {},
-            "execution": {
-                "runner": "playwright",
-                "page": normalized_page,
-                "variables": {},
-                "steps": [
-                    {"action": "login"},
-                    {"action": "click", "target": menu_target},
-                    {"action": "wait_for", "target": title_target},
-                    {"action": "assert_visible", "target": title_target},
-                ],
-            },
-        }
-
     def _build_design_generation(self, case: dict[str, Any]) -> dict[str, Any]:
-        tags = [str(item).strip().lower() for item in (case.get("tags") or []) if str(item).strip()]
-        description = str(case.get("description", "")).strip()
-        lowered_description = description.lower()
-        fallback_used = ("fallback" in tags) or ("fallback case generated because test-design-agent failed" in lowered_description)
-        fallback_reason = ""
-        marker = "failed:"
-        if fallback_used and marker in lowered_description:
-            original_parts = description.split("failed:", 1)
-            if len(original_parts) > 1:
-                fallback_reason = original_parts[1].strip()
-        if fallback_used and not fallback_reason:
-            fallback_reason = "test-design-agent returned fallback case"
-        return {
-            "generator": "test-design-agent",
-            "fallback_used": fallback_used,
-            "fallback_reason": fallback_reason,
-        }
+        return AgentExecutionSupport.build_design_generation(case)
 
     def _build_test_points_preview(
         self,
@@ -1206,50 +876,13 @@ class OrchestratorService:
         case: dict[str, Any],
         requirement_spec: dict[str, Any],
     ) -> dict[str, Any]:
-        intent_based = self._build_test_points_from_requirement_spec(
+        return self._requirement_testpoint_support.build_test_points_preview(
             case=case,
-            requirement_spec=requirement_spec,
-        )
-        if intent_based.get("points"):
-            return self._apply_constraint_summary_to_test_points(intent_based, requirement_spec=requirement_spec)
-        return self._apply_constraint_summary_to_test_points(
-            self._build_test_points_from_execution_steps(case),
             requirement_spec=requirement_spec,
         )
 
     def _build_test_points_from_execution_steps(self, case: dict[str, Any]) -> dict[str, Any]:
-        if str(self.agent_root) not in sys.path:
-            sys.path.insert(0, str(self.agent_root))
-
-        from src.test_points import build_test_point_plan
-
-        requirement = case.get("requirement") or []
-        if isinstance(requirement, str):
-            requirement = [requirement]
-
-        execution = case.get("execution", {})
-        plan = build_test_point_plan(
-            page=execution.get("page", ""),
-            requirement=requirement,
-            steps=execution.get("steps", []),
-        )
-        raw_plan = plan.model_dump(exclude_none=True)
-        payload = {
-            "version": "TestPointPlanV1",
-            "project": "default",
-            "case_id": str(case.get("id", "")).strip(),
-            "page": str(execution.get("page", "")).strip(),
-            "source_type": "execution_steps",
-            "requirement": requirement,
-            "points": raw_plan.get("points", []),
-            "generated_at": self._now(),
-            "metadata": {
-                "upstream_schema": str(raw_plan.get("version", "")).strip(),
-                "point_count": len(raw_plan.get("points", [])) if isinstance(raw_plan.get("points"), list) else 0,
-                "build_source": "execution_steps",
-            },
-        }
-        return self._normalize_test_point_plan(payload)
+        return self._requirement_testpoint_support.build_test_points_from_execution_steps(case)
 
     def _build_test_points_from_requirement_spec(
         self,
@@ -1257,77 +890,10 @@ class OrchestratorService:
         case: dict[str, Any],
         requirement_spec: dict[str, Any],
     ) -> dict[str, Any]:
-        execution = case.get("execution") if isinstance(case.get("execution"), dict) else {}
-        page = str(execution.get("page", "")).strip() or str(requirement_spec.get("page", "")).strip() or "product"
-        case_id = str(case.get("id", "")).strip()
-        requirement = case.get("requirement")
-        if isinstance(requirement, str):
-            requirement_rows = [requirement]
-        elif isinstance(requirement, list):
-            requirement_rows = [str(item).strip() for item in requirement if str(item).strip()]
-        else:
-            requirement_rows = []
-        if not requirement_rows:
-            requirement_rows = [str(requirement_spec.get("raw_requirement", "")).strip() or str(requirement_spec.get("design_input", "")).strip()]
-            requirement_rows = [row for row in requirement_rows if row]
-
-        intents = requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
-        points: list[dict[str, Any]] = [
-            {
-                "key": f"{page}-00",
-                "point_type": "precondition",
-                "action": "login",
-                "description": "Use shared login precondition.",
-                "priority": "P0",
-                "dependencies": [],
-                "source_ids": [],
-            }
-        ]
-        for index, intent in enumerate(intents[:80], start=1):
-            if not isinstance(intent, dict):
-                continue
-            title = str(intent.get("title", "")).strip() or f"intent-{index:02d}"
-            intent_type = str(intent.get("intent_type", "functional")).strip().lower() or "functional"
-            priority = str(intent.get("priority", "P1")).strip() or "P1"
-            dependencies = intent.get("dependencies") if isinstance(intent.get("dependencies"), list) else []
-            source_ids = intent.get("source_ids") if isinstance(intent.get("source_ids"), list) else []
-            action, target, value = self._map_intent_to_step(
-                page=page,
-                intent_type=intent_type,
-                title=title,
-                steps_hint=intent.get("steps_hint"),
-            )
-            point = {
-                "key": str(intent.get("intent_id", f"intent-{index:02d}")).strip() or f"intent-{index:02d}",
-                "point_type": self._map_intent_type_to_point_type(intent_type),
-                "action": action,
-                "description": title[:200],
-                "priority": priority,
-                "dependencies": [str(item).strip() for item in dependencies if str(item).strip()],
-                "source_ids": [str(item).strip() for item in source_ids if str(item).strip()],
-            }
-            if target:
-                point["target"] = target
-            if value is not None:
-                point["value"] = value
-            points.append(point)
-
-        payload = {
-            "version": "TestPointPlanV1",
-            "project": "default",
-            "case_id": case_id,
-            "page": page,
-            "source_type": "requirement_intents",
-            "requirement": requirement_rows,
-            "generated_at": self._now(),
-            "points": points,
-            "metadata": {
-                "build_source": "requirement_spec.test_intents",
-                "intent_count": len(intents),
-                "point_count": len(points),
-            },
-        }
-        return self._normalize_test_point_plan(payload)
+        return self._requirement_testpoint_support.build_test_points_from_requirement_spec(
+            case=case,
+            requirement_spec=requirement_spec,
+        )
 
     def _apply_constraint_summary_to_test_points(
         self,
@@ -1335,20 +901,10 @@ class OrchestratorService:
         *,
         requirement_spec: dict[str, Any],
     ) -> dict[str, Any]:
-        normalized = dict(test_points) if isinstance(test_points, dict) else {}
-        metadata = normalized.get("metadata") if isinstance(normalized.get("metadata"), dict) else {}
-        metadata = dict(metadata)
-        review_summary = normalized.get("review_summary") if isinstance(normalized.get("review_summary"), dict) else {}
-        review_summary = dict(review_summary)
-        points = normalized.get("points") if isinstance(normalized.get("points"), list) else []
-        summary = self._build_constraint_technique_summary(requirement_spec=requirement_spec, current_points=points)
-        metadata["technique_summary"] = summary
-        metadata["field_definition_count"] = int(summary.get("field_definition_count", 0) or 0)
-        metadata["parameter_constraint_count"] = int(summary.get("parameter_constraint_count", 0) or 0)
-        review_summary.setdefault("mainline_point_count", len([point for point in points if isinstance(point, dict)]))
-        normalized["metadata"] = metadata
-        normalized["review_summary"] = review_summary
-        return normalized
+        return self._requirement_testpoint_support.apply_constraint_summary_to_test_points(
+            test_points,
+            requirement_spec=requirement_spec,
+        )
 
     def _build_constraint_technique_summary(
         self,
@@ -1356,100 +912,22 @@ class OrchestratorService:
         requirement_spec: dict[str, Any],
         current_points: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        field_definitions = requirement_spec.get("field_definitions") if isinstance(requirement_spec.get("field_definitions"), list) else []
-        parameter_constraints = requirement_spec.get("parameter_constraints") if isinstance(requirement_spec.get("parameter_constraints"), list) else []
-        normalized_items = [item for item in [*field_definitions, *parameter_constraints] if isinstance(item, dict)]
-        technique_distribution: dict[str, int] = {}
-        api_parameter_count = 0
-        field_definition_count = 0
-        parameter_constraint_count = 0
-        design_only_point_count = 0
-
-        for item in normalized_items[:60]:
-            field_type = str(item.get("field_type", "")).strip().lower() or str(item.get("type", "")).strip().lower() or "string"
-            constraints = item.get("constraints") if isinstance(item.get("constraints"), dict) else {}
-            format_hint = str(item.get("format", constraints.get("format", ""))).strip().lower()
-            if field_type == "string" and format_hint in {"date", "date-time", "datetime", "timestamp"}:
-                field_type = "datetime" if format_hint in {"date-time", "datetime", "timestamp"} else "date"
-            is_parameter = bool(str(item.get("location", "")).strip() or str(item.get("in", "")).strip())
-            if is_parameter:
-                parameter_constraint_count += 1
-                api_parameter_count += 1
-            else:
-                field_definition_count += 1
-
-            equivalence_count = 0
-            boundary_count = 0
-            enum_values = item.get("enum") if isinstance(item.get("enum"), list) else constraints.get("enum") if isinstance(constraints.get("enum"), list) else []
-            if bool(item.get("required", False)):
-                equivalence_count += 1
-            if enum_values:
-                equivalence_count += 2
-            if field_type in {"string", "text", "keyword", "search"}:
-                if self._safe_int(item.get("min_length", constraints.get("min_length", constraints.get("minLength")))) not in (None, 0):
-                    boundary_count += 1
-                if self._safe_int(item.get("max_length", constraints.get("max_length", constraints.get("maxLength")))) not in (None, 0):
-                    boundary_count += 1
-            elif field_type in {"integer", "number", "decimal", "float", "amount", "price", "currency_amount"}:
-                if self._safe_float(item.get("min", constraints.get("min", constraints.get("minimum")))) is not None:
-                    boundary_count += 1
-                if self._safe_float(item.get("max", constraints.get("max", constraints.get("maximum")))) is not None:
-                    boundary_count += 1
-                if field_type in {"decimal", "float", "amount", "price", "currency_amount"}:
-                    equivalence_count += 1
-            elif field_type in {"date", "datetime", "timestamp"}:
-                boundary_count += 2
-                equivalence_count += 1
-
-            if boundary_count:
-                technique_distribution["boundary"] = technique_distribution.get("boundary", 0) + boundary_count
-                design_only_point_count += boundary_count
-            if equivalence_count:
-                technique_distribution["equivalence"] = technique_distribution.get("equivalence", 0) + equivalence_count
-                design_only_point_count += equivalence_count
-
-        current_mainline_point_count = len([point for point in (current_points or []) if isinstance(point, dict)])
-        return {
-            "field_definition_count": int(field_definition_count),
-            "parameter_constraint_count": int(parameter_constraint_count),
-            "api_parameter_count": int(api_parameter_count),
-            "mainline_point_count": int(current_mainline_point_count),
-            "design_only_point_count": int(design_only_point_count),
-            "technique_distribution": dict(sorted(technique_distribution.items())),
-            "has_structured_constraints": bool(field_definition_count or parameter_constraint_count),
-            "source": "requirement_spec.constraints",
-        }
+        return self._requirement_testpoint_support.build_constraint_technique_summary(
+            requirement_spec=requirement_spec,
+            current_points=current_points,
+        )
 
     @staticmethod
     def _map_intent_type_to_point_type(intent_type: str) -> str:
-        mapping = {
-            "functional": "action",
-            "negative": "assertion",
-            "security": "assertion",
-            "compatibility": "assertion",
-            "performance": "assertion",
-            "regression": "action",
-            "api": "api",
-        }
-        return mapping.get(intent_type, "action")
+        return RequirementTestPointSupport.map_intent_type_to_point_type(intent_type)
 
     @staticmethod
     def _safe_int(value: Any) -> int | None:
-        try:
-            if value in (None, ""):
-                return None
-            return int(value)
-        except (TypeError, ValueError):
-            return None
+        return RequirementTestPointSupport.safe_int(value)
 
     @staticmethod
     def _safe_float(value: Any) -> float | None:
-        try:
-            if value in (None, ""):
-                return None
-            return float(value)
-        except (TypeError, ValueError):
-            return None
+        return RequirementTestPointSupport.safe_float(value)
 
     def _map_intent_to_step(
         self,
@@ -1459,51 +937,18 @@ class OrchestratorService:
         title: str,
         steps_hint: Any,
     ) -> tuple[str, str | None, Any]:
-        hints = [str(item).strip().lower() for item in (steps_hint if isinstance(steps_hint, list) else []) if str(item).strip()]
-        lowered_title = title.lower()
-        if any(item == "login" or item == "auth_check" for item in hints) or any(token in lowered_title for token in ["登录", "鉴权", "auth"]):
-            return "login", None, None
-        if any(item.startswith("open:") for item in hints):
-            return "click", f"{page}_menu", None
-        if any(item.startswith("api:") or item == "api" for item in hints) or intent_type == "api":
-            return "assert_visible", f"{page}_list_title", None
-        if any(item in {"search", "query"} for item in hints) or any(token in lowered_title for token in ["搜索", "查询", "筛选"]):
-            return "fill", "search_input", "3"
-        if any(item in {"create", "update", "delete", "submit", "approve"} for item in hints):
-            return "click", f"{page}_menu", None
-        if any(item in {"assert", "negative", "regression", "smoke"} for item in hints):
-            return "assert_visible", f"{page}_list_title", None
-        return "wait_for", f"{page}_list_title", None
+        return RequirementTestPointSupport.map_intent_to_step(
+            page=page,
+            intent_type=intent_type,
+            title=title,
+            steps_hint=steps_hint,
+        )
 
     def _render_case_steps_from_test_points(self, *, case: dict[str, Any], test_points: dict[str, Any]) -> dict[str, Any]:
-        rendered = dict(case)
-        execution = rendered.get("execution") if isinstance(rendered.get("execution"), dict) else {}
-        existing_steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
-        if existing_steps and not self.test_point_steps_authoritative:
-            return rendered
-
-        points = test_points.get("points") if isinstance(test_points.get("points"), list) else []
-        steps: list[dict[str, Any]] = []
-        for point in points:
-            if not isinstance(point, dict):
-                continue
-            action = str(point.get("action", "")).strip()
-            if not action:
-                continue
-            step: dict[str, Any] = {"action": action}
-            target = str(point.get("target", "")).strip()
-            if target:
-                step["target"] = target
-            if "value" in point and point.get("value") is not None:
-                step["value"] = point.get("value")
-            if steps and steps[-1] == step:
-                continue
-            steps.append(step)
-        if steps:
-            execution = dict(execution)
-            execution["steps"] = steps
-            rendered["execution"] = execution
-        return rendered
+        return self._agent_execution_support.render_case_steps_from_test_points(
+            case=case,
+            test_points=test_points,
+        )
 
     def _save_case(self, case: dict[str, Any]) -> Path:
         self._ensure_runner_import_path()
@@ -1526,14 +971,7 @@ class OrchestratorService:
             sys.path.insert(0, str(self.runner_root))
 
     def _build_report_summary_path(self) -> str:
-        self._ensure_runner_import_path()
-        from tools.report_summary import build_report_summary
-
-        summary_path = build_report_summary(
-            self.runner_root / "artifacts",
-            self.runner_root / "artifacts" / "report_summary.txt",
-        )
-        return str(summary_path)
+        return self._execution_report_support.build_report_summary_path()
 
     def _run_case(self, case_id: str, case_path: Path) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
@@ -1617,136 +1055,16 @@ class OrchestratorService:
         mode: str = "",
         stage: str = "",
     ) -> dict[str, Any]:
-        normalized_limit = max(1, min(int(limit), 5000))
-        normalized_prompt_version = str(prompt_version).strip()
-        normalized_model = str(model).strip()
-        normalized_mode = str(mode).strip().lower()
-        normalized_stage = str(stage).strip().lower()
-
-        events = self._iter_requirement_parse_telemetry_events(limit=normalized_limit)
-        filtered: list[dict[str, Any]] = []
-        for event in events:
-            parser_runtime = event.get("parser_runtime")
-            runtime = parser_runtime if isinstance(parser_runtime, dict) else {}
-            event_stage = str(event.get("stage", "")).strip().lower()
-            event_prompt_version = str(runtime.get("prompt_version", "")).strip()
-            event_model = str(runtime.get("model", "")).strip()
-            event_mode = str(runtime.get("mode", "")).strip().lower()
-            if normalized_stage and event_stage != normalized_stage:
-                continue
-            if normalized_prompt_version and event_prompt_version != normalized_prompt_version:
-                continue
-            if normalized_model and event_model != normalized_model:
-                continue
-            if normalized_mode and event_mode != normalized_mode:
-                continue
-            filtered.append(event)
-
-        allow_count = 0
-        blocked_count = 0
-        llm_attempted_count = 0
-        llm_succeeded_count = 0
-        llm_fallback_count = 0
-        groups: dict[str, dict[str, Any]] = {}
-
-        for event in filtered:
-            parser_runtime = event.get("parser_runtime")
-            runtime = parser_runtime if isinstance(parser_runtime, dict) else {}
-            llm_trace = event.get("llm_trace")
-            llm = llm_trace if isinstance(llm_trace, dict) else {}
-            decision = str(event.get("quality_gate_decision", "")).strip().lower() or "allow"
-            blocked = decision == "block" or str(event.get("outcome", "")).strip().lower() == "block"
-
-            if blocked:
-                blocked_count += 1
-            else:
-                allow_count += 1
-            if bool(llm.get("attempted", False)):
-                llm_attempted_count += 1
-            if bool(llm.get("succeeded", False)):
-                llm_succeeded_count += 1
-            if bool(llm.get("fallback_used", False)):
-                llm_fallback_count += 1
-
-            group_prompt = str(runtime.get("prompt_version", "")).strip() or "unknown"
-            group_model = str(runtime.get("model", "")).strip() or "unknown"
-            group_mode = str(runtime.get("mode", "")).strip().lower() or "rule_based"
-            group_key = f"{group_prompt}|{group_model}|{group_mode}"
-            group = groups.setdefault(
-                group_key,
-                {
-                    "prompt_version": group_prompt,
-                    "model": group_model,
-                    "mode": group_mode,
-                    "total": 0,
-                    "allow_count": 0,
-                    "blocked_count": 0,
-                    "llm_attempted_count": 0,
-                    "llm_succeeded_count": 0,
-                    "llm_fallback_count": 0,
-                },
-            )
-            group["total"] += 1
-            if blocked:
-                group["blocked_count"] += 1
-            else:
-                group["allow_count"] += 1
-            if bool(llm.get("attempted", False)):
-                group["llm_attempted_count"] += 1
-            if bool(llm.get("succeeded", False)):
-                group["llm_succeeded_count"] += 1
-            if bool(llm.get("fallback_used", False)):
-                group["llm_fallback_count"] += 1
-
-        group_items = sorted(groups.values(), key=lambda item: int(item.get("total", 0)), reverse=True)
-        for item in group_items:
-            total = max(1, int(item.get("total", 0)))
-            item["allow_rate"] = round(int(item.get("allow_count", 0)) / total, 3)
-            item["llm_fallback_rate"] = round(int(item.get("llm_fallback_count", 0)) / total, 3)
-
-        total_filtered = len(filtered)
-        return {
-            "version": "RequirementParseTelemetrySummaryV1",
-            "generated_at": self._now(),
-            "filters": {
-                "limit": normalized_limit,
-                "prompt_version": normalized_prompt_version,
-                "model": normalized_model,
-                "mode": normalized_mode,
-                "stage": normalized_stage,
-            },
-            "total_events": total_filtered,
-            "allow_count": allow_count,
-            "blocked_count": blocked_count,
-            "allow_rate": round(allow_count / max(1, total_filtered), 3),
-            "llm_attempted_count": llm_attempted_count,
-            "llm_succeeded_count": llm_succeeded_count,
-            "llm_fallback_count": llm_fallback_count,
-            "llm_fallback_rate": round(llm_fallback_count / max(1, total_filtered), 3),
-            "groups": group_items[:100],
-        }
+        return self._analytics_query_support.get_requirement_parse_telemetry_summary(
+            limit=limit,
+            prompt_version=prompt_version,
+            model=model,
+            mode=mode,
+            stage=stage,
+        )
 
     def _iter_requirement_parse_telemetry_events(self, *, limit: int) -> list[dict[str, Any]]:
-        if not self.requirement_parse_telemetry_log.exists():
-            return []
-        events: list[dict[str, Any]] = []
-        try:
-            with self.requirement_parse_telemetry_log.open("r", encoding="utf-8") as handle:
-                for line in handle:
-                    text = str(line).strip()
-                    if not text:
-                        continue
-                    try:
-                        payload = json.loads(text)
-                    except Exception:
-                        continue
-                    if isinstance(payload, dict):
-                        events.append(payload)
-        except Exception:
-            return []
-        if len(events) > limit:
-            return events[-limit:]
-        return events
+        return self._analytics_query_support.iter_requirement_parse_telemetry_events(limit=limit)
 
     def _record_requirement_parse_telemetry(
         self,
@@ -1756,61 +1074,12 @@ class OrchestratorService:
         source: str,
         outcome: str,
     ) -> None:
-        spec = requirement_spec if isinstance(requirement_spec, dict) else {}
-        parser_runtime = spec.get("parser_runtime")
-        runtime = parser_runtime if isinstance(parser_runtime, dict) else {}
-        quality_gate = spec.get("quality_gate")
-        gate = quality_gate if isinstance(quality_gate, dict) else {}
-        blockers_raw = gate.get("blockers")
-        blockers = blockers_raw if isinstance(blockers_raw, list) else []
-        blocker_codes = [
-            str(item.get("code", "")).strip()
-            for item in blockers
-            if isinstance(item, dict) and str(item.get("code", "")).strip()
-        ][:20]
-        llm_trace = runtime.get("llm_trace")
-        llm = llm_trace if isinstance(llm_trace, dict) else {}
-        try:
-            parse_confidence = round(float(spec.get("parse_confidence", 0.0) or 0.0), 2)
-        except Exception:
-            parse_confidence = 0.0
-
-        event = {
-            "event_type": "requirement_parse_telemetry",
-            "timestamp": self._now(),
-            "stage": str(stage).strip().lower(),
-            "source": str(source).strip().lower() or "manual",
-            "outcome": str(outcome).strip().lower() or "allow",
-            "page": str(spec.get("page", "")).strip(),
-            "source_type": str(spec.get("source_type", "")).strip() or "text",
-            "priority": str(spec.get("priority", "")).strip() or "P1",
-            "parse_confidence": parse_confidence,
-            "quality_gate_decision": str(gate.get("decision", "")).strip().lower() or "allow",
-            "quality_gate_blocker_count": len(blocker_codes),
-            "quality_gate_blocker_codes": blocker_codes,
-            "parser_runtime": {
-                "mode": str(runtime.get("mode", "")).strip() or "rule_based",
-                "model": str(runtime.get("model", "")).strip() or "rule-engine",
-                "prompt_version": str(runtime.get("prompt_version", "")).strip() or "unknown",
-                "instructions_version": str(runtime.get("instructions_version", "")).strip() or "unknown",
-                "parse_duration_ms": int(runtime.get("parse_duration_ms", 0) or 0),
-            },
-            "llm_trace": {
-                "attempted": bool(llm.get("attempted", False)),
-                "succeeded": bool(llm.get("succeeded", False)),
-                "fallback_used": bool(llm.get("fallback_used", False)),
-                "reason_code": str(llm.get("reason_code", "")).strip(),
-                "latency_ms": int(llm.get("latency_ms", 0) or 0),
-                "total_tokens": llm.get("total_tokens"),
-                "overlay_key_count": int(llm.get("overlay_key_count", 0) or 0),
-            },
-        }
-        try:
-            self.telemetry_root.mkdir(parents=True, exist_ok=True)
-            with self.requirement_parse_telemetry_log.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(event, ensure_ascii=False) + "\n")
-        except Exception:
-            return
+        self._analytics_query_support.record_requirement_parse_telemetry(
+            requirement_spec=requirement_spec,
+            stage=stage,
+            source=source,
+            outcome=outcome,
+        )
 
     def generate_script(
         self,
@@ -1822,6 +1091,15 @@ class OrchestratorService:
         if not isinstance(case, dict) or not case:
             raise OrchestratorValidationError("case must not be empty")
         return self._generate_script_bundle(case=case, framework=framework, language=language)
+
+    def list_runners(self) -> dict[str, Any]:
+        return self._runner_registry_support.list_runners()
+
+    def _resolve_runner_profile(self, runner: str) -> dict[str, Any]:
+        try:
+            return self._runner_registry_support.resolve_runner_profile(runner)
+        except ValueError as exc:
+            raise OrchestratorValidationError(str(exc)) from exc
 
     def plan_execution(
         self,
@@ -1901,127 +1179,19 @@ class OrchestratorService:
 
     @staticmethod
     def render_requirement_spec_markdown(requirement_spec: dict[str, Any]) -> str:
-        spec = requirement_spec if isinstance(requirement_spec, dict) else {}
-        page = str(spec.get("page", "")).strip() or "-"
-        priority = str(spec.get("priority", "")).strip() or "P1"
-        parse_confidence = spec.get("parse_confidence", 0)
-        source_type = str(spec.get("source_type", "")).strip() or "manual"
-        test_intents = spec.get("test_intents") if isinstance(spec.get("test_intents"), list) else []
-        ambiguities = spec.get("ambiguities") if isinstance(spec.get("ambiguities"), list) else []
-        business_rules = spec.get("business_rules") if isinstance(spec.get("business_rules"), list) else []
-        quality_gate = spec.get("quality_gate") if isinstance(spec.get("quality_gate"), dict) else {}
-        parser_runtime = spec.get("parser_runtime") if isinstance(spec.get("parser_runtime"), dict) else {}
-
-        lines = [
-            "# 需求测试点分析",
-            "",
-            "## 概览",
-            f"- 来源: `{source_type}`",
-            f"- 页面: `{page}`",
-            f"- 优先级: `{priority}`",
-            f"- 解析置信度: `{parse_confidence}`",
-            f"- 测试点数量: `{len(test_intents)}`",
-            f"- 规则数量: `{len(business_rules)}`",
-            f"- 消歧数量: `{len(ambiguities)}`",
-        ]
-
-        if quality_gate:
-            blockers = quality_gate.get("blockers") if isinstance(quality_gate.get("blockers"), list) else []
-            lines.extend(
-                [
-                    "",
-                    "## 质量门禁",
-                    f"- 决策: `{str(quality_gate.get('decision', '')).strip() or '-'}`",
-                    f"- 阶段: `{str(quality_gate.get('stage', '')).strip() or '-'}`",
-                    f"- 阻断项数量: `{len(blockers)}`",
-                ]
-            )
-            for index, blocker in enumerate(blockers[:10], start=1):
-                if not isinstance(blocker, dict):
-                    continue
-                code = str(blocker.get("code", "")).strip() or "unknown"
-                message = str(blocker.get("message", "")).strip() or "-"
-                lines.append(f"- blocker-{index}: `{code}` {message}")
-
-        if test_intents:
-            lines.extend(["", "## 测试点"])
-            for index, intent in enumerate(test_intents[:30], start=1):
-                if not isinstance(intent, dict):
-                    continue
-                title = str(intent.get("title", "")).strip() or f"intent-{index:02d}"
-                intent_type = str(intent.get("intent_type", "")).strip() or "functional"
-                intent_priority = str(intent.get("priority", "")).strip() or "P1"
-                lines.append(f"{index}. [{intent_priority}/{intent_type}] {title}")
-
-        if business_rules:
-            lines.extend(["", "## 业务规则"])
-            for index, rule in enumerate(business_rules[:20], start=1):
-                if isinstance(rule, dict):
-                    text = str(rule.get("rule_text", "")).strip() or str(rule.get("text", "")).strip()
-                else:
-                    text = str(rule).strip()
-                if text:
-                    lines.append(f"{index}. {text}")
-
-        if ambiguities:
-            lines.extend(["", "## 待消歧"])
-            for index, item in enumerate(ambiguities[:20], start=1):
-                if not isinstance(item, dict):
-                    text = str(item).strip()
-                    if text:
-                        lines.append(f"{index}. {text}")
-                    continue
-                text = str(item.get("text", "")).strip() or str(item.get("title", "")).strip() or "未命名歧义"
-                suggestion = str(item.get("suggestion", "")).strip()
-                if suggestion:
-                    lines.append(f"{index}. {text} -> 建议: {suggestion}")
-                else:
-                    lines.append(f"{index}. {text}")
-
-        if parser_runtime:
-            lines.extend(
-                [
-                    "",
-                    "## 解析运行信息",
-                    f"- mode: `{str(parser_runtime.get('mode', '')).strip() or '-'}`",
-                    f"- model: `{str(parser_runtime.get('model', '')).strip() or '-'}`",
-                    f"- prompt_version: `{str(parser_runtime.get('prompt_version', '')).strip() or '-'}`",
-                    f"- instructions_version: `{str(parser_runtime.get('instructions_version', '')).strip() or '-'}`",
-                ]
-            )
-        return "\n".join(lines).strip() + "\n"
+        return RequirementTestPointSupport.render_requirement_spec_markdown(requirement_spec)
 
     def get_latest_report(self) -> dict[str, Any]:
-        report_files = sorted(
-            self.report_root.glob("*.report.json"),
-            key=lambda path: path.stat().st_mtime,
-            reverse=True,
-        )
-        if not report_files:
-            raise OrchestratorValidationError("No execution reports found")
-        return self.get_report(report_files[0].stem.removesuffix(".report"))
+        try:
+            return self._analytics_query_support.get_latest_report()
+        except ValueError as exc:
+            raise OrchestratorValidationError(str(exc)) from exc
 
     def get_report(self, case_id: str) -> dict[str, Any]:
-        normalized_case_id = case_id.strip()
-        if not normalized_case_id:
-            raise OrchestratorValidationError("case_id must not be empty")
-
-        json_path = self.report_root / f"{normalized_case_id}.report.json"
-        markdown_path = self.report_root / f"{normalized_case_id}.report.md"
-        if not json_path.exists():
-            raise OrchestratorValidationError(f"Execution report not found for case_id: {normalized_case_id}")
-
-        payload = json.loads(json_path.read_text(encoding="utf-8"))
-        payload.setdefault("self_healing_suggestion_preview", self._load_self_healing_suggestion_preview(payload))
-        report_summary_path = self.runner_root / "artifacts" / "report_summary.txt"
-        return {
-            "report": payload,
-            "execution_record": payload.get("execution_record", {}),
-            "report_json_path": str(json_path),
-            "report_markdown_path": str(markdown_path),
-            "report_summary_path": str(report_summary_path),
-            "report_summary_preview": self._load_report_summary_preview(report_summary_path),
-        }
+        try:
+            return self._analytics_query_support.get_report(case_id)
+        except ValueError as exc:
+            raise OrchestratorValidationError(str(exc)) from exc
 
     def get_failure_clusters(
         self,
@@ -2032,258 +1202,26 @@ class OrchestratorService:
         failure_class: str = "",
         severity: str = "",
     ) -> dict[str, Any]:
-        normalized_limit = max(1, min(int(limit), 2000))
-        normalized_max_clusters = max(1, min(int(max_clusters), 200))
-        normalized_queue = str(queue).strip().lower()
-        normalized_failure_class = str(failure_class).strip().lower()
-        normalized_severity = str(severity).strip().upper()
-        reports = self._iter_recent_reports(limit=normalized_limit)
-
-        clusters: dict[str, dict[str, Any]] = {}
-        total_failed_reports = 0
-        queue_distribution: dict[str, int] = {}
-        class_distribution: dict[str, int] = {}
-        severity_distribution: dict[str, int] = {}
-
-        for report in reports:
-            status = str(report.get("status", "")).strip().lower()
-            if status not in {"failed", "broken", "coverage_gap"}:
-                continue
-            total_failed_reports += 1
-
-            triage = report.get("failure_triage", {})
-            if not isinstance(triage, dict):
-                triage = {}
-            failure_analysis = report.get("failure_analysis", {})
-            if not isinstance(failure_analysis, dict):
-                failure_analysis = {}
-
-            case_id = str(report.get("case_id", "")).strip()
-            page = str(report.get("page", "")).strip()
-            started_at = str(report.get("started_at", "")).strip()
-            risk_level = str((report.get("risk_report", {}) or {}).get("risk_level", "")).strip().lower()
-            queue = str(triage.get("queue", "")).strip() or "manual-triage"
-            severity = str(triage.get("severity", "")).strip().upper() or "S4"
-            failure_class = str(triage.get("failure_class", "")).strip().lower() or str(failure_analysis.get("failure_category", "unknown")).strip().lower() or "unknown"
-            owner_team = str(triage.get("owner_team", "")).strip() or "qa-triage"
-            bucket_key = str(triage.get("bucket_key", "")).strip().lower()
-            cluster_id = str(triage.get("cluster_id", "")).strip()
-
-            if not cluster_id:
-                cluster_seed = bucket_key or f"{failure_class}|{page or 'unknown-page'}"
-                cluster_id = f"cluster-{hashlib.sha1(cluster_seed.encode('utf-8')).hexdigest()[:12]}"
-
-            row = clusters.setdefault(
-                cluster_id,
-                {
-                    "cluster_id": cluster_id,
-                    "failure_class": failure_class,
-                    "page": page,
-                    "queue": queue,
-                    "owner_team": owner_team,
-                    "severity": severity,
-                    "bucket_key": bucket_key,
-                    "occurrence_count": 0,
-                    "first_seen_at": started_at,
-                    "last_seen_at": started_at,
-                    "latest_case_id": case_id,
-                    "requires_manual_review_count": 0,
-                    "risk_level_count": {"critical": 0, "high": 0, "medium": 0, "low": 0, "unknown": 0},
-                    "sample_cases": [],
-                },
-            )
-
-            row["occurrence_count"] += 1
-            if bool(triage.get("requires_manual_review", False)):
-                row["requires_manual_review_count"] += 1
-
-            current_first = str(row.get("first_seen_at", "")).strip()
-            current_last = str(row.get("last_seen_at", "")).strip()
-            if started_at:
-                if not current_first or started_at < current_first:
-                    row["first_seen_at"] = started_at
-                if not current_last or started_at > current_last:
-                    row["last_seen_at"] = started_at
-                    row["latest_case_id"] = case_id or row.get("latest_case_id", "")
-
-            if risk_level not in {"critical", "high", "medium", "low"}:
-                risk_level = "unknown"
-            row["risk_level_count"][risk_level] = int(row["risk_level_count"].get(risk_level, 0)) + 1
-
-            row["sample_cases"].append(
-                {
-                    "case_id": case_id,
-                    "status": status,
-                    "page": page,
-                    "started_at": started_at,
-                    "risk_level": risk_level,
-                    "severity": severity,
-                    "queue": queue,
-                }
-            )
-
-            queue_distribution[queue] = queue_distribution.get(queue, 0) + 1
-            class_distribution[failure_class] = class_distribution.get(failure_class, 0) + 1
-            severity_distribution[severity] = severity_distribution.get(severity, 0) + 1
-
-        rows: list[dict[str, Any]] = []
-        for row in clusters.values():
-            sample_cases = sorted(
-                row["sample_cases"],
-                key=lambda item: str(item.get("started_at", "")),
-                reverse=True,
-            )[:5]
-            risk_level_count = row["risk_level_count"]
-            top_risk_level = max(
-                ["critical", "high", "medium", "low", "unknown"],
-                key=lambda level: int(risk_level_count.get(level, 0)),
-            )
-            occurrence_count = int(row["occurrence_count"])
-            requires_manual_review_count = int(row["requires_manual_review_count"])
-            manual_review_ratio = round(requires_manual_review_count / occurrence_count, 2) if occurrence_count > 0 else 0.0
-
-            rows.append(
-                {
-                    "cluster_id": row["cluster_id"],
-                    "failure_class": row["failure_class"],
-                    "page": row["page"],
-                    "queue": row["queue"],
-                    "owner_team": row["owner_team"],
-                    "severity": row["severity"],
-                    "bucket_key": row["bucket_key"],
-                    "occurrence_count": occurrence_count,
-                    "first_seen_at": row["first_seen_at"],
-                    "last_seen_at": row["last_seen_at"],
-                    "latest_case_id": row["latest_case_id"],
-                    "requires_manual_review_count": requires_manual_review_count,
-                    "manual_review_ratio": manual_review_ratio,
-                    "top_risk_level": top_risk_level,
-                    "risk_level_count": risk_level_count,
-                    "sample_cases": sample_cases,
-                }
-            )
-
-        if normalized_queue:
-            rows = [item for item in rows if str(item.get("queue", "")).strip().lower() == normalized_queue]
-        if normalized_failure_class:
-            rows = [
-                item
-                for item in rows
-                if str(item.get("failure_class", "")).strip().lower() == normalized_failure_class
-            ]
-        if normalized_severity:
-            rows = [item for item in rows if str(item.get("severity", "")).strip().upper() == normalized_severity]
-
-        severity_rank = {"S0": 5, "S1": 4, "S2": 3, "S3": 2, "S4": 1}
-        risk_rank = {"critical": 5, "high": 4, "medium": 3, "low": 2, "unknown": 1}
-        rows.sort(
-            key=lambda item: (
-                severity_rank.get(str(item.get("severity", "S4")).upper(), 0),
-                risk_rank.get(str(item.get("top_risk_level", "unknown")).lower(), 0),
-                int(item.get("occurrence_count", 0)),
-                str(item.get("last_seen_at", "")),
-            ),
-            reverse=True,
+        return self._analytics_query_support.get_failure_clusters(
+            limit=limit,
+            max_clusters=max_clusters,
+            queue=queue,
+            failure_class=failure_class,
+            severity=severity,
         )
-        rows = rows[:normalized_max_clusters]
-
-        return {
-            "generated_at": self._now(),
-            "total_failed_reports": total_failed_reports,
-            "total_clusters": len(rows),
-            "clusters": rows,
-            "queue_distribution": [{"queue": key, "count": value} for key, value in sorted(queue_distribution.items(), key=lambda item: item[1], reverse=True)],
-            "class_distribution": [{"failure_class": key, "count": value} for key, value in sorted(class_distribution.items(), key=lambda item: item[1], reverse=True)],
-            "severity_distribution": [{"severity": key, "count": value} for key, value in sorted(severity_distribution.items(), key=lambda item: item[1], reverse=True)],
-            "filters": {
-                "queue": normalized_queue,
-                "failure_class": normalized_failure_class,
-                "severity": normalized_severity,
-            },
-        }
 
     def get_failure_cluster(self, *, cluster_id: str, limit: int = 200) -> dict[str, Any]:
-        normalized_cluster_id = str(cluster_id).strip()
-        if not normalized_cluster_id:
-            raise OrchestratorValidationError("cluster_id must not be empty")
-        cluster_payload = self.get_failure_clusters(limit=limit, max_clusters=200)
-        for cluster in cluster_payload.get("clusters", []):
-            if str(cluster.get("cluster_id", "")).strip() == normalized_cluster_id:
-                return {
-                    "generated_at": cluster_payload.get("generated_at", self._now()),
-                    "cluster": cluster,
-                }
-        raise OrchestratorValidationError(f"Failure cluster not found: {normalized_cluster_id}")
+        try:
+            return self._analytics_query_support.get_failure_cluster(cluster_id=cluster_id, limit=limit)
+        except ValueError as exc:
+            raise OrchestratorValidationError(str(exc)) from exc
 
     def _load_report_summary_preview(self, summary_path: Path) -> dict[str, Any]:
-        preview = {
-            "total_failed_cases": 0,
-            "environment_failures": 0,
-            "business_failures": 0,
-            "high_risk_failures": 0,
-            "actionable_self_healing_cases": 0,
-            "environment_failure_cases": [],
-            "actionable_self_healing_case_details": [],
-        }
-        if not summary_path.exists():
-            return preview
-
-        patterns = {
-            "total_failed_cases": re.compile(r"^- Total Failed Cases: (\d+)$"),
-            "environment_failures": re.compile(r"^- Environment Failures: (\d+)$"),
-            "business_failures": re.compile(r"^- Business Failures: (\d+)$"),
-            "high_risk_failures": re.compile(r"^- High Risk Failures: (\d+)$"),
-            "actionable_self_healing_cases": re.compile(r"^- Cases With Actionable Self-Healing Advice: (\d+)$"),
-        }
-        try:
-            current_case: dict[str, str] | None = None
-            for raw_line in summary_path.read_text(encoding="utf-8").splitlines():
-                line = raw_line.strip()
-                for key, pattern in patterns.items():
-                    match = pattern.match(line)
-                    if match:
-                        preview[key] = int(match.group(1))
-                case_match = re.match(r"^\d+\.\s+Case:\s+(.+)$", line)
-                if case_match:
-                    if current_case:
-                        self._append_report_summary_case_preview(preview, current_case)
-                    current_case = {
-                        "case_id": case_match.group(1).strip(),
-                        "failure_category": "",
-                        "actionable_suggestion": "no",
-                        "suggestion_target": "",
-                        "suggestion_advice_type": "",
-                    }
-                    continue
-                if current_case is None:
-                    continue
-                if line.startswith("Failure Category: "):
-                    current_case["failure_category"] = line.removeprefix("Failure Category: ").strip()
-                elif line.startswith("Actionable Suggestion: "):
-                    current_case["actionable_suggestion"] = line.removeprefix("Actionable Suggestion: ").strip().lower()
-                elif line.startswith("Suggestion Target: "):
-                    current_case["suggestion_target"] = line.removeprefix("Suggestion Target: ").strip()
-                elif line.startswith("Suggestion Advice Type: "):
-                    current_case["suggestion_advice_type"] = line.removeprefix("Suggestion Advice Type: ").strip()
-            if current_case:
-                self._append_report_summary_case_preview(preview, current_case)
-        except OSError:
-            return preview
-        return preview
+        return self._execution_report_support.load_report_summary_preview(summary_path)
 
     @staticmethod
     def _append_report_summary_case_preview(preview: dict[str, Any], current_case: dict[str, str]) -> None:
-        failure_category = current_case.get("failure_category", "").strip().lower()
-        if failure_category in {"environment", "network", "authentication"}:
-            preview["environment_failure_cases"].append(current_case["case_id"])
-        if current_case.get("actionable_suggestion") == "yes":
-            preview["actionable_self_healing_case_details"].append(
-                {
-                    "case_id": current_case["case_id"],
-                    "target": current_case.get("suggestion_target", ""),
-                    "advice_type": current_case.get("suggestion_advice_type", ""),
-                }
-            )
+        ExecutionReportSupport.append_report_summary_case_preview(preview, current_case)
 
     def preview_self_healing_advice(
         self,
@@ -2292,28 +1230,15 @@ class OrchestratorService:
         failure_reason: str = "",
         failure_analysis: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        normalized_page = page.strip()
-        if not normalized_page:
-            raise OrchestratorValidationError("page must not be empty")
-
-        normalized_case = case if isinstance(case, dict) else {}
-        normalized_failure_analysis = failure_analysis if isinstance(failure_analysis, dict) else {}
-        if not normalized_case:
-            normalized_case = {
-                "execution": {
-                    "page": normalized_page,
-                    "steps": [],
-                }
-            }
-
-        payload = {
-            "page": normalized_page,
-            "failure_reason": str(failure_reason).strip(),
-            "failure_analysis": normalized_failure_analysis,
-            "available_targets": self._load_available_targets(normalized_page),
-            "case": normalized_case,
-        }
-        return self._run_self_healing_advisor_agent(payload)
+        try:
+            return self._failure_healing_support.preview_self_healing_advice(
+                page=page,
+                case=case,
+                failure_reason=failure_reason,
+                failure_analysis=failure_analysis,
+            )
+        except ValueError as exc:
+            raise OrchestratorValidationError(str(exc)) from exc
 
     @staticmethod
     def _now() -> str:
@@ -2411,6 +1336,7 @@ class OrchestratorService:
         finished_at: str,
         source: str,
         mode: str,
+        runner_profile: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], Path, Path]:
         report_payload = self._build_report_payload(
             requirement_spec=requirement_spec,
@@ -2427,6 +1353,7 @@ class OrchestratorService:
             finished_at=finished_at,
             source=source,
             mode=mode,
+            runner_profile=runner_profile,
         )
         return self._write_report_files(case["id"], report_payload)
 
@@ -2446,128 +1373,32 @@ class OrchestratorService:
         finished_at: str,
         source: str,
         mode: str,
+        runner_profile: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        evidence_manifest = self._normalize_evidence_manifest(evidence_manifest)
-        stdout_text = completed.stdout if completed else ""
-        stderr_text = completed.stderr if completed else ""
-        metrics = self._extract_runner_metrics(stdout_text)
-        pytest_results = self._build_pytest_results(
-            output=stdout_text,
-            error_output=stderr_text,
-            runner_exit_code=completed.returncode if completed else None,
-            metrics=metrics,
-        )
-        if not execution_requested:
-            status = "generated"
-        elif completed and completed.returncode == 0:
-            status = "passed"
-        else:
-            status = "failed"
-
-        test_point_metadata = test_points.get("metadata") if isinstance(test_points.get("metadata"), dict) else {}
-        technique_summary = test_point_metadata.get("technique_summary") if isinstance(test_point_metadata.get("technique_summary"), dict) else {}
-        report_payload = {
-            "status": status,
-            "summary": self._build_summary_text(status=status, case=case, execution_requested=execution_requested, metrics=metrics),
-            "case_id": case["id"],
-            "case_title": case.get("title", ""),
-            "page": case.get("execution", {}).get("page", ""),
-            "case_path": str(case_path),
-            "execution_requested": execution_requested,
-            "source": source,
-            "request_context": {
-                "page": case.get("execution", {}).get("page", ""),
-                "mode": mode,
-                "source": source,
-                "execution_requested": execution_requested,
-                "requirement_parser": requirement_spec.get("parser_runtime", {})
-                if isinstance(requirement_spec.get("parser_runtime"), dict)
-                else {},
-                "technique_summary": technique_summary,
-            },
-            "requirement_spec": requirement_spec,
-            "test_points_summary": {
-                "page": str(test_points.get("page", "")).strip(),
-                "point_count": len(test_points.get("points", [])) if isinstance(test_points.get("points"), list) else 0,
-                "review_summary": test_points.get("review_summary", {}) if isinstance(test_points.get("review_summary"), dict) else {},
-                "technique_summary": technique_summary,
-            },
-            "generated_script": generated_script,
-            "execution_plan": execution_plan,
-            "design_generation": design_generation,
-            "agent_pipeline": self.agent_pipeline_order(),
-            "started_at": started_at,
-            "finished_at": finished_at,
-            "runner_exit_code": completed.returncode if completed else None,
-            "metrics": metrics,
-            "pytest_results": pytest_results,
-            "failure_reason": self._extract_failure_reason(output=stdout_text, error_output=stderr_text, status=status),
-            "self_healing_enabled": os.getenv("SELF_HEALING_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"},
-            "self_healing_attempted": bool(evidence_manifest.get("self_healing_result_files")),
-            "evidence": evidence_manifest,
-            "runner_stdout_excerpt": self._truncate_text(stdout_text),
-            "runner_stderr_excerpt": self._truncate_text(stderr_text),
-        }
-        execution_record, execution_record_meta = self._resolve_execution_record_for_report(
-            case=case,
-            execution_requested=execution_requested,
-            source=source,
-            mode=mode,
-            started_at=started_at,
-            finished_at=finished_at,
-            status=status,
-            runner_exit_code=completed.returncode if completed else None,
-            evidence_manifest=evidence_manifest,
-        )
-        report_payload["execution_record"] = execution_record
-        report_payload["execution_record_meta"] = execution_record_meta
-        report_payload["failure_analysis"] = self._analyze_failure(
-            report_payload=report_payload,
-            stdout_text=stdout_text,
-            stderr_text=stderr_text,
-        )
-        raw_triage = self._triage_failure(
-            failure_analysis=report_payload["failure_analysis"],
-            execution_record=report_payload["execution_record"],
-            evidence_manifest=evidence_manifest,
-            report=report_payload,
-        )
-        report_payload["failure_triage"] = self._enrich_failure_triage_with_history(
-            triage=raw_triage,
-            case_id=case.get("id", ""),
-            page=report_payload.get("page", ""),
-            started_at=started_at,
-        )
-        report_payload["self_healing_advice"] = self._build_self_healing_advice(
-            case=case,
-            report_payload=report_payload,
-        )
-        report_payload["self_healing_suggestion_preview"] = self._load_self_healing_suggestion_preview(report_payload)
-        report_payload["self_healing_execution_preview"] = self._load_self_healing_execution_preview(report_payload)
-        report_payload["risk_report"] = self._evaluate_risk_report(
-            requirement_spec=requirement_spec,
-            execution_plan=execution_plan,
-            execution_record=report_payload["execution_record"],
-            failure_analysis=report_payload["failure_analysis"],
-            failure_triage=report_payload["failure_triage"],
-        )
-        return report_payload
+        try:
+            return self._execution_report_support.build_report_payload(
+                requirement_spec=requirement_spec,
+                case=case,
+                test_points=test_points,
+                generated_script=generated_script,
+                execution_plan=execution_plan,
+                design_generation=design_generation,
+                case_path=case_path,
+                execution_requested=execution_requested,
+                completed=completed,
+                evidence_manifest=evidence_manifest,
+                started_at=started_at,
+                finished_at=finished_at,
+                source=source,
+                mode=mode,
+                runner_profile=runner_profile,
+            )
+        except ValueError as exc:
+            raise OrchestratorValidationError(str(exc)) from exc
 
     @staticmethod
     def _load_execution_record_from_manifest(evidence_manifest: dict[str, Any]) -> dict[str, Any]:
-        record_files = evidence_manifest.get("execution_record_files") or []
-        if not isinstance(record_files, list) or not record_files:
-            return {}
-        path = Path(str(record_files[0]))
-        if not path.exists():
-            return {}
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-        if not isinstance(payload, dict):
-            return {}
-        return payload
+        return ExecutionReportSupport.load_execution_record_from_manifest(evidence_manifest)
 
     def _resolve_execution_record_for_report(
         self,
@@ -2581,53 +1412,43 @@ class OrchestratorService:
         status: str,
         runner_exit_code: int | None,
         evidence_manifest: dict[str, Any],
+        execution_metadata: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        record_files = evidence_manifest.get("execution_record_files")
-        manifest_record_count = len(record_files) if isinstance(record_files, list) else 0
-        meta = {
-            "version": "ExecutionRecordResolutionMetaV1",
-            "source": "generated",
-            "manifest_record_count": manifest_record_count,
-            "compat_builder_enabled": bool(self.execution_record_compat_builder_enabled),
-            "compat_builder_used": False,
-            "strict_violation": False,
-        }
-
-        manifest_execution_record = self._load_execution_record_from_manifest(evidence_manifest)
-        if manifest_execution_record:
-            meta["source"] = "manifest"
-            return self._normalize_execution_record(manifest_execution_record), meta
-
-        if execution_requested and int(evidence_manifest.get("total_files", 0) or 0) > 0:
-            if not self.execution_record_compat_builder_enabled:
-                meta["source"] = "strict_blocked"
-                meta["strict_violation"] = True
-                self.logger.error(
-                    "execution_record manifest path missing/invalid for case %s; strict mode blocks compatibility builder",
-                    case.get("id", ""),
-                )
-                raise OrchestratorValidationError(
-                    "execution_record missing in evidence_manifest and compatibility builder is disabled"
-                )
-            meta["source"] = "compat_builder"
-            meta["compat_builder_used"] = True
-            self.logger.warning(
-                "execution_record manifest path missing/invalid for case %s; using compatibility record builder",
-                case.get("id", ""),
+        try:
+            return self._execution_report_support.resolve_execution_record_for_report(
+                case=case,
+                execution_requested=execution_requested,
+                source=source,
+                mode=mode,
+                started_at=started_at,
+                finished_at=finished_at,
+                status=status,
+                runner_exit_code=runner_exit_code,
+                evidence_manifest=evidence_manifest,
+                execution_metadata=execution_metadata,
             )
+        except ValueError as exc:
+            raise OrchestratorValidationError(str(exc)) from exc
 
-        execution_record = self._build_execution_record(
-            case=case,
-            execution_requested=execution_requested,
-            source=source,
-            mode=mode,
-            started_at=started_at,
-            finished_at=finished_at,
-            status=status,
-            runner_exit_code=runner_exit_code,
-            evidence_manifest=evidence_manifest,
+    @staticmethod
+    def _merge_execution_record_metadata(
+        execution_record: dict[str, Any],
+        supplemental_metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return ExecutionReportSupport.merge_execution_record_metadata(execution_record, supplemental_metadata)
+
+    def _build_execution_record_metadata(
+        self,
+        *,
+        requirement_spec: dict[str, Any],
+        test_points: dict[str, Any],
+        runner_profile: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self._execution_report_support.build_execution_record_metadata(
+            requirement_spec=requirement_spec,
+            test_points=test_points,
+            runner_profile=runner_profile,
         )
-        return execution_record, meta
 
     def _build_execution_record(
         self,
@@ -2641,45 +1462,20 @@ class OrchestratorService:
         status: str,
         runner_exit_code: int | None,
         evidence_manifest: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        steps = case.get("execution", {}).get("steps", [])
-        requirement = case.get("requirement") or []
-        if isinstance(requirement, str):
-            requirement = [requirement]
-        raw = {
-            "version": "ExecutionRecordV1",
-            "schema_version": "execution-record.v1",
-            "run_id": f"{case.get('id', '')}:{started_at}",
-            "case_id": case.get("id", ""),
-            "project": "default",
-            "source": source,
-            "mode": mode,
-            "status": status,
-            "started_at": started_at,
-            "finished_at": finished_at,
-            "step_summary": {
-                "page": case.get("execution", {}).get("page", ""),
-                "requirement_count": len(requirement),
-                "total_steps": len(steps),
-                "action_types": sorted({step.get("action", "") for step in steps if step.get("action")}),
-            },
-            "evidence_index": {
-                "total_files": evidence_manifest.get("total_files", 0),
-                "artifact_categories": {
-                    "screenshots": len(evidence_manifest.get("screenshots", [])),
-                    "html_pages": len(evidence_manifest.get("html_pages", [])),
-                    "meta_files": len(evidence_manifest.get("meta_files", [])),
-                    "analysis_files": len(evidence_manifest.get("analysis_files", [])),
-                    "suggestion_files": len(evidence_manifest.get("suggestion_files", [])),
-                    "self_healing_result_files": len(evidence_manifest.get("self_healing_result_files", [])),
-                    "videos": len(evidence_manifest.get("videos", [])),
-                    "other_files": len(evidence_manifest.get("other_files", [])),
-                },
-                "runner_exit_code": runner_exit_code,
-                "execution_requested": execution_requested,
-            },
-        }
-        return self._normalize_execution_record(raw)
+        return self._execution_report_support.build_execution_record(
+            case=case,
+            execution_requested=execution_requested,
+            source=source,
+            mode=mode,
+            started_at=started_at,
+            finished_at=finished_at,
+            status=status,
+            runner_exit_code=runner_exit_code,
+            evidence_manifest=evidence_manifest,
+            metadata=metadata,
+        )
 
     @staticmethod
     def _extract_runner_metrics(output: str) -> dict[str, int]:
@@ -2746,53 +1542,7 @@ class OrchestratorService:
         return "Runner execution failed without a parsed failure reason."
 
     def _analyze_failure(self, report_payload: dict[str, Any], stdout_text: str, stderr_text: str) -> dict[str, Any]:
-        if report_payload["status"] != "failed":
-            return {
-                "summary": "No failure analysis needed because the run did not fail.",
-                "failure_category": "unknown",
-                "failure_source": "unknown",
-                "failure_source_reason": "No failure occurred, so no source classification is required.",
-                "failure_source_confidence": 1.0,
-                "source_evidence": [],
-                "likely_cause": "",
-                "risk_level": "low",
-                "recommended_action": "No immediate failure action is required.",
-                "confidence": 1.0,
-                "requires_manual_review": False,
-                "evidence_used": [],
-            }
-
-        try:
-            return self._run_failure_analysis_agent(
-                {
-                    "report": report_payload,
-                    "stdout": stdout_text,
-                    "stderr": stderr_text,
-                    "error": report_payload["failure_reason"],
-                }
-            )
-        except Exception:
-            return {
-                "summary": "Failure analysis agent was unavailable; returned heuristic fallback analysis.",
-                "failure_category": "unknown",
-                "failure_source": "unknown",
-                "failure_source_reason": "Failure analysis agent was unavailable, so source classification fell back to unknown.",
-                "failure_source_confidence": 0.35,
-                "source_evidence": [
-                    {
-                        "signal": "fallback",
-                        "value": "failure_analysis_agent_unavailable",
-                        "origin": "report",
-                        "supports": "unknown",
-                    }
-                ],
-                "likely_cause": report_payload["failure_reason"] or "Unknown execution failure.",
-                "risk_level": "medium",
-                "recommended_action": "Review the pytest output and captured evidence manually.",
-                "confidence": 0.35,
-                "requires_manual_review": True,
-                "evidence_used": ["stdout", "stderr"] if stdout_text or stderr_text else ["report"],
-            }
+        return self._failure_healing_support.analyze_failure(report_payload, stdout_text, stderr_text)
 
     def _run_failure_analysis_agent(self, payload: dict[str, Any]) -> dict[str, Any]:
         if str(self.failure_agent_root) not in sys.path:
@@ -2803,89 +1553,15 @@ class OrchestratorService:
         return agent.analyze(payload)
 
     def _build_self_healing_advice(self, case: dict[str, Any], report_payload: dict[str, Any]) -> dict[str, Any]:
-        available_targets = self._load_available_targets(case.get("execution", {}).get("page", ""))
-        payload = {
-            "page": case.get("execution", {}).get("page", ""),
-            "failure_reason": report_payload.get("failure_reason", ""),
-            "failure_analysis": report_payload.get("failure_analysis", {}),
-            "available_targets": available_targets,
-            "case": case,
-        }
-        try:
-            return self._run_self_healing_advisor_agent(payload)
-        except Exception:
-            return {
-                "summary": "No self-healing advice generated.",
-                "suggestion_type": "no_change",
-                "suggested_changes": ["Do not modify files automatically. Review the report and failure analysis manually."],
-                "rationale": "Self-healing advisor agent was unavailable.",
-                "confidence": 0.0,
-                "safe_to_apply_manually": True,
-            }
+        return self._failure_healing_support.build_self_healing_advice(case, report_payload)
 
     @staticmethod
     def _load_self_healing_suggestion_preview(report_payload: dict[str, Any]) -> dict[str, Any]:
-        evidence = report_payload.get("evidence", {})
-        if not isinstance(evidence, dict):
-            return {}
-
-        suggestion_files = evidence.get("suggestion_files") or []
-        if not isinstance(suggestion_files, list) or not suggestion_files:
-            return {}
-
-        suggestion_path = Path(str(suggestion_files[0]))
-        if not suggestion_path.exists():
-            return {}
-
-        try:
-            payload = json.loads(suggestion_path.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-
-        if not isinstance(payload, dict):
-            return {}
-
-        return {
-            "summary": str(payload.get("summary", "No suggestion summary available.")).strip() or "No suggestion summary available.",
-            "advice_type": str(payload.get("advice_type", "no_change")).strip() or "no_change",
-            "target": str(payload.get("target", "")).strip(),
-            "suggestion": str(payload.get("suggestion", "")).strip(),
-            "confidence": payload.get("confidence", 0.0),
-            "fix_candidates": payload.get("fix_candidates", []) if isinstance(payload.get("fix_candidates", []), list) else [],
-        }
+        return FailureHealingSupport.load_self_healing_suggestion_preview(report_payload)
 
     @staticmethod
     def _load_self_healing_execution_preview(report_payload: dict[str, Any]) -> dict[str, Any]:
-        evidence = report_payload.get("evidence", {})
-        if not isinstance(evidence, dict):
-            return {}
-
-        result_files = evidence.get("self_healing_result_files") or []
-        if not isinstance(result_files, list) or not result_files:
-            return {}
-
-        result_path = Path(str(result_files[0]))
-        if not result_path.exists():
-            return {}
-
-        try:
-            payload = json.loads(result_path.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-
-        if not isinstance(payload, dict):
-            return {}
-
-        return {
-            "status": str(payload.get("status", "unknown")).strip() or "unknown",
-            "reason": str(payload.get("reason", "")).strip(),
-            "attempts_used": int(payload.get("attempts_used", 0) or 0),
-            "healed": bool(payload.get("healed", False)),
-            "rolled_back": bool(payload.get("rolled_back", False)),
-            "confidence": payload.get("confidence", 0.0),
-            "plan_path": str(payload.get("plan_path", "")).strip(),
-            "result_path": str(payload.get("result_path", "")).strip(),
-        }
+        return FailureHealingSupport.load_self_healing_execution_preview(report_payload)
 
     def _run_self_healing_advisor_agent(self, payload: dict[str, Any]) -> dict[str, Any]:
         if str(self.self_healing_agent_root) not in sys.path:
@@ -2936,225 +1612,8 @@ class OrchestratorService:
 
     @staticmethod
     def _render_report_json(report_payload: dict[str, Any]) -> str:
-        return json.dumps(report_payload, ensure_ascii=False, indent=2)
+        return ExecutionReportSupport.render_report_json(report_payload)
 
     @staticmethod
     def _render_report_markdown(report_payload: dict[str, Any]) -> str:
-        metrics = report_payload["metrics"]
-        pytest_results = report_payload["pytest_results"]
-        evidence = report_payload["evidence"]
-        failure_analysis = report_payload["failure_analysis"]
-        failure_triage = report_payload.get("failure_triage", {})
-        self_healing_advice = report_payload["self_healing_advice"]
-        self_healing_suggestion_preview = report_payload.get("self_healing_suggestion_preview", {})
-        self_healing_execution_preview = report_payload.get("self_healing_execution_preview", {})
-        request_context = report_payload["request_context"]
-        execution_record_meta = report_payload.get("execution_record_meta", {})
-        execution_plan = report_payload.get("execution_plan", {})
-        risk_report = report_payload.get("risk_report", {})
-        agent_pipeline = report_payload.get("agent_pipeline", [])
-        test_points_summary = report_payload.get("test_points_summary", {})
-        technique_summary = request_context.get("technique_summary", {}) if isinstance(request_context.get("technique_summary"), dict) else {}
-        plan_stages = execution_plan.get("stages", []) if isinstance(execution_plan, dict) else []
-        stage_lines: list[str] = []
-        if isinstance(plan_stages, list):
-            for stage in plan_stages:
-                if not isinstance(stage, dict):
-                    continue
-                stage_lines.append(
-                    "- {stage_id}: {stage_name} ({runner}, est={estimated}s, retry={retry})".format(
-                        stage_id=stage.get("stage_id", "-"),
-                        stage_name=stage.get("stage_name", "-"),
-                        runner=stage.get("runner", "-"),
-                        estimated=stage.get("estimated_seconds", "-"),
-                        retry=stage.get("retry_limit", "-"),
-                    )
-                )
-        lines = [
-            f"# Execution Report: {report_payload['case_id']}",
-            "",
-            f"- Status: {report_payload['status']}",
-            f"- Page: {report_payload['page'] or '-'}",
-            f"- Case Path: {report_payload['case_path']}",
-            f"- Execution Requested: {report_payload['execution_requested']}",
-            f"- Source: {report_payload['source']}",
-            f"- Runner Exit Code: {report_payload['runner_exit_code']}",
-            f"- Started At: {report_payload['started_at']}",
-            f"- Finished At: {report_payload['finished_at']}",
-            "",
-            "## Summary",
-            "",
-            report_payload["summary"],
-            "",
-            "## Request Context",
-            "",
-            f"- Page: {request_context['page']}",
-            f"- Mode: {request_context['mode']}",
-            f"- Source: {request_context['source']}",
-            f"- Execution Requested: {request_context['execution_requested']}",
-            f"- Structured Constraints: {bool(technique_summary.get('has_structured_constraints', False))}",
-            f"- Technique Distribution: {json.dumps(technique_summary.get('technique_distribution', {}), ensure_ascii=False) if technique_summary else '{}'}",
-            f"- Design-only Points: {technique_summary.get('design_only_point_count', 0) if technique_summary else 0}",
-            "",
-            "## Test Point Summary",
-            "",
-            f"- Page: {test_points_summary.get('page', '-') if isinstance(test_points_summary, dict) else '-'}",
-            f"- Point Count: {test_points_summary.get('point_count', '-') if isinstance(test_points_summary, dict) else '-'}",
-            f"- Review Summary: {json.dumps(test_points_summary.get('review_summary', {}), ensure_ascii=False) if isinstance(test_points_summary, dict) else '{}'}",
-            f"- Technique Summary: {json.dumps(test_points_summary.get('technique_summary', {}), ensure_ascii=False) if isinstance(test_points_summary, dict) else '{}'}",
-            "",
-            "## Generated Script",
-            "",
-            f"- Framework: {report_payload.get('generated_script', {}).get('framework', '-')}",
-            f"- Language: {report_payload.get('generated_script', {}).get('language', '-')}",
-            f"- Entrypoint: {report_payload.get('generated_script', {}).get('entrypoint', '-')}",
-            f"- Script Path: {report_payload.get('generated_script', {}).get('script_path', '-')}",
-            "",
-            "## Agent Pipeline",
-            "",
-            f"- Sequence: {' -> '.join(agent_pipeline) if isinstance(agent_pipeline, list) and agent_pipeline else '-'}",
-            "",
-            "## Execution Plan",
-            "",
-            f"- Version: {execution_plan.get('version', '-') if isinstance(execution_plan, dict) else '-'}",
-            f"- Run Mode: {execution_plan.get('run_mode', '-') if isinstance(execution_plan, dict) else '-'}",
-            f"- Priority: {execution_plan.get('priority', '-') if isinstance(execution_plan, dict) else '-'}",
-            f"- Environment: {execution_plan.get('environment', '-') if isinstance(execution_plan, dict) else '-'}",
-            f"- Parallelism: {execution_plan.get('parallelism', '-') if isinstance(execution_plan, dict) else '-'}",
-            f"- Retry Policy: {json.dumps(execution_plan.get('retry_policy', {}), ensure_ascii=False) if isinstance(execution_plan, dict) else '-'}",
-            f"- Scheduling Hints: {json.dumps(execution_plan.get('scheduling_hints', {}), ensure_ascii=False) if isinstance(execution_plan, dict) else '-'}",
-            "- Stages:",
-            *(stage_lines if stage_lines else ["- -"]),
-            "",
-            "## Risk Report",
-            "",
-            f"- Version: {risk_report.get('version', '-') if isinstance(risk_report, dict) else '-'}",
-            f"- Risk Score: {risk_report.get('risk_score', '-') if isinstance(risk_report, dict) else '-'}",
-            f"- Risk Level: {risk_report.get('risk_level', '-') if isinstance(risk_report, dict) else '-'}",
-            f"- Gate Decision: {risk_report.get('gate_decision', '-') if isinstance(risk_report, dict) else '-'}",
-            f"- Recommendation: {risk_report.get('recommendation', '-') if isinstance(risk_report, dict) else '-'}",
-            f"- Factors: {json.dumps(risk_report.get('factors', []), ensure_ascii=False) if isinstance(risk_report, dict) else '-'}",
-            "",
-            "## Metrics",
-            "",
-            f"- Passed: {metrics['passed']}",
-            f"- Failed: {metrics['failed']}",
-            f"- Skipped: {metrics['skipped']}",
-            f"- Errors: {metrics['errors']}",
-            "",
-            "## Pytest Results",
-            "",
-            f"- Collected: {pytest_results['collected']}",
-            f"- Passed: {pytest_results['passed']}",
-            f"- Failed: {pytest_results['failed']}",
-            f"- Skipped: {pytest_results['skipped']}",
-            f"- Errors: {pytest_results['errors']}",
-            f"- Duration Seconds: {pytest_results['duration_seconds']}",
-            f"- Runner Exit Code: {pytest_results['runner_exit_code']}",
-            f"- Has Stderr: {pytest_results['has_stderr']}",
-            "",
-            "## Failure Reason",
-            "",
-            report_payload["failure_reason"] or "No failure reason because the run did not fail.",
-            "",
-            "## Self-Healing Status",
-            "",
-            f"- Enabled: {report_payload.get('self_healing_enabled', False)}",
-            f"- Attempted: {report_payload.get('self_healing_attempted', False)}",
-            "",
-            "## Failure Analysis",
-            "",
-            f"- Summary: {failure_analysis['summary']}",
-            f"- Category: {failure_analysis['failure_category']}",
-            f"- Source: {failure_analysis.get('failure_source', '-')}",
-            f"- Source Reason: {failure_analysis.get('failure_source_reason', '-') or '-'}",
-            f"- Source Confidence: {failure_analysis.get('failure_source_confidence', '-')}",
-            f"- Source Evidence: {json.dumps(failure_analysis.get('source_evidence', []), ensure_ascii=False) if failure_analysis.get('source_evidence') else '-'}",
-            f"- Likely Cause: {failure_analysis['likely_cause'] or '-'}",
-            f"- Risk Level: {failure_analysis['risk_level']}",
-            f"- Recommended Action: {failure_analysis['recommended_action']}",
-            f"- Confidence: {failure_analysis['confidence']}",
-            f"- Requires Manual Review: {failure_analysis.get('requires_manual_review', '-')}",
-            f"- Evidence Used: {', '.join(failure_analysis['evidence_used']) if failure_analysis['evidence_used'] else '-'}",
-            "",
-            "## Failure Triage",
-            "",
-            f"- Version: {failure_triage.get('version', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Label: {failure_triage.get('triage_label', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Class: {failure_triage.get('failure_class', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Severity: {failure_triage.get('severity', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Owner Team: {failure_triage.get('owner_team', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Queue: {failure_triage.get('queue', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Bucket Key: {failure_triage.get('bucket_key', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Cluster ID: {failure_triage.get('cluster_id', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Occurrence Count: {failure_triage.get('occurrence_count', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- First Seen At: {failure_triage.get('first_seen_at', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Last Seen At: {failure_triage.get('last_seen_at', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Duplicate Of: {failure_triage.get('duplicate_of', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Requires Manual Review: {failure_triage.get('requires_manual_review', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Confidence: {failure_triage.get('confidence', '-') if isinstance(failure_triage, dict) else '-'}",
-            f"- Actions: {json.dumps(failure_triage.get('actions', []), ensure_ascii=False) if isinstance(failure_triage, dict) else '-'}",
-            f"- Similar Cases: {json.dumps(failure_triage.get('similar_cases', []), ensure_ascii=False) if isinstance(failure_triage, dict) else '-'}",
-            "",
-            "## Self-Healing Advice",
-            "",
-            f"- Summary: {self_healing_advice['summary']}",
-            f"- Suggestion Type: {self_healing_advice['suggestion_type']}",
-            f"- Suggested Changes: {'; '.join(self_healing_advice['suggested_changes']) if self_healing_advice['suggested_changes'] else '-'}",
-            f"- Rationale: {self_healing_advice['rationale']}",
-            f"- Confidence: {self_healing_advice['confidence']}",
-            f"- Safe To Apply Manually: {self_healing_advice['safe_to_apply_manually']}",
-            "",
-            "## Self-Healing Suggestion Preview",
-            "",
-            f"- Summary: {self_healing_suggestion_preview.get('summary', '-')}",
-            f"- Advice Type: {self_healing_suggestion_preview.get('advice_type', '-')}",
-            f"- Target: {self_healing_suggestion_preview.get('target', '-')}",
-            f"- Suggestion: {self_healing_suggestion_preview.get('suggestion', '-')}",
-            f"- Confidence: {self_healing_suggestion_preview.get('confidence', '-')}",
-            f"- Fix Candidates: {', '.join(self_healing_suggestion_preview.get('fix_candidates', [])) if self_healing_suggestion_preview.get('fix_candidates') else '-'}",
-            "",
-            "## Self-Healing Execution Preview",
-            "",
-            f"- Status: {self_healing_execution_preview.get('status', '-')}",
-            f"- Reason: {self_healing_execution_preview.get('reason', '-')}",
-            f"- Attempts Used: {self_healing_execution_preview.get('attempts_used', '-')}",
-            f"- Healed: {self_healing_execution_preview.get('healed', '-')}",
-            f"- Rolled Back: {self_healing_execution_preview.get('rolled_back', '-')}",
-            f"- Confidence: {self_healing_execution_preview.get('confidence', '-')}",
-            f"- Plan Path: {self_healing_execution_preview.get('plan_path', '-')}",
-            f"- Result Path: {self_healing_execution_preview.get('result_path', '-')}",
-            "",
-            "## Execution Record Resolution",
-            "",
-            f"- Source: {execution_record_meta.get('source', '-')}",
-            f"- Manifest Record Count: {execution_record_meta.get('manifest_record_count', 0)}",
-            f"- Compat Builder Enabled: {execution_record_meta.get('compat_builder_enabled', False)}",
-            f"- Compat Builder Used: {execution_record_meta.get('compat_builder_used', False)}",
-            f"- Strict Violation: {execution_record_meta.get('strict_violation', False)}",
-            "",
-            "## Evidence",
-            "",
-            f"- Total Files: {evidence['total_files']}",
-            f"- Screenshots: {len(evidence['screenshots'])}",
-            f"- HTML Pages: {len(evidence['html_pages'])}",
-            f"- Meta Files: {len(evidence['meta_files'])}",
-            f"- Analysis Files: {len(evidence['analysis_files'])}",
-            f"- Suggestion Files: {len(evidence['suggestion_files'])}",
-            f"- Execution Record Files: {len(evidence['execution_record_files'])}",
-            f"- Self-Healing Result Files: {len(evidence['self_healing_result_files'])}",
-            f"- Videos: {len(evidence['videos'])}",
-            "",
-            "## Runner Stdout Excerpt",
-            "",
-            "```text",
-            report_payload["runner_stdout_excerpt"] or "(empty)",
-            "```",
-            "",
-            "## Runner Stderr Excerpt",
-            "",
-            "```text",
-            report_payload["runner_stderr_excerpt"] or "(empty)",
-            "```",
-        ]
-        return "\n".join(lines) + "\n"
+        return ExecutionReportSupport.render_report_markdown(report_payload)

@@ -1,17 +1,17 @@
-# Execution Report: TC-PRODUCT-GEN-001
+# Execution Report: tc-product-GEN-001
 
 - Status: generated
 - Page: product
-- Case Path: /private/var/folders/sv/_mskx0bx6516yzhmb5s7_yth0000gn/T/pytest-of-bettyhuang/pytest-466/test_orchestrator_service_pers0/assets/test-cases/ai-generated/TC-PRODUCT-GEN-001.yaml
+- Case Path: /private/var/folders/sv/_mskx0bx6516yzhmb5s7_yth0000gn/T/pytest-of-bettyhuang/pytest-724/test_orchestrator_service_pers0/assets/test-cases/ai-generated/atp-web-prod-list-fn-ai-0001.yaml
 - Execution Requested: False
 - Source: manual
 - Runner Exit Code: None
-- Started At: 2026-03-30T09:56:54.845393+00:00
-- Finished At: 2026-03-30T09:56:54.845453+00:00
+- Started At: 2026-04-05T07:05:25.669291+00:00
+- Finished At: 2026-04-05T07:05:25.669556+00:00
 
 ## Summary
 
-Generated test case TC-PRODUCT-GEN-001 for page product. Execution was not requested.
+Generated test case tc-product-GEN-001 for page product. Execution was not requested.
 
 ## Request Context
 
@@ -61,7 +61,7 @@ Generated test case TC-PRODUCT-GEN-001 for page product. Execution was not reque
 - Risk Level: low
 - Gate Decision: allow
 - Recommendation: 风险可控，可放行并持续观察趋势。
-- Factors: [{"factor": "business_priority", "score": 12, "reason": "priority=P2"}, {"factor": "execution_status", "score": 12, "reason": "status=generated"}, {"factor": "failure_analysis", "score": 5, "reason": "failure_risk=low"}, {"factor": "retry_strategy", "score": 2, "reason": "max_retries=1"}, {"factor": "case_complexity", "score": 0, "reason": "steps=2"}, {"factor": "triage_severity", "score": 2, "reason": "severity=S4"}, {"factor": "triage_manual_review", "score": 8, "reason": "triage requires manual review"}]
+- Factors: [{"factor": "business_priority", "score": 12, "reason": "priority=P2"}, {"factor": "execution_status", "score": 12, "reason": "status=generated"}, {"factor": "failure_analysis", "score": 5, "reason": "failure_risk=low"}, {"factor": "retry_strategy", "score": 2, "reason": "max_retries=1"}, {"factor": "case_complexity", "score": 0, "reason": "steps=3"}, {"factor": "triage_severity", "score": 2, "reason": "severity=S4"}, {"factor": "triage_manual_review", "score": 8, "reason": "triage requires manual review"}]
 
 ## Metrics
 
@@ -116,8 +116,8 @@ No failure reason because the run did not fail.
 - Bucket Key: unknown|unknown|product|click,login
 - Cluster ID: cluster-e9f278d4a30a
 - Occurrence Count: 1
-- First Seen At: 2026-03-30T09:56:54.845393+00:00
-- Last Seen At: 2026-03-30T09:56:54.845393+00:00
+- First Seen At: 2026-04-05T07:05:25.669291+00:00
+- Last Seen At: 2026-04-05T07:05:25.669291+00:00
 - Duplicate Of: 
 - Requires Manual Review: True
 - Confidence: 1.0
@@ -157,6 +157,9 @@ No failure reason because the run did not fail.
 
 - Source: generated
 - Manifest Record Count: 0
+- Manifest Record Path: -
+- Manifest Status: no_entry
+- Resolution Reason: generated_without_execution_artifacts
 - Compat Builder Enabled: True
 - Compat Builder Used: False
 - Strict Violation: False

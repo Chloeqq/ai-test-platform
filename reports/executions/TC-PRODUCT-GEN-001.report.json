@@ -1,31 +1,44 @@
 {
   "status": "generated",
-  "summary": "Generated test case TC-PRODUCT-GEN-001 for page product. Execution was not requested.",
-  "case_id": "TC-PRODUCT-GEN-001",
-  "case_title": "生成商品用例",
+  "summary": "Generated test case tc-product-GEN-001 for page product. Execution was not requested.",
+  "case_id": "tc-product-GEN-001",
+  "case_title": "商品页-列表展示-基础生成-执行验证-关键元素可见",
   "page": "product",
-  "case_path": "/private/var/folders/sv/_mskx0bx6516yzhmb5s7_yth0000gn/T/pytest-of-bettyhuang/pytest-466/test_orchestrator_service_pers0/assets/test-cases/ai-generated/TC-PRODUCT-GEN-001.yaml",
+  "case_path": "/private/var/folders/sv/_mskx0bx6516yzhmb5s7_yth0000gn/T/pytest-of-bettyhuang/pytest-724/test_orchestrator_service_pers0/assets/test-cases/ai-generated/atp-web-prod-list-fn-ai-0001.yaml",
   "execution_requested": false,
   "source": "manual",
   "request_context": {
     "page": "product",
     "mode": "generate_only",
     "source": "manual",
+    "runner": "playwright",
+    "runner_profile": {
+      "runner": "playwright",
+      "display_name": "Web Playwright Runner",
+      "channel": "web",
+      "framework": "playwright",
+      "language": "python",
+      "execution_supported": true,
+      "generation_supported": true,
+      "environment_pool": "web-browser-default",
+      "artifact_mode": "manifest_first",
+      "root_path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/runners/web-playwright-python"
+    },
     "execution_requested": false,
     "requirement_parser": {
       "agent": "requirement-parser-agent",
       "pipeline": "requirement->test_points",
-      "generated_at": "2026-03-30T09:56:54.734270+00:00",
+      "generated_at": "2026-04-05T07:05:25.547182+00:00",
       "mode": "rule_based",
       "llm_enabled": false,
       "model": "rule-engine",
       "prompt_name": "requirement-parser-system",
       "prompt_version": "requirement-parser.prompt.v1.0.0",
-      "prompt_fingerprint": "d37205af2d67e5c8",
+      "prompt_fingerprint": "126ddedefa1f2956",
       "instructions_version": "requirement-parser.instructions.v1.0.0",
-      "parse_started_at": "2026-03-30T09:56:54.725633+00:00",
-      "parse_finished_at": "2026-03-30T09:56:54.734270+00:00",
-      "parse_duration_ms": 8,
+      "parse_started_at": "2026-04-05T07:05:25.543055+00:00",
+      "parse_finished_at": "2026-04-05T07:05:25.547182+00:00",
+      "parse_duration_ms": 4,
       "source_count": 2,
       "intent_count": 2,
       "ambiguity_count": 0,
@@ -33,19 +46,77 @@
       "llm_trace": {
         "attempted": false,
         "succeeded": false,
-        "fallback_used": false,
-        "mode": "rule_based",
-        "model": "qwen3.5-plus",
+        "fallback_used": true,
         "reason_code": "mode_disabled",
-        "reason": "llm mode disabled",
-        "source_count": 2,
-        "input_chars": 35,
-        "prompt_chars": 0,
-        "overlay_key_count": 0,
-        "started_at": "2026-03-30T09:56:54.725726+00:00",
-        "finished_at": "2026-03-30T09:56:54.725727+00:00",
         "latency_ms": 0,
-        "overlay_keys": []
+        "overlay_key_count": 2,
+        "total_tokens": null
+      },
+      "source_summary": {
+        "source_count": 2,
+        "source_types": [
+          "manual",
+          "openapi"
+        ],
+        "has_multisource_inputs": true
+      },
+      "ai_trace": {
+        "trace_id": "ai-trace-f6ae9138218866ee",
+        "prompt_version": "requirement-parser.prompt.v1.0.0",
+        "model": "rule-engine",
+        "source": "manual",
+        "fallback_used": true,
+        "fallback_reason": "mode_disabled",
+        "instructions_version": "requirement-parser.instructions.v1.0.0"
+      },
+      "trace_id": "ai-trace-f6ae9138218866ee",
+      "page_resolution": {
+        "page": "product",
+        "page_candidates": [],
+        "candidate_details": [],
+        "conflict_detected": false,
+        "conflict_candidates": [],
+        "conflict_candidate_details": [],
+        "chosen_source_id": "",
+        "chosen_source_type": "",
+        "chosen_candidate": {
+          "page": "product",
+          "score": 0,
+          "vote_count": 0,
+          "source_types": [],
+          "source_ids": [],
+          "confidence": 0.0
+        },
+        "resolution_strategy": "single_candidate_or_fallback",
+        "source_priority_rules": [
+          {
+            "source_type": "openapi",
+            "priority_weight": 5
+          },
+          {
+            "source_type": "git_diff",
+            "priority_weight": 4
+          },
+          {
+            "source_type": "defect_ticket",
+            "priority_weight": 3
+          },
+          {
+            "source_type": "prd",
+            "priority_weight": 2
+          },
+          {
+            "source_type": "user_story",
+            "priority_weight": 2
+          },
+          {
+            "source_type": "input_source",
+            "priority_weight": 1
+          }
+        ],
+        "reason": "fallback inferred from requirement text",
+        "chosen_reason": "",
+        "rejected_reasons": []
       }
     },
     "technique_summary": {
@@ -57,6 +128,83 @@
       "technique_distribution": {},
       "has_structured_constraints": false,
       "source": "requirement_spec.constraints"
+    },
+    "source_summary": {
+      "source_count": 2,
+      "source_types": [
+        "manual",
+        "openapi"
+      ],
+      "has_multisource_inputs": true
+    },
+    "page_resolution": {
+      "page": "product",
+      "page_candidates": [],
+      "candidate_details": [],
+      "conflict_detected": false,
+      "conflict_candidates": [],
+      "conflict_candidate_details": [],
+      "chosen_source_id": "",
+      "chosen_source_type": "",
+      "chosen_candidate": {
+        "page": "product",
+        "score": 0,
+        "vote_count": 0,
+        "source_types": [],
+        "source_ids": [],
+        "confidence": 0.0
+      },
+      "resolution_strategy": "single_candidate_or_fallback",
+      "source_priority_rules": [
+        {
+          "source_type": "openapi",
+          "priority_weight": 5
+        },
+        {
+          "source_type": "git_diff",
+          "priority_weight": 4
+        },
+        {
+          "source_type": "defect_ticket",
+          "priority_weight": 3
+        },
+        {
+          "source_type": "prd",
+          "priority_weight": 2
+        },
+        {
+          "source_type": "user_story",
+          "priority_weight": 2
+        },
+        {
+          "source_type": "input_source",
+          "priority_weight": 1
+        }
+      ],
+      "reason": "fallback inferred from requirement text",
+      "chosen_reason": "",
+      "rejected_reasons": []
+    },
+    "change_impact": {
+      "changed_modules": [],
+      "changed_files": [],
+      "changed_areas": [],
+      "affected_intent_ids": [],
+      "impacted_source_ids": [
+        "source-02"
+      ],
+      "suggested_regression_scope": [
+        "product"
+      ],
+      "risk_hint": "no_git_diff",
+      "impact_score": 0,
+      "risk_signals": [],
+      "factors": [],
+      "top_factor": {},
+      "recommended_regression_scope": [],
+      "why_manual_review": "",
+      "why_blocked": "",
+      "explanation": "changed_files=0, changed_areas=0, signals=0, top_factor=-"
     }
   },
   "requirement_spec": {
@@ -69,7 +217,8 @@
       {
         "source_id": "source-01",
         "source_type": "manual",
-        "content_preview": "验证商品列表展示",
+        "summary": "",
+        "reference_ids": [],
         "metadata": {
           "field": "requirement",
           "content": "验证商品列表展示"
@@ -78,7 +227,8 @@
       {
         "source_id": "source-02",
         "source_type": "openapi",
-        "content_preview": "OpenAPI (0 paths)",
+        "summary": "",
+        "reference_ids": [],
         "metadata": {
           "field": "openapi_spec",
           "content": "OpenAPI",
@@ -127,25 +277,33 @@
     "coverage_matrix": [
       {
         "requirement_id": "REQ-001",
-        "source_id": "source-01",
-        "source_type": "manual",
         "requirement_text": "验证商品列表展示",
         "intent_ids": [
           "intent-01"
         ],
+        "source_ids": [
+          "source-01"
+        ],
+        "source_id": "source-01",
+        "source_type": "manual",
         "coverage_ratio": 0.5,
-        "traceability_status": "covered"
+        "traceability_status": "covered",
+        "explanation": "linked to source inputs"
       },
       {
         "requirement_id": "REQ-002",
-        "source_id": "source-02",
-        "source_type": "openapi",
         "requirement_text": "OpenAPI",
         "intent_ids": [
           "intent-02"
         ],
+        "source_ids": [
+          "source-02"
+        ],
+        "source_id": "source-02",
+        "source_type": "openapi",
         "coverage_ratio": 0.5,
-        "traceability_status": "covered"
+        "traceability_status": "covered",
+        "explanation": "linked to source inputs"
       }
     ],
     "dependency_graph": [
@@ -162,24 +320,32 @@
     "ambiguities": [],
     "change_impact": {
       "changed_modules": [],
+      "changed_files": [],
+      "changed_areas": [],
       "affected_intent_ids": [],
+      "impacted_source_ids": [
+        "source-02"
+      ],
       "suggested_regression_scope": [
         "product"
       ],
       "risk_hint": "no_git_diff",
       "impact_score": 0,
-      "changed_areas": []
+      "risk_signals": [],
+      "factors": [],
+      "top_factor": {},
+      "recommended_regression_scope": [],
+      "why_manual_review": "",
+      "why_blocked": "",
+      "explanation": "changed_files=0, changed_areas=0, signals=0, top_factor=-"
     },
     "historical_patterns": [
       {
         "pattern": "unknown",
-        "count": 16,
+        "count": 2,
         "sample_case_ids": [
           "SMOKE-PRODUCT-000001",
-          "TC-PRODUCT-GEN-001",
-          "SMOKE-PRODUCT-160402",
-          "TC-PRODUCT-SMOKE-001",
-          "PROD-PAGE-SMOKE-01"
+          "tc-product-GEN-001"
         ]
       },
       {
@@ -193,9 +359,9 @@
       },
       {
         "pattern": "historical_execution_mode",
-        "count": 16,
+        "count": 2,
         "distribution": {
-          "generate_only": 16
+          "generate_only": 2
         },
         "sample_case_ids": []
       }
@@ -206,17 +372,17 @@
     "parser_runtime": {
       "agent": "requirement-parser-agent",
       "pipeline": "requirement->test_points",
-      "generated_at": "2026-03-30T09:56:54.734270+00:00",
+      "generated_at": "2026-04-05T07:05:25.547182+00:00",
       "mode": "rule_based",
       "llm_enabled": false,
       "model": "rule-engine",
       "prompt_name": "requirement-parser-system",
       "prompt_version": "requirement-parser.prompt.v1.0.0",
-      "prompt_fingerprint": "d37205af2d67e5c8",
+      "prompt_fingerprint": "126ddedefa1f2956",
       "instructions_version": "requirement-parser.instructions.v1.0.0",
-      "parse_started_at": "2026-03-30T09:56:54.725633+00:00",
-      "parse_finished_at": "2026-03-30T09:56:54.734270+00:00",
-      "parse_duration_ms": 8,
+      "parse_started_at": "2026-04-05T07:05:25.543055+00:00",
+      "parse_finished_at": "2026-04-05T07:05:25.547182+00:00",
+      "parse_duration_ms": 4,
       "source_count": 2,
       "intent_count": 2,
       "ambiguity_count": 0,
@@ -224,26 +390,86 @@
       "llm_trace": {
         "attempted": false,
         "succeeded": false,
-        "fallback_used": false,
-        "mode": "rule_based",
-        "model": "qwen3.5-plus",
+        "fallback_used": true,
         "reason_code": "mode_disabled",
-        "reason": "llm mode disabled",
-        "source_count": 2,
-        "input_chars": 35,
-        "prompt_chars": 0,
-        "overlay_key_count": 0,
-        "started_at": "2026-03-30T09:56:54.725726+00:00",
-        "finished_at": "2026-03-30T09:56:54.725727+00:00",
         "latency_ms": 0,
-        "overlay_keys": []
+        "overlay_key_count": 2,
+        "total_tokens": null
+      },
+      "source_summary": {
+        "source_count": 2,
+        "source_types": [
+          "manual",
+          "openapi"
+        ],
+        "has_multisource_inputs": true
+      },
+      "ai_trace": {
+        "trace_id": "ai-trace-f6ae9138218866ee",
+        "prompt_version": "requirement-parser.prompt.v1.0.0",
+        "model": "rule-engine",
+        "source": "manual",
+        "fallback_used": true,
+        "fallback_reason": "mode_disabled",
+        "instructions_version": "requirement-parser.instructions.v1.0.0"
+      },
+      "trace_id": "ai-trace-f6ae9138218866ee",
+      "page_resolution": {
+        "page": "product",
+        "page_candidates": [],
+        "candidate_details": [],
+        "conflict_detected": false,
+        "conflict_candidates": [],
+        "conflict_candidate_details": [],
+        "chosen_source_id": "",
+        "chosen_source_type": "",
+        "chosen_candidate": {
+          "page": "product",
+          "score": 0,
+          "vote_count": 0,
+          "source_types": [],
+          "source_ids": [],
+          "confidence": 0.0
+        },
+        "resolution_strategy": "single_candidate_or_fallback",
+        "source_priority_rules": [
+          {
+            "source_type": "openapi",
+            "priority_weight": 5
+          },
+          {
+            "source_type": "git_diff",
+            "priority_weight": 4
+          },
+          {
+            "source_type": "defect_ticket",
+            "priority_weight": 3
+          },
+          {
+            "source_type": "prd",
+            "priority_weight": 2
+          },
+          {
+            "source_type": "user_story",
+            "priority_weight": 2
+          },
+          {
+            "source_type": "input_source",
+            "priority_weight": 1
+          }
+        ],
+        "reason": "fallback inferred from requirement text",
+        "chosen_reason": "",
+        "rejected_reasons": []
       }
     },
+    "parameter_constraints": [],
     "quality_gate": {
       "version": "RequirementQualityGateV1",
       "stage": "orchestrate",
       "gate_enabled": true,
       "decision": "allow",
+      "explanation": "allow because parse confidence and traceability satisfy the current thresholds",
       "blockers": [],
       "metrics": {
         "parse_confidence": 0.69,
@@ -295,17 +521,65 @@
       "technique_distribution": {},
       "has_structured_constraints": false,
       "source": "requirement_spec.constraints"
+    },
+    "traceability_summary": {
+      "source_input_count": 2,
+      "source_type_distribution": {
+        "manual": 1,
+        "openapi": 1
+      },
+      "intent_count": 2,
+      "point_count": 3,
+      "linked_point_count": 2,
+      "coverage_row_count": 2,
+      "gap_count": 0,
+      "gap_point_count": 0,
+      "partial_count": 0,
+      "covered_count": 2,
+      "orphan_point_count": 0,
+      "orphan_step_count": 0,
+      "source_covered_count": 2,
+      "source_gap_count": 0,
+      "partial_source_ids": [],
+      "uncovered_source_ids": [],
+      "source_coverage_status": "covered",
+      "intent_coverage_status": "covered",
+      "status": "covered",
+      "unmapped_changed_area_count": 0,
+      "unmapped_changed_areas": [],
+      "orphan_point_keys": [],
+      "orphan_step_keys": [],
+      "coverage_breakdown": {
+        "covered": 2,
+        "partial": 0,
+        "gap": 0,
+        "orphan": 0
+      },
+      "source_breakdown": {
+        "covered": 2,
+        "partial": 0,
+        "gap": 0,
+        "total": 2
+      },
+      "intent_breakdown": {
+        "covered": 2,
+        "partial": 0,
+        "gap": 0,
+        "orphan": 0,
+        "status": "covered"
+      },
+      "traceability_completeness": 1.0
     }
   },
   "generated_script": {
     "version": "GeneratedScriptV1",
     "framework": "playwright",
     "language": "python",
-    "case_id": "TC-PRODUCT-GEN-001",
+    "case_id": "tc-product-GEN-001",
     "page": "product",
     "filename": "tc_product_gen_001.generated.py",
     "entrypoint": "test_tc_product_gen_001",
-    "script_code": "import os\nfrom pathlib import Path\n\nimport pytest\nimport yaml\nfrom playwright.sync_api import expect\n\nCASE = {\n  \"version\": \"v4\",\n  \"id\": \"TC-PRODUCT-GEN-001\",\n  \"title\": \"生成商品用例\",\n  \"module\": \"product\",\n  \"priority\": \"P1\",\n  \"tags\": [\n    \"product\"\n  ],\n  \"owner\": \"qa-team\",\n  \"status\": \"automated\",\n  \"description\": \"生成的商品用例\",\n  \"requirement\": [\n    \"验证商品列表展示\",\n    \"测试点(P2): 验证商品列表展示\",\n    \"测试点(P1): [openapi] OpenAPI\"\n  ],\n  \"data\": {},\n  \"execution\": {\n    \"runner\": \"playwright\",\n    \"page\": \"product\",\n    \"variables\": {},\n    \"steps\": [\n      {\n        \"action\": \"login\"\n      },\n      {\n        \"action\": \"assert_visible\",\n        \"target\": \"product_list_title\"\n      }\n    ]\n  }\n}\n\ndef _load_page_object(page_name: str) -> dict:\n    repo_root = Path(__file__).resolve().parents[2]\n    page_object_path = repo_root / 'assets' / 'page-objects' / 'web' / f'{page_name}.page-object.yaml'\n    return yaml.safe_load(page_object_path.read_text(encoding='utf-8')) or {}\n\ndef _resolve_locator(page, element: dict):\n    locator_type = str(element.get('locator_type', '')).strip()\n    locator_value = element.get('locator_value')\n    role = element.get('role')\n    if locator_type == 'placeholder':\n        return page.get_by_placeholder(locator_value)\n    if locator_type == 'text':\n        return page.get_by_text(locator_value)\n    if locator_type == 'css':\n        return page.locator(locator_value)\n    if locator_type == 'role':\n        return page.get_by_role(role, name=locator_value)\n    raise ValueError(f'Unsupported locator_type: {locator_type}')\n\ndef _login(page):\n    login_url = os.getenv('BASE_URL', 'http://localhost:5173/login#/login')\n    username = os.getenv('TEST_USERNAME', 'admin')\n    password = os.getenv('TEST_PASSWORD', 'macro123')\n    page.goto(login_url, wait_until='domcontentloaded', timeout=60000)\n    page.get_by_placeholder('请输入用户名').fill(username)\n    page.get_by_placeholder('请输入密码').fill(password)\n    page.get_by_role('button', name='登录').click()\n\n@pytest.mark.generated\ndef test_tc_product_gen_001(page):\n    execution = CASE.get('execution', {})\n    page_name = execution.get('page')\n    page_object = _load_page_object(page_name)\n    elements = page_object.get('elements', {})\n    for step in execution.get('steps', []):\n        action = step.get('action')\n        target = step.get('target')\n        value = step.get('value')\n        if action == 'login':\n            _login(page)\n            continue\n        if action == 'goto':\n            page.goto(str(value), wait_until='domcontentloaded', timeout=60000)\n            continue\n        if action == 'assert_url':\n            expect(page).to_have_url(str(value))\n            continue\n        if target not in elements:\n            raise ValueError(f'Missing target in page object: {target}')\n        locator = _resolve_locator(page, elements[target])\n        if action == 'click':\n            locator.click()\n        elif action == 'fill':\n            locator.fill(str(value))\n        elif action == 'wait_for':\n            expect(locator).to_be_visible(timeout=10000)\n        elif action == 'assert_visible':\n            expect(locator).to_be_visible(timeout=10000)\n        else:\n            raise ValueError(f'Unsupported action: {action}')\n",
+    "script_code": "import os\nfrom pathlib import Path\n\nimport pytest\nimport yaml\nfrom playwright.sync_api import expect\n\nCASE = {\n  \"version\": \"v4\",\n  \"id\": \"tc-product-GEN-001\",\n  \"title\": \"商品页-列表展示-基础生成-执行验证-关键元素可见\",\n  \"module\": \"product\",\n  \"priority\": \"P1\",\n  \"tags\": [\n    \"product\"\n  ],\n  \"owner\": \"qa-team\",\n  \"status\": \"automated\",\n  \"description\": \"根据需求自动生成的商品列表测试用例。\",\n  \"requirement\": [\n    \"验证商品列表展示\",\n    \"[P2] 验证商品列表展示\",\n    \"[P1] [openapi] OpenAPI\",\n    \"原始需求: 验证商品列表展示\\n整体优先级: P2\\n结构化测试点:\\n- [intent-01](functional/P2) 验证商品列表展示; steps=open:product,assert; deps=-; sources=source-01\\n- [intent-02](api/P1) [openapi] OpenAPI; steps=open:product,api,assert; deps=-; sources=source-02\\n请基于以上测试点生成稳定可执行 YAML。\"\n  ],\n  \"data\": {},\n  \"execution\": {\n    \"runner\": \"playwright\",\n    \"page\": \"product\",\n    \"variables\": {},\n    \"steps\": [\n      {\n        \"action\": \"login\"\n      },\n      {\n        \"action\": \"assert_visible\",\n        \"target\": \"product_list_title\"\n      }\n    ]\n  }\n}\n\ndef _load_page_object(page_name: str) -> dict:\n    repo_root = Path(__file__).resolve().parents[2]\n    page_object_path = repo_root / 'assets' / 'page-objects' / 'web' / f'{page_name}.page-object.yaml'\n    return yaml.safe_load(page_object_path.read_text(encoding='utf-8')) or {}\n\ndef _resolve_locator(page, element: dict):\n    locator_type = str(element.get('locator_type', '')).strip()\n    locator_value = element.get('locator_value')\n    role = element.get('role')\n    if locator_type == 'placeholder':\n        return page.get_by_placeholder(locator_value)\n    if locator_type == 'text':\n        return page.get_by_text(locator_value)\n    if locator_type == 'css':\n        return page.locator(locator_value)\n    if locator_type == 'role':\n        return page.get_by_role(role, name=locator_value)\n    raise ValueError(f'Unsupported locator_type: {locator_type}')\n\ndef _login(page):\n    login_url = os.getenv('BASE_URL', 'http://localhost:5173/login#/login')\n    username = os.getenv('TEST_USERNAME', 'admin')\n    password = os.getenv('TEST_PASSWORD', 'macro123')\n    page.goto(login_url, wait_until='domcontentloaded', timeout=60000)\n    page.get_by_placeholder('请输入用户名').fill(username)\n    page.get_by_placeholder('请输入密码').fill(password)\n    page.get_by_role('button', name='登录').click()\n\n@pytest.mark.generated\ndef test_tc_product_gen_001(page):\n    execution = CASE.get('execution', {})\n    page_name = execution.get('page')\n    page_object = _load_page_object(page_name)\n    elements = page_object.get('elements', {})\n    for step in execution.get('steps', []):\n        action = step.get('action')\n        target = step.get('target')\n        value = step.get('value')\n        if action == 'login':\n            _login(page)\n            continue\n        if action == 'goto':\n            page.goto(str(value), wait_until='domcontentloaded', timeout=60000)\n            continue\n        if action == 'assert_url':\n            expect(page).to_have_url(str(value))\n            continue\n        if target not in elements:\n            raise ValueError(f'Missing target in page object: {target}')\n        locator = _resolve_locator(page, elements[target])\n        if action == 'click':\n            locator.click()\n        elif action == 'fill':\n            locator.fill(str(value))\n        elif action == 'wait_for':\n            expect(locator).to_be_visible(timeout=10000)\n        elif action == 'assert_visible':\n            expect(locator).to_be_visible(timeout=10000)\n        else:\n            raise ValueError(f'Unsupported action: {action}')\n",
     "metadata": {
       "step_count": 2,
       "actions": [
@@ -357,7 +631,9 @@
   "design_generation": {
     "generator": "test-design-agent",
     "fallback_used": false,
-    "fallback_reason": ""
+    "fallback_reason": "",
+    "ai_status": "generated",
+    "change_source": "ai"
   },
   "agent_pipeline": [
     "requirement-parser-agent",
@@ -369,8 +645,8 @@
     "failure-triage-agent",
     "self-healing-advisor-agent"
   ],
-  "started_at": "2026-03-30T09:56:54.845393+00:00",
-  "finished_at": "2026-03-30T09:56:54.845453+00:00",
+  "started_at": "2026-04-05T07:05:25.669291+00:00",
+  "finished_at": "2026-04-05T07:05:25.669556+00:00",
   "runner_exit_code": null,
   "metrics": {
     "passed": 0,
@@ -394,7 +670,7 @@
   "evidence": {
     "version": "EvidenceManifestV1",
     "schema_version": "evidence-manifest.v1",
-    "generated_at": "2026-03-30T09:56:54.845451+00:00",
+    "generated_at": "2026-04-05T07:05:25.669553+00:00",
     "artifact_root": "",
     "metadata": {},
     "screenshots": [],
@@ -413,18 +689,18 @@
   "execution_record": {
     "version": "ExecutionRecordV1",
     "schema_version": "execution-record.v1",
-    "run_id": "TC-PRODUCT-GEN-001:2026-03-30T09:56:54.845393+00:00",
-    "case_id": "TC-PRODUCT-GEN-001",
+    "run_id": "tc-product-GEN-001:2026-04-05T07:05:25.669291+00:00",
+    "case_id": "tc-product-GEN-001",
     "project": "default",
     "source": "manual",
     "mode": "generate_only",
     "status": "generated",
-    "started_at": "2026-03-30T09:56:54.845393+00:00",
-    "finished_at": "2026-03-30T09:56:54.845453+00:00",
+    "started_at": "2026-04-05T07:05:25.669291+00:00",
+    "finished_at": "2026-04-05T07:05:25.669556+00:00",
     "step_summary": {
       "page": "product",
-      "requirement_count": 3,
-      "total_steps": 2,
+      "requirement_count": 4,
+      "total_steps": 3,
       "action_types": [
         "click",
         "login"
@@ -448,12 +724,168 @@
     },
     "duration_seconds": null,
     "artifact_dir": "",
-    "metadata": {}
+    "metadata": {
+      "runner": "playwright",
+      "runner_profile": {
+        "runner": "playwright",
+        "display_name": "Web Playwright Runner",
+        "channel": "web",
+        "framework": "playwright",
+        "language": "python",
+        "execution_supported": true,
+        "generation_supported": true,
+        "environment_pool": "web-browser-default",
+        "artifact_mode": "manifest_first",
+        "root_path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/runners/web-playwright-python"
+      },
+      "ai_observability": {
+        "trace_id": "ai-trace-f6ae9138218866ee",
+        "prompt_version": "requirement-parser.prompt.v1.0.0",
+        "model": "rule-engine",
+        "fallback_used": true,
+        "fallback_reason": "mode_disabled",
+        "instructions_version": "requirement-parser.instructions.v1.0.0"
+      },
+      "multisource": {
+        "source_summary": {
+          "source_count": 2,
+          "source_types": [
+            "manual",
+            "openapi"
+          ],
+          "has_multisource_inputs": true
+        },
+        "page_resolution": {
+          "page": "product",
+          "page_candidates": [],
+          "candidate_details": [],
+          "conflict_detected": false,
+          "conflict_candidates": [],
+          "conflict_candidate_details": [],
+          "chosen_source_id": "",
+          "chosen_source_type": "",
+          "chosen_candidate": {
+            "page": "product",
+            "score": 0,
+            "vote_count": 0,
+            "source_types": [],
+            "source_ids": [],
+            "confidence": 0.0
+          },
+          "resolution_strategy": "single_candidate_or_fallback",
+          "source_priority_rules": [
+            {
+              "source_type": "openapi",
+              "priority_weight": 5
+            },
+            {
+              "source_type": "git_diff",
+              "priority_weight": 4
+            },
+            {
+              "source_type": "defect_ticket",
+              "priority_weight": 3
+            },
+            {
+              "source_type": "prd",
+              "priority_weight": 2
+            },
+            {
+              "source_type": "user_story",
+              "priority_weight": 2
+            },
+            {
+              "source_type": "input_source",
+              "priority_weight": 1
+            }
+          ],
+          "reason": "fallback inferred from requirement text",
+          "chosen_reason": "",
+          "rejected_reasons": []
+        },
+        "traceability_summary": {
+          "source_input_count": 2,
+          "source_type_distribution": {
+            "manual": 1,
+            "openapi": 1
+          },
+          "intent_count": 2,
+          "point_count": 3,
+          "linked_point_count": 2,
+          "coverage_row_count": 2,
+          "gap_count": 0,
+          "gap_point_count": 0,
+          "partial_count": 0,
+          "covered_count": 2,
+          "orphan_point_count": 0,
+          "orphan_step_count": 0,
+          "source_covered_count": 2,
+          "source_gap_count": 0,
+          "partial_source_ids": [],
+          "uncovered_source_ids": [],
+          "source_coverage_status": "covered",
+          "intent_coverage_status": "covered",
+          "status": "covered",
+          "unmapped_changed_area_count": 0,
+          "unmapped_changed_areas": [],
+          "orphan_point_keys": [],
+          "orphan_step_keys": [],
+          "coverage_breakdown": {
+            "covered": 2,
+            "partial": 0,
+            "gap": 0,
+            "orphan": 0
+          },
+          "source_breakdown": {
+            "covered": 2,
+            "partial": 0,
+            "gap": 0,
+            "total": 2
+          },
+          "intent_breakdown": {
+            "covered": 2,
+            "partial": 0,
+            "gap": 0,
+            "orphan": 0,
+            "status": "covered"
+          },
+          "traceability_completeness": 1.0
+        },
+        "change_impact": {
+          "changed_modules": [],
+          "changed_files": [],
+          "changed_areas": [],
+          "affected_intent_ids": [],
+          "impacted_source_ids": [
+            "source-02"
+          ],
+          "suggested_regression_scope": [
+            "product"
+          ],
+          "risk_hint": "no_git_diff",
+          "impact_score": 0,
+          "risk_signals": [],
+          "factors": [],
+          "top_factor": {},
+          "recommended_regression_scope": [],
+          "why_manual_review": "",
+          "why_blocked": "",
+          "explanation": "changed_files=0, changed_areas=0, signals=0, top_factor=-"
+        }
+      },
+      "run_state": {
+        "status": "generated",
+        "status_name": "仅生成"
+      }
+    }
   },
   "execution_record_meta": {
     "version": "ExecutionRecordResolutionMetaV1",
     "source": "generated",
     "manifest_record_count": 0,
+    "manifest_record_path": "",
+    "manifest_status": "no_entry",
+    "resolution_reason": "generated_without_execution_artifacts",
     "compat_builder_enabled": true,
     "compat_builder_used": false,
     "strict_violation": false
@@ -503,14 +935,12 @@
     "metadata": {
       "source": "failure-triage-agent",
       "category": "unknown",
-      "failure_source": "unknown",
-      "history_enriched": true,
-      "history_sample_size": 0
+      "failure_source": "unknown"
     },
     "cluster_id": "cluster-e9f278d4a30a",
     "occurrence_count": 1,
-    "first_seen_at": "2026-03-30T09:56:54.845393+00:00",
-    "last_seen_at": "2026-03-30T09:56:54.845393+00:00",
+    "first_seen_at": "2026-04-05T07:05:25.669291+00:00",
+    "last_seen_at": "2026-04-05T07:05:25.669291+00:00",
     "similar_cases": []
   },
   "self_healing_advice": {
@@ -555,7 +985,7 @@
       {
         "factor": "case_complexity",
         "score": 0,
-        "reason": "steps=2"
+        "reason": "steps=3"
       },
       {
         "factor": "triage_severity",

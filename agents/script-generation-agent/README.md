@@ -15,7 +15,7 @@ python -m src.index --input /tmp/script_generation_payload.json
   "framework": "playwright",
   "language": "python",
   "case": {
-    "id": "TC-PRODUCT-001",
+    "id": "tc-product-001",
     "execution": {
       "page": "product",
       "steps": [

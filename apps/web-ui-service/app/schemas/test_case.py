@@ -72,6 +72,11 @@ class BatchTagsUpdatePayload(BaseModel):
     mode: str = Field(default="replace", pattern="^(replace|append)$")
 
 
+class BatchStatusUpdatePayload(BaseModel):
+    ids: list[int] = Field(default_factory=list)
+    status: str = Field(..., max_length=20)
+
+
 class BatchExportPayload(BaseModel):
     ids: list[int] = Field(default_factory=list)
     format: str = Field(default="json", pattern="^(json|csv)$")

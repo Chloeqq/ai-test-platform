@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 from pathlib import Path
 from copy import deepcopy
 from typing import Any
@@ -8,6 +10,19 @@ from runner.page_object_validator import validate_page_object_schema
 from runner.paths import AI_GENERATED_CASES_ROOT, ASSET_TEMPLATES_ROOT, PAGE_OBJECTS_ROOT, SMOKE_TEST_CASES_ROOT, TEST_CASES_ROOT
 from runner.schema_validator import validate_testcase_schema
 from runner.yaml_loader import load_yaml_file
+
+try:
+    from shared_backend.case_ids import build_case_id, build_case_metadata, match_case_id, next_case_sequence, normalize_case_id
+    from shared_backend.case_rules import CaseRuleViolation, enrich_case_metadata, validate_case_payload
+except Exception:  # pragma: no cover - runner keeps fallback usability
+    build_case_id = None
+    build_case_metadata = None
+    match_case_id = None
+    next_case_sequence = None
+    normalize_case_id = None
+    CaseRuleViolation = ValueError
+    enrich_case_metadata = None
+    validate_case_payload = None
 
 
 def dump_yaml(data: dict, output_path: Path) -> Path:
@@ -95,6 +110,22 @@ def infer_smoke_targets(page_object: dict) -> tuple[str | None, str | None]:
     return menu_target, assert_target
 
 
+def _ensure_structured_title(*, page: str, module: str, title: str) -> str:
+    normalized = str(title or "").strip()
+    segments = [segment.strip() for segment in normalized.split("-") if segment.strip()]
+    if len(segments) >= 4:
+        return normalized
+    if callable(build_case_metadata):
+        metadata = build_case_metadata(page=page, module=module, title=title)
+        page_name = str(metadata.get("page_name", page)).strip() or page
+        module_name = str(metadata.get("module_name", module)).strip() or module
+    else:
+        page_name = str(page or "目标页面").strip()
+        module_name = str(module or "核心流程").strip()
+    outcome = normalized or "关键结果正确"
+    return f"{page_name}-{module_name}-基础场景-执行验证-{outcome}"
+
+
 def resolve_test_case_dir(kind: str, output_dir: Path | None = None) -> Path:
     if output_dir:
         return output_dir
@@ -107,6 +138,58 @@ def resolve_test_case_dir(kind: str, output_dir: Path | None = None) -> Path:
         return TEST_CASES_ROOT / "regression"
 
     raise ValueError(f"Unsupported test case kind: {kind}")
+
+
+def _allocate_platform_case_id(test_case: dict[str, Any], *, kind: str, output_dir: Path | None = None) -> str:
+    if not callable(build_case_id) or not callable(next_case_sequence) or not callable(build_case_metadata):
+        return str(test_case.get("id", "")).strip()
+    source_dir = resolve_test_case_dir(kind, output_dir=output_dir)
+    existing_case_ids = [path.stem for path in source_dir.glob("*.yaml")] if source_dir.exists() else []
+    current_id = normalize_case_id(str(test_case.get("id", "")).strip(), fallback="") if callable(normalize_case_id) else str(test_case.get("id", "")).strip()
+    current_match = match_case_id(current_id) if callable(match_case_id) and current_id else None
+
+    execution = test_case.get("execution") if isinstance(test_case.get("execution"), dict) else {}
+    metadata = build_case_metadata(
+        page=str(execution.get("page", "")).strip() or str(test_case.get("page", "")).strip(),
+        module=str(test_case.get("module", "")).strip(),
+        title=str(test_case.get("title", "")).strip(),
+        description=str(test_case.get("description", "")).strip(),
+        tags=test_case.get("tags"),
+        source_hint=str(test_case.get("source", "")).strip() or ("AI" if kind == "ai-generated" else "MN"),
+        legacy=kind != "ai-generated" and str(test_case.get("source", "")).strip().lower() == "imp",
+    )
+    if current_match:
+        same_prefix = all(
+            [
+                current_match.group("project").lower() == metadata["project"],
+                current_match.group("client").lower() == metadata["client"],
+                current_match.group("page").lower() == metadata["page_code"],
+                current_match.group("module").lower() == metadata["module_code"],
+                current_match.group("case_type").lower() == metadata["case_type"],
+                current_match.group("source").lower() == metadata["source"],
+            ]
+        )
+        if same_prefix:
+            return current_id
+
+    sequence = next_case_sequence(
+        existing_case_ids=existing_case_ids,
+        page_code=metadata["page_code"],
+        module_code=metadata["module_code"],
+        project=metadata["project"],
+        client=metadata["client"],
+        case_type=metadata["case_type"],
+        source=metadata["source"],
+    )
+    return build_case_id(
+        project=metadata["project"],
+        client=metadata["client"],
+        page_code=metadata["page_code"],
+        module_code=metadata["module_code"],
+        case_type=metadata["case_type"],
+        source=metadata["source"],
+        sequence=sequence,
+    )
 
 
 def load_test_case_for_edit(test_case_path: Path) -> dict:
@@ -161,6 +244,7 @@ def build_test_case(
     assert_target: str | None = None,
     page_objects_dir: Path | None = None,
 ) -> dict:
+    final_module = module or ("auth" if page == "login" else page)
     steps = build_standard_steps(
         page=page,
         page_objects_dir=page_objects_dir,
@@ -177,8 +261,8 @@ def build_test_case(
     test_case = {
         "version": "v4",
         "id": case_id,
-        "title": title,
-        "module": module or ("auth" if page == "login" else page),
+        "title": _ensure_structured_title(page=page, module=final_module, title=title),
+        "module": final_module,
         "priority": priority,
         "tags": final_tags,
         "owner": "qa-team",
@@ -193,11 +277,26 @@ def build_test_case(
             "steps": steps,
         },
     }
+    if callable(enrich_case_metadata):
+        test_case = enrich_case_metadata(test_case)
+    if callable(validate_case_payload):
+        errors = validate_case_payload(test_case)
+        if errors:
+            raise CaseRuleViolation("; ".join(errors))
     validate_testcase_schema(test_case)
     return test_case
 
 
 def save_test_case(test_case: dict, kind: str, output_dir: Path | None = None) -> Path:
+    if kind == "ai-generated":
+        test_case = deepcopy(test_case)
+        test_case["id"] = _allocate_platform_case_id(test_case, kind=kind, output_dir=output_dir)
+    if callable(enrich_case_metadata):
+        test_case = enrich_case_metadata(test_case)
+    if callable(validate_case_payload):
+        errors = validate_case_payload(test_case)
+        if errors:
+            raise CaseRuleViolation("; ".join(errors))
     validate_testcase_schema(test_case)
     target_dir = resolve_test_case_dir(kind, output_dir=output_dir)
     return dump_yaml(test_case, target_dir / f"{test_case['id']}.yaml")
@@ -308,10 +407,15 @@ def scaffold_page_assets(
         apply_scaffold_element(page_object, element, smoke_targets)
 
     page_object_path = save_page_object(page_object, output_dir=page_objects_dir)
+    default_case_id = (
+        build_case_id(page=page, module=page, case_type="SM", source="MN", sequence=1)
+        if callable(build_case_id)
+        else f"ATP-WEB-{page.upper()}-CORE-SM-MN-0001"
+    )
     test_case = build_test_case(
         kind="smoke",
         page=page,
-        case_id=f"TC-{page.upper()}-001",
+        case_id=default_case_id,
         title=title,
         description=description or f"验证{title}可以正常打开",
         requirement=requirement,

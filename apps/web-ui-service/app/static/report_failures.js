@@ -20,12 +20,13 @@
   }
 
   function formatTime(value) {
-    if (!value) return "-";
-    try {
-      return new Date(value).toLocaleString("zh-CN");
-    } catch (_error) {
-      return String(value);
-    }
+    if (typeof window.platformFormatDateTime === "function") return window.platformFormatDateTime(value);
+    return String(value || "").trim() || "-";
+  }
+
+  function displayCaseId(value) {
+    if (typeof window.platformDisplayCaseId === "function") return window.platformDisplayCaseId(value);
+    return String(value || "").trim() || "-";
   }
 
   function renderDefects(defects) {
@@ -74,7 +75,7 @@
     const manifestPath = String(item.manifest_path || "").trim();
     return `
       <li class="failure-item" data-case-id="${escapeHtml(item.case_id || "")}">
-        <div class="failure-title">${escapeHtml(item.case_id || "-")} · ${escapeHtml(item.case_title || "-")}</div>
+        <div class="failure-title">${escapeHtml(displayCaseId(item.case_id || "-"))} · ${escapeHtml(item.case_title || "-")}</div>
         <div class="failure-meta">
           <span>风险：${escapeHtml(item.risk_level || "-")}</span>
           <span>分类：${escapeHtml(item.failure_category || "-")}</span>

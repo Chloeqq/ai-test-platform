@@ -50,12 +50,33 @@
   }
 
   function formatTime(value) {
-    if (!value) return "-";
-    try {
-      return new Date(value).toLocaleString("zh-CN");
-    } catch (_error) {
-      return String(value);
-    }
+    if (typeof window.platformFormatDateTime === "function") return window.platformFormatDateTime(value);
+    return String(value || "").trim() || "-";
+  }
+
+  function displayCaseId(value) {
+    if (typeof window.platformDisplayCaseId === "function") return window.platformDisplayCaseId(value);
+    return String(value || "").trim() || "-";
+  }
+
+  function displayModule(value) {
+    if (typeof window.platformDisplayModule === "function") return window.platformDisplayModule(value);
+    return String(value || "").trim() || "-";
+  }
+
+  function displayTagList(values) {
+    if (typeof window.platformDisplayTagList === "function") return window.platformDisplayTagList(values);
+    return Array.isArray(values) ? values.join(", ") : "-";
+  }
+
+  function displayTestType(value) {
+    if (typeof window.platformDisplayTestType === "function") return window.platformDisplayTestType(value);
+    return String(value || "").trim() || "-";
+  }
+
+  function displayStatus(value) {
+    if (typeof window.platformDisplayStatus === "function") return window.platformDisplayStatus(value);
+    return String(value || "").trim() || "-";
   }
 
   function resultClass(status) {
@@ -189,14 +210,14 @@
     const rows = [
       ["名称", basic.name],
       ["产品线", basic.product_line],
-      ["模块", basic.module],
+      ["模块", displayModule(basic.module)],
       ["优先级", basic.priority],
-      ["测试类型", basic.test_type || "ui"],
-      ["标签", (basic.tags || []).join(", ") || "-"],
-      ["标记", (basic.markers || []).join(", ") || "-"],
+      ["测试类型", displayTestType(basic.test_type || "ui")],
+      ["标签", displayTagList(basic.tags || [])],
+      ["标记", displayTagList(basic.markers || [])],
       ["创建人", basic.creator],
       ["Pytest路径", basic.pytest_path || "-"],
-      ["状态", basic.status || "active"],
+      ["状态", displayStatus(basic.status || "active")],
       ["数据驱动", basic.data_config_enabled ? "已启用" : "未启用"],
       ["最后执行结果", basic.last_execution_result],
       ["创建时间", formatTime(basic.created_at)],
@@ -345,7 +366,7 @@
     }
     const payload = await response.json();
     const basic = payload.basic || {};
-    els.detailTitle.textContent = `用例详情 #${basic.id || caseId} - ${basic.name || ""}`;
+    els.detailTitle.textContent = `用例详情 · ${displayCaseId(basic.id || caseId)} - ${basic.name || ""}`;
     renderBasicInfo(basic);
     applyAssetMetaToForm(basic);
     applyDataConfigToForm(payload.data_config || {});

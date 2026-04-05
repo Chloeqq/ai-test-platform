@@ -22,6 +22,7 @@ def test_openapi_spec_declares_health_and_orchestrate_paths():
     assert "/healing/preview" in paths
     assert "/reports/latest" in paths
     assert "/reports/{case_id}" in paths
+    assert "/runners/catalog" in paths
     assert "/assets/page-objects" in paths
     assert "/assets/page-objects/{page}/elements" in paths
     assert "/assets/test-cases/sync" in paths
@@ -76,6 +77,7 @@ def test_openapi_spec_requires_page_and_requirement_in_request_body():
     assert request_schema["additionalProperties"] is False
     assert request_schema["properties"]["mode"]["enum"] == ["generate_only", "generate_and_run"]
     assert request_schema["properties"]["source"]["enum"] == ["manual", "ai", "regression"]
+    assert request_schema["properties"]["runner"]["enum"] == ["playwright", "api", "mobile"]
 
 
 def test_openapi_spec_declares_asset_management_request_schemas():
@@ -100,6 +102,8 @@ def test_openapi_spec_declares_asset_management_request_schemas():
     assert "RequirementSpecV1" in schemas
     assert "RequirementInputSourceV1" in schemas
     assert "RequirementInputSource" in schemas
+    assert "RunnerProfile" in schemas
+    assert "RunnerCatalogResponse" in schemas
     assert "RequirementTestIntentV1" in schemas
     assert "RequirementAmbiguityV1" in schemas
     assert "RequirementBusinessRuleV1" in schemas
@@ -185,6 +189,10 @@ def test_openapi_spec_declares_pytest_and_failure_analysis_fields():
     assert "execution_record_files" in evidence_schema["properties"]
     assert "self_healing_result_files" in evidence_schema["properties"]
     assert evidence_schema["properties"]["version"]["const"] == "EvidenceManifestV1"
+    meta_schema = spec["components"]["schemas"]["ExecutionRecordResolutionMetaV1"]
+    assert "manifest_record_path" in meta_schema["properties"]
+    assert "manifest_status" in meta_schema["properties"]
+    assert "resolution_reason" in meta_schema["properties"]
 
 
 def _load_openapi_spec() -> dict:

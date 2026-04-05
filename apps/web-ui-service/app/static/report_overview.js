@@ -20,12 +20,13 @@
   }
 
   function formatTime(value) {
-    if (!value) return "-";
-    try {
-      return new Date(value).toLocaleString("zh-CN");
-    } catch (_error) {
-      return String(value);
-    }
+    if (typeof window.platformFormatDateTime === "function") return window.platformFormatDateTime(value);
+    return String(value || "").trim() || "-";
+  }
+
+  function displayCaseId(value) {
+    if (typeof window.platformDisplayCaseId === "function") return window.platformDisplayCaseId(value);
+    return String(value || "").trim() || "-";
   }
 
   function formatFailureSource(value) {
@@ -49,7 +50,7 @@
     const reviewLabel = item.requires_manual_review ? "需要" : "否";
     return `
       <tr>
-        <td>${escapeHtml(item.case_id || "-")}</td>
+        <td>${escapeHtml(displayCaseId(item.case_id || "-"))}</td>
         <td>${escapeHtml(item.summary || "-")}</td>
         <td>${escapeHtml(item.risk_level || "-")}</td>
         <td title="${escapeHtml(item.failure_source || "")}">${escapeHtml(sourceLabel)}</td>

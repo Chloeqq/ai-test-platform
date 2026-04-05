@@ -1,2 +1,1 @@
-from .agent import TestDesignAgent
-
+from .agent import TestDesignAgent as TestDesignAgent

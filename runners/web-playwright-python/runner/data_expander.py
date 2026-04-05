@@ -12,7 +12,6 @@ def expand_test_case(test_case: dict) -> list[dict]:
         return [test_case]
 
     keys = list(data.keys())
-    values = list(data.values())
     lengths = []
 
     for key, value in data.items():

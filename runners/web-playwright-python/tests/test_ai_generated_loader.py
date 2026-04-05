@@ -23,7 +23,8 @@ def test_ai_generated_loader_only_reads_ai_generated_directory():
     test_cases = load_ai_generated_test_cases()
 
     assert test_cases, "No ai-generated test cases found"
-    assert all(case["id"].startswith("TC-") for case in test_cases)
+    assert all(case["id"] == case["id"].lower() for case in test_cases)
+    assert all(len(case["id"].split("-")) >= 3 for case in test_cases)
     assert all(case["execution"]["page"] for case in test_cases)
     assert all("smoke" not in case.get("tags", []) for case in test_cases)
 

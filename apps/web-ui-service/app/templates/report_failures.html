@@ -17,15 +17,15 @@
   <p>{{ page_description }}</p>
 
   <nav class="report-tabs">
-    <a href="/report">Overview</a>
-    <a class="active" href="/report/failures">Failures</a>
-    <a href="/report/context">Context</a>
-    <a href="/report/performance">Performance</a>
-    <a href="/report/allure">Allure</a>
+    <a href="/execution/results">Overview</a>
+    <a class="active" href="/execution/results/failures">Failures</a>
+    <a href="/execution/results/context">Context</a>
+    <a href="/execution/results/performance">Performance</a>
+    <a href="/execution/results/allure">Allure</a>
   </nav>
 
   <section class="report-filters">
-    <input id="rp-filter-case" placeholder="用例ID">
+    <input id="rp-filter-case" placeholder="用例 ID">
     <input id="rp-filter-keyword" placeholder="关键词/缺陷ID">
     <select id="rp-filter-defect">
       <option value="all">缺陷状态（全部）</option>
@@ -43,5 +43,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/report_failures.js"></script>
+<script src="/static/report_failures.js?v=20260402-report-failures-1"></script>
 {% endblock %}

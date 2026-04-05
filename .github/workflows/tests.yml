@@ -11,17 +11,17 @@ on:
       suite:
         description: Test suite to run
         required: true
-        default: contract
+        default: static-baseline
         type: choice
         options:
-          - contract
+          - static-baseline
           - e2e-smoke
           - e2e-generated
           - all
 
 jobs:
-  contract-and-integration:
-    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'contract' || inputs.suite == 'all'
+  static-baseline:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'static-baseline' || inputs.suite == 'all'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,11 +35,8 @@ jobs:
       - name: Install root dev dependencies
         run: make install-dev
 
-      - name: Run OpenAPI contract tests
-        run: make test-openapi
-
-      - name: Run contract and integration tests
-        run: make test
+      - name: Run static baseline (ruff + mypy + pytest)
+        run: make static-baseline
 
   e2e-smoke:
     if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'e2e-smoke' || inputs.suite == 'all')

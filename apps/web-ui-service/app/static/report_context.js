@@ -22,6 +22,11 @@
       .join("");
   }
 
+  function displayRunId(value) {
+    if (typeof window.platformDisplayRunId === "function") return window.platformDisplayRunId(value);
+    return String(value || "").trim() || "-";
+  }
+
   async function loadContext() {
     const resp = await fetch("/api/report/context");
     if (!resp.ok) {
@@ -49,7 +54,7 @@
       ["访问地址", exec.base_url || "-"],
       ["浏览器", exec.browser || "-"],
       ["运行器", exec.runner || "-"],
-      ["最新 Run ID", exec.latest_run_id || "-"],
+      ["最新 Run ID", displayRunId(exec.latest_run_id || "-")],
     ]);
   }
 

@@ -7,7 +7,7 @@ EXAMPLE_REQUIREMENT = """
 
 EXAMPLE_OUTPUT = {
     "version": "v4",
-    "id": "TC-PRODUCT-001",
+    "id": "tc-product-001",
     "title": "商品列表页面加载",
     "module": "product",
     "priority": "P0",

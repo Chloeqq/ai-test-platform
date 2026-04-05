@@ -33,6 +33,11 @@ except Exception:  # pragma: no cover - keep runner usable when shared package u
     normalize_evidence_manifest_v1 = None
     normalize_execution_record_v1 = None
 
+try:
+    from shared_backend.case_ids import normalize_case_id
+except Exception:  # pragma: no cover - keep runner usable when shared package unavailable
+    normalize_case_id = None
+
 
 def resolve_artifacts_dir() -> Path:
     raw_path = os.getenv("PLAYWRIGHT_ARTIFACTS_DIR", "").strip()
@@ -186,7 +191,10 @@ def resolve_case_id_from_request(request) -> str:
     test_case = getattr(getattr(node, "callspec", None), "params", {}).get("test_case")
     if not isinstance(test_case, dict):
         return ""
-    return str(test_case.get("id", "")).strip()
+    raw = str(test_case.get("id", "")).strip()
+    if callable(normalize_case_id):
+        return normalize_case_id(raw)
+    return raw
 
 
 def build_execution_record(
@@ -424,9 +432,11 @@ def resolve_case_yaml_path(request) -> Path | None:
     case_id = str(test_case.get("id", "")).strip()
     if not case_id:
         return None
-    candidate = Path(__file__).resolve().parents[2] / "assets" / "test-cases" / "ai-generated" / f"{case_id}.yaml"
-    if candidate.exists():
-        return candidate.resolve()
+    normalized_case_id = normalize_case_id(case_id) if callable(normalize_case_id) else case_id
+    assets_root = Path(__file__).resolve().parents[2] / "assets" / "test-cases"
+    for candidate in [assets_root / "ai-generated" / f"{normalized_case_id}.yaml", *sorted(assets_root.rglob(f"{normalized_case_id}.yaml"))]:
+        if candidate.exists():
+            return candidate.resolve()
     return None
 
 
@@ -609,14 +619,16 @@ def extract_allure_test_metadata(request) -> dict[str, object]:
     execution = test_case.get("execution", {})
     title = str(test_case.get("title", "")).strip()
     case_id = str(test_case.get("id", "")).strip()
+    normalized_case_id = normalize_case_id(case_id) if callable(normalize_case_id) and case_id else case_id
     page_name = str(execution.get("page", "")).strip()
     tags = test_case.get("tags", [])
     if not isinstance(tags, list):
         tags = []
 
     metadata: dict[str, object] = {
-        "title": title or request.node.name,
-        "case_id": case_id,
+        "title": normalized_case_id or title or request.node.name,
+        "case_title": title,
+        "case_id": normalized_case_id,
         "page": page_name,
         "tags": [str(tag).strip() for tag in tags if str(tag).strip()],
         "base_url": os.getenv("BASE_URL", "http://localhost:5173/login#/login"),
@@ -631,6 +643,7 @@ def apply_allure_test_metadata(metadata: dict[str, object]) -> bool:
         return False
     try:
         title = str(metadata.get("title", "")).strip()
+        case_title = str(metadata.get("case_title", "")).strip()
         case_id = str(metadata.get("case_id", "")).strip()
         page_name = str(metadata.get("page", "")).strip()
         base_url = str(metadata.get("base_url", "")).strip()
@@ -645,6 +658,8 @@ def apply_allure_test_metadata(metadata: dict[str, object]) -> bool:
         if case_id:
             allure.dynamic.story(case_id)
             allure.dynamic.label("case_id", case_id)
+        if case_title:
+            allure.dynamic.label("case_title", case_title)
         if base_url:
             allure.dynamic.label("base_url", base_url)
         if run_mode:
@@ -740,7 +755,7 @@ ARTIFACTS_DIR = resolve_artifacts_dir()
 if str(RUNNER_TOOLS_ROOT) not in sys.path:
     sys.path.insert(0, str(RUNNER_TOOLS_ROOT))
 
-from check_base_url import check_base_url_reachable
+from check_base_url import check_base_url_reachable  # noqa: E402
 
 
 @pytest.fixture(scope="session")

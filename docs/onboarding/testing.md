@@ -56,6 +56,22 @@ make install-hooks
 make test
 ```
 
+### 统一静态基线（ruff + mypy + pytest）
+
+```bash
+make static-baseline
+```
+
+该入口会调用 [scripts/qa/run-static-baseline.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline.sh)，执行当前 monorepo 下稳定可复用的 scoped `mypy` 命令组合（覆盖 `apps`、`runners`，并自动发现 `agents/*/src` 全量目录），避免重复模块命名冲突导致的误报。
+
+### 快速静态基线（ruff + mypy，不跑 pytest）
+
+```bash
+make static-baseline-fast
+```
+
+该入口会调用 [scripts/qa/run-static-baseline-fast.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline-fast.sh)，适合本地高频迭代时快速验证静态质量门。
+
 等价于：
 
 ```bash
@@ -142,10 +158,10 @@ PYTHONPATH=runners/web-playwright-python .venv/bin/python -m pytest -m "e2e and 
 执行策略：
 
 - `pull_request` / `push`
-  - 默认跑 `contract + integration`
+  - 默认跑 `make static-baseline`（`ruff + scoped mypy + pytest`）
 - `workflow_dispatch`
   - 可手动选择：
-    - `contract`
+    - `static-baseline`
     - `e2e-smoke`
     - `e2e-generated`
     - `all`
@@ -188,6 +204,7 @@ make install-hooks
 
 1. `make install-dev`
 2. `make test`
-3. 改动涉及 YAML / page object / orchestrator 接口时，继续跑 `make test`
+3. 改动涉及多模块质量门（类型检查、格式、回归）时，跑 `make static-baseline`
+  如果仅需快速静态检查，可先跑 `make static-baseline-fast`
 4. 改动涉及真实页面交互时，再额外跑 `make test-e2e-smoke`
 5. 需要验证 AI 生成链路时，跑 `make test-e2e-generated`

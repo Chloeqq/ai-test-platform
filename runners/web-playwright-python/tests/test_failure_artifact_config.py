@@ -200,7 +200,7 @@ def test_extract_allure_test_metadata_from_parametrized_case():
     class FakeCallSpec:
         params = {
             "test_case": {
-                "id": "TC-PRODUCT-GEN-001",
+                "id": "tc-product-GEN-001",
                 "title": "验证商品搜索功能",
                 "tags": ["product", "ai-generated"],
                 "execution": {"page": "product"},
@@ -218,7 +218,7 @@ def test_extract_allure_test_metadata_from_parametrized_case():
 
     assert metadata == {
         "title": "验证商品搜索功能",
-        "case_id": "TC-PRODUCT-GEN-001",
+        "case_id": "tc-product-GEN-001",
         "page": "product",
         "tags": ["product", "ai-generated"],
         "base_url": "http://localhost:5173/login#/login",
@@ -259,7 +259,7 @@ def test_apply_allure_test_metadata_calls_dynamic_api(monkeypatch):
     result = MODULE.apply_allure_test_metadata(
         {
             "title": "验证商品搜索功能",
-            "case_id": "TC-PRODUCT-GEN-001",
+            "case_id": "tc-product-GEN-001",
             "page": "product",
             "tags": ["product", "ai-generated"],
             "base_url": "http://localhost:5173/login#/login",
@@ -271,8 +271,8 @@ def test_apply_allure_test_metadata_calls_dynamic_api(monkeypatch):
     assert result is True
     assert ("title", "验证商品搜索功能") in calls
     assert ("feature", "product") in calls
-    assert ("story", "TC-PRODUCT-GEN-001") in calls
-    assert ("label", "case_id", "TC-PRODUCT-GEN-001") in calls
+    assert ("story", "tc-product-GEN-001") in calls
+    assert ("label", "case_id", "tc-product-GEN-001") in calls
     assert ("label", "base_url", "http://localhost:5173/login#/login") in calls
     assert ("label", "run_mode", "ai") in calls
     assert ("label", "run_source", "manual") in calls
@@ -289,7 +289,7 @@ def test_build_execution_record_contains_core_fields(tmp_path: Path):
     class FakeCallSpec:
         params = {
             "test_case": {
-                "id": "TC-PRODUCT-GEN-001",
+                "id": "tc-product-GEN-001",
                 "requirement": ["验证商品页面展示"],
                 "execution": {
                     "page": "product",
@@ -312,7 +312,7 @@ def test_build_execution_record_contains_core_fields(tmp_path: Path):
         runner_exit_code=1,
     )
 
-    assert record["case_id"] == "TC-PRODUCT-GEN-001"
+    assert record["case_id"] == "tc-product-GEN-001"
     assert record["version"] == "ExecutionRecordV1"
     assert record["status"] == "failed"
     assert record["step_summary"]["page"] == "product"

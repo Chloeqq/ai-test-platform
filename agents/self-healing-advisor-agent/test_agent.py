@@ -6,7 +6,7 @@ SRC_ROOT = Path(__file__).resolve().parent / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from agent import SelfHealingAdvisorAgent
+from agent import SelfHealingAdvisorAgent  # noqa: E402
 
 
 def test_self_healing_advisor_outputs_manual_suggestions_only():

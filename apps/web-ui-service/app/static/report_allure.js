@@ -26,7 +26,9 @@
     const start = Number(time.start || 0);
     const stop = Number(time.stop || 0);
     const dateText = start > 0 && stop > 0
-      ? `${new Date(start).toLocaleString("zh-CN")} ~ ${new Date(stop).toLocaleString("zh-CN")}`
+      ? (typeof window.platformFormatDateRange === "function"
+        ? window.platformFormatDateRange(start, stop, "时间未知")
+        : "时间未知")
       : "时间未知";
     return `总数:${total} 通过:${passed} 失败:${failed} 异常:${broken} 时间:${dateText}`;
   }

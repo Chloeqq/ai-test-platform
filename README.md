@@ -120,6 +120,18 @@ make install-hooks
 make test
 ```
 
+如果要在提交前执行当前稳定的静态质量门（`ruff + mypy + pytest` 组合），执行：
+
+```bash
+make static-baseline
+```
+
+如果只需要快速跑静态检查（不跑 `pytest`），执行：
+
+```bash
+make static-baseline-fast
+```
+
 也可以直接在根目录执行：
 
 ```bash
@@ -141,6 +153,8 @@ make test
 make test-orchestrator
 make test-runner-assets
 make check-console
+make static-baseline-fast
+make static-baseline
 make test-e2e-generated-allure
 make allure-info
 make allure-summary
@@ -153,6 +167,8 @@ make allure-open
 - `make test-orchestrator` 会跑 `apps/ai-orchestrator` 的 `POST /orchestrate` pytest 集成测试
 - `make test-runner-assets` 会跑 `web-playwright-python` 的 page object / test case 资产契约测试
 - `make check-console` 会对 `apps/web-console/static/app.js` 做 Node 语法检查
+- `make static-baseline-fast` 会执行静态基线脚本 [scripts/qa/run-static-baseline-fast.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline-fast.sh)
+- `make static-baseline` 会执行跨模块静态基线脚本 [scripts/qa/run-static-baseline.sh](/Users/bettyhuang/PycharmProjects/ai-test-platform/scripts/qa/run-static-baseline.sh)
 - `make test-e2e` 会跑需要真实业务环境的浏览器端到端测试
 - `make test-e2e-smoke` 会跑人工维护的 smoke 浏览器测试
 - `make test-e2e-generated` 会跑 AI 生成的 YAML 浏览器测试
@@ -171,14 +187,16 @@ make allure-open
 仓库已增加 GitHub Actions 工作流：
 
 - [tests.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/tests.yml)
+- [build-image.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/build-image.yml)
+- [deploy-staging.yml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.github/workflows/deploy-staging.yml)
 
 当前策略：
 
 - `pull_request` / `push`
-  - 默认只跑 `contract + integration`
+  - 默认跑 `static-baseline`（`ruff + scoped mypy + pytest`）
 - `workflow_dispatch`
   - 可手动选择：
-    - `contract`
+    - `static-baseline`
     - `e2e-smoke`
     - `e2e-generated`
     - `all`
@@ -188,6 +206,10 @@ make allure-open
 - `BASE_URL`
 - `TEST_USERNAME`
 - `TEST_PASSWORD`
+
+Staging 部署所需 secrets 与回滚方式见：
+
+- [release-runbook.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/onboarding/release-runbook.md)
 
 ## 7. 测试手册
 

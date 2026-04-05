@@ -11,6 +11,19 @@
   </p>
   <h1>{{ page_title }}</h1>
   <p>{{ page_description }}</p>
+  {% if active_filters %}
+  <section class="placeholder-card">
+    <h2>当前筛选上下文</h2>
+    <div class="placeholder-grid">
+      {% for item in active_filters %}
+      <article class="placeholder-card">
+        <h2>{{ item.label }}</h2>
+        <p>{{ item.value }}</p>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
   <div class="placeholder-grid">
     <article class="placeholder-card">
       <h2>模块状态</h2>

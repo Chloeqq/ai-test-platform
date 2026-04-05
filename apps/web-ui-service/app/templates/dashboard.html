@@ -3,7 +3,8 @@
 {% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/dashboard.css?v=20260322-2">
+<link rel="stylesheet" href="/static/dashboard_core.css?v=20260404-2">
+<link rel="stylesheet" href="/static/dashboard_sections.css?v=20260404-2">
 {% endblock %}
 
 {% block content %}
@@ -16,9 +17,9 @@
         {% endfor %}
       </p>
       <div class="hero-kicker">
-        <span class="hero-pill hero-pill-primary">URL 驱动</span>
-        <span class="hero-pill">确定性优先</span>
-        <span class="hero-pill">防幻觉闭环</span>
+        <span class="hero-pill hero-pill-primary">平台概览</span>
+        <span class="hero-pill">本周重点</span>
+        <span class="hero-pill">待处理事项</span>
       </div>
       <h1>{{ page_title }}</h1>
       <p class="hero-description">{{ page_description }}</p>
@@ -28,12 +29,12 @@
           <strong id="dashboard-as-of">-</strong>
         </div>
         <div class="hero-metric">
-          <span>风险级别</span>
+          <span>当前风险级别</span>
           <strong id="dashboard-risk-level">-</strong>
         </div>
         <div class="hero-metric">
-          <span>行动建议</span>
-          <strong id="dashboard-risk-advice">-</strong>
+          <span>首页职责</span>
+          <strong>总览与提醒</strong>
         </div>
         <div class="hero-metric">
           <span>刷新策略</span>
@@ -46,7 +47,7 @@
       <a id="risk-card" class="dash-card risk-card risk-low" href="/quality/trends">
         <div class="dash-card-header">
           <div class="card-label-group">
-            <span class="card-eyebrow">当前主分支</span>
+            <span class="card-eyebrow">平台概览</span>
             <h2>风险评分</h2>
           </div>
           <span id="risk-level-badge" class="level-badge">低</span>
@@ -55,152 +56,126 @@
           <strong id="risk-score">0</strong>
           <span>风险分</span>
         </div>
-        <p id="risk-summary" class="dash-note">正在评估当前主分支风险，请稍候。</p>
+        <p id="risk-summary" class="dash-note">正在评估当前平台风险，请稍候。</p>
         <div class="risk-metric-strip" aria-label="风险摘要">
           <span><strong id="risk-strip-pass-rate">-</strong><em>24h 通过率</em></span>
           <span><strong id="risk-strip-execution-count">-</strong><em>24h 执行</em></span>
-          <span><strong id="risk-strip-pending-issues">-</strong><em>待确认</em></span>
+          <span><strong id="risk-strip-pending-issues">-</strong><em>待处理</em></span>
         </div>
-        <span class="risk-hint">点击进入风险评估详情</span>
+        <span class="risk-hint">详细分析请进入趋势分析页</span>
       </a>
-
-      <section class="dash-card entry-card">
-        <div class="entry-header">
-          <div class="card-label-group">
-            <span class="card-eyebrow">常用入口</span>
-            <h2>快速进入</h2>
-          </div>
-          <p class="dash-note">10 个页面入口，适合日常运维和回归切换。</p>
-        </div>
-        <div class="entry-grid">
-          <a class="entry-item" href="/workbench">工作台首页</a>
-          <a class="entry-item" href="/workbench/generate">生成用例</a>
-          <a class="entry-item" href="/workbench/generate?sample=returnapply">returnApply 样板</a>
-          <a class="entry-item" href="/workbench/preview?project=default">URL 预览</a>
-          <a class="entry-item" href="/workbench/history">操作历史</a>
-          <a class="entry-item" href="/report">报告总览</a>
-          <a class="entry-item" href="/quality/trends">风险趋势</a>
-          <a class="entry-item" href="/report/failures">失败分析</a>
-          <a class="entry-item" href="/report/context">上下文报告</a>
-          <a class="entry-item" href="/report/allure">Allure 报告</a>
-        </div>
-      </section>
     </div>
   </section>
 
-  <section class="dashboard-kpi-grid">
-    <article class="dash-card mini-card">
-      <h2>最近24小时通过率</h2>
-      <strong id="summary-pass-rate">-</strong>
-      <p class="dash-note">用于判断当前回归健康度。</p>
-    </article>
-
-    <article class="dash-card mini-card">
-      <h2>最近24小时执行次数</h2>
-      <strong id="summary-execution-count">-</strong>
-      <p class="dash-note">覆盖自动化与门禁触发任务。</p>
-    </article>
-
-    <article class="dash-card mini-card">
-      <h2>最近10次门禁拦截</h2>
-      <strong id="summary-intercepted-last10">-</strong>
-      <p class="dash-note">用于观察质量门禁压力和阻断密度。</p>
-    </article>
-
-    <article class="dash-card mini-card">
-      <h2>待确认问题数</h2>
-      <strong id="summary-pending-issues">-</strong>
-      <p class="dash-note">来自失败归因 Agent 推荐队列。</p>
-    </article>
-  </section>
-
-  <article class="dash-card trend-card">
+  <article class="dash-card dashboard-section-card">
     <div class="dash-card-header">
-      <h2>最近24小时执行趋势</h2>
-      <div class="trend-legend">
-        <span><i class="dot pass-dot"></i>通过率</span>
-        <span><i class="dot exec-dot"></i>执行次数</span>
+      <div>
+        <p class="card-eyebrow">平台概览</p>
+        <h2>最近 24 小时执行概况</h2>
+      </div>
+      <div class="section-link-row">
+        <a class="section-link" href="/execution/results">执行结果</a>
+        <a class="section-link" href="/quality/trends">趋势分析</a>
       </div>
     </div>
-    <p id="trend-meta" class="dash-note">正在加载趋势数据...</p>
-    <p class="dash-note trend-tip">悬停趋势点可查看每个小时的通过率与执行量。</p>
-    <div class="trend-canvas-wrap">
-      <svg id="trend-svg" viewBox="0 0 960 280" preserveAspectRatio="none" aria-label="最近24小时执行趋势图"></svg>
-      <div id="trend-x-axis" class="trend-x-axis"></div>
+    <section class="dashboard-kpi-grid">
+      <article class="dash-card mini-card">
+        <h2>最近24小时通过率</h2>
+        <strong id="summary-pass-rate">-</strong>
+        <p class="dash-note">用于判断当前回归健康度。</p>
+      </article>
+      <article class="dash-card mini-card">
+        <h2>最近24小时执行次数</h2>
+        <strong id="summary-execution-count">-</strong>
+        <p class="dash-note">覆盖自动化与门禁触发任务。</p>
+      </article>
+      <article class="dash-card mini-card">
+        <h2>最近10次门禁拦截</h2>
+        <strong id="summary-intercepted-last10">-</strong>
+        <p class="dash-note">用于观察质量门禁压力和阻断密度。</p>
+      </article>
+      <article class="dash-card mini-card">
+        <h2>待确认问题数</h2>
+        <strong id="summary-pending-issues">-</strong>
+        <p class="dash-note">当前需要继续跟进的执行问题。</p>
+      </article>
+    </section>
+    <div class="dashboard-trend-wrap">
+      <p id="trend-meta" class="dash-note">正在加载趋势数据...</p>
+      <div class="trend-canvas-wrap">
+        <svg id="trend-svg" viewBox="0 0 960 280" preserveAspectRatio="none" aria-label="最近24小时执行趋势图"></svg>
+        <div id="trend-x-axis" class="trend-x-axis"></div>
+      </div>
     </div>
   </article>
 
-  <article class="dash-card trend-card qg-trend-card">
-    <div class="dash-card-header">
-      <h2>质量门禁拦截趋势（24小时）</h2>
-      <div class="trend-legend">
-        <span><i class="dot block-dot"></i>拦截次数</span>
-        <span><i class="dot block-rate-dot"></i>拦截率</span>
+  <section class="dashboard-two-col dashboard-focus-grid">
+    <article class="dash-card manager-summary-card">
+      <div class="dash-card-header">
+        <div>
+          <p class="card-eyebrow">本周重点</p>
+          <h2>管理者摘要</h2>
+        </div>
+        <div class="section-link-row">
+          <a class="section-link" href="/quality/trends">趋势分析</a>
+          <a class="section-link" href="/quality/flaky">Flaky 分析</a>
+          <a class="section-link" href="/quality/failure-clusters">失败聚类</a>
+        </div>
       </div>
-    </div>
-    <p id="qg-trend-meta" class="dash-note">正在加载 quality gate 趋势...</p>
-    <p class="dash-note trend-tip">悬停门禁趋势点可查看具体小时的拦截明细。</p>
-    <div class="dashboard-kpi-grid qg-inline-kpis">
-      <article class="dash-card mini-card">
-        <h2>24h 门禁事件</h2>
-        <strong id="qg-total-events-24h">-</strong>
-        <p class="dash-note">最近24小时触发 quality gate 评估次数。</p>
-      </article>
-      <article class="dash-card mini-card">
-        <h2>24h 拦截次数</h2>
-        <strong id="qg-blocked-events-24h">-</strong>
-        <p class="dash-note">最近24小时被门禁阻断的生成次数。</p>
-      </article>
-      <article class="dash-card mini-card">
-        <h2>24h 拦截率</h2>
-        <strong id="qg-block-rate-24h">-</strong>
-        <p class="dash-note">用于判断当前需求输入质量稳定性。</p>
-      </article>
-      <article class="dash-card mini-card">
-        <h2>Top 告警码</h2>
-        <strong><a id="qg-top-alert-24h-link" class="dash-inline-link" href="/quality/clusters">-</a></strong>
-        <p id="qg-top-alert-24h-count" class="dash-note">暂无拦截告警</p>
-      </article>
-    </div>
-    <div class="trend-canvas-wrap">
-      <svg id="qg-trend-svg" viewBox="0 0 960 220" preserveAspectRatio="none" aria-label="质量门禁24小时趋势图"></svg>
-      <div id="qg-trend-x-axis" class="trend-x-axis"></div>
-    </div>
-  </article>
-
-  <section class="dashboard-two-col">
-    <article class="dash-card">
-      <h2>Top Flaky用例</h2>
-      <ul id="flaky-list" class="flaky-list"></ul>
-    </article>
-
-    <article class="dash-card gate-card">
-      <h2>门禁状态（最近10次拦截）</h2>
-      <div class="gate-table-wrap">
-        <table class="gate-table">
-          <thead>
-            <tr>
-              <th>PR</th>
-              <th>用例</th>
-              <th>分支</th>
-              <th>状态</th>
-              <th>说明</th>
-              <th>时间</th>
-            </tr>
-          </thead>
-          <tbody id="gate-body"></tbody>
-        </table>
+      <p id="manager-headline" class="dash-note">正在汇总当前治理重点...</p>
+      <div class="dashboard-kpi-grid manager-summary-grid">
+        <article class="dash-card mini-card">
+          <h2>发布准备度</h2>
+          <strong id="manager-release-readiness">-</strong>
+          <p class="dash-note">综合质量门、治理风险和聚类热点判断。</p>
+        </article>
+        <article class="dash-card mini-card">
+          <h2>追溯状态</h2>
+          <strong id="manager-traceability-status">-</strong>
+          <p class="dash-note">关注 manifest 和 traceability 完整度。</p>
+        </article>
+        <article class="dash-card mini-card">
+          <h2>多源状态</h2>
+          <strong id="manager-multisource-status">-</strong>
+          <p class="dash-note">观察多源输入覆盖与冲突治理质量。</p>
+        </article>
+        <article class="dash-card mini-card">
+          <h2>本周焦点</h2>
+          <strong id="manager-weekly-focus">-</strong>
+          <p class="dash-note">本周最值得先推进的治理主题。</p>
+        </article>
       </div>
+      <ul id="manager-highlights-list" class="pending-issues-list"></ul>
     </article>
   </section>
 
-  <article class="dash-card">
-    <h2>待处理问题</h2>
-    <ul id="pending-issues-list" class="pending-issues-list"></ul>
+  <article class="dash-card dashboard-section-card">
+    <div class="dash-card-header">
+      <div>
+        <p class="card-eyebrow">待处理事项</p>
+        <h2>需要落到对应页面继续处理的任务</h2>
+      </div>
+      <div class="section-link-row">
+        <a class="section-link" href="/execution/runs">执行任务</a>
+        <a class="section-link" href="/quality/gates">质量门禁</a>
+      </div>
+    </div>
+    <p id="governance-meta" class="dash-note">正在汇总平台当前待处理事项...</p>
+    <section class="dashboard-two-col dashboard-action-grid">
+      <article class="dashboard-subsection">
+        <h3>治理行动建议</h3>
+        <ul id="governance-actions-list" class="pending-issues-list"></ul>
+      </article>
+      <article class="dashboard-subsection">
+        <h3>待确认问题</h3>
+        <ul id="pending-issues-list" class="pending-issues-list"></ul>
+      </article>
+    </section>
   </article>
 </section>
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/dashboard.js?v=20260322-2"></script>
+<script src="/static/dashboard_sections.js?v=20260404-2"></script>
+<script src="/static/dashboard.js?v=20260404-2"></script>
 {% endblock %}

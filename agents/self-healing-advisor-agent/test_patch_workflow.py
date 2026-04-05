@@ -10,11 +10,11 @@ AGENT_ROOT = Path(__file__).resolve().parent
 if str(AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(AGENT_ROOT))
 
-from apply_patch import apply_patch_plan
-from patch_generator import generate_patch_plan
-from rollback import rollback_patch
-from self_healing_executor import SelfHealingExecutor
-from self_healing_orchestrator import SelfHealingOrchestrator
+from apply_patch import apply_patch_plan  # noqa: E402
+from patch_generator import generate_patch_plan  # noqa: E402
+from rollback import rollback_patch  # noqa: E402
+from self_healing_executor import SelfHealingExecutor  # noqa: E402
+from self_healing_orchestrator import SelfHealingOrchestrator  # noqa: E402
 
 
 def _write_yaml(path: Path, data: dict) -> None:
@@ -30,7 +30,7 @@ def test_patch_preview_rejects_stable_smoke_case(tmp_path: Path):
     _write_yaml(
         smoke_root / "product-smoke.yaml",
         {
-            "id": "TC-PRODUCT-SMOKE-001",
+            "id": "tc-product-SMOKE-001",
             "execution": {
                 "page": "product",
                 "steps": [
@@ -83,10 +83,10 @@ def test_apply_and_rollback_patch_workflow(tmp_path: Path):
     page_objects_root = tmp_path / "assets" / "page-objects" / "web"
     rollback_root = tmp_path / "artifacts" / "yaml-rollbacks"
 
-    case_path = ai_root / "TC-PRODUCT-SEARCH-001.yaml"
+    case_path = ai_root / "tc-product-SEARCH-001.yaml"
     original_case = {
         "version": "v4",
-        "id": "TC-PRODUCT-SEARCH-001",
+        "id": "tc-product-SEARCH-001",
         "execution": {
             "runner": "playwright",
             "page": "product",
@@ -163,11 +163,11 @@ def test_apply_refuses_when_case_changed_after_preview(tmp_path: Path):
     ai_root = tmp_path / "assets" / "test-cases" / "ai-generated"
     page_objects_root = tmp_path / "assets" / "page-objects" / "web"
 
-    case_path = ai_root / "TC-PRODUCT-SEARCH-001.yaml"
+    case_path = ai_root / "tc-product-SEARCH-001.yaml"
     _write_yaml(
         case_path,
         {
-            "id": "TC-PRODUCT-SEARCH-001",
+            "id": "tc-product-SEARCH-001",
             "execution": {
                 "page": "product",
                 "steps": [
@@ -223,11 +223,11 @@ def test_executor_runs_preview_apply_and_rollback(tmp_path: Path):
     page_objects_root = tmp_path / "assets" / "page-objects" / "web"
     rollback_root = tmp_path / "artifacts" / "yaml-rollbacks"
 
-    case_path = ai_root / "TC-PRODUCT-SEARCH-001.yaml"
+    case_path = ai_root / "tc-product-SEARCH-001.yaml"
     _write_yaml(
         case_path,
         {
-            "id": "TC-PRODUCT-SEARCH-001",
+            "id": "tc-product-SEARCH-001",
             "execution": {
                 "page": "product",
                 "steps": [
@@ -288,12 +288,12 @@ def test_self_healing_orchestrator_keeps_patch_when_rerun_succeeds(tmp_path: Pat
     page_objects_root = tmp_path / "assets" / "page-objects" / "web"
     rollback_root = tmp_path / "artifacts" / "yaml-rollbacks"
     artifact_dir = tmp_path / "artifacts" / "case-1"
-    case_path = ai_root / "TC-PRODUCT-SEARCH-001.yaml"
+    case_path = ai_root / "tc-product-SEARCH-001.yaml"
 
     _write_yaml(
         case_path,
         {
-            "id": "TC-PRODUCT-SEARCH-001",
+            "id": "tc-product-SEARCH-001",
             "execution": {
                 "page": "product",
                 "steps": [
@@ -359,12 +359,12 @@ def test_self_healing_orchestrator_rolls_back_when_rerun_fails(tmp_path: Path):
     page_objects_root = tmp_path / "assets" / "page-objects" / "web"
     rollback_root = tmp_path / "artifacts" / "yaml-rollbacks"
     artifact_dir = tmp_path / "artifacts" / "case-2"
-    case_path = ai_root / "TC-PRODUCT-SEARCH-001.yaml"
+    case_path = ai_root / "tc-product-SEARCH-001.yaml"
 
     _write_yaml(
         case_path,
         {
-            "id": "TC-PRODUCT-SEARCH-001",
+            "id": "tc-product-SEARCH-001",
             "execution": {
                 "page": "product",
                 "steps": [
@@ -427,12 +427,12 @@ def test_self_healing_orchestrator_rejects_low_confidence_and_repeat_attempts(tm
     ai_root = tmp_path / "assets" / "test-cases" / "ai-generated"
     page_objects_root = tmp_path / "assets" / "page-objects" / "web"
     artifact_dir = tmp_path / "artifacts" / "case-3"
-    case_path = ai_root / "TC-PRODUCT-SEARCH-001.yaml"
+    case_path = ai_root / "tc-product-SEARCH-001.yaml"
 
     _write_yaml(
         case_path,
         {
-            "id": "TC-PRODUCT-SEARCH-001",
+            "id": "tc-product-SEARCH-001",
             "execution": {
                 "page": "product",
                 "steps": [
@@ -497,12 +497,12 @@ def test_self_healing_orchestrator_rejects_low_confidence_and_repeat_attempts(tm
 def test_patch_preview_rejects_assertion_update_outside_boundary(tmp_path: Path):
     ai_root = tmp_path / "assets" / "test-cases" / "ai-generated"
     page_objects_root = tmp_path / "assets" / "page-objects" / "web"
-    case_path = ai_root / "TC-PRODUCT-SEARCH-001.yaml"
+    case_path = ai_root / "tc-product-SEARCH-001.yaml"
 
     _write_yaml(
         case_path,
         {
-            "id": "TC-PRODUCT-SEARCH-001",
+            "id": "tc-product-SEARCH-001",
             "execution": {
                 "page": "product",
                 "steps": [

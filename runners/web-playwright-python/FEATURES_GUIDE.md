@@ -71,7 +71,7 @@
 **用例结构**:
 ```yaml
 version: v4
-id: TC-PRODUCT-001
+id: tc-product-001
 title: 商品列表页面加载
 module: product
 priority: P0
@@ -578,7 +578,7 @@ cat assets/page-objects/web/product.page-object.yaml
 python tools/asset_cli.py init-test-case \
   --kind smoke \
   --page product \
-  --id TC-PRODUCT-002 \
+  --id tc-product-002 \
   --title "商品搜索测试" \
   --description "验证商品搜索功能" \
   --requirement "商品搜索" \
@@ -728,7 +728,7 @@ RUN_MODE=all python -m pytest tests/test_yaml_smoke.py -v
 
 ```bash
 # 通过用例 ID 过滤
-TEST_CASE_ID=TC-PRODUCT-001 python -m pytest tests/test_yaml_smoke.py -v
+TEST_CASE_ID=tc-product-001 python -m pytest tests/test_yaml_smoke.py -v
 
 # 通过文件路径运行
 TEST_CASE_PATH=assets/test-cases/smoke/product-smoke.yaml \

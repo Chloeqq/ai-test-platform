@@ -17,11 +17,11 @@
   <p>{{ page_description }}</p>
 
   <nav class="report-tabs">
-    <a href="/report">Overview</a>
-    <a href="/report/failures">Failures</a>
-    <a class="active" href="/report/context">Context</a>
-    <a href="/report/performance">Performance</a>
-    <a href="/report/allure">Allure</a>
+    <a href="/execution/results">Overview</a>
+    <a href="/execution/results/failures">Failures</a>
+    <a class="active" href="/execution/results/context">Context</a>
+    <a href="/execution/results/performance">Performance</a>
+    <a href="/execution/results/allure">Allure</a>
   </nav>
 
   <section class="report-grid">
@@ -42,5 +42,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/report_context.js"></script>
+<script src="/static/report_context.js?v=20260402-report-context-1"></script>
 {% endblock %}

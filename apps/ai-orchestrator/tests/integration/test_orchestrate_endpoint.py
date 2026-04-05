@@ -44,6 +44,7 @@ class FakeService:
         execute: bool = False,
         source: str = "manual",
         mode: str = "generate_only",
+        runner: str = "playwright",
         input_sources=None,
         openapi_spec=None,
         prd_text: str = "",
@@ -59,6 +60,7 @@ class FakeService:
                 "execute": execute,
                 "source": source,
                 "mode": mode,
+                "runner": runner,
                 "input_sources": input_sources,
                 "openapi_spec": openapi_spec,
                 "prd_text": prd_text,
@@ -73,7 +75,7 @@ class FakeService:
 
         return {
             "case": {
-                "id": "TC-PRODUCT-999",
+                "id": "tc-product-999",
                 "title": "Fake case",
             },
             "test_points": {
@@ -96,8 +98,8 @@ class FakeService:
                 ],
             },
             "execution_record": {
-                "run_id": "TC-PRODUCT-999:2026-03-17T00:00:00+00:00",
-                "case_id": "TC-PRODUCT-999",
+                "run_id": "tc-product-999:2026-03-17T00:00:00+00:00",
+                "case_id": "tc-product-999",
                 "project": "default",
                 "source": source,
                 "mode": mode,
@@ -126,7 +128,7 @@ class FakeService:
                     "execution_requested": execute,
                 },
             },
-            "case_path": "/tmp/TC-PRODUCT-999.yaml",
+            "case_path": "/tmp/tc-product-999.yaml",
             "execution_requested": execute,
             "runner_exit_code": 0 if execute else None,
             "runner_stdout": "ok" if execute else "",
@@ -134,10 +136,10 @@ class FakeService:
             "report": {
                 "status": "passed" if execute else "generated",
                 "summary": "Fake report summary",
-                "case_id": "TC-PRODUCT-999",
+                "case_id": "tc-product-999",
                 "case_title": "Fake case",
                 "page": "product",
-                "case_path": "/tmp/TC-PRODUCT-999.yaml",
+                "case_path": "/tmp/tc-product-999.yaml",
                 "execution_requested": execute,
                 "source": source,
                 "request_context": {
@@ -147,8 +149,8 @@ class FakeService:
                     "execution_requested": execute,
                 },
                 "execution_record": {
-                    "run_id": "TC-PRODUCT-999:2026-03-17T00:00:00+00:00",
-                    "case_id": "TC-PRODUCT-999",
+                    "run_id": "tc-product-999:2026-03-17T00:00:00+00:00",
+                    "case_id": "tc-product-999",
                     "project": "default",
                     "source": source,
                     "mode": mode,
@@ -243,8 +245,8 @@ class FakeService:
                 "runner_stdout_excerpt": "ok" if execute else "",
                 "runner_stderr_excerpt": "",
             },
-            "report_json_path": "/tmp/TC-PRODUCT-999.report.json",
-            "report_markdown_path": "/tmp/TC-PRODUCT-999.report.md",
+            "report_json_path": "/tmp/tc-product-999.report.json",
+            "report_markdown_path": "/tmp/tc-product-999.report.md",
             "report_summary_path": "/tmp/report_summary.txt" if execute else "",
         }
 
@@ -252,15 +254,26 @@ class FakeService:
     def serialize_result(result):
         return result
 
+    @staticmethod
+    def list_runners():
+        return {
+            "default_runner": "playwright",
+            "items": [
+                {"runner": "playwright", "execution_supported": True, "framework": "playwright"},
+                {"runner": "api", "execution_supported": False, "framework": "requests"},
+                {"runner": "mobile", "execution_supported": False, "framework": "appium"},
+            ],
+        }
+
     def get_latest_report(self):
         return {
             "report": {
-                "case_id": "TC-PRODUCT-999",
+                "case_id": "tc-product-999",
                 "status": "passed",
                 "summary": "Latest fake report",
                 "execution_record": {
-                    "run_id": "TC-PRODUCT-999:2026-03-17T00:00:00+00:00",
-                    "case_id": "TC-PRODUCT-999",
+                    "run_id": "tc-product-999:2026-03-17T00:00:00+00:00",
+                    "case_id": "tc-product-999",
                     "project": "default",
                     "source": "manual",
                     "mode": "generate_and_run",
@@ -284,8 +297,8 @@ class FakeService:
                 },
             },
             "execution_record": {
-                "run_id": "TC-PRODUCT-999:2026-03-17T00:00:00+00:00",
-                "case_id": "TC-PRODUCT-999",
+                "run_id": "tc-product-999:2026-03-17T00:00:00+00:00",
+                "case_id": "tc-product-999",
                 "project": "default",
                 "source": "manual",
                 "mode": "generate_and_run",
@@ -295,8 +308,8 @@ class FakeService:
                 "step_summary": {"page": "product", "requirement_count": 1, "total_steps": 2, "action_types": ["click", "login"]},
                 "evidence_index": {"total_files": 1, "artifact_categories": {"self_healing_result_files": 1}, "runner_exit_code": 0, "execution_requested": True},
             },
-            "report_json_path": "/tmp/TC-PRODUCT-999.report.json",
-            "report_markdown_path": "/tmp/TC-PRODUCT-999.report.md",
+            "report_json_path": "/tmp/tc-product-999.report.json",
+            "report_markdown_path": "/tmp/tc-product-999.report.md",
             "report_summary_path": "/tmp/report_summary.txt",
             "report_summary_preview": {
                 "total_failed_cases": 2,
@@ -307,7 +320,7 @@ class FakeService:
                 "environment_failure_cases": ["TC-LOGIN-001"],
                 "actionable_self_healing_case_details": [
                     {
-                        "case_id": "TC-PRODUCT-999",
+                        "case_id": "tc-product-999",
                         "target": "product_list_title",
                         "advice_type": "assertion_update",
                     }
@@ -375,7 +388,7 @@ class FakeService:
                 "environment_failure_cases": ["TC-LOGIN-001"],
                 "actionable_self_healing_case_details": [
                     {
-                        "case_id": "TC-PRODUCT-999",
+                        "case_id": "tc-product-999",
                         "target": "product_list_title",
                         "advice_type": "assertion_update",
                     }
@@ -417,14 +430,14 @@ class FakeService:
                     "occurrence_count": 3,
                     "first_seen_at": "2026-03-18T00:00:00+00:00",
                     "last_seen_at": "2026-03-20T00:00:00+00:00",
-                    "latest_case_id": "TC-PRODUCT-003",
+                    "latest_case_id": "tc-product-003",
                     "requires_manual_review_count": 2,
                     "manual_review_ratio": 0.67,
                     "top_risk_level": "medium",
                     "risk_level_count": {"critical": 0, "high": 1, "medium": 2, "low": 0, "unknown": 0},
                     "sample_cases": [
                         {
-                            "case_id": "TC-PRODUCT-003",
+                            "case_id": "tc-product-003",
                             "status": "failed",
                             "page": "product",
                             "started_at": "2026-03-20T00:00:00+00:00",
@@ -774,7 +787,7 @@ class FakeAssetService:
         )
         return {
             "test_case": {
-                "id": "TC-PRODUCT-001",
+                "id": "tc-product-001",
                 "execution": {"page": "product"},
             },
             "path": file_path,
@@ -984,7 +997,7 @@ def test_post_orchestrate_returns_201_and_payload(orchestrator_server):
     )
 
     assert status == 201
-    assert payload["case"]["id"] == "TC-PRODUCT-999"
+    assert payload["case"]["id"] == "tc-product-999"
     assert payload["test_points"]["page"] == "product"
     assert payload["test_points"]["points"][0]["action"] == "login"
     assert payload["execution_requested"] is True
@@ -1043,6 +1056,18 @@ def test_post_orchestrate_forwards_multisource_payload(orchestrator_server):
     assert call["git_diff"] == "+++ b/apps/order/service.py"
     assert call["defect_ticket"] == "BUG-1001 timeout in order list query"
     assert call["runtime_logs"] == "ERROR timeout while querying order list"
+
+
+def test_post_orchestrate_forwards_runner(orchestrator_server):
+    status, _payload = _request_json(
+        orchestrator_server["base_url"],
+        "POST",
+        "/orchestrate",
+        {"requirement": "验证移动端登录", "page": "login", "runner": "mobile"},
+    )
+
+    assert status == 201
+    assert orchestrator_server["service"].calls[-1]["runner"] == "mobile"
 
 
 def test_post_orchestrate_supports_explicit_generate_only_mode(orchestrator_server):
@@ -1154,7 +1179,7 @@ def test_post_scripts_generate_returns_201_and_payload(orchestrator_server):
             "framework": "playwright",
             "language": "python",
             "case": {
-                "id": "TC-PRODUCT-001",
+                "id": "tc-product-001",
                 "execution": {"page": "product", "steps": []},
             },
         },
@@ -1162,7 +1187,7 @@ def test_post_scripts_generate_returns_201_and_payload(orchestrator_server):
 
     assert status == 201
     assert payload["generated_script"]["version"] == "GeneratedScriptV1"
-    assert payload["generated_script"]["case_id"] == "TC-PRODUCT-001"
+    assert payload["generated_script"]["case_id"] == "tc-product-001"
     assert payload["output_contract"]["machine_schema"] == "GeneratedScriptV1"
     assert payload["output_contract"]["human_render"] == "GeneratedScriptPreviewMarkdownV1"
     assert orchestrator_server["service"].script_generation_calls[-1]["framework"] == "playwright"
@@ -1174,7 +1199,7 @@ def test_post_execution_plan_returns_201_and_payload(orchestrator_server):
         "POST",
         "/execution/plan",
         {
-            "case": {"id": "TC-PRODUCT-001", "priority": "P1", "execution": {"page": "product"}},
+            "case": {"id": "tc-product-001", "priority": "P1", "execution": {"page": "product"}},
             "execution_requested": True,
             "source": "manual",
             "execution_config": {"parallelism": 1},
@@ -1221,7 +1246,7 @@ def test_post_failures_triage_returns_201_and_payload(orchestrator_server):
             "failure_analysis": {"failure_category": "assertion", "failure_source": "case_design", "risk_level": "medium"},
             "execution_record": {"status": "failed", "step_summary": {"page": "product", "action_types": ["login", "click"]}},
             "evidence_manifest": {"total_files": 3, "analysis_files": ["/tmp/a.txt"]},
-            "report": {"case_id": "TC-PRODUCT-001", "page": "product"},
+            "report": {"case_id": "tc-product-001", "page": "product"},
         },
     )
 
@@ -1333,8 +1358,8 @@ def test_get_latest_report_returns_200(orchestrator_server):
     )
 
     assert status == 200
-    assert payload["report"]["case_id"] == "TC-PRODUCT-999"
-    assert payload["execution_record"]["case_id"] == "TC-PRODUCT-999"
+    assert payload["report"]["case_id"] == "tc-product-999"
+    assert payload["execution_record"]["case_id"] == "tc-product-999"
     assert payload["report_json_path"].endswith(".report.json")
     assert payload["report_summary_path"].endswith("report_summary.txt")
     assert payload["report_summary_preview"]["total_failed_cases"] == 2
@@ -1345,17 +1370,31 @@ def test_get_latest_report_returns_200(orchestrator_server):
     assert payload["report"]["self_healing_enabled"] is True
 
 
-def test_get_report_by_case_id_returns_200(orchestrator_server):
+def test_get_runner_catalog_returns_200(orchestrator_server):
     status, payload = _request_raw(
         orchestrator_server["base_url"],
         "GET",
-        "/reports/TC-PRODUCT-999",
+        "/runners/catalog",
         body=b"",
         content_type="application/json",
     )
 
     assert status == 200
-    assert payload["report"]["case_id"] == "TC-PRODUCT-999"
+    assert payload["default_runner"] == "playwright"
+    assert {item["runner"] for item in payload["items"]} == {"playwright", "api", "mobile"}
+
+
+def test_get_report_by_case_id_returns_200(orchestrator_server):
+    status, payload = _request_raw(
+        orchestrator_server["base_url"],
+        "GET",
+        "/reports/tc-product-999",
+        body=b"",
+        content_type="application/json",
+    )
+
+    assert status == 200
+    assert payload["report"]["case_id"] == "tc-product-999"
     assert payload["execution_record"]["mode"] == "generate_and_run"
     assert payload["report_summary_path"].endswith("report_summary.txt")
     assert payload["report_summary_preview"]["environment_failures"] == 1
@@ -1492,7 +1531,7 @@ def test_post_sync_test_case_returns_200(orchestrator_server):
     )
 
     assert status == 200
-    assert payload["test_case"]["id"] == "TC-PRODUCT-001"
+    assert payload["test_case"]["id"] == "tc-product-001"
     assert orchestrator_server["asset_service"].sync_calls[0]["file"] == "assets/test-cases/smoke/product-smoke.yaml"
 
 

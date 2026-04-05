@@ -4,7 +4,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/pagination.component.css?v=20260322-1">
-<link rel="stylesheet" href="/static/workbench.css?v=20260322-5">
+<link rel="stylesheet" href="/static/workbench.css?v=20260403-workbench-2">
 {% endblock %}
 
 {% block content %}
@@ -18,15 +18,43 @@
   <p>{{ page_description }}</p>
   <div id="wb-auth-notice" class="wb-auth-notice wb-auth-notice-anonymous">当前若未登录，平台仍允许查看、生成与执行；但涉及审计的确认动作会要求先登录后再提交。</div>
 
+  <section class="workbench-boundary-note">
+    <h2>调试边界</h2>
+    <p>本页只负责单用例调试、YAML 精修、失败复现和快速重跑。新建 Draft 请前往 <a href="/ai-generation">AI生成</a>，批量管理请回到 <a href="/cases">用例中心</a>。</p>
+  </section>
+
   <section class="workbench-quickstart">
     <h2>Quick Start</h2>
     <ol>
-      <li>选择项目与用例</li>
-      <li>编辑 YAML 或生成新用例</li>
-      <li>点击 Run Test 执行</li>
-      <li>查看实时日志与失败分析</li>
+      <li>选择项目与调试目标</li>
+      <li>查看当前用例结构并精修 YAML</li>
+      <li>点击 Run Test 执行单用例调试</li>
+      <li>查看实时日志、失败分析与审计时间线</li>
       <li>必要时一键修复并重跑</li>
     </ol>
+  </section>
+
+  <section class="wb-card workbench-current-bar" id="wb-current-case-bar" hidden>
+    <article class="wb-current-item">
+      <span>当前用例</span>
+      <strong id="wb-current-case-header">未选择</strong>
+    </article>
+    <article class="wb-current-item">
+      <span>页面</span>
+      <strong id="wb-current-page-header">-</strong>
+    </article>
+    <article class="wb-current-item">
+      <span>优先级</span>
+      <strong id="wb-current-priority-header">-</strong>
+    </article>
+    <article class="wb-current-item">
+      <span>最近更新</span>
+      <strong id="wb-current-updated-header">-</strong>
+    </article>
+    <article class="wb-current-item">
+      <span>执行状态</span>
+      <strong id="wb-current-run-header">等待执行</strong>
+    </article>
   </section>
 
   <section class="workbench-toolbar">
@@ -35,11 +63,8 @@
       <select id="wb-project"></select>
     </label>
     <button id="wb-refresh" class="btn">刷新用例</button>
-    <a class="btn btn-primary" href="/workbench/generate">AI 生成用例</a>
-    <a class="btn" href="/workbench/generate?sample=returnapply">returnApply 样板</a>
-    <a class="btn" href="/workbench/history">操作历史</a>
     <div class="toolbar-spacer"></div>
-    <div class="inline-tip">提示：选择用例后可直接在线编辑 YAML。</div>
+    <div class="inline-tip">提示：这里只做调试，不承担生成入口和历史总览。</div>
   </section>
 
   <section class="workbench-grid workbench-grid-main">
@@ -49,7 +74,7 @@
         <table class="case-table">
           <thead>
             <tr>
-              <th>用例ID</th>
+              <th>用例 ID</th>
               <th>标题</th>
               <th>页面</th>
               <th>优先级</th>
@@ -107,11 +132,11 @@
   <section class="workbench-reports">
     <h2>报告导航</h2>
     <div class="report-cards">
-      <a class="report-card" href="/report">报告总览</a>
-      <a class="report-card" href="/report/failures">失败详情</a>
-      <a class="report-card" href="/report/context">资产与集成</a>
-      <a class="report-card" href="/report/performance">性能耗时</a>
-      <a class="report-card" href="/report/allure">Allure 报告</a>
+      <a class="report-card" href="/execution/results">报告总览</a>
+      <a class="report-card" href="/execution/results/failures">失败详情</a>
+      <a class="report-card" href="/execution/results/context">资产与集成</a>
+      <a class="report-card" href="/execution/results/performance">性能耗时</a>
+      <a class="report-card" href="/execution/results/allure">Allure 报告</a>
     </div>
   </section>
 </section>
@@ -119,5 +144,8 @@
 
 {% block extra_scripts %}
 <script src="/static/pagination.component.js?v=20260322-1"></script>
-<script src="/static/workbench.js?v=20260322-5"></script>
+<script src="/static/workbench_shared.js?v=20260403-workbench-1"></script>
+<script src="/static/workbench_cases.js?v=20260403-workbench-1"></script>
+<script src="/static/workbench_runs.js?v=20260403-workbench-1"></script>
+<script src="/static/workbench.js?v=20260403-workbench-2"></script>
 {% endblock %}

@@ -1,6 +1,6 @@
 [
   {
-    "case_id": "TC-PRODUCT-SEARCH-001",
+    "case_id": "atp-web-prod-list-fn-ai-0006",
     "defect_id": "QA-123",
     "defect_url": "https://jira.example.com/browse/QA-123",
     "system": "jira",
@@ -8,7 +8,7 @@
     "linked_at": "2026-03-18T16:07:33.851559+00:00"
   },
   {
-    "case_id": "TC-PRODUCT-SEARCH-001",
+    "case_id": "atp-web-prod-list-fn-ai-0006",
     "defect_id": "JIRA-123",
     "defect_url": "https://jira.example.com/browse/JIRA-123",
     "system": "jira",

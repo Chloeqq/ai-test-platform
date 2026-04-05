@@ -17,11 +17,11 @@
   <p>{{ page_description }}</p>
 
   <nav class="report-tabs">
-    <a href="/report">Overview</a>
-    <a href="/report/failures">Failures</a>
-    <a href="/report/context">Context</a>
-    <a class="active" href="/report/performance">Performance</a>
-    <a href="/report/allure">Allure</a>
+    <a href="/execution/results">Overview</a>
+    <a href="/execution/results/failures">Failures</a>
+    <a href="/execution/results/context">Context</a>
+    <a class="active" href="/execution/results/performance">Performance</a>
+    <a href="/execution/results/allure">Allure</a>
   </nav>
 
   <section class="report-summary-grid">
@@ -47,7 +47,7 @@
         <thead>
           <tr>
             <th>Run ID</th>
-            <th>用例ID</th>
+            <th>用例 ID</th>
             <th>状态</th>
             <th>耗时(s)</th>
             <th>完成时间</th>
@@ -61,5 +61,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/report_performance.js"></script>
+<script src="/static/report_performance.js?v=20260402-report-performance-1"></script>
 {% endblock %}

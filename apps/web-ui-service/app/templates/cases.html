@@ -4,7 +4,13 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/pagination.component.css?v=20260323-1">
-<link rel="stylesheet" href="/static/cases.css?v=20260328-2">
+<link rel="stylesheet" href="/static/cases.css?v=20260403-cases-shared-2">
+<link rel="stylesheet" href="/static/cases.form.css?v=20260403-cases-form-1">
+<link rel="stylesheet" href="/static/cases.layout.css?v=20260403-cases-layout-2">
+<link rel="stylesheet" href="/static/cases.tree.css?v=20260403-cases-tree-2">
+<link rel="stylesheet" href="/static/cases.list.css?v=20260403-cases-list-4">
+<link rel="stylesheet" href="/static/cases.panel.css?v=20260403-cases-panel-2">
+<link rel="stylesheet" href="/static/cases.pagination.css?v=20260403-cases-pagination-2">
 {% endblock %}
 
 {% block content %}
@@ -14,174 +20,128 @@
       <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
     {% endfor %}
   </p>
-  <h1>{{ page_title }}</h1>
-  <p>{{ page_description }}</p>
+  <div class="cases-page-head">
+    <div class="cases-page-copy">
+      <h1 class="cases-page-title">{{ page_title }}</h1>
+      <p class="cases-page-note">
+        {{ page_description }}
+        AI 生成入口已统一收口到 <a href="/ai-generation">AI生成</a>，本页聚焦结构化浏览、筛选、批量治理和详情跳转。
+      </p>
+    </div>
+  </div>
 
-  <section class="cases-layout">
-    <aside class="module-tree-pane">
-      <div class="section-title-row">
-        <h2>模块树</h2>
+  <section class="cases-reference-layout">
+    <aside class="cases-tree-pane" id="cases-tree-shell">
+      <div class="cases-tree-toolbar">
+        <details class="cases-tree-ops" id="cases-tree-ops">
+          <summary>更多操作</summary>
+          <div class="cases-tree-ops-menu">
+            <button id="btn-tree-clear" class="btn cases-inline-btn" type="button">清空定位</button>
+            <button id="btn-tree-expand" class="btn cases-inline-btn" type="button">展开全部</button>
+            <button id="btn-tree-collapse" class="btn cases-inline-btn" type="button">收起全部</button>
+          </div>
+        </details>
       </div>
-      <div id="module-tree" class="module-tree-list"></div>
+
+      <div class="cases-tree-card">
+        <div class="cases-tree-head">
+          <h2>模块树</h2>
+          <span id="cases-tree-total" class="cases-tree-total">0</span>
+        </div>
+        <div id="cases-tree" class="cases-tree"></div>
+      </div>
     </aside>
 
-    <div class="case-list-pane">
-      <div class="toolbar-grid">
-        <input id="search-input" type="search" placeholder="搜索用例名称/模块">
-        <select id="filter-tag"><option value="">标签（全部）</option></select>
-        <select id="filter-priority"><option value="">优先级（全部）</option></select>
-        <select id="filter-creator"><option value="">创建人（全部）</option></select>
-        <select id="filter-result"><option value="">最后执行结果（全部）</option></select>
-      </div>
+    <section class="cases-table-pane" id="cases-table-shell">
+      <div class="cases-table-card">
+        <header class="cases-table-header">
+          <div class="cases-table-copy">
+            <p class="cases-section-eyebrow">用例列表</p>
+            <h2>功能用例</h2>
+            <p class="cases-section-note">左侧按产品线与模块定位，右侧统一做列表浏览、筛选、批量操作和详情跳转。</p>
+          </div>
+          <button id="btn-new-case" class="btn btn-primary cases-btn-primary">手动新建草稿</button>
+        </header>
 
-      <div class="toolbar-actions">
-        <button id="btn-new-case" class="btn btn-primary">新建用例</button>
-        <button id="btn-export" class="btn">批量导出</button>
-        <button id="btn-delete" class="btn btn-danger">批量删除</button>
-        <button id="btn-tags" class="btn">修改标签</button>
-      </div>
+        <section class="cases-toolbar-card">
+          <input id="cases-sort-key" type="hidden" value="updated_at">
+          <input id="cases-sort-dir" type="hidden" value="desc">
+          <input id="filter-product-line" type="hidden" value="">
+          <input id="filter-module" type="hidden" value="">
+          <div class="list-toolbar">
+            <div class="list-search-row">
+              <label class="list-search-field" for="search-input">
+                <span class="list-search-icon">搜</span>
+                <input id="search-input" type="search" placeholder="搜索用例 ID、名称、模块，或输入 类型:api 状态:启用 创建人:qa 结果:失败">
+                <button id="cases-search-clear" class="list-search-clear" type="button" aria-label="清空搜索" hidden>×</button>
+              </label>
+              <button id="btn-search" class="btn btn-primary" type="button">搜索</button>
+              <button id="btn-refresh" class="btn cases-btn-secondary" type="button">重新加载</button>
+              <button id="btn-reset-filters" class="btn cases-btn-secondary" type="button">重置搜索</button>
+            </div>
+            <details class="cases-search-help">
+              <summary>搜索语法示例</summary>
+              <p>支持模糊搜索，也支持字段搜索：<code>类型:api</code> <code>状态:启用</code> <code>创建人:qa</code> <code>结果:失败</code>。</p>
+            </details>
+          </div>
+        </section>
 
-      <div class="table-wrap">
-        <table class="case-table">
-          <thead>
-            <tr>
-              <th><input id="check-all" type="checkbox"></th>
-              <th>用例名称</th>
-              <th>产品线</th>
-              <th>模块</th>
-              <th>类型</th>
-              <th>优先级</th>
-              <th>标签</th>
-              <th>标记</th>
-              <th>数据驱动</th>
-              <th>状态</th>
-              <th>创建人</th>
-              <th>最后执行结果</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="case-table-body"></tbody>
-        </table>
-      </div>
-      <div class="case-pagination" id="cases-pagination"></div>
-    </div>
-  </section>
-</section>
+        <div id="cases-search-context" class="cases-search-context" hidden></div>
 
-<dialog id="new-case-dialog" class="case-dialog">
-  <form id="new-case-form" method="dialog">
-    <header>
-      <h3>新建用例（引导式）</h3>
-      <button type="button" class="close-btn" id="btn-close-dialog">×</button>
-    </header>
+        <div class="cases-selection-bar hidden" id="cases-selection-bar">
+          <span>已选择 <strong id="cases-selected-count">0</strong> 条用例</span>
+          <div class="cases-selection-actions">
+            <button id="btn-tags" class="btn cases-inline-btn" type="button">批量修改标签</button>
+            <button id="btn-export" class="btn cases-inline-btn" type="button">批量导出</button>
+            <button id="btn-archive" class="btn cases-inline-btn cases-inline-danger" type="button">批量废弃</button>
+            <button id="btn-clear-selection" class="btn cases-inline-btn" type="button">清空选择</button>
+          </div>
+        </div>
 
-    <ol class="wizard-steps">
-      <li>1. 选择生成方式</li>
-      <li>2. 填写基本信息</li>
-      <li>3. 提交创建</li>
-    </ol>
+        <div class="table-wrap cases-table-wrap">
+          <table class="case-table cases-grid-table">
+            <thead>
+              <tr>
+                <th class="cases-col-check">
+                  <input id="check-all" type="checkbox" aria-label="全选当前页">
+                </th>
+                <th class="cases-col-handle"></th>
+                <th><button class="sort-button" data-sort-key="id" data-sort-default="asc" type="button">ID</button></th>
+                <th><button class="sort-button" data-sort-key="name" data-sort-default="asc" type="button">名称</button></th>
+                <th><button class="sort-button" data-sort-key="status" data-sort-default="asc" type="button">状态 / 结果</button></th>
+                <th>标签</th>
+                <th><button class="sort-button" data-sort-key="version" data-sort-default="desc" type="button">版本</button></th>
+                <th><button class="sort-button" data-sort-key="module" data-sort-default="asc" type="button">所属模块</button></th>
+                <th><button class="sort-button" data-sort-key="updated_at" data-sort-default="desc" type="button">更新时间</button></th>
+                <th class="row-actions-col">操作</th>
+              </tr>
+            </thead>
+            <tbody id="cases-table-body"></tbody>
+          </table>
+        </div>
 
-    <div class="form-grid">
-      <label>生成方式
-        <select id="new-mode" name="mode">
-          <option value="manual">手动编写</option>
-          <option value="ai">AI生成（从需求解析）</option>
-        </select>
-      </label>
-      <label>用例名称
-        <input id="new-name" name="name" placeholder="例如：商品页筛选条件组合验证">
-      </label>
-      <label>产品线
-        <input id="new-product-line" name="product_line" value="电商平台" required>
-      </label>
-      <label>模块
-        <input id="new-module" name="module" value="商品中心" required>
-      </label>
-      <label>优先级
-        <select id="new-priority" name="priority">
-          <option value="P1">P1</option>
-          <option value="P2" selected>P2</option>
-          <option value="P3">P3</option>
-        </select>
-      </label>
-      <label>测试类型
-        <select id="new-test-type" name="test_type">
-          <option value="ui" selected>UI</option>
-          <option value="api">API</option>
-          <option value="mobile">Mobile</option>
-          <option value="database">Database</option>
-        </select>
-      </label>
-      <label>标签（逗号分隔）
-        <input id="new-tags" name="tags" placeholder="smoke,search,web">
-      </label>
-      <label>标记（逗号分隔）
-        <input id="new-markers" name="markers" placeholder="smoke,regression,p0">
-      </label>
-      <label>创建人
-        <input id="new-creator" name="creator" value="admin">
-      </label>
-      <label>Pytest 路径
-        <input id="new-pytest-path" name="pytest_path" placeholder="tests/ui/oms/test_return_apply.py">
-      </label>
-      <label>状态
-        <select id="new-status" name="status">
-          <option value="active" selected>active</option>
-          <option value="inactive">inactive</option>
-          <option value="deprecated">deprecated</option>
-        </select>
-      </label>
-    </div>
-
-    <label id="manual-script-wrap">脚本代码（手动）
-      <textarea id="new-script" name="script_code" rows="8" placeholder="def test_xxx(page): ..."></textarea>
-    </label>
-
-    <label id="ai-requirement-wrap" class="hidden">需求描述（AI）
-      <textarea id="new-requirement" name="requirement" rows="6" placeholder="输入需求，AI将自动生成初始脚本"></textarea>
-    </label>
-
-    <section class="data-config-panel">
-      <div class="data-config-header">
-        <strong>数据驱动配置</strong>
-        <label class="data-config-toggle">
-          <input id="new-ddt-enabled" type="checkbox" name="data_config_enabled">
-          启用
-        </label>
-      </div>
-
-      <div class="data-config-fields">
-        <label>参数（逗号分隔）
-          <input id="new-ddt-parameters" name="data_config_parameters" placeholder="例如：username,password,expected">
-        </label>
-      </div>
-
-      <div class="data-config-actions">
-        <button type="button" class="btn" id="btn-ddt-add-row">添加数据行</button>
-        <button type="button" class="btn" id="btn-ddt-clear-rows">清空数据行</button>
-      </div>
-
-      <div class="data-config-table-wrap">
-        <table class="data-config-table">
-          <thead id="ddt-table-head"></thead>
-          <tbody id="ddt-table-body">
-            <tr>
-              <td class="ddt-empty">暂无数据行。请先填写参数，再点击“添加数据行”。</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="case-list-footer" id="cases-footer">
+          <div class="case-list-footer-meta">
+            <span id="cases-visible-summary">当前页 0 条</span>
+            <span class="case-list-footer-sep">·</span>
+            <span id="cases-last-updated">最近刷新：未刷新</span>
+          </div>
+          <div class="case-pagination" id="cases-pagination"></div>
+        </div>
       </div>
     </section>
-
-    <footer>
-      <button type="button" class="btn" id="btn-cancel-dialog">取消</button>
-      <button type="submit" class="btn btn-primary">创建用例</button>
-    </footer>
-  </form>
-</dialog>
+  </section>
+</section>
+{% include "_cases_new_case_dialog.html" %}
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="/static/pagination.component.js?v=20260323-1"></script>
-<script src="/static/cases.js?v=20260328-2"></script>
+<script src="/static/cases_api.js?v=20260403-cases-1"></script>
+<script src="/static/cases_dialog.js?v=20260403-cases-1"></script>
+<script src="/static/cases_presenter.js?v=20260403-cases-3"></script>
+<script src="/static/cases.table_actions.js?v=20260403-cases-table-actions-1"></script>
+<script src="/static/cases_tree.js?v=20260404-cases-tree-1"></script>
+<script src="/static/cases_support.js?v=20260404-cases-2"></script>
+<script src="/static/cases.js?v=20260404-cases-2"></script>
 {% endblock %}

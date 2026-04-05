@@ -5,12 +5,12 @@ import uuid
 from pathlib import Path
 
 from flask import Flask, Response, g, jsonify, request, send_from_directory
-from starlette.middleware.wsgi import WSGIMiddleware
 from werkzeug.serving import make_server
 
-from asset_service import AssetService
+from asset_service import AssetService  # type: ignore[import-not-found]
 from apps.shared_backend.observability import configure_logging, set_request_id
-from orchestrator_service import OrchestratorError, OrchestratorService, OrchestratorValidationError
+from orchestrator_service import OrchestratorError, OrchestratorService, OrchestratorValidationError  # type: ignore[import-not-found]
+from wsgi_asgi import WSGIToASGIAdapter  # type: ignore[import-not-found]
 
 WEB_CONSOLE_ROOT = Path(__file__).resolve().parents[2] / "web-console" / "static"
 configure_logging(service_name="ai-orchestrator")
@@ -119,6 +119,10 @@ def create_app(
     def get_report(case_id: str):
         return jsonify(orchestrator_service.get_report(case_id))
 
+    @app.get("/runners/catalog")
+    def get_runner_catalog():
+        return jsonify(orchestrator_service.list_runners())
+
     @app.get("/failures/clusters")
     def get_failure_clusters():
         limit = _read_int_query_arg("limit", default=200, min_value=1, max_value=2000)
@@ -152,6 +156,7 @@ def create_app(
             "execute": execute,
             "source": payload.get("source", "manual"),
             "mode": mode,
+            "runner": payload.get("runner", "playwright"),
         }
         optional_fields = [
             "input_sources",
@@ -450,4 +455,4 @@ def _resolve_execute_flag(payload: dict, mode: str) -> bool:
 
 
 flask_app = create_app()
-app = WSGIMiddleware(flask_app)
+app = WSGIToASGIAdapter(flask_app)

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from shared_backend.case_ids import normalize_case_id
 
 from runner.asset_toolkit import (
     add_page_element,
@@ -20,6 +21,9 @@ from runner.yaml_loader import load_yaml_file
 
 
 pytestmark = [pytest.mark.contract]
+
+
+CATALOG_CASE_ID = normalize_case_id("TC-CATALOG-001")
 
 
 def test_create_and_extend_page_object(tmp_path: Path):
@@ -68,7 +72,7 @@ def test_build_and_save_smoke_case_from_page_object(tmp_path: Path):
         kind="smoke",
         page="catalog",
         case_id="TC-CATALOG-001",
-        title="目录页面加载",
+        title="目录页面-列表展示-基础加载-执行验证-页面正常打开",
         description="验证目录页面可正常打开",
         requirement="目录页面展示",
         page_objects_dir=page_dir,
@@ -76,7 +80,7 @@ def test_build_and_save_smoke_case_from_page_object(tmp_path: Path):
     path = save_test_case(test_case, kind="smoke", output_dir=case_dir)
 
     saved = load_yaml_file(path)
-    assert saved["id"] == "TC-CATALOG-001"
+    assert saved["id"] == CATALOG_CASE_ID
     assert saved["execution"]["steps"] == [
         {"action": "login"},
         {"action": "click", "target": "catalog_menu"},
@@ -114,7 +118,7 @@ def test_build_test_case_requires_explicit_targets_when_inference_fails(tmp_path
 
 def test_sync_test_case_rewrites_steps_but_preserves_metadata(tmp_path: Path):
     page_dir = tmp_path / "page-objects"
-    case_path = tmp_path / "cases" / "TC-CATALOG-001.yaml"
+    case_path = tmp_path / "cases" / f"{CATALOG_CASE_ID}.yaml"
 
     save_page_object(
         {
@@ -138,7 +142,7 @@ def test_sync_test_case_rewrites_steps_but_preserves_metadata(tmp_path: Path):
         {
             "version": "v4",
             "id": "TC-CATALOG-001",
-            "title": "旧目录用例",
+            "title": "目录页面-列表展示-旧版场景-同步步骤-保持元数据不变",
             "module": "catalog",
             "priority": "P1",
             "tags": ["smoke", "catalog"],
@@ -167,7 +171,7 @@ def test_sync_test_case_rewrites_steps_but_preserves_metadata(tmp_path: Path):
     )
 
     synced = load_yaml_file(case_path)
-    assert synced["title"] == "旧目录用例"
+    assert synced["title"] == "目录页面-列表展示-旧版场景-同步步骤-保持元数据不变"
     assert synced["description"] == "原始描述"
     assert synced["execution"]["steps"] == [
         {"action": "login"},
@@ -212,6 +216,37 @@ def test_scaffold_page_assets_uses_smoke_role_targets(tmp_path: Path):
     ]
     assert Path(result["page_object_path"]).exists()
     assert Path(result["test_case_path"]).exists()
+
+
+def test_save_test_case_allocates_platform_case_id_for_ai_generated_case(tmp_path: Path):
+    case_dir = tmp_path / "ai-generated"
+    case_path = save_test_case(
+        {
+            "version": "v4",
+            "id": "legacy-product-case-001",
+            "title": "商品页-列表展示-基础加载-执行验证-页面正常打开",
+            "module": "product",
+            "priority": "P1",
+            "tags": ["ai-generated", "product"],
+            "owner": "qa-team",
+            "status": "automated",
+            "description": "验证商品页列表展示基础场景可以正常执行。",
+            "requirement": ["商品页基础展示"],
+            "data": {},
+            "execution": {
+                "runner": "playwright",
+                "page": "product",
+                "variables": {},
+                "steps": [{"action": "login"}],
+            },
+        },
+        kind="ai-generated",
+        output_dir=case_dir,
+    )
+
+    assert case_path.stem.startswith("atp-web-prod-list-")
+    saved = load_yaml_file(case_path)
+    assert saved["id"] == case_path.stem
 
 
 def test_scaffold_page_assets_rejects_duplicate_smoke_roles(tmp_path: Path):

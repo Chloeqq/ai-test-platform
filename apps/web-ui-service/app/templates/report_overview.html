@@ -17,11 +17,11 @@
   <p>{{ page_description }}</p>
 
   <nav class="report-tabs">
-    <a class="active" href="/report">Overview</a>
-    <a href="/report/failures">Failures</a>
-    <a href="/report/context">Context</a>
-    <a href="/report/performance">Performance</a>
-    <a href="/report/allure">Allure</a>
+    <a class="active" href="/execution/results">总览</a>
+    <a href="/execution/results/failures">失败详情</a>
+    <a href="/execution/results/context">资产与集成</a>
+    <a href="/execution/results/performance">性能耗时</a>
+    <a href="/execution/results/allure">Allure</a>
   </nav>
 
   <section class="report-summary-grid">
@@ -50,7 +50,7 @@
       <table class="case-table">
         <thead>
           <tr>
-            <th>用例ID</th>
+            <th>用例 ID</th>
             <th>摘要</th>
             <th>风险</th>
             <th>失败来源</th>
@@ -67,5 +67,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/report_overview.js"></script>
+<script src="/static/report_overview.js?v=20260402-report-overview-1"></script>
 {% endblock %}

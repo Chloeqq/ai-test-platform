@@ -6,7 +6,7 @@ SRC_ROOT = Path(__file__).resolve().parents[1]
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from src.agent import TestDesignAgent
+from src.agent import TestDesignAgent  # noqa: E402
 
 
 def _build_agent_without_init() -> TestDesignAgent:
@@ -116,7 +116,7 @@ def test_build_test_points_from_case_keeps_step_order_and_semantics():
 def test_render_case_from_test_points_preserves_stable_steps():
     agent = _build_agent_without_init()
     test_case = {
-        "id": "TC-PRODUCT-001",
+        "id": "tc-product-001",
         "requirement": ["商品搜索"],
         "execution": {
             "page": "product",

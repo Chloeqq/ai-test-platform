@@ -12,7 +12,7 @@ test_cases = load_expanded_test_cases("smoke")
 @pytest.mark.parametrize(
     "test_case",
     test_cases,
-    ids=[tc["title"] for tc in test_cases],
+    ids=[tc.get("id") or tc.get("title") or "case" for tc in test_cases],
 )
 def test_yaml_smoke(page, base_url, test_username, test_password, test_case):
 

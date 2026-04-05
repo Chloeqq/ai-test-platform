@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from runner.action_registry import ACTION_DEFINITIONS
@@ -7,22 +5,23 @@ from runner.page_object_validator import validate_page_object_schema
 from runner.paths import PAGE_OBJECTS_ROOT, TEST_CASES_ROOT
 from runner.schema_validator import validate_testcase_schema
 from runner.yaml_loader import load_yaml_file
+from shared_backend.case_rules import validate_case_payload
 
 
 pytestmark = [pytest.mark.contract]
 
 
 STABLE_SMOKE_BASELINE = {
-    "login-smoke.yaml": {
-        "id": "TC-LOGIN-001",
+    "atp-web-login-auth-sm-imp-0001.yaml": {
+        "id": "atp-web-login-auth-sm-imp-0001",
         "page": "login",
         "steps": [
             {"action": "login"},
             {"action": "assert_visible", "target": "home_menu"},
         ],
     },
-    "order-smoke.yaml": {
-        "id": "TC-ORDER-001",
+    "atp-web-ord-list-sm-imp-0001.yaml": {
+        "id": "atp-web-ord-list-sm-imp-0001",
         "page": "order",
         "steps": [
             {"action": "login"},
@@ -31,8 +30,8 @@ STABLE_SMOKE_BASELINE = {
             {"action": "assert_visible", "target": "order_list_title"},
         ],
     },
-    "permission-smoke.yaml": {
-        "id": "TC-PERMISSION-001",
+    "atp-web-perm-auth-sm-imp-0001.yaml": {
+        "id": "atp-web-perm-auth-sm-imp-0001",
         "page": "permission",
         "steps": [
             {"action": "login"},
@@ -41,8 +40,8 @@ STABLE_SMOKE_BASELINE = {
             {"action": "assert_visible", "target": "permission_table"},
         ],
     },
-    "product-smoke.yaml": {
-        "id": "TC-PRODUCT-001",
+    "atp-web-prod-list-sm-imp-0001.yaml": {
+        "id": "atp-web-prod-list-sm-imp-0001",
         "page": "product",
         "steps": [
             {"action": "login"},
@@ -86,6 +85,8 @@ def test_all_test_cases_are_non_empty_schema_valid_and_reference_known_targets()
         test_case = load_yaml_file(path)
         assert test_case is not None, f"Test case file is empty: {path}"
         validate_testcase_schema(test_case)
+        rule_errors = validate_case_payload(test_case)
+        assert rule_errors == [], f"Case rule violations in {path}: {rule_errors}"
 
         case_id = test_case["id"]
         assert case_id not in seen_ids, f"Duplicate test case id found: {case_id}"

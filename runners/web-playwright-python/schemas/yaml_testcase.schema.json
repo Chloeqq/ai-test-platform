@@ -28,7 +28,55 @@
     "owner": {
       "type": "string"
     },
+    "legacy_case_id": {
+      "type": "string"
+    },
+    "project": {
+      "type": "string"
+    },
+    "client": {
+      "type": "string"
+    },
+    "page_code": {
+      "type": "string"
+    },
+    "page_name": {
+      "type": "string"
+    },
+    "module_code": {
+      "type": "string"
+    },
+    "module_name": {
+      "type": "string"
+    },
+    "case_type": {
+      "type": "string"
+    },
+    "case_type_name": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "source_name": {
+      "type": "string"
+    },
     "status": {
+      "type": "string"
+    },
+    "status_name": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "change_source": {
+      "type": "string"
+    },
+    "ai_status": {
+      "type": "string"
+    },
+    "ai_status_name": {
       "type": "string"
     },
     "description": {
@@ -53,7 +101,7 @@
       "properties": {
         "runner": {
           "type": "string",
-          "enum": ["playwright"]
+          "enum": ["playwright", "api", "mobile"]
         },
         "page": {
           "type": "string",
@@ -87,6 +135,13 @@
               },
               "value": {
                 "type": ["string", "number", "boolean", "object", "array", "null"]
+              },
+              "source_point_key": {
+                "type": ["string", "null"]
+              },
+              "traceability": {
+                "type": ["object", "null"],
+                "additionalProperties": true
               }
             },
             "allOf": [

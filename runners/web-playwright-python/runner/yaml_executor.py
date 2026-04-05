@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 from playwright.sync_api import Page
 
 from runner.action_registry import ACTION_DEFINITIONS

@@ -161,7 +161,7 @@ PYTHONPATH=runners/web-playwright-python .venv/bin/python runners/web-playwright
   init-test-case \
   --kind smoke \
   --page product \
-  --id TC-PRODUCT-NEW-001 \
+  --id tc-product-NEW-001 \
   --title "商品页面加载" \
   --description "验证商品页面可以正常打开" \
   --requirement "商品页面展示"
@@ -282,7 +282,7 @@ suggestion.json
 
 ```bash
 python /Users/bettyhuang/PycharmProjects/ai-test-platform/agents/self-healing-advisor-agent/apply_fix.py preview \
-  --case /Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/TC-PRODUCT-SEARCH-001.yaml \
+  --case /Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/tc-product-SEARCH-001.yaml \
   --suggestion /path/to/suggestion.json \
   --output /tmp/patch-plan.json
 
@@ -461,7 +461,7 @@ export PLAYWRIGHT_VIDEO_DIR=custom-videos
 
 ```yaml
 version: v4                          # ① 用例格式版本
-id: TC-PRODUCT-001                   # ② 用例唯一标识
+id: tc-product-001                   # ② 用例唯一标识
 title: 商品列表页面加载                # ③ 用例标题
 module: product                      # ④ 所属模块
 priority: P0                         # ⑤ 优先级 (P0/P1/P2/P3)
@@ -530,9 +530,9 @@ data:
     - 图书
 
 # 展开后生成 3 条用例:
-# TC-PRODUCT-SEARCH-001-0: search_keyword = "手机"
-# TC-PRODUCT-SEARCH-001-1: search_keyword = "电脑"
-# TC-PRODUCT-SEARCH-001-2: search_keyword = "图书"
+# tc-product-SEARCH-001-0: search_keyword = "手机"
+# tc-product-SEARCH-001-1: search_keyword = "电脑"
+# tc-product-SEARCH-001-2: search_keyword = "图书"
 ```
 
 ```yaml

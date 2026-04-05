@@ -6,7 +6,7 @@ AGENT_ROOT = Path(__file__).resolve().parent
 if str(AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(AGENT_ROOT))
 
-from suggest import SelfHealingAdvisor
+from suggest import SelfHealingAdvisor  # noqa: E402
 
 
 def test_suggest_never_emits_new_target():

@@ -9,6 +9,20 @@ make install-dev
 make test
 ```
 
+如果改动跨越 `apps/agents/runners` 多模块，建议额外执行：
+
+```bash
+make static-baseline
+```
+
+本地快速迭代时可以先运行：
+
+```bash
+make static-baseline-fast
+```
+
+说明：当前 CI 在 `pull_request/push` 默认执行 `make static-baseline`，本地提前执行可避免命令口径不一致导致的回归。
+
 如果改动涉及以下内容，要求额外检查：
 
 - `assets/test-cases/`

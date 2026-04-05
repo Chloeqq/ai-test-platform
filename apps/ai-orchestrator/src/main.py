@@ -1,8 +1,8 @@
 import argparse
 import json
 
-from app import create_server
-from orchestrator_service import OrchestratorService
+from app import create_server  # type: ignore[import-not-found]
+from orchestrator_service import OrchestratorService  # type: ignore[import-not-found]
 
 
 def build_parser() -> argparse.ArgumentParser:

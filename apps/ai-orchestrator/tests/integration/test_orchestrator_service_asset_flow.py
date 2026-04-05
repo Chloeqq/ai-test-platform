@@ -23,14 +23,14 @@ def test_orchestrator_service_persists_generated_case_via_asset_toolkit(tmp_path
     def fake_generate_case(requirement: str, page: str):
         return {
             "version": "v4",
-            "id": "TC-PRODUCT-GEN-001",
-            "title": "生成商品用例",
+            "id": "tc-product-GEN-001",
+            "title": "商品页-列表展示-基础生成-执行验证-关键元素可见",
             "module": "product",
             "priority": "P1",
             "tags": ["product"],
             "owner": "qa-team",
             "status": "automated",
-            "description": "生成的商品用例",
+            "description": "根据需求自动生成的商品列表测试用例。",
             "requirement": [requirement],
             "data": {},
             "execution": {
@@ -61,12 +61,14 @@ def test_orchestrator_service_persists_generated_case_via_asset_toolkit(tmp_path
 
     assert "ai-generated" in saved_case["tags"]
     assert "product" in saved_case["tags"]
-    assert result.case["id"] == "TC-PRODUCT-GEN-001"
+    assert result.case["id"] == "tc-product-GEN-001"
     assert result.test_points["page"] == "product"
     assert result.test_points["points"][0]["action"] == "login"
     assert result.execution_record["status"] == "generated"
     assert result.execution_record["version"] == "ExecutionRecordV1"
-    assert result.execution_record["step_summary"]["total_steps"] == 2
+    assert result.execution_record["step_summary"]["total_steps"] == len(result.case["execution"]["steps"])
+    assert result.execution_record["metadata"]["multisource"]["traceability_summary"]["source_input_count"] >= 1
+    assert "traceability_completeness" in result.execution_record["metadata"]["multisource"]["traceability_summary"]
     assert result.design_generation["fallback_used"] is False
     assert result.report is not None
     assert result.report["status"] == "generated"
@@ -75,6 +77,8 @@ def test_orchestrator_service_persists_generated_case_via_asset_toolkit(tmp_path
     assert result.report["execution_record"]["version"] == "ExecutionRecordV1"
     assert result.report["execution_record_meta"]["version"] == "ExecutionRecordResolutionMetaV1"
     assert result.report["execution_record_meta"]["source"] == "generated"
+    assert result.report["execution_record_meta"]["manifest_status"] == "no_entry"
+    assert result.report["execution_record_meta"]["resolution_reason"] == "generated_without_execution_artifacts"
     assert result.report["execution_record_meta"]["compat_builder_used"] is False
     assert result.report["request_context"]["mode"] == "generate_only"
     assert result.report["request_context"]["source"] == "manual"
@@ -84,9 +88,78 @@ def test_orchestrator_service_persists_generated_case_via_asset_toolkit(tmp_path
     assert parser_runtime.get("agent") == "requirement-parser-agent"
     assert str(parser_runtime.get("prompt_version", "")).startswith("requirement-parser.prompt.")
     assert parser_runtime.get("model")
+    assert isinstance(parser_runtime.get("page_resolution", {}).get("candidate_details", []), list)
     assert Path(result.report_json_path).exists()
     assert Path(result.report_markdown_path).exists()
     assert result.report_summary_path == ""
+
+
+def test_orchestrator_service_supports_generate_only_api_runner(tmp_path: Path):
+    import sys
+
+    src_root = Path(__file__).resolve().parents[2] / "src"
+    if str(src_root) not in sys.path:
+        sys.path.insert(0, str(src_root))
+
+    from orchestrator_service import OrchestratorService
+
+    service = OrchestratorService(repo_root=Path(__file__).resolve().parents[4])
+    service.generated_cases_root = tmp_path / "assets" / "test-cases" / "ai-generated"
+    service.generated_cases_root.mkdir(parents=True)
+
+    service._generate_case = lambda requirement, page: {  # type: ignore[method-assign]
+        "version": "v4",
+        "id": "TC-API-GEN-001",
+        "title": "账单页-查询检索-接口生成-执行验证-返回结果正确",
+        "module": "billing",
+        "priority": "P1",
+        "tags": ["billing", "api"],
+        "owner": "qa-team",
+        "status": "automated",
+        "description": "根据需求自动生成的账单查询接口测试用例。",
+        "requirement": [requirement],
+        "data": {},
+        "execution": {
+            "runner": "playwright",
+            "page": page,
+            "variables": {},
+            "steps": [{"action": "assert_visible", "target": "billing_result"}],
+        },
+    }
+
+    result = service.orchestrate(
+        requirement="验证账单 API 查询",
+        page="billing",
+        execute=False,
+        runner="api",
+    )
+
+    assert result.case["execution"]["runner"] == "api"
+    assert result.generated_script["framework"] == "requests"
+    assert result.execution_record["metadata"]["runner"] == "api"
+    assert result.execution_record["metadata"]["runner_profile"]["channel"] == "api"
+
+
+def test_orchestrator_service_rejects_execute_for_mobile_runner(tmp_path: Path):
+    import sys
+
+    src_root = Path(__file__).resolve().parents[2] / "src"
+    if str(src_root) not in sys.path:
+        sys.path.insert(0, str(src_root))
+
+    from orchestrator_service import OrchestratorService, OrchestratorValidationError
+
+    service = OrchestratorService(repo_root=Path(__file__).resolve().parents[4])
+
+    with pytest.raises(OrchestratorValidationError) as exc_info:
+        service.orchestrate(
+            requirement="验证移动端登录",
+            page="login",
+            execute=True,
+            runner="mobile",
+        )
+
+    assert "does not support execute=true" in str(exc_info.value)
 
 
 def test_orchestrator_service_exposes_design_fallback_metadata(tmp_path: Path):
@@ -105,13 +178,13 @@ def test_orchestrator_service_exposes_design_fallback_metadata(tmp_path: Path):
     service._generate_case = lambda requirement, page: {  # type: ignore[method-assign]
         "version": "v4",
         "id": "SMOKE-PRODUCT-000001",
-        "title": "SMOKE-PRODUCT-FALLBACK",
+        "title": "商品页-核心流程-回退生成-执行基础冒烟-关键元素可见",
         "module": "product",
         "priority": "P1",
         "tags": ["ai-generated", "smoke", "product", "fallback"],
         "owner": "qa-team",
         "status": "automated",
-        "description": "Fallback case generated because test-design-agent failed: invalid yaml from llm",
+        "description": "由于测试设计代理生成失败，平台已回退生成基础冒烟用例。失败原因：invalid yaml from llm",
         "requirement": ["商品列表流程验证"],
         "data": {},
         "execution": {
@@ -156,6 +229,10 @@ def test_orchestrator_service_surfaces_constraint_technique_summary_in_test_poin
         "page": "billing",
         "design_input": "账单查询需要覆盖日期、金额和页码约束",
         "parse_confidence": 0.92,
+        "source_inputs": [
+            {"source_id": "prd.billing.list", "source_type": "prd", "summary": "账单列表需求", "reference_ids": ["PRD-BILLING-001"]},
+            {"source_id": "openapi.billing.list", "source_type": "openapi", "summary": "GET /api/billing/list", "reference_ids": ["/api/billing/list"]},
+        ],
         "test_intents": [
             {
                 "intent_id": "intent-01",
@@ -168,6 +245,8 @@ def test_orchestrator_service_surfaces_constraint_technique_summary_in_test_poin
         ],
         "coverage_matrix": [{"traceability_status": "covered", "intent_ids": ["intent-01"]}],
         "ambiguities": [],
+        "business_rules": [{"rule_type": "query_scope", "rule_text": "账单列表应支持分页查询", "source_ids": ["prd.billing.list"]}],
+        "change_impact": {"changed_files": ["apps/billing/service.py"], "changed_areas": ["business_rule"], "affected_intent_ids": ["intent-01"], "impact_score": 42},
         "field_definitions": [
             {
                 "field_key": "settlement_date",
@@ -199,13 +278,13 @@ def test_orchestrator_service_surfaces_constraint_technique_summary_in_test_poin
     service._generate_case = lambda requirement, page: {  # type: ignore[method-assign]
         "version": "v4",
         "id": "TC-BILLING-GEN-001",
-        "title": "账单查询",
+        "title": "账单页-查询检索-输入日期范围-执行查询-展示账单结果",
         "module": "billing",
         "priority": "P1",
         "tags": ["billing"],
         "owner": "qa-team",
         "status": "automated",
-        "description": "账单查询测试",
+        "description": "验证账单查询场景可正确处理日期、金额和页码约束。",
         "requirement": [requirement],
         "data": {},
         "execution": {
@@ -239,6 +318,19 @@ def test_orchestrator_service_surfaces_constraint_technique_summary_in_test_poin
     assert result.report["request_context"]["technique_summary"]["has_structured_constraints"] is True
     assert result.report["request_context"]["technique_summary"]["technique_distribution"]["boundary"] >= 4
     assert result.report["test_points_summary"]["technique_summary"]["parameter_constraint_count"] == 1
+    assert result.test_points["metadata"]["traceability_summary"]["source_input_count"] == 2
+    assert result.test_points["metadata"]["traceability_summary"]["coverage_breakdown"]["covered"] >= 1
+    assert result.test_points["metadata"]["traceability_summary"]["source_breakdown"]["total"] == 2
+    assert result.test_points["metadata"]["traceability_summary"]["intent_coverage_status"] in {"covered", "partial", "gap", "orphan"}
+    assert isinstance(result.test_points["metadata"]["traceability_summary"]["partial_source_ids"], list)
+    assert result.test_points["points"][1]["metadata"]["traceability"]["source_ids"] == ["prd.billing.list"]
+    assert result.case["execution"]["steps"][0]["source_point_key"]
+    assert isinstance(result.report["request_context"]["source_summary"], dict)
+    assert result.report["test_points_summary"]["traceability_summary"]["source_input_count"] == 2
+    assert result.execution_record["metadata"]["multisource"]["source_summary"]["source_count"] == 2
+    assert result.execution_record["metadata"]["multisource"]["change_impact"]["top_factor"]["factor"]
+    assert "why_manual_review" in result.execution_record["metadata"]["multisource"]["change_impact"]
+    assert "why_blocked" in result.execution_record["metadata"]["multisource"]["change_impact"]
 
 
 def test_orchestrator_service_blocks_generation_when_requirement_quality_gate_fails(tmp_path: Path):
@@ -311,16 +403,16 @@ def test_orchestrator_service_builds_execution_report_after_runner_success(tmp_p
     service.generated_cases_root.mkdir(parents=True)
 
     def fake_generate_case(requirement: str, page: str):
-        return {
-            "version": "v4",
-            "id": "TC-PRODUCT-GEN-002",
-            "title": "执行商品用例",
-            "module": "product",
-            "priority": "P1",
-            "tags": ["product"],
-            "owner": "qa-team",
-            "status": "automated",
-            "description": "执行用例",
+            return {
+                "version": "v4",
+                "id": "tc-product-GEN-002",
+                "title": "商品页-列表展示-执行回放-运行验证-生成执行报告",
+                "module": "product",
+                "priority": "P1",
+                "tags": ["product"],
+                "owner": "qa-team",
+                "status": "automated",
+                "description": "用于验证生成后执行链路与报告拼装的商品列表用例。",
             "requirement": [requirement],
             "data": {},
             "execution": {
@@ -348,7 +440,7 @@ def test_orchestrator_service_builds_execution_report_after_runner_success(tmp_p
         (artifact_dir / "analysis.txt").write_text("Summary: none", encoding="utf-8")
         (artifact_dir / "suggestion.json").write_text('{"advice_type":"no_change"}', encoding="utf-8")
         (artifact_dir / "execution_record.json").write_text(
-            '{"run_id":"TC-PRODUCT-GEN-002:2026-03-18T00:00:00+00:00","case_id":"TC-PRODUCT-GEN-002","project":"default","source":"manual","mode":"generate_and_run","status":"passed","started_at":"2026-03-18T00:00:00+00:00","finished_at":"2026-03-18T00:00:01+00:00","step_summary":{"page":"product","requirement_count":1,"total_steps":2,"action_types":["assert_visible","login"]},"evidence_index":{"total_files":6,"artifact_categories":{"screenshots":1,"html_pages":1,"meta_files":1,"analysis_files":1,"suggestion_files":1,"execution_record_files":1,"self_healing_result_files":0,"videos":0,"other_files":0},"runner_exit_code":0,"execution_requested":true}}',
+            '{"run_id":"tc-product-GEN-002:2026-03-18T00:00:00+00:00","case_id":"tc-product-GEN-002","project":"default","source":"manual","mode":"generate_and_run","status":"passed","started_at":"2026-03-18T00:00:00+00:00","finished_at":"2026-03-18T00:00:01+00:00","step_summary":{"page":"product","requirement_count":1,"total_steps":2,"action_types":["assert_visible","login"]},"evidence_index":{"total_files":6,"artifact_categories":{"screenshots":1,"html_pages":1,"meta_files":1,"analysis_files":1,"suggestion_files":1,"execution_record_files":1,"self_healing_result_files":0,"videos":0,"other_files":0},"runner_exit_code":0,"execution_requested":true}}',
             encoding="utf-8",
         )
         (artifact_dir / "self_healing_result.json").write_text(
@@ -388,9 +480,11 @@ def test_orchestrator_service_builds_execution_report_after_runner_success(tmp_p
     assert result.report["self_healing_execution_preview"]["status"] == "success"
     assert result.report["execution_record"]["status"] == "passed"
     assert result.report["execution_record"]["version"] == "ExecutionRecordV1"
-    assert result.report["execution_record"]["case_id"] == "TC-PRODUCT-GEN-002"
+    assert result.report["execution_record"]["case_id"] == "tc-product-GEN-002"
     assert result.report["execution_record_meta"]["version"] == "ExecutionRecordResolutionMetaV1"
     assert result.report["execution_record_meta"]["source"] == "manifest"
+    assert result.report["execution_record_meta"]["manifest_status"] == "loaded"
+    assert result.report["execution_record_meta"]["resolution_reason"] == "execution_record_loaded_from_manifest"
     assert result.report["execution_record_meta"]["compat_builder_used"] is False
     assert result.report["evidence"]["execution_record_files"]
     assert result.report["request_context"]["mode"] == "generate_and_run"
@@ -424,16 +518,16 @@ def test_orchestrator_service_builds_failure_reason_and_analysis_for_failed_run(
     service.generated_cases_root.mkdir(parents=True)
 
     def fake_generate_case(requirement: str, page: str):
-        return {
-            "version": "v4",
-            "id": "TC-PRODUCT-GEN-003",
-            "title": "失败商品用例",
-            "module": "product",
-            "priority": "P1",
-            "tags": ["product"],
-            "owner": "qa-team",
-            "status": "automated",
-            "description": "失败用例",
+            return {
+                "version": "v4",
+                "id": "tc-product-GEN-003",
+                "title": "商品页-列表展示-失败回放-断言验证-输出失败分析",
+                "module": "product",
+                "priority": "P1",
+                "tags": ["product"],
+                "owner": "qa-team",
+                "status": "automated",
+                "description": "用于验证失败链路会生成失败原因、自愈建议和风险分析。",
             "requirement": [requirement],
             "data": {},
             "execution": {
@@ -457,7 +551,7 @@ def test_orchestrator_service_builds_failure_reason_and_analysis_for_failed_run(
         (artifact_dir / "analysis.txt").write_text("Summary: assertion", encoding="utf-8")
         (artifact_dir / "suggestion.json").write_text('{"advice_type":"assertion_update"}', encoding="utf-8")
         (artifact_dir / "execution_record.json").write_text(
-            '{"run_id":"TC-PRODUCT-GEN-003:2026-03-18T00:00:00+00:00","case_id":"TC-PRODUCT-GEN-003","project":"default","source":"manual","mode":"generate_and_run","status":"failed","started_at":"2026-03-18T00:00:00+00:00","finished_at":"2026-03-18T00:00:01+00:00","step_summary":{"page":"product","requirement_count":1,"total_steps":2,"action_types":["assert_visible","login"]},"evidence_index":{"total_files":3,"artifact_categories":{"screenshots":1,"html_pages":0,"meta_files":0,"analysis_files":1,"suggestion_files":1,"execution_record_files":1,"self_healing_result_files":0,"videos":0,"other_files":0},"runner_exit_code":1,"execution_requested":true}}',
+            '{"run_id":"tc-product-GEN-003:2026-03-18T00:00:00+00:00","case_id":"tc-product-GEN-003","project":"default","source":"manual","mode":"generate_and_run","status":"failed","started_at":"2026-03-18T00:00:00+00:00","finished_at":"2026-03-18T00:00:01+00:00","step_summary":{"page":"product","requirement_count":1,"total_steps":2,"action_types":["assert_visible","login"]},"evidence_index":{"total_files":3,"artifact_categories":{"screenshots":1,"html_pages":0,"meta_files":0,"analysis_files":1,"suggestion_files":1,"execution_record_files":1,"self_healing_result_files":0,"videos":0,"other_files":0},"runner_exit_code":1,"execution_requested":true}}',
             encoding="utf-8",
         )
         (artifact_dir / "self_healing_result.json").write_text(
@@ -527,6 +621,8 @@ def test_orchestrator_service_builds_failure_reason_and_analysis_for_failed_run(
     assert details["report"]["request_context"]["mode"] == "generate_and_run"
     assert details["report"]["execution_record_meta"]["version"] == "ExecutionRecordResolutionMetaV1"
     assert details["report"]["execution_record_meta"]["source"] == "manifest"
+    assert details["report"]["execution_record_meta"]["manifest_status"] == "loaded"
+    assert details["report"]["execution_record_meta"]["resolution_reason"] == "execution_record_loaded_from_manifest"
     assert details["report"]["execution_record_meta"]["compat_builder_used"] is False
     assert details["report"]["evidence"]["analysis_files"]
     assert details["report"]["evidence"]["suggestion_files"]
@@ -567,13 +663,13 @@ def test_orchestrator_service_reads_latest_and_named_reports(tmp_path: Path):
                 "   Suggestion Advice Type: no_change",
                 "   Suggestion Target: -",
                 "",
-                "2. Case: TC-PRODUCT-001",
+                "2. Case: tc-product-001",
                 "   Failure Category: assertion",
                 "   Actionable Suggestion: yes",
                 "   Suggestion Advice Type: assertion_update",
                 "   Suggestion Target: product_list_title",
                 "",
-                "3. Case: TC-PRODUCT-002",
+                "3. Case: tc-product-002",
                 "   Failure Category: locator",
                 "   Actionable Suggestion: yes",
                 "   Suggestion Advice Type: locator_update",
@@ -600,20 +696,18 @@ def test_orchestrator_service_reads_latest_and_named_reports(tmp_path: Path):
     assert named_report["report_summary_preview"]["total_failed_cases"] == 3
     assert named_report["report_summary_preview"]["actionable_self_healing_cases"] == 2
     assert named_report["report_summary_preview"]["environment_failure_cases"] == ["TC-LOGIN-001"]
-    assert named_report["report_summary_preview"]["actionable_self_healing_case_details"][0]["case_id"] == "TC-PRODUCT-001"
+    assert named_report["report_summary_preview"]["actionable_self_healing_case_details"][0]["case_id"] == "tc-product-001"
     assert latest_report["report"]["case_id"] == "TC-LATEST"
     assert latest_report["report_markdown_path"].endswith("TC-LATEST.report.md")
     assert latest_report["report_summary_preview"]["environment_failures"] == 1
     assert latest_report["report_summary_preview"]["actionable_self_healing_case_details"][1]["target"] == "product_table"
 
 
-def test_orchestrator_service_strict_mode_blocks_compat_execution_record_builder(tmp_path: Path):
-    import os
+def test_orchestrator_service_strict_mode_blocks_compat_execution_record_builder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     import sys
     import subprocess
 
-    if os.getenv("EXECUTION_RECORD_COMPAT_BUILDER_ENABLED", "").strip().lower() not in {"0", "false", "no", "off"}:
-        pytest.skip("strict-mode test requires EXECUTION_RECORD_COMPAT_BUILDER_ENABLED=false")
+    monkeypatch.setenv("EXECUTION_RECORD_COMPAT_BUILDER_ENABLED", "false")
 
     src_root = Path(__file__).resolve().parents[2] / "src"
     if str(src_root) not in sys.path:
@@ -628,16 +722,16 @@ def test_orchestrator_service_strict_mode_blocks_compat_execution_record_builder
     service.generated_cases_root.mkdir(parents=True)
 
     def fake_generate_case(requirement: str, page: str):
-        return {
-            "version": "v4",
-            "id": "TC-PRODUCT-STRICT-001",
-            "title": "严格模式商品用例",
-            "module": "product",
-            "priority": "P1",
-            "tags": ["product"],
-            "owner": "qa-team",
-            "status": "automated",
-            "description": "严格模式验证",
+            return {
+                "version": "v4",
+                "id": "tc-product-STRICT-001",
+                "title": "商品页-列表展示-严格模式-执行验证-缺少记录即阻断",
+                "module": "product",
+                "priority": "P1",
+                "tags": ["product"],
+                "owner": "qa-team",
+                "status": "automated",
+                "description": "用于验证严格模式下缺少 execution_record 时会直接阻断。",
             "requirement": [requirement],
             "data": {},
             "execution": {
@@ -677,6 +771,80 @@ def test_orchestrator_service_strict_mode_blocks_compat_execution_record_builder
         )
 
 
+def test_orchestrator_service_marks_compat_builder_usage_in_execution_record_meta(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import sys
+    import subprocess
+
+    monkeypatch.setenv("EXECUTION_RECORD_COMPAT_BUILDER_ENABLED", "true")
+
+    src_root = Path(__file__).resolve().parents[2] / "src"
+    if str(src_root) not in sys.path:
+        sys.path.insert(0, str(src_root))
+
+    from orchestrator_service import OrchestratorService
+
+    service = OrchestratorService(repo_root=Path(__file__).resolve().parents[4])
+    service.generated_cases_root = tmp_path / "assets" / "test-cases" / "ai-generated"
+    service.report_root = tmp_path / "reports" / "executions"
+    service.runner_root = tmp_path / "runner"
+    service.generated_cases_root.mkdir(parents=True)
+
+    service._generate_case = lambda requirement, page: {  # type: ignore[method-assign]
+        "version": "v4",
+        "id": "tc-product-COMPAT-001",
+        "title": "商品页-列表展示-兼容构建-执行验证-补齐执行记录元数据",
+        "module": "product",
+        "priority": "P1",
+        "tags": ["product"],
+        "owner": "qa-team",
+        "status": "automated",
+        "description": "用于验证兼容构建路径会补齐执行记录元数据。",
+        "requirement": [requirement],
+        "data": {},
+        "execution": {
+            "runner": "playwright",
+            "page": page,
+            "variables": {},
+            "steps": [
+                {"action": "login"},
+                {"action": "assert_visible", "target": "product_list_title"},
+            ],
+        },
+    }
+
+    artifact_dir = service.runner_root / "artifacts" / "compat-missing-record"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+
+    def fake_run_case(case_id: str, case_path: Path):
+        (artifact_dir / "analysis.txt").write_text("Summary: compat builder check", encoding="utf-8")
+        (artifact_dir / "suggestion.json").write_text('{"advice_type":"no_change"}', encoding="utf-8")
+        (artifact_dir / "failed.png").write_bytes(b"png")
+        return subprocess.CompletedProcess(
+            args=["pytest"],
+            returncode=0,
+            stdout="============================== 1 passed in 0.12s ==============================\n",
+            stderr="",
+        )
+
+    service._run_case = fake_run_case  # type: ignore[method-assign]
+
+    result = service.orchestrate(
+        requirement="验证商品列表展示",
+        page="product",
+        execute=True,
+    )
+
+    meta = result.report["execution_record_meta"]
+    assert meta["source"] == "compat_builder"
+    assert meta["compat_builder_used"] is True
+    assert meta["strict_violation"] is False
+    assert meta["manifest_status"] == "no_entry"
+    assert meta["resolution_reason"] == "compat_builder_fallback:no_entry"
+
+
 def test_orchestrator_service_previews_self_healing_advice_without_mutating_assets(tmp_path: Path):
     import sys
 
@@ -701,7 +869,7 @@ def test_orchestrator_service_previews_self_healing_advice_without_mutating_asse
     advice = service.preview_self_healing_advice(
         page="product",
         case={
-            "id": "TC-PRODUCT-GEN-900",
+            "id": "tc-product-GEN-900",
             "execution": {
                 "page": "product",
                 "steps": [{"action": "login"}],

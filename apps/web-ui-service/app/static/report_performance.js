@@ -19,20 +19,26 @@
   }
 
   function formatTime(value) {
-    if (!value) return "-";
-    try {
-      return new Date(value).toLocaleString("zh-CN");
-    } catch (_error) {
-      return String(value);
-    }
+    if (typeof window.platformFormatDateTime === "function") return window.platformFormatDateTime(value);
+    return String(value || "").trim() || "-";
+  }
+
+  function displayCaseId(value) {
+    if (typeof window.platformDisplayCaseId === "function") return window.platformDisplayCaseId(value);
+    return String(value || "").trim() || "-";
+  }
+
+  function displayRunId(value) {
+    if (typeof window.platformDisplayRunId === "function") return window.platformDisplayRunId(value);
+    return String(value || "").trim() || "-";
   }
 
   function renderRow(item) {
     const duration = typeof item.duration_seconds === "number" ? item.duration_seconds.toFixed(2) : "-";
     return `
       <tr>
-        <td>${escapeHtml(item.run_id || "-")}</td>
-        <td>${escapeHtml(item.case_id || "-")}</td>
+        <td>${escapeHtml(displayRunId(item.run_id || "-"))}</td>
+        <td>${escapeHtml(displayCaseId(item.case_id || "-"))}</td>
         <td>${escapeHtml(item.status || "-")}</td>
         <td>${escapeHtml(duration)}</td>
         <td>${escapeHtml(formatTime(item.finished_at))}</td>

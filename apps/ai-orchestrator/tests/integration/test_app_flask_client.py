@@ -1,4 +1,5 @@
 import sys
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -12,19 +13,19 @@ SRC_ROOT = PROJECT_ROOT / "apps" / "ai-orchestrator" / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from app import create_app
+from app import app as asgi_app, create_app
 
 
 class FakeService:
     def get_latest_report(self):
         return {
             "report": {
-                "case_id": "TC-PRODUCT-999",
+                "case_id": "tc-product-999",
                 "status": "passed",
                 "summary": "Latest fake report",
             },
-            "report_json_path": "/tmp/TC-PRODUCT-999.report.json",
-            "report_markdown_path": "/tmp/TC-PRODUCT-999.report.md",
+            "report_json_path": "/tmp/tc-product-999.report.json",
+            "report_markdown_path": "/tmp/tc-product-999.report.md",
             "report_summary_path": "/tmp/report_summary.txt",
             "report_summary_preview": {
                 "total_failed_cases": 0,
@@ -77,7 +78,7 @@ def test_flask_client_latest_report_returns_summary_preview(flask_client):
 
     payload = response.get_json()
     assert response.status_code == 200
-    assert payload["report"]["case_id"] == "TC-PRODUCT-999"
+    assert payload["report"]["case_id"] == "tc-product-999"
     assert payload["report_summary_preview"]["total_failed_cases"] == 0
 
 
@@ -91,3 +92,39 @@ def test_flask_client_rejects_non_json_post(flask_client):
     payload = response.get_json()
     assert response.status_code == 415
     assert payload["error"]["code"] == "unsupported_media_type"
+
+
+def test_asgi_adapter_health_returns_ok() -> None:
+    messages: list[dict[str, object]] = []
+    body_sent = False
+
+    async def receive() -> dict[str, object]:
+        nonlocal body_sent
+        if not body_sent:
+            body_sent = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict[str, object]) -> None:
+        messages.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/health",
+        "raw_path": b"/health",
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 12345),
+        "server": ("127.0.0.1", 8000),
+    }
+
+    asyncio.run(asgi_app(scope, receive, send))
+
+    assert messages[0]["type"] == "http.response.start"
+    assert messages[0]["status"] == 200
+    assert messages[1]["type"] == "http.response.body"
+    assert messages[1]["body"] == b'{"status":"ok"}\n'

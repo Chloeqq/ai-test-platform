@@ -3,7 +3,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from patch_generator import AI_GENERATED_ROOT, REPO_ROOT, is_path_within, load_yaml
+from patch_generator import AI_GENERATED_ROOT, is_path_within, load_yaml
 from rerun_runner import RerunRunner
 from self_healing_executor import SelfHealingExecutor
 

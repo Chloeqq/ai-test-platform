@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from orchestrator_service import OrchestratorValidationError
+from orchestrator_service import OrchestratorValidationError  # type: ignore[import-not-found]
 
 
 class AssetService:
@@ -17,7 +17,7 @@ class AssetService:
             raise OrchestratorValidationError("page must not be empty")
 
         self._ensure_runner_import_path()
-        from runner.asset_toolkit import create_page_object, save_page_object
+        from runner.asset_toolkit import create_page_object, save_page_object  # type: ignore[import-not-found]
 
         page_object = create_page_object(page=page, description=description)
         path = save_page_object(page_object, output_dir=self.page_objects_root)
@@ -43,7 +43,7 @@ class AssetService:
             raise OrchestratorValidationError("locator_value must not be empty")
 
         self._ensure_runner_import_path()
-        from runner.asset_toolkit import add_page_element, load_page_object_for_edit
+        from runner.asset_toolkit import add_page_element, load_page_object_for_edit  # type: ignore[import-not-found]
 
         path = add_page_element(
             page=page,
@@ -77,7 +77,7 @@ class AssetService:
             raise OrchestratorValidationError("file must be under assets/test-cases")
 
         self._ensure_runner_import_path()
-        from runner.asset_toolkit import load_test_case_for_edit, sync_test_case_steps
+        from runner.asset_toolkit import load_test_case_for_edit, sync_test_case_steps  # type: ignore[import-not-found]
 
         path = sync_test_case_steps(
             test_case_path=target_path,
@@ -104,7 +104,7 @@ class AssetService:
         elements: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         self._ensure_runner_import_path()
-        from runner.asset_toolkit import scaffold_page_assets
+        from runner.asset_toolkit import scaffold_page_assets  # type: ignore[import-not-found]
 
         try:
             return scaffold_page_assets(
@@ -125,7 +125,7 @@ class AssetService:
 
     def list_scaffold_templates(self) -> dict[str, Any]:
         self._ensure_runner_import_path()
-        from runner.asset_toolkit import describe_scaffold_template, list_scaffold_templates
+        from runner.asset_toolkit import describe_scaffold_template, list_scaffold_templates  # type: ignore[import-not-found]
 
         templates = [
             describe_scaffold_template(template_name)
@@ -138,7 +138,7 @@ class AssetService:
             raise OrchestratorValidationError("template must not be empty")
 
         self._ensure_runner_import_path()
-        from runner.asset_toolkit import describe_scaffold_template
+        from runner.asset_toolkit import describe_scaffold_template  # type: ignore[import-not-found]
 
         try:
             return {"template": describe_scaffold_template(template_name)}

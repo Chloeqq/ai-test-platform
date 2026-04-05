@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 import logging
 import time
 import uuid
@@ -28,6 +29,8 @@ from app.routers.workbench_generation import router as workbench_generation_rout
 from app.routers.workbench_reporting import router as workbench_reporting_router
 from app.routers.workbench_reviews import router as workbench_reviews_router
 from app.routers.workbench_runs import router as workbench_runs_router
+from app.routers.workbench_scheduler import router as workbench_scheduler_router
+from app.routers.workbench_tasks import router as workbench_tasks_router
 from app.routers.ui import router as ui_router
 from apps.shared_backend.observability import configure_logging, set_request_id
 
@@ -35,10 +38,21 @@ settings = get_settings()
 configure_logging(service_name="web-ui-service")
 access_logger = logging.getLogger("web.access")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if settings.database_auto_create_tables:
+        Base.metadata.create_all(bind=engine)
+    _ensure_default_admin()
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="FastAPI backend skeleton with SQLite and JWT authentication.",
+    lifespan=lifespan,
 )
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -59,6 +73,8 @@ app.include_router(workbench_generation_router)
 app.include_router(workbench_reporting_router)
 app.include_router(workbench_reviews_router)
 app.include_router(workbench_runs_router)
+app.include_router(workbench_scheduler_router)
+app.include_router(workbench_tasks_router)
 app.include_router(legacy_workbench_router)
 app.include_router(test_cases_router)
 
@@ -103,14 +119,6 @@ def _create_default_admin_if_needed(db: Session) -> None:
     )
     db.add(user)
     db.commit()
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    if settings.database_auto_create_tables:
-        Base.metadata.create_all(bind=engine)
-    _ensure_default_admin()
-
 
 @app.get("/health/ready")
 def readiness() -> dict[str, object]:

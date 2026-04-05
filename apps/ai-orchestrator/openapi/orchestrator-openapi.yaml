@@ -117,6 +117,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /runners/catalog:
+    get:
+      summary: List supported runner profiles
+      operationId: getRunnerCatalog
+      responses:
+        "200":
+          description: Runner catalog
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunnerCatalogResponse"
+        "500":
+          description: Internal runner catalog failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /orchestrate:
     post:
       summary: Generate a test case and optionally execute it
@@ -431,6 +448,14 @@ components:
             - regression
           default: manual
           description: Optional request source label used for reporting only
+        runner:
+          type: string
+          enum:
+            - playwright
+            - api
+            - mobile
+          default: playwright
+          description: Runner profile used for generation and execution orchestration
         input_sources:
           type: array
           items:
@@ -514,6 +539,50 @@ components:
           additionalProperties: true
     RequirementInputSource:
       $ref: "#/components/schemas/RequirementInputSourceV1"
+    RunnerProfile:
+      type: object
+      additionalProperties: false
+      required:
+        - runner
+        - display_name
+        - channel
+        - framework
+        - language
+        - execution_supported
+      properties:
+        runner:
+          type: string
+        display_name:
+          type: string
+        channel:
+          type: string
+        framework:
+          type: string
+        language:
+          type: string
+        execution_supported:
+          type: boolean
+        generation_supported:
+          type: boolean
+        environment_pool:
+          type: string
+        artifact_mode:
+          type: string
+        root_path:
+          type: string
+    RunnerCatalogResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - default_runner
+      properties:
+        default_runner:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunnerProfile"
     RequirementTestIntentV1:
       type: object
       additionalProperties: false
@@ -1183,6 +1252,9 @@ components:
         - version
         - source
         - manifest_record_count
+        - manifest_record_path
+        - manifest_status
+        - resolution_reason
         - compat_builder_enabled
         - compat_builder_used
         - strict_violation
@@ -1200,6 +1272,19 @@ components:
         manifest_record_count:
           type: integer
           minimum: 0
+        manifest_record_path:
+          type: string
+        manifest_status:
+          type: string
+          enum:
+            - not_checked
+            - no_entry
+            - file_missing
+            - invalid_json
+            - invalid_payload
+            - loaded
+        resolution_reason:
+          type: string
         compat_builder_enabled:
           type: boolean
         compat_builder_used:

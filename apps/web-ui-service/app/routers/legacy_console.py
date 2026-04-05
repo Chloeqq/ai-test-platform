@@ -11,14 +11,15 @@ ORCHESTRATOR_SRC = REPO_ROOT / "apps" / "ai-orchestrator" / "src"
 if str(ORCHESTRATOR_SRC) not in sys.path:
     sys.path.insert(0, str(ORCHESTRATOR_SRC))
 
-from asset_service import AssetService  # noqa: E402
-from orchestrator_service import (  # noqa: E402
+from asset_service import AssetService  # type: ignore[import-not-found]  # noqa: E402
+from orchestrator_service import (  # type: ignore[import-not-found]  # noqa: E402
     OrchestratorError,
     OrchestratorService,
     OrchestratorValidationError,
 )
 
 router = APIRouter(tags=["legacy-console"])
+RouteResult = Any
 
 
 def _asset_service() -> AssetService:
@@ -76,7 +77,7 @@ def _resolve_execute_flag(payload: dict[str, Any], mode: str) -> bool:
 
 
 @router.get("/assets/scaffold/templates")
-def list_scaffold_templates() -> dict[str, Any]:
+def list_scaffold_templates() -> RouteResult:
     try:
         return _asset_service().list_scaffold_templates()
     except OrchestratorError as exc:
@@ -84,7 +85,7 @@ def list_scaffold_templates() -> dict[str, Any]:
 
 
 @router.get("/assets/scaffold/templates/{template_name}")
-def get_scaffold_template(template_name: str) -> dict[str, Any]:
+def get_scaffold_template(template_name: str) -> RouteResult:
     try:
         return _asset_service().get_scaffold_template(template_name)
     except OrchestratorError as exc:
@@ -92,7 +93,7 @@ def get_scaffold_template(template_name: str) -> dict[str, Any]:
 
 
 @router.post("/assets/scaffold", status_code=status.HTTP_201_CREATED)
-async def scaffold_assets(request: Request) -> dict[str, Any]:
+async def scaffold_assets(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         result = _asset_service().scaffold_page_assets(
@@ -112,7 +113,7 @@ async def scaffold_assets(request: Request) -> dict[str, Any]:
 
 
 @router.post("/assets/page-objects", status_code=status.HTTP_201_CREATED)
-async def create_page_object(request: Request) -> dict[str, Any]:
+async def create_page_object(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         result = _asset_service().create_page_object(
@@ -125,7 +126,7 @@ async def create_page_object(request: Request) -> dict[str, Any]:
 
 
 @router.post("/assets/page-objects/{page}/elements", status_code=status.HTTP_201_CREATED)
-async def add_page_element(page: str, request: Request) -> dict[str, Any]:
+async def add_page_element(page: str, request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         result = _asset_service().add_page_element(
@@ -142,7 +143,7 @@ async def add_page_element(page: str, request: Request) -> dict[str, Any]:
 
 
 @router.post("/assets/test-cases/sync")
-async def sync_test_case(request: Request) -> dict[str, Any]:
+async def sync_test_case(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         result = _asset_service().sync_test_case(
@@ -156,7 +157,7 @@ async def sync_test_case(request: Request) -> dict[str, Any]:
 
 
 @router.get("/reports/latest")
-def get_latest_report() -> dict[str, Any]:
+def get_latest_report() -> RouteResult:
     try:
         return _orchestrator_service().get_latest_report()
     except OrchestratorError as exc:
@@ -164,7 +165,7 @@ def get_latest_report() -> dict[str, Any]:
 
 
 @router.get("/reports/{case_id}")
-def get_report(case_id: str) -> dict[str, Any]:
+def get_report(case_id: str) -> RouteResult:
     try:
         return _orchestrator_service().get_report(case_id)
     except OrchestratorError as exc:
@@ -172,7 +173,7 @@ def get_report(case_id: str) -> dict[str, Any]:
 
 
 @router.get("/failures/clusters")
-def get_failure_clusters(request: Request) -> dict[str, Any]:
+def get_failure_clusters(request: Request) -> RouteResult:
     try:
         limit = _read_int_query_arg(request, "limit", default=200, min_value=1, max_value=2000)
         max_clusters = _read_int_query_arg(request, "max_clusters", default=20, min_value=1, max_value=200)
@@ -188,7 +189,7 @@ def get_failure_clusters(request: Request) -> dict[str, Any]:
 
 
 @router.get("/failures/clusters/{cluster_id}")
-def get_failure_cluster(cluster_id: str, request: Request) -> dict[str, Any]:
+def get_failure_cluster(cluster_id: str, request: Request) -> RouteResult:
     try:
         limit = _read_int_query_arg(request, "limit", default=200, min_value=1, max_value=2000)
         return _orchestrator_service().get_failure_cluster(cluster_id=cluster_id, limit=limit)
@@ -197,7 +198,7 @@ def get_failure_cluster(cluster_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.post("/orchestrate", status_code=status.HTTP_201_CREATED)
-async def orchestrate(request: Request) -> dict[str, Any]:
+async def orchestrate(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         mode = _resolve_mode(payload)
@@ -240,7 +241,7 @@ def _read_int_query_arg(request: Request, name: str, *, default: int, min_value:
 
 
 @router.post("/requirements/parse", status_code=status.HTTP_201_CREATED)
-async def parse_requirement(request: Request) -> dict[str, Any]:
+async def parse_requirement(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         parse_kwargs: dict[str, Any] = {
@@ -269,7 +270,7 @@ async def parse_requirement(request: Request) -> dict[str, Any]:
 
 
 @router.post("/scripts/generate", status_code=status.HTTP_201_CREATED)
-async def generate_script(request: Request) -> dict[str, Any]:
+async def generate_script(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         generated = _orchestrator_service().generate_script(
@@ -283,7 +284,7 @@ async def generate_script(request: Request) -> dict[str, Any]:
 
 
 @router.post("/execution/plan", status_code=status.HTTP_201_CREATED)
-async def plan_execution(request: Request) -> dict[str, Any]:
+async def plan_execution(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         execution_plan = _orchestrator_service().plan_execution(
@@ -298,7 +299,7 @@ async def plan_execution(request: Request) -> dict[str, Any]:
 
 
 @router.post("/risk/evaluate", status_code=status.HTTP_201_CREATED)
-async def evaluate_risk(request: Request) -> dict[str, Any]:
+async def evaluate_risk(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         risk_report = _orchestrator_service().evaluate_risk(
@@ -314,7 +315,7 @@ async def evaluate_risk(request: Request) -> dict[str, Any]:
 
 
 @router.post("/failures/triage", status_code=status.HTTP_201_CREATED)
-async def triage_failure(request: Request) -> dict[str, Any]:
+async def triage_failure(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         triage = _orchestrator_service().triage_failure(
@@ -329,7 +330,7 @@ async def triage_failure(request: Request) -> dict[str, Any]:
 
 
 @router.post("/healing/preview")
-async def healing_preview(request: Request) -> dict[str, Any]:
+async def healing_preview(request: Request) -> RouteResult:
     try:
         payload = await _read_json_object(request)
         result = _orchestrator_service().preview_self_healing_advice(

@@ -3,7 +3,8 @@
 {% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="/static/cases.css">
+<link rel="stylesheet" href="/static/cases.css?v=20260403-cases-shared-2">
+<link rel="stylesheet" href="/static/cases.detail.css?v=20260403-cases-detail-1">
 {% endblock %}
 
 {% block content %}
@@ -23,13 +24,13 @@
         <dt>执行ID</dt>
         <dd>#{{ report.execution_id }}</dd>
         <dt>关联用例</dt>
-        <dd><a href="/assets/cases/{{ report.case_id }}">{{ report.case_name }}</a></dd>
+        <dd><a href="/cases/{{ report.case_id }}">{{ report.case_name }}</a></dd>
         <dt>执行结果</dt>
         <dd><span class="result-pill result-{{ (report.status or 'unknown') | lower }}">{{ report.status }}</span></dd>
         <dt>执行耗时</dt>
         <dd>{{ report.duration_ms }} ms</dd>
         <dt>执行时间</dt>
-        <dd>{{ report.executed_at }}</dd>
+        <dd>{{ report.executed_at | replace("T", " ") | replace("+00:00", "") | truncate(19, True, "") }}</dd>
       </dl>
     </section>
 

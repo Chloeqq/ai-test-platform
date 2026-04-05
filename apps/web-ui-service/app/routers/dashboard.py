@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime_compat import UTC
 from datetime import datetime, timedelta
 import logging
-from typing import Any
+from typing import Any, Sequence
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -10,7 +10,13 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.test_case import TestCase, TestCaseExecution
-from app.routers.test_cases import _ensure_seed_data
+from app.routers import legacy_console, legacy_workbench
+from app.services import (
+    test_case_service,
+    workbench_governance_service,
+    workbench_history_service,
+    workbench_reporting_service,
+)
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 logger = logging.getLogger("dashboard.api")
@@ -24,7 +30,7 @@ def _to_utc(value: datetime | None) -> datetime:
     return value.astimezone(UTC)
 
 
-def _compute_trend(executions: list[TestCaseExecution], now: datetime) -> list[dict[str, Any]]:
+def _compute_trend(executions: Sequence[TestCaseExecution], now: datetime) -> list[dict[str, Any]]:
     base = (now - timedelta(hours=23)).replace(minute=0, second=0, microsecond=0)
     buckets: dict[datetime, dict[str, int]] = {
         base + timedelta(hours=i): {"total": 0, "passed": 0}
@@ -57,7 +63,7 @@ def _compute_trend(executions: list[TestCaseExecution], now: datetime) -> list[d
     return points
 
 
-def _compute_top_flaky(cases: list[TestCase], executions: list[TestCaseExecution]) -> list[dict[str, Any]]:
+def _compute_top_flaky(cases: Sequence[TestCase], executions: Sequence[TestCaseExecution]) -> list[dict[str, Any]]:
     case_map = {item.id: item for item in cases}
     case_runs: dict[int, list[TestCaseExecution]] = defaultdict(list)
     for item in executions:
@@ -101,7 +107,7 @@ def _compute_top_flaky(cases: list[TestCase], executions: list[TestCaseExecution
 
 
 def _compute_gate_history(
-    executions: list[TestCaseExecution],
+    executions: Sequence[TestCaseExecution],
     case_map: dict[int, TestCase],
 ) -> list[dict[str, Any]]:
     sorted_runs = sorted(executions, key=lambda item: (_to_utc(item.executed_at), item.id), reverse=True)[:10]
@@ -149,7 +155,7 @@ def _compute_gate_history(
 
 
 def _compute_pending_issues(
-    executions: list[TestCaseExecution],
+    executions: Sequence[TestCaseExecution],
     case_map: dict[int, TestCase],
     flaky_rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -174,7 +180,7 @@ def _compute_pending_issues(
                 "confidence": round(min(confidence, 0.95), 2),
                 "status": "待确认",
                 "recommendation": recommendation,
-                "detail_url": f"/assets/cases/{item.case_id}",
+                "detail_url": f"/cases/{item.case_id}",
             }
         )
         if len(issues) >= 6:
@@ -192,7 +198,7 @@ def _compute_pending_issues(
                 "confidence": round(min(0.6 + row["flaky_rate"] / 200, 0.93), 2),
                 "status": "待确认",
                 "recommendation": "建议补充稳定性断言并提高重试与隔离策略。",
-                "detail_url": f"/assets/cases/{row['case_id']}",
+                "detail_url": f"/cases/{row['case_id']}",
             }
         )
     return issues
@@ -236,11 +242,68 @@ def _fallback_overview(now: datetime, reason: str) -> dict[str, Any]:
     }
 
 
+def _load_governance_quality_gate_summary(*, limit: int = 2000) -> dict[str, Any]:
+    legacy_workbench._sync_stage_a_workbench_state()
+    legacy_workbench._ensure_dirs()
+    history_items = legacy_workbench._read_json_list(legacy_workbench.HISTORY_FILE)
+    return workbench_history_service.summarize_quality_gate_events(
+        history_items,
+        limit=limit,
+        normalize_page_slug=legacy_workbench._normalize_page_slug,
+    )
+
+
+def _load_governance_task_snapshot(*, limit: int = 200) -> dict[str, Any]:
+    legacy_workbench._sync_stage_a_workbench_state()
+    legacy_workbench._ensure_dirs()
+    execution_rows, execution_meta_raw = legacy_workbench._collect_execution_records_with_meta(limit=max(limit * 3, 200))
+    execution_meta = workbench_reporting_service.normalize_execution_meta(execution_meta_raw)
+    items: list[dict[str, Any]] = []
+    for row in execution_rows:
+        items.append(legacy_workbench._build_execution_task_view(row))
+        if len(items) >= limit:
+            break
+    return {
+        "items": items,
+        "summary": legacy_workbench._build_execution_task_summary(
+            items=items,
+            filter_snapshot={},
+            execution_meta=execution_meta,
+        ),
+    }
+
+
+def _load_governance_failure_clusters(*, limit: int = 200, max_clusters: int = 8) -> dict[str, Any]:
+    return legacy_console._orchestrator_service().get_failure_clusters(limit=limit, max_clusters=max_clusters)
+
+
+def _load_governance_trend(*, quality_gate_summary: dict[str, Any] | None = None, days: int = 14) -> dict[str, Any]:
+    legacy_workbench._sync_stage_a_workbench_state()
+    legacy_workbench._ensure_dirs()
+    history_items = legacy_workbench._read_json_list(legacy_workbench.HISTORY_FILE)
+    return workbench_governance_service.build_governance_trend(
+        history_items=history_items,
+        resolve_governance_snapshot=legacy_workbench._resolve_run_governance_snapshot,
+        quality_gate_summary=quality_gate_summary,
+        now=datetime.now(UTC),
+        days=days,
+    )
+
+
+def _load_governance_flaky_snapshot(db: Session) -> dict[str, Any]:
+    test_case_service.ensure_seed_data(db)
+    cases = db.execute(select(TestCase).order_by(TestCase.id.asc())).scalars().all()
+    executions = db.execute(select(TestCaseExecution).order_by(TestCaseExecution.executed_at.desc())).scalars().all()
+    return {
+        "top_flaky": _compute_top_flaky(cases, executions),
+    }
+
+
 @router.get("/overview")
 def get_dashboard_overview(db: Session = Depends(get_db)) -> dict[str, Any]:
     now = datetime.now(UTC)
     try:
-        _ensure_seed_data(db)
+        test_case_service.ensure_seed_data(db)
         cases = db.execute(select(TestCase).order_by(TestCase.id.asc())).scalars().all()
         executions = db.execute(select(TestCaseExecution).order_by(TestCaseExecution.executed_at.desc())).scalars().all()
         case_map = {item.id: item for item in cases}
@@ -289,6 +352,62 @@ def get_dashboard_overview(db: Session = Depends(get_db)) -> dict[str, Any]:
             "gate_last10": gate_rows,
             "pending_issues": pending_issues,
         }
-    except Exception as exc:
+    except Exception:
         logger.exception("dashboard overview degraded due to backend error")
         return _fallback_overview(now, reason="dashboard_backend_error")
+
+
+@router.get("/governance")
+def get_dashboard_governance(db: Session = Depends(get_db)) -> dict[str, Any]:
+    now = datetime.now(UTC)
+    degraded_sources: list[str] = []
+    quality_gate_summary: dict[str, Any] = {}
+    task_snapshot: dict[str, Any] = {"items": [], "summary": {}}
+    cluster_payload: dict[str, Any] = {
+        "generated_at": now.isoformat(),
+        "total_failed_reports": 0,
+        "total_clusters": 0,
+        "clusters": [],
+    }
+    flaky_payload: dict[str, Any] = {"top_flaky": []}
+    governance_trend: dict[str, Any] = {"items": [], "summary_7d": {}}
+
+    try:
+        quality_gate_summary = _load_governance_quality_gate_summary(limit=2000)
+    except Exception:
+        logger.exception("dashboard governance degraded: quality gate summary unavailable")
+        degraded_sources.append("quality_gate")
+
+    try:
+        task_snapshot = _load_governance_task_snapshot(limit=200)
+    except Exception:
+        logger.exception("dashboard governance degraded: task snapshot unavailable")
+        degraded_sources.append("tasks")
+
+    try:
+        cluster_payload = _load_governance_failure_clusters(limit=200, max_clusters=8)
+    except Exception:
+        logger.exception("dashboard governance degraded: failure clusters unavailable")
+        degraded_sources.append("failure_clusters")
+
+    try:
+        governance_trend = _load_governance_trend(quality_gate_summary=quality_gate_summary, days=14)
+    except Exception:
+        logger.exception("dashboard governance degraded: governance trend unavailable")
+        degraded_sources.append("governance_trend")
+
+    try:
+        flaky_payload = _load_governance_flaky_snapshot(db)
+    except Exception:
+        logger.exception("dashboard governance degraded: flaky snapshot unavailable")
+        degraded_sources.append("flaky")
+
+    return workbench_governance_service.build_governance_overview(
+        quality_gate_summary=quality_gate_summary,
+        task_snapshot=task_snapshot,
+        cluster_payload=cluster_payload,
+        flaky_payload=flaky_payload,
+        governance_trend=governance_trend,
+        degraded_sources=degraded_sources,
+        now=now,
+    )
