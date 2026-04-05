@@ -26,3 +26,12 @@ runners/web-playwright-python/runner/__pycache__/
 
 agents/test-design-agent/src/__pycache__/
 agents/test-design-agent/src/tools/__pycache__/
+
+# Generated local state snapshots
+web-ui/state/default/runtime-runs.json
+web-ui/state/reporting/execution-gate-decisions.json
+web-ui/state/reporting/failure-source-calibrations.json
+web-ui/state/reporting/review-decisions.json
+
+# Generated Allure plugin assets (local-only)
+runners/web-playwright-python/allure-report/plugins/
