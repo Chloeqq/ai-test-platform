@@ -76,6 +76,13 @@ body {
   height: 18px;
 }
 
+.icon-button:focus-visible,
+.help-link:focus-visible,
+.auth-link:focus-visible {
+  outline: 2px solid #2f79db;
+  outline-offset: 2px;
+}
+
 .help-link {
   font-size: 13px;
   color: #2b66b8;

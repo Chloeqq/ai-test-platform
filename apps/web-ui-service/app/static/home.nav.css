@@ -73,6 +73,14 @@
   border-color: rgba(216, 231, 255, 0.2);
 }
 
+.nav-link:focus-visible,
+.submenu a:focus-visible,
+.cases-tree-product:focus-visible,
+.cases-tree-module:focus-visible {
+  outline: 2px solid #9dc3ff;
+  outline-offset: 2px;
+}
+
 .nav-link.active {
   color: #0d2c58;
   background: linear-gradient(120deg, #d7e9ff 0%, #f1f7ff 100%);

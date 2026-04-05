@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 - {{ platform_name }}</title>
+  <style>
+    :root {
+      --bg: #eef3f9;
+      --panel: #ffffff;
+      --line: #d9e3f0;
+      --text: #18314f;
+      --muted: #6983a3;
+      --accent: #2f79db;
+      --danger: #af4040;
+      --danger-bg: #fff1f1;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(circle at 20% 0%, #ddeeff 0%, var(--bg) 45%, #e9eef5 100%);
+      color: var(--text);
+      padding: 20px;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+      padding: 22px 20px;
+    }
+
+    .brand {
+      margin: 0 0 8px;
+      font-size: 21px;
+      color: #1b3c64;
+    }
+
+    .desc {
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #4f6786;
+    }
+
+    .field input {
+      height: 40px;
+      border: 1px solid #cad8ea;
+      border-radius: 10px;
+      padding: 0 12px;
+      font-size: 14px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+    }
+
+    .field input:focus-visible {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(47, 121, 219, 0.18);
+    }
+
+    .submit {
+      width: 100%;
+      height: 40px;
+      border: 0;
+      border-radius: 10px;
+      background: linear-gradient(120deg, #2f79db, #3e8af0);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .submit:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    .error {
+      margin-bottom: 12px;
+      border: 1px solid #f2cccc;
+      border-radius: 10px;
+      padding: 9px 10px;
+      color: var(--danger);
+      background: var(--danger-bg);
+      font-size: 12px;
+      line-height: 1.5;
+      display: none;
+    }
+
+    .hint {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #6f87a5;
+    }
+  </style>
+</head>
+<body>
+  <section class="login-card" aria-label="登录卡片">
+    <h1 class="brand">{{ platform_name }}</h1>
+    <p class="desc">请输入测试账号进行登录。登录成功后会回到你刚才访问的页面。</p>
+    <div id="login-error" class="error" role="alert"></div>
+    <form id="login-form">
+      <label class="field" for="username">
+        用户名
+        <input id="username" name="username" type="text" autocomplete="username" required>
+      </label>
+      <label class="field" for="password">
+        密码
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </label>
+      <button id="login-submit" class="submit" type="submit">登录</button>
+    </form>
+    <p class="hint">默认管理员账号请查看环境配置 `DEFAULT_ADMIN_USERNAME` / `DEFAULT_ADMIN_PASSWORD`。</p>
+  </section>
+
+  <script>
+    (function () {
+      const form = document.getElementById("login-form");
+      const submitButton = document.getElementById("login-submit");
+      const errorNode = document.getElementById("login-error");
+      const nextPath = "{{ next_path }}";
+      const storageKey = "platform_access_token";
+
+      function showError(message) {
+        errorNode.textContent = String(message || "登录失败，请稍后重试。");
+        errorNode.style.display = "block";
+      }
+
+      function clearError() {
+        errorNode.textContent = "";
+        errorNode.style.display = "none";
+      }
+
+      async function handleSubmit(event) {
+        event.preventDefault();
+        clearError();
+        submitButton.disabled = true;
+        submitButton.textContent = "登录中...";
+
+        const formData = new FormData(form);
+        const payload = {
+          username: String(formData.get("username") || "").trim(),
+          password: String(formData.get("password") || ""),
+        };
+
+        try {
+          const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const body = await response.json().catch(function () { return {}; });
+          if (!response.ok) {
+            throw new Error(body && (body.detail || body.message) ? (body.detail || body.message) : "用户名或密码错误");
+          }
+          const token = body && body.access_token ? String(body.access_token) : "";
+          if (!token) {
+            throw new Error("登录响应缺少 token。");
+          }
+          window.localStorage.setItem(storageKey, token);
+          window.location.href = nextPath || "/";
+        } catch (error) {
+          showError(error && error.message ? error.message : "登录失败，请稍后重试。");
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = "登录";
+        }
+      }
+
+      form.addEventListener("submit", handleSubmit);
+    })();
+  </script>
+</body>
+</html>

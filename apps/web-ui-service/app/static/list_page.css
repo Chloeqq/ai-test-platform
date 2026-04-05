@@ -53,6 +53,15 @@
   background: #e7f0fc;
 }
 
+.list-search-clear:focus-visible,
+.sort-button:focus-visible,
+.toolbar-field input:focus-visible,
+.toolbar-field select:focus-visible,
+.btn:focus-visible {
+  outline: 2px solid #2f79db;
+  outline-offset: 2px;
+}
+
 .list-filter-row {
   display: flex;
   align-items: flex-start;

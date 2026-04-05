@@ -1,4 +1,19 @@
 (function () {
+  function escapeHtml(value) {
+    return String(value || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  function safeHref(value) {
+    const text = String(value || "").trim();
+    if (!text) return "#";
+    if (text.startsWith("/") && !text.startsWith("//")) return text;
+    return "#";
+  }
+
   function toNumber(value, fallback) {
     const num = Number(value);
     return Number.isFinite(num) ? num : fallback;
@@ -155,18 +170,18 @@
         const agent = asText(item.agent, "系统");
         const confidence = toNumber(item.confidence, 0);
         const note = asText(item.recommendation, "");
-        const detailUrl = asText(item.detail_url, "#");
+        const detailUrl = safeHref(asText(item.detail_url, "#"));
         return (
           '<li><div class="pending-item-head"><a class="pending-item-title" href="' +
-          detailUrl +
+          escapeHtml(detailUrl) +
           '">' +
-          title +
+          escapeHtml(title) +
           '</a><span class="pill">' +
           Math.round(confidence * 100) +
           '%</span></div><div class="pending-item-meta">来源：' +
-          agent +
+          escapeHtml(agent) +
           '</div><p class="pending-item-note">' +
-          note +
+          escapeHtml(note) +
           "</p></li>"
         );
       })
@@ -189,7 +204,7 @@
     }
     els.managerHighlightsList.innerHTML = highlights
       .slice(0, 6)
-      .map((item) => "<li>" + asText(item, "") + "</li>")
+      .map((item) => "<li>" + escapeHtml(asText(item, "")) + "</li>")
       .join("");
   }
 
@@ -205,19 +220,19 @@
           const title = asText(item.title, "治理建议");
           const status = asText(item.status, "持续跟进");
           const summary = asText(item.summary, "");
-          const href = asText(item.href, "#");
+          const href = safeHref(asText(item.href, "#"));
           const level = levelKey(item.level);
           return (
             '<li><div class="pending-item-head"><a class="pending-item-title" href="' +
-            href +
+            escapeHtml(href) +
             '">' +
-            title +
+            escapeHtml(title) +
             '</a><span class="pill pill-' +
             level +
             '">' +
-            status +
+            escapeHtml(status) +
             '</span></div><p class="pending-item-note">' +
-            summary +
+            escapeHtml(summary) +
             "</p></li>"
           );
         })

@@ -106,7 +106,8 @@
   }
 
   async function submitJson(url, payload) {
-    const response = await fetch(url, {
+    const authFetch = typeof window.platformAuthFetch === "function" ? window.platformAuthFetch : window.fetch.bind(window);
+    const response = await authFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
