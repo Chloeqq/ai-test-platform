@@ -145,12 +145,35 @@
     }
   }
 
-  function buildGeneratePayload(els, extraInputSources) {
+  function normalizeSelectedCandidates(items) {
+    return (Array.isArray(items) ? items : [])
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const title = String(item.title || "").trim();
+        const summary = String(item.summary || item.title || "").trim();
+        const intentType = String(item.intent_type || "").trim();
+        const priority = String(item.priority || "").trim();
+        const tags = Array.isArray(item.tags)
+          ? item.tags.map((tag) => String(tag || "").trim()).filter(Boolean)
+          : [];
+        if (!title && !summary && !intentType) return null;
+        return {
+          title,
+          summary,
+          intent_type: intentType,
+          priority,
+          tags,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function buildGeneratePayload(els, extraInputSources, selectedCandidates) {
     const method = normalizeMethod(els.methodInput?.value);
     const pageUrls = splitLines(els.pageUrlsInput?.value || "");
     const methodInputSources = method === "url" ? buildUrlInputSources(pageUrls.join("\n")) : [];
     return {
-      project: els.projectSelect.value || "default",
+      project: els.projectSelect.value || "atp",
       page: resolvePageField(els, method),
       requirement: resolveRequirementByMethod(els, method),
       title: String(els.titleInput?.value || "").trim(),
@@ -167,6 +190,7 @@
       openapi_url: String(els.openapiUrlInput?.value || "").trim(),
       defect_ticket: String(els.defectTicketInput?.value || "").trim(),
       runtime_logs: String(els.runtimeLogsInput?.value || "").trim(),
+      selected_candidates: normalizeSelectedCandidates(selectedCandidates),
     };
   }
 

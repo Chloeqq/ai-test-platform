@@ -3,7 +3,9 @@
   const shared = window.WorkbenchGenerateShared;
   const presenter = window.WorkbenchGeneratePresenter;
   const support = window.WorkbenchGenerateSupport;
-  if (!shell || !shared || !support || !presenter) return;
+  const projectsApi = window.ProjectsApi;
+  const projectManager = window.ProjectManagerDialog;
+  if (!shell || !shared || !support || !presenter || !projectsApi || !projectManager) return;
 
   const state = {
     method: shared.normalizeMethod(document.getElementById("gen-method")?.value),
@@ -44,6 +46,7 @@
     loadReturnApplyBtn: document.getElementById("gen-load-returnapply"),
     backToInputBtn: document.getElementById("gen-back-to-input"),
     previewPointsBtn: document.getElementById("gen-preview-points"),
+    createProjectBtn: document.getElementById("gen-create-project"),
     confirmGenerateBtn: document.getElementById("gen-confirm-generate"),
     intentSummary: document.getElementById("gen-intent-summary"),
     intentPreview: document.getElementById("gen-intent-preview"),
@@ -83,6 +86,9 @@
     if (els.confirmGenerateBtn) {
       els.confirmGenerateBtn.disabled = !preview.ok;
     }
+    if (window.WorkbenchGenerateWizard && typeof window.WorkbenchGenerateWizard.refresh === "function") {
+      window.WorkbenchGenerateWizard.refresh();
+    }
   }
 
   function updateAuthNotice() {
@@ -92,6 +98,42 @@
     if (!username) return;
     els.authNotice.className = "wb-auth-notice wb-auth-notice-authenticated";
     els.authNotice.textContent = `${username} 已登录，生成 Draft 与后续审核动作都会保留真实审计记录。`;
+  }
+
+  function setProjectOptions(items, selectedValue) {
+    const options = (Array.isArray(items) ? items : []).map((item) => {
+      const projectCode = String(item.project_code || "").trim();
+      const projectName = String(item.project_name || projectCode).trim();
+      const selected = projectCode === (selectedValue || "atp") ? " selected" : "";
+      return `<option value="${projectCode}"${selected}>${projectCode} · ${projectName}</option>`;
+    });
+    if (els.projectSelect) {
+      els.projectSelect.innerHTML = options.join("") || '<option value="atp" selected>atp</option>';
+    }
+  }
+
+  async function loadProjects(selectedValue) {
+    const payload = await projectsApi.list();
+    setProjectOptions(payload.items || [], selectedValue || String(els.projectSelect?.value || "atp").trim() || "atp");
+  }
+
+  function openProjectManager() {
+    projectManager.open({
+      selectedProjectCode: String(els.projectSelect?.value || "atp").trim() || "atp",
+      onChanged: async ({ action, project_code: projectCode }) => {
+        const selectedProjectCode = action === "delete" ? "atp" : String(projectCode || "").trim().toLowerCase();
+        await loadProjects(selectedProjectCode);
+        if (action === "create") {
+          presenter.setText(els.result, `项目 ${selectedProjectCode} 已创建，可直接用于生成 Draft。`);
+          return;
+        }
+        if (action === "update") {
+          presenter.setText(els.result, `项目 ${selectedProjectCode} 已更新。`);
+          return;
+        }
+        presenter.setText(els.result, `项目 ${String(projectCode || "").trim().toLowerCase()} 已删除。`);
+      },
+    });
   }
 
   async function collectExtraInputSources() {
@@ -121,6 +163,18 @@
 
   function getCandidateById(candidateId) {
     return state.previewCandidates.find((item) => item.preview_id === candidateId) || null;
+  }
+
+  function buildWorkbenchHref(caseId, projectCode) {
+    const params = new URLSearchParams();
+    if (caseId) {
+      params.set("case_id", caseId);
+    }
+    if (projectCode) {
+      params.set("project", projectCode);
+    }
+    const query = params.toString();
+    return query ? `/execution/workbench?${query}` : "/execution/workbench";
   }
 
   function renderCandidateList() {
@@ -158,15 +212,24 @@
     }
     presenter.setText(els.result, "正在生成 Draft...");
     const inputSources = await collectExtraInputSources();
-    const payload = shared.buildGeneratePayload(els, inputSources);
+    const payload = shared.buildGeneratePayload(els, inputSources, state.previewCandidates);
     const body = await submitJson("/api/workbench/generate", payload);
-    const item = body.item || {};
-    const caseId = String(item.case_id || "").trim();
-    presenter.setText(els.result, `已生成 ${caseId || "1 条"} Draft 用例，下一步请到用例中心审核。`);
-    presenter.setText(els.yamlPreview, item.yaml_content || JSON.stringify(item, null, 2));
-    if (caseId) {
-      els.openCases.href = `/cases/${encodeURIComponent(caseId)}`;
-      els.openWorkbenchResult.href = `/execution/workbench?case_id=${encodeURIComponent(caseId)}`;
+    const items = Array.isArray(body.items) && body.items.length ? body.items : [body.item || {}];
+    const caseIds = items
+      .map((item) => String(item && item.case_id || "").trim())
+      .filter(Boolean);
+    const generatedCount = Number(body.count || caseIds.length || items.length || 0);
+    presenter.setText(els.result, `已生成 ${generatedCount || 1} 条 Draft 用例，下一步请到用例中心审核。`);
+    const firstItem = items[0] || {};
+    const previewText = caseIds.length
+      ? `批量生成 case_id：\n${caseIds.map((id) => `- ${id}`).join("\n")}\n\n---\n\n${String(firstItem.yaml_content || "").trim()}`
+      : (firstItem.yaml_content || JSON.stringify(firstItem, null, 2));
+    presenter.setText(els.yamlPreview, previewText);
+    if (caseIds.length) {
+      const firstCaseId = caseIds[0];
+      const projectCode = String(firstItem.project_code || payload.project || els.projectSelect?.value || "atp").trim() || "atp";
+      els.openCases.href = `/cases/review?project_code=${encodeURIComponent(projectCode)}`;
+      els.openWorkbenchResult.href = buildWorkbenchHref(firstCaseId, projectCode);
     }
     if (window.WorkbenchGenerateWizard) window.WorkbenchGenerateWizard.goTo(4);
   }
@@ -217,6 +280,13 @@
     els.previewPointsBtn?.addEventListener("click", () => {
       previewPoints().catch((error) => presenter.setText(els.intentSummary, error.message || "预览失败"));
     });
+    els.createProjectBtn?.addEventListener("click", () => {
+      try {
+        openProjectManager();
+      } catch (error) {
+        presenter.setText(els.result, error.message || "打开项目管理失败");
+      }
+    });
 
     els.form?.addEventListener("submit", (event) => {
       generateCase(event).catch((error) => presenter.setText(els.result, error.message || "生成失败"));
@@ -226,6 +296,7 @@
   }
 
   function bootstrap() {
+    loadProjects(String(els.projectSelect?.value || "atp").trim() || "atp").catch(() => {});
     renderMethodState();
     bindEvents();
     if (window.WorkbenchGenerateWizard && typeof window.WorkbenchGenerateWizard.setCanProceed === "function") {

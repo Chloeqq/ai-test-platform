@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from typing import Any
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
 from shared_backend import get_dictionary_items
 
+from app.core.database import get_db
+from app.services import workbench_case_consistency_service
 from app.services import workbench_asset_service
 from . import legacy_workbench
 
@@ -36,23 +39,43 @@ def list_cases(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100),
     focus_case_id: str = Query(default=""),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+
+    def _collect_case_items_filtered(project_code: str) -> list[dict[str, Any]]:
+        items = legacy_workbench._collect_case_items(project_code)
+        filtered_items, _filter_meta = workbench_case_consistency_service.filter_records_by_case_center(
+            items,
+            case_center_case_ids=case_center_case_ids,
+        )
+        return filtered_items
+
     return workbench_asset_service.build_cases_payload(
         project=project,
         page=page,
         page_size=page_size,
         focus_case_id=focus_case_id,
-        collect_case_items=legacy_workbench._collect_case_items,
+        collect_case_items=_collect_case_items_filtered,
         paginate_case_items=legacy_workbench._paginate_case_items,
     )
 
 
 @router.get("/api/workbench/cases/{case_id}")
-def get_case(case_id: str, project: str = Query(default="default")) -> dict[str, Any]:
+def get_case(case_id: str, project: str = Query(default="default"), db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+    if not workbench_case_consistency_service.is_case_tracked(
+        case_id,
+        case_center_case_ids=case_center_case_ids,
+    ):
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="case not found",
+        )
     return workbench_asset_service.build_case_detail(
         project=project,
         case_id=case_id,
@@ -62,9 +85,22 @@ def get_case(case_id: str, project: str = Query(default="default")) -> dict[str,
 
 
 @router.put("/api/workbench/cases/{case_id}")
-def save_case(case_id: str, payload: legacy_workbench.SaveCasePayload) -> dict[str, Any]:
+def save_case(
+    case_id: str,
+    payload: legacy_workbench.SaveCasePayload,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+    if not workbench_case_consistency_service.is_case_tracked(
+        case_id,
+        case_center_case_ids=case_center_case_ids,
+    ):
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="case not found",
+        )
     return workbench_asset_service.build_saved_case_payload(
         case_id=case_id,
         project=payload.project,
@@ -88,10 +124,11 @@ def list_test_point_assets(
     review_status: str = Query(default=""),
     gate_decision: str = Query(default=""),
     selection_state: str = Query(default=""),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
-    return workbench_asset_service.build_test_point_asset_items(
+    payload = workbench_asset_service.build_test_point_asset_items(
         project=project,
         page=page,
         keyword=keyword,
@@ -109,6 +146,35 @@ def list_test_point_assets(
         build_coverage_summary=legacy_workbench._build_test_point_asset_coverage_summary,
         clamp_confidence=legacy_workbench._clamp_confidence,
     )
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+    filtered_items, _filter_meta = workbench_case_consistency_service.filter_records_by_case_center(
+        payload.get("items", []),
+        case_center_case_ids=case_center_case_ids,
+        case_id_key="asset_id",
+        case_id_resolver=lambda row: row.get("asset_id"),
+    )
+    payload["items"] = filtered_items
+    payload["selection_summary"]["total_assets"] = len(filtered_items)
+    payload["selection_summary"]["ready_count"] = sum(
+        1
+        for item in filtered_items
+        if str((item.get("selection_summary") or {}).get("selection_state", "")).strip() == "ready"
+    )
+    payload["selection_summary"]["needs_review_count"] = sum(
+        1
+        for item in filtered_items
+        if str((item.get("selection_summary") or {}).get("selection_state", "")).strip() == "needs_review"
+    )
+    payload["selection_summary"]["blocked_count"] = sum(
+        1
+        for item in filtered_items
+        if str((item.get("selection_summary") or {}).get("selection_state", "")).strip() == "blocked"
+    )
+    payload["coverage_summary"] = legacy_workbench._build_test_point_asset_coverage_summary(
+        items=filtered_items,
+        filter_snapshot=payload["selection_summary"].get("filter_snapshot", {}),
+    )
+    return payload
 
 
 @router.get("/api/workbench/test-point-assets/coverage-summary")
@@ -121,6 +187,7 @@ def get_test_point_asset_coverage_summary(
     review_status: str = Query(default=""),
     gate_decision: str = Query(default=""),
     selection_state: str = Query(default=""),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     payload = list_test_point_assets(
         project=project,
@@ -131,14 +198,28 @@ def get_test_point_asset_coverage_summary(
         review_status=review_status,
         gate_decision=gate_decision,
         selection_state=selection_state,
+        db=db,
     )
     return {"item": payload.get("coverage_summary", {})}
 
 
 @router.get("/api/workbench/test-point-assets/{asset_id}")
-def get_test_point_asset(asset_id: str, project: str = Query(default="default")) -> dict[str, Any]:
+def get_test_point_asset(
+    asset_id: str,
+    project: str = Query(default="default"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+    if not workbench_case_consistency_service.is_case_tracked(
+        asset_id,
+        case_center_case_ids=case_center_case_ids,
+    ):
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="test point asset not found",
+        )
     payload = workbench_asset_service.build_test_point_asset_detail(
         project=project,
         asset_id=asset_id,
@@ -157,9 +238,22 @@ def get_test_point_asset(asset_id: str, project: str = Query(default="default"))
 
 
 @router.get("/api/workbench/test-point-assets/{asset_id}/coverage-matrix")
-def get_test_point_asset_coverage_matrix(asset_id: str, project: str = Query(default="default")) -> dict[str, Any]:
+def get_test_point_asset_coverage_matrix(
+    asset_id: str,
+    project: str = Query(default="default"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+    if not workbench_case_consistency_service.is_case_tracked(
+        asset_id,
+        case_center_case_ids=case_center_case_ids,
+    ):
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="test point asset not found",
+        )
     payload = workbench_asset_service.build_test_point_asset_detail(
         project=project,
         asset_id=asset_id,

@@ -50,6 +50,7 @@ class RequirementParseSupport:
         defect_ticket: str = "",
         runtime_logs: str = "",
     ) -> dict[str, Any]:
+        force_llm_mode = self.is_llm_force_mode_enabled()
         try:
             payload = {
                 "requirement": requirement,
@@ -82,6 +83,7 @@ class RequirementParseSupport:
                 text=True,
                 capture_output=True,
                 check=False,
+                timeout=40,
             )
             try:
                 temp_path.unlink(missing_ok=True)
@@ -111,7 +113,11 @@ class RequirementParseSupport:
                 requirement=requirement,
                 fallback_context=supplemental_context,
             )
-        except Exception:
+        except Exception as exc:
+            if force_llm_mode:
+                raise RuntimeError(
+                    f"requirement parser failed under forced llm mode: {str(exc)[:240]}"
+                ) from exc
             normalized = requirement.strip()
             fallback_context = self._build_fallback_multisource_context(
                 input_sources=input_sources,
@@ -236,7 +242,7 @@ class RequirementParseSupport:
                 "parse_confidence": 0.78 if source_inputs else (0.72 if normalized else 0.5),
                 "parser_runtime": self.build_requirement_parser_runtime_fallback(
                     source="orchestrator_fallback",
-                    detail="requirement parser subprocess failed; fallback spec used",
+                    detail=f"requirement parser subprocess failed; fallback spec used: {str(exc)[:200]}",
                 ),
             }
             return self._harmonize_requirement_spec(
@@ -245,6 +251,15 @@ class RequirementParseSupport:
                 requirement=requirement,
                 fallback_context=fallback_context,
             )
+
+    @staticmethod
+    def is_llm_force_mode_enabled() -> bool:
+        raw_mode = str(os.getenv("REQUIREMENT_PARSER_MODE", "")).strip().lower()
+        if raw_mode == "rule_based":
+            return False
+        if raw_mode in {"llm", "hybrid"}:
+            return True
+        return bool(str(os.getenv("OPENAI_API_KEY", "")).strip())
 
     @staticmethod
     def infer_page_from_text(

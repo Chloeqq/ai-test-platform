@@ -1057,11 +1057,12 @@ def build_report_allure_refresh(
     get_allure_index_version: GetAllureIndexVersion,
 ) -> dict[str, Any]:
     summary = read_allure_summary() if available else {}
-    if int(getattr(command_result, "returncode", 1) or 1) != 0:
+    return_code = int(getattr(command_result, "returncode", 1))
+    if return_code != 0:
         return {
             "error": {
                 "message": "allure generate failed",
-                "return_code": getattr(command_result, "returncode", 1),
+                "return_code": return_code,
                 "stdout": str(getattr(command_result, "stdout", "") or "").strip()[-4000:],
                 "stderr": str(getattr(command_result, "stderr", "") or "").strip()[-4000:],
             }
@@ -1072,7 +1073,7 @@ def build_report_allure_refresh(
         "available": available,
         "version": version,
         "allure_index": allure_index,
-        "return_code": getattr(command_result, "returncode", 0),
+        "return_code": return_code,
         "stdout": str(getattr(command_result, "stdout", "") or "").strip()[-4000:],
         "stderr": str(getattr(command_result, "stderr", "") or "").strip()[-4000:],
         "summary": summary,

@@ -1,0 +1,39 @@
+{
+  "asset_id": "mall-web-ret-query-fn-ai-0002",
+  "version": 1,
+  "updated_at": "2026-04-06T02:00:38.547981+00:00",
+  "title": "退货申请页面正常加载访问",
+  "page": "returnapply",
+  "requirement": [
+    "前置条件\n- 通用前置条件已满足\n测试步骤\n- 1. 点击左侧导航栏「订单」->「退货申请处理」\n- 2. 查看页面加载情况\n预期结果\n- 1. 页面正常加载，无报错、无空白区域\n- 2. 顶部面包屑显示「首页 / 订单 / 退货申请处理」\n- 3. 左侧导航栏「退货申请处理」处于选中状态\n- 4. 筛选区、数据列表区均正常渲染",
+    "测试点(P1): 前置条件\n- 通用前置条件已满足\n测试步骤\n- 1. 点击左侧导航栏「订单」->「退货申请处理」\n- 2. 查看页面加载情况\n预期结果\n- 1. 页面正常加载，"
+  ],
+  "priority": "P1",
+  "source_type": "yaml_case",
+  "source_name": "mall-web-ret-query-fn-ai-0002",
+  "source_ref": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/mall-web-ret-query-fn-ai-0002.yaml",
+  "references": [
+    {
+      "kind": "case_yaml",
+      "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/mall-web-ret-query-fn-ai-0002.yaml",
+      "case_id": "mall-web-ret-query-fn-ai-0002"
+    }
+  ],
+  "point_count": 4,
+  "point_types": [
+    "assertion",
+    "navigation",
+    "precondition"
+  ],
+  "point_keys": [
+    "returnapply-01",
+    "returnapply-02",
+    "returnapply-03",
+    "returnapply-04"
+  ],
+  "precondition_count": 1,
+  "navigation_count": 1,
+  "input_count": 0,
+  "assertion_count": 2,
+  "action_count": 0
+}

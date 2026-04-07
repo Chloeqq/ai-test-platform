@@ -13,6 +13,7 @@ class ParsedTestCaseSearch:
     status: str
     creator: str
     last_result: str
+    source: str
 
 
 _FIELD_ALIASES = {
@@ -29,6 +30,8 @@ _FIELD_ALIASES = {
     "执行结果": "last_result",
     "result": "last_result",
     "last_result": "last_result",
+    "source": "source",
+    "来源": "source",
 }
 
 _TEST_TYPE_ALIASES = {
@@ -75,6 +78,22 @@ _RESULT_ALIASES = {
     "unknown": "unknown",
 }
 
+_SOURCE_ALIASES = {
+    "ai": "ai",
+    "mn": "mn",
+    "manual": "mn",
+    "人工": "mn",
+    "cv": "cv",
+    "review": "cv",
+    "复核": "cv",
+    "imp": "imp",
+    "import": "imp",
+    "导入": "imp",
+    "fb": "fb",
+    "fallback": "fb",
+    "回退": "fb",
+}
+
 
 def _normalize_field_name(key: str) -> str:
     text = str(key or "").strip().lower()
@@ -93,13 +112,15 @@ def _normalize_field_value(field: str, value: str) -> str:
         return normalize_status(normalized) if normalized else ""
     if field == "last_result":
         return _RESULT_ALIASES.get(text.strip().lower(), "")
+    if field == "source":
+        return _SOURCE_ALIASES.get(text.strip().lower(), "")
     return text
 
 
 def parse_test_case_search_query(raw_query: str) -> ParsedTestCaseSearch:
     normalized_query = str(raw_query or "").replace("：", ":").strip()
     if not normalized_query:
-        return ParsedTestCaseSearch(keyword="", test_type="", status="", creator="", last_result="")
+        return ParsedTestCaseSearch(keyword="", test_type="", status="", creator="", last_result="", source="")
 
     try:
         tokens = shlex.split(normalized_query)
@@ -112,6 +133,7 @@ def parse_test_case_search_query(raw_query: str) -> ParsedTestCaseSearch:
         "status": "",
         "creator": "",
         "last_result": "",
+        "source": "",
     }
 
     for token in tokens:
@@ -135,25 +157,32 @@ def parse_test_case_search_query(raw_query: str) -> ParsedTestCaseSearch:
         status=parsed_values["status"],
         creator=parsed_values["creator"],
         last_result=parsed_values["last_result"],
+        source=parsed_values["source"],
     )
 
 
 def build_test_case_search_context(
     *,
     keyword: str,
+    project_code: str,
     product_line: str,
     module: str,
+    priority: str,
     test_type: str,
     status: str,
     creator: str,
     last_result: str,
+    source: str = "",
 ) -> dict[str, str]:
     return {
         "keyword": str(keyword or "").strip(),
+        "project_code": str(project_code or "").strip(),
         "product_line": str(product_line or "").strip(),
         "module": str(module or "").strip(),
+        "priority": str(priority or "").strip(),
         "test_type": str(test_type or "").strip(),
         "status": str(status or "").strip(),
         "creator": str(creator or "").strip(),
         "last_result": str(last_result or "").strip(),
+        "source": str(source or "").strip(),
     }

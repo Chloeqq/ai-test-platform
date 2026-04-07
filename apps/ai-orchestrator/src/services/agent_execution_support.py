@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from shared_backend.case_ids import build_case_id, next_case_sequence, normalize_case_id
+from shared_backend.case_ids import build_case_id, match_case_id, next_case_sequence, normalize_case_id
 
 
 class AgentExecutionSupport:
@@ -32,7 +32,8 @@ class AgentExecutionSupport:
 
     def _allocate_case_id(self, *, page: str, module: str, preferred: str = "") -> str:
         normalized_preferred = normalize_case_id(preferred, fallback="").strip() if str(preferred).strip() else ""
-        if normalized_preferred.count("-") >= 2 and normalized_preferred.rsplit("-", 1)[-1].isdigit():
+        # Only reuse preferred id when it already conforms to shared_backend case_id format.
+        if normalized_preferred and match_case_id(normalized_preferred):
             return normalized_preferred
         existing_case_ids: list[str] = []
         if self._assets_cases_root.exists():

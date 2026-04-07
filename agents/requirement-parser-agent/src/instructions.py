@@ -15,4 +15,4 @@ Output contract:
 - RequirementSpecV1 JSON object only.
 """
 
-INSTRUCTIONS_VERSION = "requirement-parser.instructions.v1.0.0"
+INSTRUCTIONS_VERSION = "requirement-parser.instructions.v1.1.0"

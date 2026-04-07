@@ -276,6 +276,36 @@ def test_scaffold_page_assets_rejects_duplicate_smoke_roles(tmp_path: Path):
         )
 
 
+def test_scaffold_page_assets_supports_id_locator_type(tmp_path: Path):
+    page_dir = tmp_path / "page-objects"
+    case_dir = tmp_path / "cases"
+
+    result = scaffold_page_assets(
+        page="product",
+        title="商品页-列表展示-基础场景-点击入口-展示商品列表",
+        requirement="商品页面展示",
+        elements=[
+            {
+                "name": "product_menu_entry",
+                "locator_type": "id",
+                "locator_value": "product-menu",
+                "smoke_role": "menu",
+            },
+            {
+                "name": "product_panel",
+                "locator_type": "css",
+                "locator_value": ".product-panel",
+                "smoke_role": "assert",
+            },
+        ],
+        page_objects_dir=page_dir,
+        test_cases_dir=case_dir,
+    )
+
+    page_object = load_yaml_file(Path(result["page_object_path"]))
+    assert page_object["elements"]["product_menu_entry"]["locator_type"] == "id"
+
+
 def test_list_and_load_scaffold_templates():
     templates = list_scaffold_templates()
 

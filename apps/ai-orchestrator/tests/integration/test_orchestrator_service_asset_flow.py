@@ -94,6 +94,45 @@ def test_orchestrator_service_persists_generated_case_via_asset_toolkit(tmp_path
     assert result.report_summary_path == ""
 
 
+def test_orchestrator_service_parses_structured_requirement_without_collapsing_title(tmp_path: Path):
+    import sys
+
+    src_root = Path(__file__).resolve().parents[2] / "src"
+    if str(src_root) not in sys.path:
+        sys.path.insert(0, str(src_root))
+
+    from orchestrator_service import OrchestratorService
+
+    service = OrchestratorService(repo_root=Path(__file__).resolve().parents[4])
+    requirement = (
+        "前置条件 - 通用前置条件已满足 "
+        "测试步骤 - 1. 点击左侧导航栏「订单」->「退货申请处理」 2. 查看页面加载情况 "
+        "预期结果 - 1. 页面正常加载，无报错、无空白区域 "
+        "2. 顶部面包屑显示「首页 / 订单 / 退货申请处理」"
+    )
+
+    parsed = service._parse_requirement_spec(
+        requirement=requirement,
+        page="returnapply",
+        source="manual",
+        input_sources=[],
+        openapi_spec={},
+    )
+
+    intents = parsed.get("test_intents") if isinstance(parsed.get("test_intents"), list) else []
+    assert intents
+    title = str(intents[0].get("title", "")).strip()
+    assert title
+    assert "前置条件" not in title
+    assert "测试步骤" not in title
+    assert len(title) <= 40
+    steps_hint = intents[0].get("steps_hint") if isinstance(intents[0], dict) else []
+    assert isinstance(steps_hint, list)
+    assert "assert" in [str(item).strip().lower() for item in steps_hint]
+    parser_runtime = parsed.get("parser_runtime") if isinstance(parsed.get("parser_runtime"), dict) else {}
+    assert "orchestrator_fallback" not in str(parser_runtime.get("detail", "")).lower()
+
+
 def test_orchestrator_service_supports_generate_only_api_runner(tmp_path: Path):
     import sys
 

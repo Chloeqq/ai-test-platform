@@ -7,8 +7,68 @@
   padding: 12px 18px 14px;
 }
 
+.cases-stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #edf2f7;
+  background: #ffffff;
+}
+
+.cases-stat-card {
+  border: 1px solid #deebf7;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f5f9ff 100%);
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.cases-stat-label {
+  color: #6f839c;
+  font-size: 12px;
+}
+
+.cases-stat-value {
+  color: #1f3653;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
 .cases-search-help {
   margin-top: 2px;
+}
+
+.cases-quick-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cases-quick-filter {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid #d8e2ee;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #5c728f;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cases-quick-filter:hover,
+.cases-quick-filter:focus-visible {
+  border-color: #c5d3e4;
+  background: #f7f9fc;
+  color: #314660;
+}
+
+.cases-quick-filter.is-active {
+  border-color: #2f79db;
+  background: #edf4ff;
+  color: #2a63b1;
 }
 
 .cases-search-help summary {
@@ -82,14 +142,20 @@
   flex: 1 1 320px;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px 12px;
 }
 
-.cases-context-meta p {
-  margin: 0;
-  color: #71839a;
+.cases-context-help {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px dashed #d2ddec;
+  border-radius: 999px;
+  color: #607792;
   font-size: 12px;
+  cursor: help;
 }
 
 .cases-context-clear {
@@ -186,6 +252,10 @@
 }
 
 @media (max-width: 1120px) {
+  .cases-stats-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .cases-search-context {
     margin-bottom: 10px;
   }

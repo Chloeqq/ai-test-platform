@@ -20,6 +20,9 @@ has_python_sources() {
 echo "[static-baseline-fast] Running Ruff..."
 "${PYTHON_BIN}" -m ruff check apps agents runners
 
+echo "[static-baseline-fast] Running web-ui static JS checks..."
+scripts/qa/check-web-ui-static.sh
+
 echo "[static-baseline-fast] Building mypy target list..."
 MYPY_TARGETS=()
 
@@ -37,6 +40,22 @@ for target in \
   fi
 done
 
+# Incremental Web UI Service scope (phase 1): typed core routes/services/schemas.
+for target in \
+  "apps/web-ui-service/app/routers/test_cases.py" \
+  "apps/web-ui-service/app/routers/test_projects.py" \
+  "apps/web-ui-service/app/services/test_case_mapper.py" \
+  "apps/web-ui-service/app/services/test_case_export_service.py" \
+  "apps/web-ui-service/app/services/test_case_search_service.py" \
+  "apps/web-ui-service/app/services/test_case_service.py" \
+  "apps/web-ui-service/app/services/test_project_service.py" \
+  "apps/web-ui-service/app/schemas/test_case.py" \
+  "apps/web-ui-service/app/schemas/test_project.py"; do
+  if [[ -f "${target}" ]]; then
+    MYPY_TARGETS+=("${target}")
+  fi
+done
+
 if [[ ${#MYPY_TARGETS[@]} -eq 0 ]]; then
   echo "[static-baseline-fast] No mypy targets found; skipping mypy."
   exit 0
@@ -46,6 +65,13 @@ echo "[static-baseline-fast] Running mypy on ${#MYPY_TARGETS[@]} targets..."
 MYPY_FAILED=0
 for target in "${MYPY_TARGETS[@]}"; do
   echo "[static-baseline-fast] mypy ${target}"
+  if [[ "${target}" == apps/web-ui-service/* ]]; then
+    # Incremental mode for web-ui: validate target files first, then tighten imports gradually.
+    if ! "${PYTHON_BIN}" -m mypy --follow-imports=silent --exclude "(^|/)tools/index\\.py$" "${target}"; then
+      MYPY_FAILED=1
+    fi
+    continue
+  fi
   if ! "${PYTHON_BIN}" -m mypy --exclude "(^|/)tools/index\\.py$" "${target}"; then
     MYPY_FAILED=1
   fi

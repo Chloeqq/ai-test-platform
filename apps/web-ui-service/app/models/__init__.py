@@ -1,6 +1,14 @@
 from app.models.user import User
 from app.models.orchestration_task import OrchestrationTask
-from app.models.test_case import TestCase, TestCaseDefect, TestCaseExecution, TestCaseVersion
+from app.models.page_object import (
+    PageElement,
+    PageElementHealthCheck,
+    PageElementVersion,
+    PageObject,
+    PageObjectRef,
+)
+from app.models.test_case import TestCase, TestCaseDefect, TestCaseExecution, TestCaseTreeNode, TestCaseVersion
+from app.models.test_project import TestProject
 from app.models.workbench_state import (
     WorkbenchDefectLink,
     WorkbenchExecutionGateDecision,
@@ -13,9 +21,16 @@ from app.models.workbench_state import (
 __all__ = [
     "User",
     "OrchestrationTask",
+    "TestProject",
+    "PageObject",
+    "PageElement",
+    "PageElementVersion",
+    "PageObjectRef",
+    "PageElementHealthCheck",
     "TestCase",
     "TestCaseDefect",
     "TestCaseExecution",
+    "TestCaseTreeNode",
     "TestCaseVersion",
     "WorkbenchRuntimeRun",
     "WorkbenchReviewDecision",

@@ -38,6 +38,13 @@ class FakeService:
             },
         }
 
+    def get_llm_health(self, *, probe: bool = True):
+        return {
+            "status": "ok",
+            "force_llm_mode": True,
+            "probe": {"enabled": probe, "attempted": probe, "ok": True},
+        }
+
 
 class FakeAssetService:
     def list_scaffold_templates(self):
@@ -63,6 +70,15 @@ def test_flask_client_health_returns_ok(flask_client):
 
     assert response.status_code == 200
     assert response.get_json() == {"status": "ok"}
+
+
+def test_flask_client_llm_health_returns_probe_result(flask_client):
+    response = flask_client.get("/health/llm?probe=false")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "ok"
+    assert payload["probe"]["enabled"] is False
 
 
 def test_flask_client_console_returns_html(flask_client):

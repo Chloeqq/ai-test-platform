@@ -17,6 +17,18 @@ def resolve_locator(page: Page, element: dict):
     if locator_type == "css":
         return page.locator(locator_value)
 
+    if locator_type == "id":
+        return page.locator(f"#{locator_value}")
+
+    if locator_type == "name":
+        return page.locator(f'[name="{locator_value}"]')
+
+    if locator_type == "xpath":
+        return page.locator(f"xpath={locator_value}")
+
+    if locator_type == "data-testid":
+        return page.get_by_test_id(locator_value)
+
     if locator_type == "role":
         if not role:
             raise ValueError("role locator requires role field")

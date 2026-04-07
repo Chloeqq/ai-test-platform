@@ -1,13 +1,31 @@
 (function () {
   function params(els, state) {
     return {
+      creator: els.filterCreator.value,
+      last_result: els.filterLastResult.value,
       module: els.filterModule.value,
       page: state.page,
       page_size: state.pageSize,
+      priority: els.filterPriority.value,
       product_line: els.filterProductLine.value,
+      project_code: els.filterProjectCode.value,
+      source: els.filterSource.value,
+      status: els.filterStatus.value,
       q: els.searchInput.value.trim(),
       sort_field: els.sortKey.value || "updated_at",
       sort_order: els.sortDir.value || "desc",
+    };
+  }
+
+  function treeParams(els) {
+    return {
+      creator: els.filterCreator.value,
+      last_result: els.filterLastResult.value,
+      priority: els.filterPriority.value,
+      project_code: els.filterProjectCode.value,
+      source: els.filterSource.value,
+      status: els.filterStatus.value,
+      q: els.searchInput.value.trim(),
     };
   }
 
@@ -28,6 +46,27 @@
     return String(value || "").trim();
   }
 
+  function normalizeSourceSearchValue(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "ai") return "AI";
+    if (normalized === "mn") return "MN";
+    if (normalized === "cv") return "CV";
+    if (normalized === "imp") return "IMP";
+    if (normalized === "fb") return "Coverage";
+    return String(value || "").trim();
+  }
+
+  function normalizePrioritySearchValue(value) {
+    const raw = String(value || "").trim().toUpperCase();
+    if (!raw) return "";
+    if (!raw.includes(",")) return raw;
+    return raw
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join("/");
+  }
+
   function formatSearchTokenValue(value) {
     const text = String(value || "").trim();
     if (!text) return "";
@@ -42,10 +81,12 @@
     if (keyword) parts.push(keyword);
 
     const fieldTokens = [
+      ["priority", "优先级", normalizePrioritySearchValue(source.priority)],
       ["test_type", "类型", String(source.test_type || "").trim()],
       ["status", "状态", normalizeStatusSearchValue(source.status)],
       ["creator", "创建人", String(source.creator || "").trim()],
       ["last_result", "结果", normalizeResultSearchValue(source.last_result)],
+      ["source", "来源", normalizeSourceSearchValue(source.source)],
     ];
 
     fieldTokens.forEach(([, label, rawValue]) => {
@@ -59,6 +100,12 @@
   function clearSearchContextKey(els, state, key) {
     const targetKey = String(key || "").trim();
     if (!targetKey) return;
+    if (targetKey === "project_code") {
+      els.filterProjectCode.value = "";
+      els.filterProductLine.value = "";
+      els.filterModule.value = "";
+      return;
+    }
     if (targetKey === "product_line") {
       els.filterProductLine.value = "";
       els.filterModule.value = "";
@@ -66,6 +113,26 @@
     }
     if (targetKey === "module") {
       els.filterModule.value = "";
+      return;
+    }
+    if (targetKey === "source") {
+      els.filterSource.value = "";
+      return;
+    }
+    if (targetKey === "priority") {
+      els.filterPriority.value = "";
+      return;
+    }
+    if (targetKey === "status") {
+      els.filterStatus.value = "";
+      return;
+    }
+    if (targetKey === "creator") {
+      els.filterCreator.value = "";
+      return;
+    }
+    if (targetKey === "last_result") {
+      els.filterLastResult.value = "";
       return;
     }
     const context = { ...(state.searchContext || {}) };
@@ -76,8 +143,14 @@
 
   function filterFieldNodes(els) {
     return {
+      creator: els.filterCreator,
+      last_result: els.filterLastResult,
       module: els.filterModule,
+      priority: els.filterPriority,
       product_line: els.filterProductLine,
+      project_code: els.filterProjectCode,
+      source: els.filterSource,
+      status: els.filterStatus,
       q: els.searchInput,
       sort_dir: els.sortDir,
       sort_key: els.sortKey,
@@ -103,6 +176,7 @@
     clearSearchContextKey,
     filterFieldNodes,
     params,
+    treeParams,
     syncTreeSelectionFromFilters,
     updateFooterMeta,
   };

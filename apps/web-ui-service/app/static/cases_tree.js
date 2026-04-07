@@ -6,8 +6,9 @@
     const { els, state, onSelectionChange } = options;
 
     function render() {
-      els.tree.innerHTML = presenter.treeMarkup(state.treeItems, "", state.treeSelection);
-      els.treeTotal.textContent = String(presenter.totalTreeCount(state.treeItems));
+      const projectCode = els.filterProjectCode ? els.filterProjectCode.value : "";
+      els.tree.innerHTML = presenter.treeMarkup(state.treeItems, "", state.treeSelection, projectCode);
+      els.treeTotal.textContent = String(presenter.totalTreeCount(state.treeItems, projectCode));
     }
 
     function bind() {

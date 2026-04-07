@@ -121,7 +121,7 @@ def asset_tags_page(request: Request) -> HTMLResponse:
 
 @router.get("/cases/{case_id}", response_class=HTMLResponse)
 @router.get("/assets/cases/{case_id}", include_in_schema=False, response_class=HTMLResponse)
-def asset_case_detail_page(request: Request, case_id: int) -> HTMLResponse:
+def asset_case_detail_page(request: Request, case_id: str) -> HTMLResponse:
     return ui_shell_service.render_template(
         request,
         "case_detail.html",
@@ -129,7 +129,7 @@ def asset_case_detail_page(request: Request, case_id: int) -> HTMLResponse:
         context={
             "page_title": f"用例详情 · {case_id}",
             "page_description": "查看与编辑脚本代码、关联缺陷、执行历史和版本对比。",
-            "breadcrumbs": ["首页", "用例中心", "用例列表", f"用例 ID {case_id}"],
+            "breadcrumbs": ["首页", "用例中心", "用例列表", f"用例 {case_id}"],
             "case_id": case_id,
         },
     )

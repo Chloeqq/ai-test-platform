@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -10,19 +10,55 @@ class TestCase(Base):
     __tablename__ = "test_cases"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    case_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    project_code: Mapped[str] = mapped_column(String(20), default="atp", index=True)
+    client: Mapped[str] = mapped_column(String(10), default="web", index=True)
+    page_code: Mapped[str] = mapped_column(String(20), default="common", index=True)
+    page_name: Mapped[str] = mapped_column(String(100), default="")
+    module_code: Mapped[str] = mapped_column(String(20), default="core", index=True)
+    module_name: Mapped[str] = mapped_column(String(100), default="")
+    case_type: Mapped[str] = mapped_column(String(10), default="fn", index=True)
+    source: Mapped[str] = mapped_column(String(10), default="mn", index=True)
     name: Mapped[str] = mapped_column(String(255), index=True)
     product_line: Mapped[str] = mapped_column(String(120), index=True)
     module: Mapped[str] = mapped_column(String(120), index=True)
+    chain_stage: Mapped[str] = mapped_column(String(120), default="", index=True)
+    sut_service: Mapped[str] = mapped_column(String(120), default="", index=True)
+    related_services: Mapped[list[str]] = mapped_column(JSON, default=list)
     priority: Mapped[str] = mapped_column(String(20), default="P2", index=True)
     test_type: Mapped[str] = mapped_column(String(50), default="ui", index=True)
+    scenario_types: Mapped[list[str]] = mapped_column(JSON, default=list)
+    trigger_entry: Mapped[str] = mapped_column(String(40), default="")
+    fault_injection_type: Mapped[str] = mapped_column(String(80), default="")
+    fault_injection_target: Mapped[str] = mapped_column(String(255), default="")
+    fault_injection_params: Mapped[str] = mapped_column(Text, default="")
+    setup_sql: Mapped[str] = mapped_column(Text, default="")
+    precondition_state: Mapped[str] = mapped_column(Text, default="")
+    test_steps: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    test_steps_text: Mapped[str] = mapped_column(Text, default="")
+    concurrency_model: Mapped[str] = mapped_column(String(120), default="")
+    retry_policy: Mapped[str] = mapped_column(Text, default="")
+    expected_result: Mapped[str] = mapped_column(Text, default="")
+    assert_sql: Mapped[str] = mapped_column(Text, default="")
+    event_assertion: Mapped[str] = mapped_column(Text, default="")
+    metric_assertion: Mapped[str] = mapped_column(Text, default="")
+    cleanup_script: Mapped[str] = mapped_column(Text, default="")
+    artifact_links: Mapped[list[str]] = mapped_column(JSON, default=list)
+    notes: Mapped[str] = mapped_column(Text, default="")
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     markers: Mapped[list[str]] = mapped_column(JSON, default=list)
     creator: Mapped[str] = mapped_column(String(120), default="system", index=True)
+    assignee: Mapped[str] = mapped_column(String(120), default="", index=True)
     pytest_path: Mapped[str] = mapped_column(String(500), default="", index=True)
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    automation_status: Mapped[str] = mapped_column(String(20), default="manual", index=True)
+    created_source: Mapped[str] = mapped_column(String(40), default="manual", index=True)
+    source_ref: Mapped[str] = mapped_column(String(255), default="")
     script_code: Mapped[str] = mapped_column(Text, default="")
     data_config: Mapped[dict] = mapped_column(JSON, default=dict)
     last_execution_result: Mapped[str] = mapped_column(String(40), default="unknown", index=True)
+    last_report_url: Mapped[str] = mapped_column(Text, default="")
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -62,3 +98,21 @@ class TestCaseVersion(Base):
     changed_by: Mapped[str] = mapped_column(String(120), default="system")
     change_summary: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class TestCaseTreeNode(Base):
+    __tablename__ = "test_case_tree_nodes"
+    __table_args__ = (
+        UniqueConstraint("project_code", "product_line", "module", name="uq_test_case_tree_node"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_code: Mapped[str] = mapped_column(String(20), default="atp", index=True)
+    product_line: Mapped[str] = mapped_column(String(120), index=True)
+    module: Mapped[str] = mapped_column(String(120), default="", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )

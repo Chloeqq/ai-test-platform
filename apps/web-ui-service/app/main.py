@@ -22,7 +22,9 @@ from app.routers.dashboard import router as dashboard_router
 from app.routers.health import router as health_router
 from app.routers.legacy_console import router as legacy_console_router
 from app.routers.legacy_workbench import router as legacy_workbench_router
+from app.routers.page_objects import router as page_objects_router
 from app.routers.test_cases import router as test_cases_router
+from app.routers.test_projects import router as test_projects_router
 from app.routers.workbench_assets import router as workbench_assets_router
 from app.routers.workbench_gate import router as workbench_gate_router
 from app.routers.workbench_generation import router as workbench_generation_router
@@ -77,6 +79,8 @@ app.include_router(workbench_scheduler_router)
 app.include_router(workbench_tasks_router)
 app.include_router(legacy_workbench_router)
 app.include_router(test_cases_router)
+app.include_router(test_projects_router)
+app.include_router(page_objects_router)
 
 
 @app.middleware("http")

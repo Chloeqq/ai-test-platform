@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from copy import deepcopy
+import sys
 from typing import Any
 
 import yaml
@@ -15,14 +16,22 @@ try:
     from shared_backend.case_ids import build_case_id, build_case_metadata, match_case_id, next_case_sequence, normalize_case_id
     from shared_backend.case_rules import CaseRuleViolation, enrich_case_metadata, validate_case_payload
 except Exception:  # pragma: no cover - runner keeps fallback usability
-    build_case_id = None
-    build_case_metadata = None
-    match_case_id = None
-    next_case_sequence = None
-    normalize_case_id = None
-    CaseRuleViolation = ValueError
-    enrich_case_metadata = None
-    validate_case_payload = None
+    # Retry once by adding repo root to import path.
+    _repo_root = Path(__file__).resolve().parents[3]
+    if str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
+    try:  # pragma: no cover - import fallback path
+        from shared_backend.case_ids import build_case_id, build_case_metadata, match_case_id, next_case_sequence, normalize_case_id
+        from shared_backend.case_rules import CaseRuleViolation, enrich_case_metadata, validate_case_payload
+    except Exception:
+        build_case_id = None
+        build_case_metadata = None
+        match_case_id = None
+        next_case_sequence = None
+        normalize_case_id = None
+        CaseRuleViolation = ValueError
+        enrich_case_metadata = None
+        validate_case_payload = None
 
 
 def dump_yaml(data: dict, output_path: Path) -> Path:
@@ -457,7 +466,7 @@ def apply_scaffold_element(
         raise ValueError("elements[].name must not be empty")
     if not locator_type:
         raise ValueError("elements[].locator_type must not be empty")
-    if locator_type not in {"placeholder", "text", "css", "role"}:
+    if locator_type not in {"placeholder", "text", "css", "role", "id", "name", "xpath", "data-testid"}:
         raise ValueError("elements[].locator_type is not supported")
     if not locator_value:
         raise ValueError("elements[].locator_value must not be empty")

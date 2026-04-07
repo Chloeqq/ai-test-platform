@@ -2,25 +2,26 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.routers import legacy_workbench
-from app.services import workbench_reporting_service, workbench_task_service
+from app.services import (
+    workbench_case_consistency_service,
+    workbench_project_service,
+    workbench_reporting_service,
+    workbench_task_service,
+)
 
 
 router = APIRouter(tags=["workbench-tasks"])
 
 
 @router.get("/api/workbench/projects")
-def list_projects() -> dict[str, Any]:
+def list_projects(db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._ensure_dirs()
-    projects = []
-    if legacy_workbench.TEST_POINTS_ROOT.exists():
-        for item in sorted(legacy_workbench.TEST_POINTS_ROOT.iterdir()):
-            if item.is_dir():
-                projects.append(item.name)
-    if "default" not in projects:
-        projects.insert(0, "default")
+    projects = workbench_project_service.list_project_codes(db, state_root=legacy_workbench.TEST_POINTS_ROOT)
     return {"items": projects}
 
 
@@ -36,8 +37,10 @@ def list_execution_tasks(
     strict_mode_status: str = Query(default=""),
     retry_enabled: str = Query(default=""),
     has_dependencies: str = Query(default=""),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
     execution_rows, execution_meta_raw = legacy_workbench._collect_execution_records_with_meta(limit=max(limit * 3, 200))
     execution_meta = workbench_reporting_service.normalize_execution_meta(execution_meta_raw)
     status_value = str(status or "").strip().lower()
@@ -52,6 +55,11 @@ def list_execution_tasks(
     items: list[dict[str, Any]] = []
     for row in execution_rows:
         task = legacy_workbench._build_execution_task_view(row)
+        if not workbench_case_consistency_service.is_case_tracked(
+            task.get("case_id", ""),
+            case_center_case_ids=case_center_case_ids,
+        ):
+            continue
         if status_value and str(task.get("status", "")).strip().lower() != status_value:
             continue
         if queue_status_value and str(task.get("queue_status", "")).strip().lower() != queue_status_value:
@@ -96,8 +104,9 @@ def list_execution_tasks(
 
 
 @router.get("/api/workbench/tasks/{task_id}")
-def get_execution_task(task_id: str) -> dict[str, Any]:
+def get_execution_task(task_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
     normalized_task_id = str(task_id or "").strip()
     if not normalized_task_id:
         raise legacy_workbench.HTTPException(status_code=legacy_workbench.status.HTTP_404_NOT_FOUND, detail="task not found")
@@ -106,5 +115,10 @@ def get_execution_task(task_id: str) -> dict[str, Any]:
     for row in execution_rows:
         task = legacy_workbench._build_execution_task_view(row)
         if str(task.get("task_id", "")).strip() == normalized_task_id:
+            if not workbench_case_consistency_service.is_case_tracked(
+                task.get("case_id", ""),
+                case_center_case_ids=case_center_case_ids,
+            ):
+                raise legacy_workbench.HTTPException(status_code=legacy_workbench.status.HTTP_404_NOT_FOUND, detail="task not found")
             return {"item": task, "meta": execution_meta}
     raise legacy_workbench.HTTPException(status_code=legacy_workbench.status.HTTP_404_NOT_FOUND, detail="task not found")

@@ -45,6 +45,15 @@
 .list-search-field .list-search-icon {
   color: var(--gp-muted, #5f738e);
   font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  min-width: 16px;
+}
+
+.list-search-field .list-search-icon::before {
+  content: "⌕";
 }
 
 .list-search-clear {

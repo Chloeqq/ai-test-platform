@@ -4,7 +4,7 @@
 }
 
 .cases-grid-table {
-  min-width: 1080px;
+  min-width: 1290px;
 }
 
 .cases-grid-table thead th {
@@ -19,6 +19,10 @@
 
 .cases-grid-table tbody tr:hover {
   background: #f7fafc;
+}
+
+.cases-grid-table tbody tr:nth-child(even) {
+  background: #fcfdff;
 }
 
 .cases-grid-table td {
@@ -88,6 +92,49 @@
   font-size: 12px;
 }
 
+.cases-case-id {
+  color: #748aa5;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cases-priority-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.cases-priority-badge.is-p0 {
+  color: #bc3d3d;
+  background: #fff0f0;
+  border-color: #f3d2d2;
+}
+
+.cases-priority-badge.is-p1 {
+  color: #b5621f;
+  background: #fff5eb;
+  border-color: #f1dbc2;
+}
+
+.cases-priority-badge.is-p2 {
+  color: #9d7b12;
+  background: #fffbe8;
+  border-color: #efe3b7;
+}
+
+.cases-priority-badge.is-p3 {
+  color: #5d7087;
+  background: #f4f7fb;
+  border-color: #dbe4ee;
+}
+
 .cases-result-stack {
   display: flex;
   flex-wrap: wrap;
@@ -107,42 +154,93 @@
 
 .cases-status-indicator {
   --cases-status-color: #6e8098;
+  --cases-status-bg: #eff3f8;
+  --cases-status-border: #d6e0eb;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--cases-status-border);
+  border-radius: 999px;
+  background: var(--cases-status-bg);
   font-size: 12px;
   font-weight: 600;
   color: #314660;
 }
 
-.cases-status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cases-status-color);
-  flex: 0 0 auto;
+.cases-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  min-width: 12px;
+  color: var(--cases-status-color);
+  font-size: 11px;
+  line-height: 1;
 }
 
 .cases-status-indicator.is-passed,
-.cases-status-indicator.is-active {
+.cases-status-indicator.is-active,
+.cases-status-indicator.is-ready {
   --cases-status-color: #2f8a58;
+  --cases-status-bg: #e8f8ee;
+  --cases-status-border: #cde9d8;
 }
 
 .cases-status-indicator.is-failed,
-.cases-status-indicator.is-deprecated {
+.cases-status-indicator.is-deprecated,
+.cases-status-indicator.is-blocked {
   --cases-status-color: #bf5151;
+  --cases-status-bg: #fdeeee;
+  --cases-status-border: #f2d4d4;
 }
 
 .cases-status-indicator.is-skipped,
 .cases-status-indicator.is-inactive,
+.cases-status-indicator.is-draft,
+.cases-status-indicator.is-in_review,
+.cases-status-indicator.is-review,
 .cases-status-indicator.is-unknown {
   --cases-status-color: #6e8098;
+  --cases-status-bg: #eff3f8;
+  --cases-status-border: #d6e0eb;
 }
 
 .cases-tag-list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.cases-automation-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.cases-automation-badge.is-automated {
+  color: #2f8a58;
+  background: #e8f8ee;
+  border-color: #cde9d8;
+}
+
+.cases-automation-badge.is-manual {
+  color: #6b7f98;
+  background: #eff3f8;
+  border-color: #d6e0eb;
+}
+
+.cases-automation-badge.is-unknown {
+  color: #8a6f1e;
+  background: #fffbe8;
+  border-color: #efe3b7;
 }
 
 .cases-tag {
@@ -179,6 +277,11 @@
 .cases-module-path {
   color: #4e637d;
   line-height: 1.6;
+  display: inline-block;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cases-time-cell {

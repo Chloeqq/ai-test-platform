@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.routers import legacy_workbench
-from app.services import workbench_gate_service
+from app.services import workbench_case_consistency_service, workbench_gate_service
 
 
 router = APIRouter(tags=["workbench-gate"])
@@ -58,9 +60,19 @@ def get_execution_gate_config() -> dict[str, Any]:
 def save_execution_gate_decision(
     payload: legacy_workbench.ExecutionGateDecisionPayload,
     request: Request,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+    if str(payload.case_id or "").strip() and not workbench_case_consistency_service.is_case_tracked(
+        payload.case_id,
+        case_center_case_ids=case_center_case_ids,
+    ):
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="case_id not found in case center",
+        )
     actor = legacy_workbench._extract_review_actor(request)
     try:
         actor = legacy_workbench._require_authenticated_review_actor(actor)
@@ -161,9 +173,25 @@ def save_execution_gate_decision(
 def approve_execution_gate_decision(
     payload: legacy_workbench.ExecutionGateDecisionActionPayload,
     request: Request,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+    existing_decision = legacy_workbench._execution_gate_decision_for_run(
+        run_id=payload.run_id,
+        project=payload.project,
+        page=payload.page,
+    )
+    existing_case_id = str(existing_decision.get("case_id", "")).strip()
+    if existing_case_id and not workbench_case_consistency_service.is_case_tracked(
+        existing_case_id,
+        case_center_case_ids=case_center_case_ids,
+    ):
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="case_id not found in case center",
+        )
     actor = legacy_workbench._extract_review_actor(request)
     try:
         actor = legacy_workbench._require_authenticated_review_actor(actor)
@@ -248,9 +276,25 @@ def approve_execution_gate_decision(
 def revoke_execution_gate_decision(
     payload: legacy_workbench.ExecutionGateDecisionActionPayload,
     request: Request,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+    existing_decision = legacy_workbench._execution_gate_decision_for_run(
+        run_id=payload.run_id,
+        project=payload.project,
+        page=payload.page,
+    )
+    existing_case_id = str(existing_decision.get("case_id", "")).strip()
+    if existing_case_id and not workbench_case_consistency_service.is_case_tracked(
+        existing_case_id,
+        case_center_case_ids=case_center_case_ids,
+    ):
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="case_id not found in case center",
+        )
     actor = legacy_workbench._extract_review_actor(request)
     try:
         actor = legacy_workbench._require_authenticated_review_actor(actor)

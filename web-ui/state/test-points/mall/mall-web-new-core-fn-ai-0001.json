@@ -1,0 +1,38 @@
+{
+  "asset_id": "mall-web-new-core-fn-ai-0001",
+  "version": 1,
+  "updated_at": "2026-04-06T07:15:03.058551+00:00",
+  "title": "营销-新品推荐页可访问",
+  "page": "new",
+  "requirement": [
+    "验证营销-新品推荐页可访问"
+  ],
+  "priority": "P1",
+  "source_type": "yaml_case",
+  "source_name": "mall-web-new-core-fn-ai-0001",
+  "source_ref": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/mall-web-new-core-fn-ai-0001.yaml",
+  "references": [
+    {
+      "kind": "case_yaml",
+      "path": "/Users/bettyhuang/PycharmProjects/ai-test-platform/assets/test-cases/ai-generated/mall-web-new-core-fn-ai-0001.yaml",
+      "case_id": "mall-web-new-core-fn-ai-0001"
+    }
+  ],
+  "point_count": 4,
+  "point_types": [
+    "assertion",
+    "navigation",
+    "precondition"
+  ],
+  "point_keys": [
+    "new-01",
+    "new-02",
+    "new-03",
+    "new-04"
+  ],
+  "precondition_count": 1,
+  "navigation_count": 1,
+  "input_count": 0,
+  "assertion_count": 2,
+  "action_count": 0
+}

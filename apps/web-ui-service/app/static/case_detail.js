@@ -1,8 +1,9 @@
 (function () {
   const shell = document.getElementById("case-detail-shell");
   if (!shell) return;
-  const caseId = Number(shell.getAttribute("data-case-id"));
+  const caseId = String(shell.getAttribute("data-case-id") || "").trim();
   if (!caseId) return;
+  const encodedCaseId = encodeURIComponent(caseId);
   const state = {
     versions: [],
     dataConfig: {
@@ -208,7 +209,9 @@
 
   function renderBasicInfo(basic) {
     const rows = [
+      ["用例ID", displayCaseId(basic.case_id || basic.id)],
       ["名称", basic.name],
+      ["项目", basic.project_code || "-"],
       ["产品线", basic.product_line],
       ["模块", displayModule(basic.module)],
       ["优先级", basic.priority],
@@ -216,6 +219,7 @@
       ["标签", displayTagList(basic.tags || [])],
       ["标记", displayTagList(basic.markers || [])],
       ["创建人", basic.creator],
+      ["负责人", basic.assignee || "-"],
       ["Pytest路径", basic.pytest_path || "-"],
       ["状态", displayStatus(basic.status || "active")],
       ["数据驱动", basic.data_config_enabled ? "已启用" : "未启用"],
@@ -344,7 +348,7 @@
       return;
     }
     const response = await fetch(
-      `/api/test-cases/${caseId}/versions/compare?from_version=${fromVersion}&to_version=${toVersion}`
+      `/api/test-cases/${encodedCaseId}/versions/compare?from_version=${fromVersion}&to_version=${toVersion}`
     );
     if (!response.ok) {
       if (!options.silent) {
@@ -360,13 +364,13 @@
   }
 
   async function loadDetail() {
-    const response = await fetch(`/api/test-cases/${caseId}`);
+    const response = await fetch(`/api/test-cases/${encodedCaseId}`);
     if (!response.ok) {
       throw new Error("load detail failed");
     }
     const payload = await response.json();
     const basic = payload.basic || {};
-    els.detailTitle.textContent = `用例详情 · ${displayCaseId(basic.id || caseId)} - ${basic.name || ""}`;
+    els.detailTitle.textContent = `用例详情 · ${displayCaseId(basic.case_id || basic.id || caseId)} - ${basic.name || ""}`;
     renderBasicInfo(basic);
     applyAssetMetaToForm(basic);
     applyDataConfigToForm(payload.data_config || {});
@@ -386,7 +390,7 @@
       alert("脚本不能为空。");
       return;
     }
-    const response = await fetch(`/api/test-cases/${caseId}/script`, {
+    const response = await fetch(`/api/test-cases/${encodedCaseId}/script`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ script_code: scriptCode, changed_by: "admin" }),
@@ -403,7 +407,7 @@
     const payload = {
       data_config: buildDataConfigPayload(),
     };
-    const response = await fetch(`/api/test-cases/${caseId}`, {
+    const response = await fetch(`/api/test-cases/${encodedCaseId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -418,7 +422,7 @@
 
   async function saveAssetMeta() {
     const payload = buildAssetMetaPayload();
-    const response = await fetch(`/api/test-cases/${caseId}`, {
+    const response = await fetch(`/api/test-cases/${encodedCaseId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -436,7 +440,7 @@
     if (!defectKey) return;
     const defectUrl = window.prompt("请输入缺陷链接（可选）：", "") || "";
     const query = new URLSearchParams({ defect_key: defectKey, defect_url: defectUrl });
-    const response = await fetch(`/api/test-cases/${caseId}/defects?${query}`, { method: "POST" });
+    const response = await fetch(`/api/test-cases/${encodedCaseId}/defects?${query}`, { method: "POST" });
     if (!response.ok) {
       alert("添加缺陷失败");
       return;

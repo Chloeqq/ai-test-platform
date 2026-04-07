@@ -40,6 +40,18 @@
     "page_code": {
       "type": "string"
     },
+    "chain_stage": {
+      "type": "string"
+    },
+    "sut_service": {
+      "type": "string"
+    },
+    "related_services": {
+      "type": ["string", "array"],
+      "items": {
+        "type": "string"
+      }
+    },
     "page_name": {
       "type": "string"
     },
@@ -126,6 +138,9 @@
               "target": {
                 "type": ["string", "null"]
               },
+              "element_code": {
+                "type": ["string", "null"]
+              },
               "count": {
                 "type": ["integer", "number", "string", "null"]
               },
@@ -154,7 +169,14 @@
                   }
                 },
                 "then": {
-                  "required": ["target"]
+                  "anyOf": [
+                    {
+                      "required": ["target"]
+                    },
+                    {
+                      "required": ["element_code"]
+                    }
+                  ]
                 }
               },
               {

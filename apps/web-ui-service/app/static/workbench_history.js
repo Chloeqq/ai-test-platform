@@ -24,6 +24,7 @@
     actorFilter: document.getElementById("wb-history-actor"),
     advancedFilters: document.getElementById("wb-history-advanced-filters"),
     applyFiltersBtn: document.getElementById("wb-history-apply-filters"),
+    clearBtn: document.getElementById("wb-history-clear"),
     refreshBtn: document.getElementById("wb-history-refresh"),
     resetBtn: document.getElementById("wb-history-reset"),
     lastUpdated: document.getElementById("wb-history-last-updated"),
@@ -167,6 +168,31 @@
     }
   }
 
+  async function clearHistory() {
+    const confirmed = window.confirm("将清空历史、运行态和关联缓存记录，操作不可恢复。是否继续？");
+    if (!confirmed) return;
+    if (!els.clearBtn) return;
+    els.clearBtn.disabled = true;
+    const originalText = els.clearBtn.textContent;
+    els.clearBtn.textContent = "清空中...";
+    try {
+      const response = await authFetch("/api/workbench/case-consistency/cleanup?purge_all=true", {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.detail || errorBody.message || "清空历史失败");
+      }
+      state.page = 1;
+      state.selectedIds.clear();
+      await refresh();
+      els.filterSummary.textContent = "已执行全量清空，当前历史记录为最新空状态。";
+    } finally {
+      els.clearBtn.disabled = false;
+      els.clearBtn.textContent = originalText || "清空历史";
+    }
+  }
+
   function scheduleActorSearch() {
     window.clearTimeout(scheduleActorSearch.timer);
     scheduleActorSearch.timer = window.setTimeout(() => {
@@ -193,6 +219,9 @@
       refresh().catch(handleLoadError);
     });
     els.refreshBtn.addEventListener("click", () => refresh().catch(handleLoadError));
+    if (els.clearBtn) {
+      els.clearBtn.addEventListener("click", () => clearHistory().catch(handleLoadError));
+    }
     els.resetBtn.addEventListener("click", () => {
       support.resetFilters(state);
       refresh().catch(handleLoadError);

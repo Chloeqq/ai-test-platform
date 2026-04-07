@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "description": "Enterprise AI testing platform monorepo scaffold",
   "scripts": {
-    "check:console": "node --check apps/web-console/static/app.js"
+    "check:console": "node --check apps/web-console/static/app.js",
+    "check:webui-static": "scripts/qa/check-web-ui-static.sh",
+    "check:webui-pages": ".venv/bin/python scripts/qa/check_web_ui_pages.py --base-url http://127.0.0.1:8013"
   }
 }

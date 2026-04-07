@@ -78,6 +78,34 @@ CRITICAL_CHANGE_FILE_HINTS = [
     "refund",
 ]
 
+_STRUCTURED_REQUIREMENT_LABEL_KEY = {
+    "用例名称": "title",
+    "用例标题": "title",
+    "标题": "title",
+    "case title": "title",
+    "title": "title",
+    "前置条件": "precondition",
+    "前提条件": "precondition",
+    "precondition": "precondition",
+    "测试步骤": "steps",
+    "操作步骤": "steps",
+    "步骤": "steps",
+    "steps": "steps",
+    "step": "steps",
+    "预期结果": "expected_results",
+    "期望结果": "expected_results",
+    "断言": "expected_results",
+    "expected": "expected_results",
+    "expected result": "expected_results",
+    "priority": "priority",
+    "优先级": "priority",
+}
+_STRUCTURED_REQUIREMENT_LABEL_PATTERN = re.compile(
+    r"(用例名称|用例标题|标题|前置条件|前提条件|测试步骤|操作步骤|步骤|预期结果|期望结果|断言|优先级|case title|title|precondition|steps?|expected(?: result)?|priority)\s*[:：\-]\s*",
+    re.IGNORECASE,
+)
+_STRUCTURED_TITLE_NOISE_PREFIX = re.compile(r"^(?:前置条件|前提条件|测试步骤|操作步骤|步骤|预期结果|期望结果|断言)\s*[:：\-]?\s*")
+
 
 class RequirementParserAgent:
     def __init__(self) -> None:
@@ -183,6 +211,11 @@ class RequirementParserAgent:
             source_type=source_type,
             source_inputs=normalized_sources,
         )
+        llm_mode = str(llm_meta.get("mode", "")).strip().lower()
+        llm_succeeded = bool(llm_meta.get("succeeded", False))
+        if llm_mode == "llm" and not llm_succeeded:
+            reason = str(llm_meta.get("reason", "")).strip() or "llm execution failed"
+            raise RuntimeError(f"forced llm mode requires successful llm overlay: {reason[:240]}")
         entities = self._extract_entities(merged_text, page=inferred_page, openapi_spec=effective_openapi_spec, git_diff=normalized_git_diff)
         intents = self._extract_test_intents(
             sources=normalized_sources,
@@ -193,7 +226,23 @@ class RequirementParserAgent:
             runtime_logs=normalized_logs,
         )
         intents = self._deduplicate_intents(intents)
+        intents = self._ensure_minimum_intent_baseline(
+            intents=intents,
+            page=inferred_page,
+            sources=normalized_sources,
+            git_diff=normalized_git_diff,
+            defect_ticket=normalized_defect,
+            runtime_logs=normalized_logs,
+        )
         intents = self._merge_llm_intents(intents=intents, llm_overlay=llm_overlay, page=inferred_page)
+        intents = self._ensure_minimum_intent_baseline(
+            intents=intents,
+            page=inferred_page,
+            sources=normalized_sources,
+            git_diff=normalized_git_diff,
+            defect_ticket=normalized_defect,
+            runtime_logs=normalized_logs,
+        )
         intents = self._apply_dependency_analysis(intents)
         priority = self._infer_priority(
             merged_text,
@@ -271,13 +320,19 @@ class RequirementParserAgent:
         ambiguity_count: int = 0,
         parse_confidence: float = 0.0,
     ) -> dict[str, Any]:
+        openai_model = str(os.getenv("OPENAI_MODEL", "")).strip()
+        openai_api_key = str(os.getenv("OPENAI_API_KEY", "")).strip()
+        legacy_mode = str(os.getenv("REQUIREMENT_PARSER_MODE", "")).strip().lower()
         configured_model = (
-            str(os.getenv("REQUIREMENT_PARSER_MODEL", "")).strip()
-            or str(os.getenv("OPENAI_MODEL", "")).strip()
+            openai_model
+            or str(os.getenv("REQUIREMENT_PARSER_MODEL", "")).strip()
             or "rule-engine"
         )
-        configured_mode = str(os.getenv("REQUIREMENT_PARSER_MODE", "rule_based")).strip().lower() or "rule_based"
-        llm_enabled = configured_mode in {"llm", "hybrid"} and bool(str(os.getenv("OPENAI_API_KEY", "")).strip())
+        if legacy_mode in {"rule_based", "llm", "hybrid"}:
+            configured_mode = legacy_mode
+        else:
+            configured_mode = "llm" if openai_api_key else "rule_based"
+        llm_enabled = configured_mode in {"llm", "hybrid"} and bool(openai_api_key)
         prompt_fingerprint = hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:16]
         parse_finished_at = datetime.now(UTC)
         parse_started = parse_started_at or parse_finished_at
@@ -311,10 +366,16 @@ class RequirementParserAgent:
         source_type: str,
         source_inputs: list[RequirementSourceInput],
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        configured_mode = str(os.getenv("REQUIREMENT_PARSER_MODE", "rule_based")).strip().lower() or "rule_based"
+        openai_model = str(os.getenv("OPENAI_MODEL", "")).strip()
+        openai_api_key = str(os.getenv("OPENAI_API_KEY", "")).strip()
+        legacy_mode = str(os.getenv("REQUIREMENT_PARSER_MODE", "")).strip().lower()
+        if legacy_mode in {"rule_based", "llm", "hybrid"}:
+            configured_mode = legacy_mode
+        else:
+            configured_mode = "llm" if openai_api_key else "rule_based"
         configured_model = (
-            str(os.getenv("REQUIREMENT_PARSER_MODEL", "")).strip()
-            or str(os.getenv("OPENAI_MODEL", "")).strip()
+            openai_model
+            or str(os.getenv("REQUIREMENT_PARSER_MODEL", "")).strip()
             or "rule-engine"
         )
         llm_meta: dict[str, Any] = {
@@ -336,7 +397,7 @@ class RequirementParserAgent:
             llm_meta["reason"] = "llm mode disabled"
             return {}, self._finalize_llm_meta(llm_meta=llm_meta, started_at=started_at, overlay={})
 
-        api_key = str(os.getenv("OPENAI_API_KEY", "")).strip()
+        api_key = openai_api_key
         if not api_key:
             llm_meta["fallback_used"] = True
             llm_meta["reason_code"] = "missing_api_key"
@@ -350,6 +411,8 @@ class RequirementParserAgent:
             client = OpenAI(
                 api_key=api_key,
                 base_url=str(os.getenv("OPENAI_BASE_URL", "")).strip() or None,
+                timeout=30,
+                max_retries=0,
             )
             prompt_payload = {
                 "source_type": source_type,
@@ -375,6 +438,8 @@ class RequirementParserAgent:
             completion = client.chat.completions.create(
                 model=configured_model,
                 temperature=0.1,
+                max_tokens=400,
+                response_format={"type": "json_object"},
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": json.dumps(prompt_payload, ensure_ascii=False)},
@@ -388,6 +453,12 @@ class RequirementParserAgent:
             content = str((completion.choices[0].message.content if completion.choices else "") or "").strip()
             overlay = self._extract_json_object(content)
             if not isinstance(overlay, dict) or not overlay:
+                overlay = self._salvage_overlay_from_text(raw_text=content, page=inferred_page)
+                if overlay:
+                    llm_meta["succeeded"] = True
+                    llm_meta["reason_code"] = "ok_salvaged"
+                    llm_meta["reason"] = "ok_salvaged"
+                    return overlay, self._finalize_llm_meta(llm_meta=llm_meta, started_at=started_at, overlay=overlay)
                 llm_meta["reason_code"] = "invalid_overlay"
                 raise ValueError("llm output is not valid JSON object")
             llm_meta["succeeded"] = True
@@ -434,6 +505,40 @@ class RequirementParserAgent:
             return payload if isinstance(payload, dict) else {}
         except Exception:
             return {}
+
+    def _salvage_overlay_from_text(self, *, raw_text: str, page: str) -> dict[str, Any]:
+        text = str(raw_text or "").strip()
+        if not text:
+            return {}
+        lines = [self._sanitize_sentence(line) for line in text.splitlines()]
+        candidates: list[str] = []
+        for line in lines:
+            if not line:
+                continue
+            lowered = line.lower()
+            if lowered.startswith(("```", "json", "输出", "说明", "结果")):
+                continue
+            if len(line) < 6:
+                continue
+            candidates.append(line)
+            if len(candidates) >= 12:
+                break
+        if not candidates:
+            return {}
+
+        test_intents: list[dict[str, Any]] = []
+        for line in candidates[:6]:
+            intent_type = self._classify_intent_type(line)
+            steps_hint = self._infer_steps_hint(line, intent_type, page)
+            test_intents.append(
+                {
+                    "title": line[:120],
+                    "intent_type": intent_type,
+                    "priority": "P1",
+                    "steps_hint": steps_hint or [f"open:{page or 'target_page'}", "assert"],
+                }
+            )
+        return {"test_intents": test_intents} if test_intents else {}
 
     def _merge_llm_intents(
         self,
@@ -582,12 +687,16 @@ class RequirementParserAgent:
                     )
                 )
         if requirement:
+            requirement_metadata: dict[str, Any] = {"field": "requirement", "content": requirement[:8000]}
+            structured_case = self._extract_structured_requirement_fields(requirement)
+            if structured_case:
+                requirement_metadata["structured_case"] = structured_case
             sources.append(
                 RequirementSourceInput(
                     source_id=f"source-{len(sources)+1:02d}",
                     source_type=self._canonical_source_type(source_type or "text"),
                     content_preview=requirement[:200],
-                    metadata={"field": "requirement", "content": requirement[:8000]},
+                    metadata=requirement_metadata,
                 )
             )
         if prd_text:
@@ -635,7 +744,7 @@ class RequirementParserAgent:
                     metadata={"field": "runtime_logs", "content": runtime_logs[:8000]},
                 )
             )
-        if isinstance(openapi_spec, dict):
+        if isinstance(openapi_spec, dict) and openapi_spec:
             title = str(((openapi_spec.get("info") or {}).get("title", "OpenAPI"))).strip() or "OpenAPI"
             openapi_summary = self._summarize_openapi_spec(openapi_spec)
             sources.append(
@@ -664,6 +773,175 @@ class RequirementParserAgent:
             return ""
         except Exception:
             return ""
+
+    @staticmethod
+    def _split_structured_text_items(value: str) -> list[str]:
+        text = str(value or "").replace("\r", "\n").strip()
+        if not text:
+            return []
+        text = re.sub(r"[；;]+", "\n", text)
+        text = re.sub(r"\s*([0-9]+)\s*[\.\)、]\s*", r"\n\1. ", text)
+        text = re.sub(r"\s*[•·]\s*", "\n", text)
+        rows: list[str] = []
+        for raw_line in text.split("\n"):
+            line = str(raw_line).strip(" \t-，,。")
+            if not line:
+                continue
+            line = re.sub(r"^(?:\d+\.\s*|[-*]\s*)", "", line).strip()
+            if not line:
+                continue
+            if line.lower() in _STRUCTURED_REQUIREMENT_LABEL_KEY:
+                continue
+            rows.append(line[:240])
+        dedup: list[str] = []
+        for row in rows:
+            if row not in dedup:
+                dedup.append(row)
+        return dedup
+
+    def _extract_structured_requirement_fields(self, text: str) -> dict[str, Any]:
+        raw_text = str(text or "").strip()
+        if not raw_text:
+            return {}
+        matches = list(_STRUCTURED_REQUIREMENT_LABEL_PATTERN.finditer(raw_text))
+        if not matches:
+            return {}
+        structured: dict[str, Any] = {
+            "title": "",
+            "precondition": "",
+            "steps": [],
+            "expected_results": [],
+            "priority": "",
+        }
+        for index, match in enumerate(matches):
+            raw_label = str(match.group(1) or "").strip().lower()
+            canonical_key = _STRUCTURED_REQUIREMENT_LABEL_KEY.get(raw_label)
+            if not canonical_key:
+                continue
+            start = match.end()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(raw_text)
+            value = str(raw_text[start:end]).strip(" \n\r\t-：:，,。")
+            if not value:
+                continue
+            if canonical_key in {"steps", "expected_results"}:
+                items = self._split_structured_text_items(value)
+                if items:
+                    merged_items = structured.get(canonical_key)
+                    if not isinstance(merged_items, list):
+                        merged_items = []
+                    for item in items:
+                        if item not in merged_items:
+                            merged_items.append(item)
+                    structured[canonical_key] = merged_items
+                continue
+            if canonical_key == "priority":
+                priority_match = re.search(r"\bP[0-3]\b", value.upper())
+                structured["priority"] = priority_match.group(0) if priority_match else ""
+                continue
+            current_text = str(structured.get(canonical_key, "")).strip()
+            if not current_text:
+                structured[canonical_key] = value[:240]
+        has_signal = any(
+            [
+                str(structured.get("title", "")).strip(),
+                str(structured.get("precondition", "")).strip(),
+                bool(structured.get("steps")),
+                bool(structured.get("expected_results")),
+            ]
+        )
+        return structured if has_signal else {}
+
+    @staticmethod
+    def _normalize_structured_priority(value: str) -> str:
+        candidate = str(value or "").strip().upper()
+        return candidate if candidate in {"P0", "P1", "P2"} else ""
+
+    @staticmethod
+    def _infer_structured_title(
+        *,
+        title: str,
+        page: str,
+        steps: list[str],
+        expected_results: list[str],
+    ) -> str:
+        normalized_title = _STRUCTURED_TITLE_NOISE_PREFIX.sub("", str(title or "").strip())
+        if normalized_title:
+            return normalized_title[:120]
+        for item in steps:
+            quoted = re.findall(r"[「“\"'《](.*?)[」”\"'》]", str(item))
+            if quoted:
+                candidate = str(quoted[-1]).strip()
+                if candidate:
+                    return f"{candidate}页面主流程校验"[:120]
+        for item in expected_results:
+            candidate = str(item).strip()
+            if candidate:
+                short = candidate[:40]
+                return f"{short}校验"[:120]
+        fallback_page = str(page or "目标页面").strip() or "目标页面"
+        return f"{fallback_page}页面主流程校验"[:120]
+
+    def _extract_structured_case_intents(
+        self,
+        *,
+        source: RequirementSourceInput,
+        page: str,
+        defect_ticket: str,
+        git_diff: str,
+        start_index: int,
+    ) -> list[TestIntent]:
+        metadata = source.metadata if isinstance(source.metadata, dict) else {}
+        structured = metadata.get("structured_case")
+        if not isinstance(structured, dict):
+            return []
+        title = str(structured.get("title", "")).strip()
+        precondition = str(structured.get("precondition", "")).strip()
+        steps = [
+            str(item).strip()
+            for item in (structured.get("steps") if isinstance(structured.get("steps"), list) else [])
+            if str(item).strip()
+        ]
+        expected_results = [
+            str(item).strip()
+            for item in (
+                structured.get("expected_results") if isinstance(structured.get("expected_results"), list) else []
+            )
+            if str(item).strip()
+        ]
+        merged_text = " ".join([title, precondition, *steps[:8], *expected_results[:8]]).strip()
+        if not merged_text:
+            return []
+        priority = self._normalize_structured_priority(str(structured.get("priority", "")).strip()) or self._infer_priority(
+            merged_text,
+            intents=[],
+            defect_ticket=defect_ticket,
+            git_diff=git_diff,
+            source_inputs=[],
+        )
+        normalized_title = self._infer_structured_title(
+            title=title,
+            page=page,
+            steps=steps,
+            expected_results=expected_results,
+        )
+        intent_type = self._classify_intent_type(merged_text)
+        steps_hint = self._extract_steps_hint(merged_text, page=page, source_type="text")
+        if not steps_hint:
+            steps_hint = [f"open:{page or 'target_page'}", "smoke", "assert"]
+        lowered_hints = [str(item).strip().lower() for item in steps_hint]
+        if expected_results and "assert" not in lowered_hints:
+            steps_hint.append("assert")
+        return [
+            TestIntent(
+                intent_id=f"intent-{start_index:02d}",
+                title=normalized_title[:90],
+                intent_type=intent_type,
+                priority=priority,
+                steps_hint=steps_hint,
+                dependencies=[],
+                source_ids=[source.source_id],
+            )
+        ]
 
     @staticmethod
     def _parse_openapi_text(raw_text: str) -> dict[str, Any] | None:
@@ -805,6 +1083,16 @@ class RequirementParserAgent:
         intents: list[TestIntent] = []
         for source in sources:
             source_type = self._canonical_source_type(source.source_type)
+            structured_intents = self._extract_structured_case_intents(
+                source=source,
+                page=page,
+                defect_ticket=defect_ticket,
+                git_diff=git_diff,
+                start_index=len(intents) + 1,
+            )
+            if structured_intents:
+                intents.extend(structured_intents)
+                continue
             source_text = self._read_source_content(source)
             if not source_text:
                 continue
@@ -862,6 +1150,98 @@ class RequirementParserAgent:
                 )
             )
         return intents
+
+    def _ensure_minimum_intent_baseline(
+        self,
+        *,
+        intents: list[TestIntent],
+        page: str,
+        sources: list[RequirementSourceInput],
+        git_diff: str,
+        defect_ticket: str,
+        runtime_logs: str,
+    ) -> list[TestIntent]:
+        if not intents:
+            return intents
+
+        normalized_page = str(page or "target_page").strip() or "target_page"
+        source_types = {
+            self._canonical_source_type(str(source.source_type).strip().lower())
+            for source in sources
+            if isinstance(source, RequirementSourceInput)
+        }
+        intent_rows = list(intents)
+        existing_titles = {str(intent.title).strip().lower() for intent in intent_rows if str(intent.title).strip()}
+        has_primary_flow = any(intent.intent_type in {"functional", "api"} for intent in intent_rows)
+        negative_like_count = sum(
+            1 for intent in intent_rows if intent.intent_type in {"negative", "security", "compatibility"}
+        )
+
+        enforce_baseline = bool(
+            source_types.intersection({"text", "manual", "requirement", "prd", "user_story", "ai"})
+            or len(intent_rows) <= 2
+        )
+        if not enforce_baseline:
+            return self._deduplicate_intents(intent_rows)
+
+        baseline_templates: list[tuple[str, str, list[str], str]] = [
+            ("functional", f"{normalized_page}主流程功能校验", [f"open:{normalized_page}", "smoke", "assert"], "P1"),
+            (
+                "negative",
+                f"{normalized_page}异常输入与错误处理校验",
+                [f"open:{normalized_page}", "negative", "assert"],
+                "P1",
+            ),
+            (
+                "negative",
+                f"{normalized_page}边界值与必填约束校验",
+                [f"open:{normalized_page}", "boundary", "assert"],
+                "P1",
+            ),
+        ]
+
+        for intent_type, title, steps_hint, priority in baseline_templates:
+            if intent_type == "functional" and has_primary_flow:
+                continue
+            if intent_type == "negative" and negative_like_count >= 2:
+                continue
+            title_key = title.strip().lower()
+            if title_key in existing_titles:
+                continue
+            intent_rows.append(
+                TestIntent(
+                    intent_id=f"intent-{len(intent_rows)+1:02d}",
+                    title=title[:90],
+                    intent_type=intent_type,
+                    priority=priority,
+                    steps_hint=steps_hint,
+                    dependencies=[],
+                    source_ids=[],
+                )
+            )
+            existing_titles.add(title_key)
+            if intent_type == "functional":
+                has_primary_flow = True
+            if intent_type == "negative":
+                negative_like_count += 1
+
+        has_regression = any(intent.intent_type == "regression" for intent in intent_rows)
+        if (git_diff.strip() or defect_ticket.strip() or runtime_logs.strip()) and not has_regression:
+            regression_title = f"{normalized_page}变更影响回归校验"
+            if regression_title.strip().lower() not in existing_titles:
+                intent_rows.append(
+                    TestIntent(
+                        intent_id=f"intent-{len(intent_rows)+1:02d}",
+                        title=regression_title[:90],
+                        intent_type="regression",
+                        priority="P1",
+                        steps_hint=[f"open:{normalized_page}", "regression", "assert"],
+                        dependencies=[],
+                        source_ids=[],
+                    )
+                )
+
+        return self._deduplicate_intents(intent_rows)
 
     @staticmethod
     def _split_sentences(text: str) -> list[str]:
@@ -1144,12 +1524,16 @@ class RequirementParserAgent:
         for intent in intents:
             dependencies: list[str] = []
             title = intent.title.lower()
-            if intent.intent_type in {"negative", "performance", "security", "regression", "compatibility"} and base_flow_intent:
+            if (
+                intent.intent_type in {"negative", "performance", "security", "regression", "compatibility"}
+                and base_flow_intent
+                and base_flow_intent != intent.intent_id
+            ):
                 dependencies.append(base_flow_intent)
             if any(token in title for token in ["删除", "修改", "提交", "审批", "回归", "缺陷回归"]):
                 for dep_type in ["functional", "api"]:
                     dep_intent = first_by_type.get(dep_type)
-                    if dep_intent:
+                    if dep_intent and dep_intent != intent.intent_id:
                         dependencies.append(dep_intent)
             if any("login" in step or "鉴权" in title for step in intent.steps_hint):
                 dependencies = []

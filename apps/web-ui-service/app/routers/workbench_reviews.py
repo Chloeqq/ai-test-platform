@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.routers import legacy_workbench
+from app.services import workbench_case_consistency_service
 
 
 router = APIRouter(tags=["workbench-reviews"])
@@ -14,9 +17,19 @@ router = APIRouter(tags=["workbench-reviews"])
 def save_review(
     payload: legacy_workbench.WorkbenchReviewPayload,
     request: Request,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
+    if not workbench_case_consistency_service.is_case_tracked(
+        payload.case_id,
+        case_center_case_ids=case_center_case_ids,
+    ):
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="case_id not found in case center",
+        )
     actor = legacy_workbench._extract_review_actor(request)
     try:
         actor = legacy_workbench._require_authenticated_review_actor(actor)

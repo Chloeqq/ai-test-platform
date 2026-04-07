@@ -4,9 +4,46 @@
   "required": ["page", "elements"],
   "additionalProperties": false,
   "properties": {
+    "page_id": {
+      "type": ["integer", "number"]
+    },
     "page": {
       "type": "string",
       "minLength": 1
+    },
+    "page_code": {
+      "type": "string"
+    },
+    "page_name": {
+      "type": "string"
+    },
+    "page_url": {
+      "type": "string"
+    },
+    "module_id": {
+      "type": ["integer", "number"]
+    },
+    "element_count": {
+      "type": ["integer", "number"]
+    },
+    "health_status": {
+      "type": ["integer", "number"],
+      "enum": [0, 1]
+    },
+    "project_code": {
+      "type": "string"
+    },
+    "client": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    },
+    "create_time": {
+      "type": ["string", "number", "null"]
+    },
+    "update_time": {
+      "type": ["string", "number", "null"]
     },
     "description": {
       "type": "string"
@@ -20,15 +57,46 @@
         "properties": {
           "locator_type": {
             "type": "string",
-            "enum": ["placeholder", "text", "css", "role"]
+            "enum": ["placeholder", "text", "css", "role", "id", "name", "xpath", "data-testid"]
           },
           "locator_value": {
             "type": "string",
             "minLength": 1
           },
+          "element_id": {
+            "type": ["integer", "number"]
+          },
+          "element_code": {
+            "type": "string"
+          },
+          "element_name": {
+            "type": "string"
+          },
+          "page_id": {
+            "type": ["integer", "number"]
+          },
+          "backup_locator": {
+            "type": "string"
+          },
+          "health_status": {
+            "type": ["integer", "number"],
+            "enum": [0, 1]
+          },
+          "version": {
+            "type": ["integer", "number"]
+          },
           "role": {
             "type": "string",
             "minLength": 1
+          },
+          "status": {
+            "type": "string"
+          },
+          "create_time": {
+            "type": ["string", "number", "null"]
+          },
+          "update_time": {
+            "type": ["string", "number", "null"]
           },
           "description": {
             "type": "string"

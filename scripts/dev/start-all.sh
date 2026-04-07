@@ -3,9 +3,20 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
+ENV_FILE="${ROOT_DIR}/.env"
 
 ORCH_LOG="/tmp/ai-orchestrator.log"
 WEB_LOG="/tmp/web-ui-service.log"
+
+if [[ -f "${ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  set +a
+  echo "[start-all] loaded env file: ${ENV_FILE}"
+else
+  echo "[start-all] env file not found, continue with current shell environment."
+fi
 
 if lsof -iTCP:8000 -sTCP:LISTEN -n -P >/dev/null 2>&1; then
   echo "[start-all] port 8000 is already in use, skip orchestrator start."

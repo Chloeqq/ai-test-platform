@@ -33,6 +33,27 @@
     return `总数:${total} 通过:${passed} 失败:${failed} 异常:${broken} 时间:${dateText}`;
   }
 
+  function formatSnapshotVersion(version) {
+    const text = String(version || "").trim();
+    if (!text || text === "0") return "";
+    if (typeof window.platformFormatDateTime === "function") {
+      const formatted = window.platformFormatDateTime(version, "");
+      if (formatted && formatted !== text) {
+        return `快照:${formatted}`;
+      }
+    }
+    if (text.length > 12) {
+      return `版本:${text.slice(0, 8)}...`;
+    }
+    return `版本:${text}`;
+  }
+
+  function buildStatusMessage(prefix, data) {
+    const summaryText = formatSummary((data && data.summary) || {});
+    const snapshotText = formatSnapshotVersion(data && data.version);
+    return snapshotText ? `${prefix}。${summaryText} ${snapshotText}` : `${prefix}。${summaryText}`;
+  }
+
   function applyFrame(allureIndex, version) {
     const url = buildAllureUrl(allureIndex || "/allure/index.html", version, Date.now());
     els.frame.style.display = "block";
@@ -73,8 +94,7 @@
     }
     const data = await resp.json();
     if (data.available) {
-      const summaryText = formatSummary(data.summary || {});
-      els.status.textContent = `Allure 报告已就绪。${summaryText}（version=${data.version || 0}）`;
+      els.status.textContent = buildStatusMessage("Allure 报告已就绪", data);
       applyFrame(data.allure_index, data.version);
     } else {
       els.status.textContent = "暂未生成 Allure 报告，请先执行用例。";
@@ -102,8 +122,7 @@
       }
       const data = await resp.json();
       if (data.available) {
-        const summaryText = formatSummary(data.summary || {});
-        els.status.textContent = `Allure 报告已刷新。${summaryText}（version=${data.version || 0}）`;
+        els.status.textContent = buildStatusMessage("Allure 报告已刷新", data);
         applyFrame(data.allure_index || "/allure/index.html", data.version);
       } else {
         els.status.textContent = "刷新完成，但报告仍不可用。";

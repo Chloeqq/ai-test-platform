@@ -7,6 +7,20 @@
       .replaceAll('"', "&quot;");
   }
 
+  function buildWorkbenchHref(item) {
+    const params = new URLSearchParams();
+    const runId = String(item?.run_id || "").trim();
+    const project = String(item?.project || "").trim();
+    if (runId) {
+      params.set("run_id", runId);
+    }
+    if (project) {
+      params.set("project", project);
+    }
+    const query = params.toString();
+    return query ? `/execution/workbench?${query}` : "/execution/workbench";
+  }
+
   function renderDetail(item, helpers) {
     if (!item) {
       return '<div class="empty-state">先选择一条执行任务。</div>';
@@ -28,16 +42,17 @@
       <article class="kv-item"><span>多源摘要</span><strong>${escapeHtml(summary.source_count ?? 0)} 路输入</strong><p class="meta-text">traceability=${escapeHtml(summary.traceability_status || "-")} ｜ changed_areas=${escapeHtml((summary.changed_areas || []).join(" / ") || "-")}</p></article>
       <article class="kv-item"><span>重试 / 依赖</span><strong>retry=${escapeHtml(retry.enabled ? "true" : "false")}</strong><p class="meta-text">dependencies=${escapeHtml(dependency.dependency_count ?? 0)} ｜ scopes=${escapeHtml((summary.recommended_regression_scope || []).join(" / ") || "-")}</p></article>
       <div class="button-row">
-        <a class="action-link" href="/execution/workbench?run_id=${encodeURIComponent(item.run_id || "")}">去调试工作台</a>
+        <a class="action-link" href="${buildWorkbenchHref(item)}">去调试工作台</a>
         <a class="action-link" href="/execution/results">查看执行结果</a>
       </div>
     `;
   }
 
   function renderRow(item, selectedTaskId, selectedIds, helpers) {
+    const workbenchHref = buildWorkbenchHref(item);
     const menu = window.ListPage && typeof window.ListPage.renderRowMenu === "function"
       ? window.ListPage.renderRowMenu([
-        { href: `/execution/workbench?run_id=${encodeURIComponent(item.run_id || "")}`, label: "调试任务" },
+        { href: workbenchHref, label: "调试任务" },
         { href: "/execution/results", label: "执行结果" },
         { href: `/execution/results/${encodeURIComponent(item.run_id || item.task_id || "")}`, label: "结果详情" },
       ])

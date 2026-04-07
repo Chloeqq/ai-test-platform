@@ -89,7 +89,7 @@
       if (!resp.ok) throw new Error("load projects failed");
       const payload = await resp.json();
       const items = payload.items || [];
-      if (!items.length) items.push("default");
+      if (!items.length) items.push("atp");
       els.projectSelect.innerHTML = items
         .map((item) => `<option value="${shared.escapeHtml(item)}">${shared.escapeHtml(item)}</option>`)
         .join("");

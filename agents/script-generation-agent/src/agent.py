@@ -1,10 +1,19 @@
 # mypy: ignore-errors
+# ruff: noqa: E402
 
 from __future__ import annotations
 
 import json
 import re
+import sys
+from pathlib import Path
 from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared_backend.case_ids import build_case_id, build_case_metadata, normalize_case_id
 
 from .schema import GeneratedScript
 
@@ -25,8 +34,8 @@ class ScriptGenerationAgent:
             raise ValueError("Only python language is supported in current MVP.")
 
         execution = case.get("execution", {}) if isinstance(case, dict) else {}
-        case_id = str(case.get("id", "TC-GENERATED-001")).strip() or "TC-GENERATED-001"
         page = str(execution.get("page", case.get("module", "product"))).strip() or "product"
+        case_id = self._normalize_case_id(case=case, page=page)
         steps = execution.get("steps", [])
         if not isinstance(steps, list):
             steps = []
@@ -49,6 +58,37 @@ class ScriptGenerationAgent:
             },
         )
         return output.to_dict()
+
+    @staticmethod
+    def _normalize_case_id(*, case: dict[str, Any], page: str) -> str:
+        raw_case_id = str(case.get("id", "")).strip()
+        if raw_case_id:
+            return normalize_case_id(raw_case_id)
+
+        module = str(case.get("module", "")).strip() or page
+        title = str(case.get("title", "")).strip()
+        description = str(case.get("description", "")).strip()
+        tags = case.get("tags")
+        source_hint = str(case.get("source", "")).strip() or "ai-generated"
+        metadata = build_case_metadata(
+            page=page,
+            module=module,
+            title=title,
+            description=description,
+            tags=tags,
+            source_hint=source_hint,
+        )
+        return build_case_id(
+            page=page,
+            module=module,
+            sequence=1,
+            project=metadata["project"],
+            client=metadata["client"],
+            page_code=metadata["page_code"],
+            module_code=metadata["module_code"],
+            case_type=metadata["case_type"],
+            source=metadata["source"],
+        )
 
     @staticmethod
     def _safe_function_name(case_id: str) -> str:

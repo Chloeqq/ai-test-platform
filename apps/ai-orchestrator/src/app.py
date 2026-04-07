@@ -86,6 +86,12 @@ def create_app(
     def health():
         return jsonify({"status": "ok"})
 
+    @app.get("/health/llm")
+    def llm_health():
+        probe_raw = str(request.args.get("probe", "true")).strip().lower()
+        probe = probe_raw not in {"0", "false", "off", "no"}
+        return jsonify(orchestrator_service.get_llm_health(probe=probe))
+
     @app.get("/")
     @app.get("/console")
     def console_index():

@@ -51,6 +51,9 @@
     currentStep() {
       return currentStep;
     },
+    refresh() {
+      sync();
+    },
     goTo(step) {
       currentStep = Math.min(maxStep, Math.max(1, Number(step) || 1));
       sync();

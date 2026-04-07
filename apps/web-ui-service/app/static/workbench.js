@@ -6,7 +6,7 @@
   if (!shell || !shared || !workbenchCases || !workbenchRuns) return;
 
   const state = {
-    project: "default",
+    project: "atp",
     currentCaseId: "",
     currentCasePath: "",
     currentRunId: "",
@@ -29,7 +29,7 @@
 
   const authFetch = typeof window.platformAuthFetch === "function" ? window.platformAuthFetch : window.fetch.bind(window);
   const searchParams = new URLSearchParams(window.location.search || "");
-  state.project = String(searchParams.get("project") || "default").trim() || "default";
+  state.project = String(searchParams.get("project") || "atp").trim() || "atp";
 
   const els = {
     projectSelect: document.getElementById("wb-project"),

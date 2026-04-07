@@ -1,18 +1,192 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
+from shared_backend.case_ids import build_case_id, match_case_id, next_case_sequence, normalize_case_id
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+import yaml
 
-from app.services import workbench_generation_service
+from app.core.database import get_db
+from app.models.test_case import TestCase
+from app.services import test_case_service, workbench_generation_service
 from . import legacy_workbench
 
 
 router = APIRouter(tags=["workbench-generation"])
 
 
+def _collect_existing_case_ids(db: Session) -> list[str]:
+    items: list[str] = []
+    try:
+        db_case_ids = db.execute(select(TestCase.case_id)).scalars().all()
+    except SQLAlchemyError:
+        db_case_ids = []
+    for raw_case_id in db_case_ids:
+        normalized_case_id = normalize_case_id(str(raw_case_id or "").strip(), fallback="").strip()
+        if normalized_case_id and match_case_id(normalized_case_id):
+            items.append(normalized_case_id)
+    assets_root = Path(legacy_workbench.ASSETS_CASES_ROOT)
+    if assets_root.exists():
+        for path in assets_root.rglob("*.yaml"):
+            normalized_case_id = normalize_case_id(path.stem, fallback="").strip()
+            if normalized_case_id and match_case_id(normalized_case_id):
+                items.append(normalized_case_id)
+    deduped: list[str] = []
+    for value in items:
+        if value not in deduped:
+            deduped.append(value)
+    return deduped
+
+
+def _next_case_id_for_conflict(current_case_id: str, existing_case_ids: list[str]) -> str:
+    normalized_current_case_id = normalize_case_id(str(current_case_id or "").strip(), fallback="").strip()
+    matched = match_case_id(normalized_current_case_id)
+    if not matched:
+        return normalized_current_case_id
+    sequence = next_case_sequence(
+        existing_case_ids=existing_case_ids,
+        page=matched.group("page"),
+        module=matched.group("module"),
+        project=matched.group("project"),
+        client=matched.group("client"),
+        page_code=matched.group("page"),
+        module_code=matched.group("module"),
+        case_type=matched.group("case_type"),
+        source=matched.group("source"),
+    )
+    return build_case_id(
+        page=matched.group("page"),
+        module=matched.group("module"),
+        sequence=sequence,
+        project=matched.group("project"),
+        client=matched.group("client"),
+        page_code=matched.group("page"),
+        module_code=matched.group("module"),
+        case_type=matched.group("case_type"),
+        source=matched.group("source"),
+    )
+
+
+def _normalize_generate_candidates(raw_candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for raw_candidate in raw_candidates:
+        if not isinstance(raw_candidate, dict):
+            continue
+        title = str(raw_candidate.get("title", "")).strip()
+        summary = str(raw_candidate.get("summary", "")).strip()
+        intent_type = str(raw_candidate.get("intent_type", "")).strip().lower()
+        priority = str(raw_candidate.get("priority", "")).strip().upper()
+        raw_tags = raw_candidate.get("tags")
+        tags: list[str] = []
+        if isinstance(raw_tags, list):
+            for item in raw_tags:
+                tag = str(item or "").strip()
+                if tag and tag not in tags:
+                    tags.append(tag)
+        requirement_hint = summary or title
+        if not requirement_hint and not intent_type:
+            continue
+        normalized.append(
+            {
+                "title": title,
+                "summary": summary,
+                "intent_type": intent_type,
+                "priority": priority,
+                "tags": tags,
+                "requirement_hint": requirement_hint,
+            }
+        )
+    return normalized
+
+
+def _build_candidate_requirement(base_requirement: str, candidate: dict[str, Any]) -> str:
+    requirement = str(base_requirement or "").strip()
+    hint = str(candidate.get("requirement_hint", "")).strip()
+    intent_type = str(candidate.get("intent_type", "")).strip()
+    if not hint and not intent_type:
+        return requirement
+    lines = [requirement] if requirement else []
+    if hint:
+        lines.append(f"测试意图：{hint}")
+    if intent_type:
+        lines.append(f"测试类型：{intent_type}")
+    return "\n".join(line for line in lines if line).strip()
+
+
+def _sync_generated_case_item(
+    *,
+    result: dict[str, Any],
+    payload: legacy_workbench.GenerateCasePayload,
+    db: Session,
+) -> dict[str, Any]:
+    item_raw = result.get("item")
+    item: dict[str, Any] = item_raw if isinstance(item_raw, dict) else {}
+    if not isinstance(item_raw, dict):
+        result["item"] = item
+    yaml_content = str(item.get("yaml_content", "")).strip()
+    if not yaml_content:
+        return item
+    case_yaml = yaml.safe_load(yaml_content) or {}
+    if not isinstance(case_yaml, dict):
+        return item
+    source_path = str(item.get("path", "")).strip()
+    try:
+        synchronized = test_case_service.upsert_test_case_from_workbench(
+            db,
+            project_code=payload.project,
+            case_yaml=case_yaml,
+            source_path=source_path,
+        )
+    except legacy_workbench.HTTPException as exc:
+        detail_text = str(getattr(exc, "detail", "")).lower()
+        if int(getattr(exc, "status_code", 0) or 0) != 409 or "case_id already exists" not in detail_text:
+            raise
+        current_case_id = normalize_case_id(str(case_yaml.get("id", "")).strip(), fallback="").strip()
+        retry_case_id = _next_case_id_for_conflict(
+            current_case_id,
+            _collect_existing_case_ids(db),
+        )
+        if not retry_case_id or retry_case_id == current_case_id:
+            raise
+        old_path = Path(source_path).resolve() if source_path else None
+        retry_path = Path(legacy_workbench.AI_CASES_ROOT) / f"{retry_case_id}.yaml"
+        case_yaml["id"] = retry_case_id
+        final_text = legacy_workbench._write_case_yaml(retry_path, case_yaml)
+        state_entry = legacy_workbench._save_case_state(payload.project, case_yaml, retry_path)
+        item["case_id"] = retry_case_id
+        item["path"] = str(retry_path.resolve())
+        item["yaml_content"] = final_text
+        item["state"] = state_entry
+        legacy_workbench._append_history(
+            {
+                "timestamp": legacy_workbench._now_iso(),
+                "action": "generate_case_retry_on_conflict",
+                "case_id": retry_case_id,
+                "replaced_case_id": current_case_id,
+                "path": str(retry_path.resolve()),
+                "previous_path": str(old_path) if old_path else "",
+            }
+        )
+        synchronized = test_case_service.upsert_test_case_from_workbench(
+            db,
+            project_code=payload.project,
+            case_yaml=case_yaml,
+            source_path=str(retry_path.resolve()),
+        )
+    item["synced_case"] = {
+        "id": synchronized.id,
+        "case_id": synchronized.case_id,
+        "project_code": synchronized.project_code,
+    }
+    return item
+
+
 @router.post("/api/workbench/generate", status_code=status.HTTP_201_CREATED)
-def generate_case(payload: legacy_workbench.GenerateCasePayload) -> dict[str, Any]:
+def generate_case(payload: legacy_workbench.GenerateCasePayload, db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
     normalized_page = legacy_workbench._normalize_page_slug(payload.page) if payload.page.strip() else ""
@@ -42,29 +216,99 @@ def generate_case(payload: legacy_workbench.GenerateCasePayload) -> dict[str, An
             status_code=legacy_workbench.status.HTTP_400_BAD_REQUEST,
             detail="requirement must not be empty when no page or additional input sources are provided",
         )
-    return workbench_generation_service.build_generated_case_payload(
-        payload=payload,
-        normalized_page=normalized_page,
-        effective_requirement=effective_requirement,
-        multisource_enabled=has_multisource_inputs,
-        input_sources=input_sources,
-        openapi_spec=openapi_spec,
-        run_orchestrator_generate=legacy_workbench._run_orchestrator_generate,
-        extract_quality_gate=legacy_workbench._extract_quality_gate,
-        safe_case_id=legacy_workbench._safe_case_id,
-        infer_targets=legacy_workbench._infer_targets,
-        write_case_yaml=legacy_workbench._write_case_yaml,
-        save_case_state=legacy_workbench._save_case_state,
-        append_history=legacy_workbench._append_history,
-        now_iso=legacy_workbench._now_iso,
-        is_quality_gate_blocked=legacy_workbench._is_quality_gate_blocked,
-        ai_cases_root=legacy_workbench.AI_CASES_ROOT,
-        utc=legacy_workbench.UTC,
-        datetime_module=legacy_workbench.datetime,
-        http_exception_cls=legacy_workbench.HTTPException,
-        bad_gateway_status=legacy_workbench.status.HTTP_502_BAD_GATEWAY,
-        unprocessable_entity_status=422,
-    )
+    existing_case_ids = _collect_existing_case_ids(db)
+    batch_candidates = _normalize_generate_candidates(payload.selected_candidates)
+    if len(batch_candidates) > 20:
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="selected_candidates exceeds max size 20",
+        )
+    if not batch_candidates:
+        result = workbench_generation_service.build_generated_case_payload(
+            payload=payload,
+            normalized_page=normalized_page,
+            effective_requirement=effective_requirement,
+            multisource_enabled=has_multisource_inputs,
+            input_sources=input_sources,
+            openapi_spec=openapi_spec,
+            run_orchestrator_generate=legacy_workbench._run_orchestrator_generate,
+            extract_quality_gate=legacy_workbench._extract_quality_gate,
+            safe_case_id=legacy_workbench._safe_case_id,
+            infer_targets=legacy_workbench._infer_targets,
+            write_case_yaml=legacy_workbench._write_case_yaml,
+            save_case_state=legacy_workbench._save_case_state,
+            append_history=legacy_workbench._append_history,
+            now_iso=legacy_workbench._now_iso,
+            is_quality_gate_blocked=legacy_workbench._is_quality_gate_blocked,
+            ai_cases_root=legacy_workbench.AI_CASES_ROOT,
+            utc=legacy_workbench.UTC,
+            datetime_module=legacy_workbench.datetime,
+            http_exception_cls=legacy_workbench.HTTPException,
+            bad_gateway_status=legacy_workbench.status.HTTP_502_BAD_GATEWAY,
+            unprocessable_entity_status=422,
+            existing_case_ids=existing_case_ids,
+        )
+        item = _sync_generated_case_item(result=result, payload=payload, db=db)
+        result["item"] = item
+        result["items"] = [item]
+        result["count"] = 1
+        return result
+
+    items: list[dict[str, Any]] = []
+    for candidate in batch_candidates:
+        candidate_tags = candidate.get("tags")
+        candidate_update = {
+            "title": str(candidate.get("title", "")).strip() or payload.title,
+            "priority": str(candidate.get("priority", "")).strip() or payload.priority,
+            "tags": candidate_tags if isinstance(candidate_tags, list) and candidate_tags else payload.tags,
+            "selected_candidates": [],
+        }
+        if hasattr(payload, "model_copy"):
+            candidate_payload = payload.model_copy(  # type: ignore[attr-defined]
+                deep=True,
+                update=candidate_update,
+            )
+        else:
+            candidate_payload = payload.copy(  # type: ignore[attr-defined]
+                deep=True,
+                update=candidate_update,
+            )
+        result = workbench_generation_service.build_generated_case_payload(
+            payload=candidate_payload,
+            normalized_page=normalized_page,
+            effective_requirement=_build_candidate_requirement(effective_requirement, candidate),
+            multisource_enabled=has_multisource_inputs,
+            input_sources=input_sources,
+            openapi_spec=openapi_spec,
+            run_orchestrator_generate=legacy_workbench._run_orchestrator_generate,
+            extract_quality_gate=legacy_workbench._extract_quality_gate,
+            safe_case_id=legacy_workbench._safe_case_id,
+            infer_targets=legacy_workbench._infer_targets,
+            write_case_yaml=legacy_workbench._write_case_yaml,
+            save_case_state=legacy_workbench._save_case_state,
+            append_history=legacy_workbench._append_history,
+            now_iso=legacy_workbench._now_iso,
+            is_quality_gate_blocked=legacy_workbench._is_quality_gate_blocked,
+            ai_cases_root=legacy_workbench.AI_CASES_ROOT,
+            utc=legacy_workbench.UTC,
+            datetime_module=legacy_workbench.datetime,
+            http_exception_cls=legacy_workbench.HTTPException,
+            bad_gateway_status=legacy_workbench.status.HTTP_502_BAD_GATEWAY,
+            unprocessable_entity_status=422,
+            existing_case_ids=existing_case_ids,
+        )
+        item = _sync_generated_case_item(result=result, payload=candidate_payload, db=db)
+        case_id = normalize_case_id(str(item.get("case_id", "")).strip(), fallback="").strip()
+        if case_id and case_id not in existing_case_ids:
+            existing_case_ids.append(case_id)
+        items.append(item)
+
+    return {
+        "message": f"generated {len(items)} cases",
+        "item": items[0] if items else {},
+        "items": items,
+        "count": len(items),
+    }
 
 
 @router.post("/api/workbench/preview-test-points")
@@ -119,7 +363,7 @@ def preview_test_points(payload: legacy_workbench.GenerateCasePayload) -> dict[s
 
 
 @router.post("/api/workbench/auto-run")
-def auto_run(payload: legacy_workbench.AutoRunPayload) -> dict[str, Any]:
+def auto_run(payload: legacy_workbench.AutoRunPayload, db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
     requirement_text = payload.requirement.strip()
@@ -241,6 +485,14 @@ def auto_run(payload: legacy_workbench.AutoRunPayload) -> dict[str, Any]:
             )
             case_id = str(generated_result["case_id"])
             case_path = generated_result["case_path"]
+            case_yaml = generated_result["case_yaml"] if isinstance(generated_result.get("case_yaml"), dict) else {}
+            if case_yaml:
+                test_case_service.upsert_test_case_from_workbench(
+                    db,
+                    project_code=payload.project,
+                    case_yaml=case_yaml,
+                    source_path=str(case_path),
+                )
             test_points = generated_result["test_points"] if isinstance(generated_result["test_points"], dict) else {}
             test_point_path = generated_result["test_point_path"]
         except legacy_workbench.HTTPException as exc:
@@ -299,6 +551,14 @@ def auto_run(payload: legacy_workbench.AutoRunPayload) -> dict[str, Any]:
             )
             case_id = str(fallback_result["case_id"])
             case_path = fallback_result["case_path"]
+            case_yaml = fallback_result["case_yaml"] if isinstance(fallback_result.get("case_yaml"), dict) else {}
+            if case_yaml:
+                test_case_service.upsert_test_case_from_workbench(
+                    db,
+                    project_code=payload.project,
+                    case_yaml=case_yaml,
+                    source_path=str(case_path),
+                )
             test_points = fallback_result["test_points"] if isinstance(fallback_result["test_points"], dict) else {}
             test_point_path = fallback_result["test_point_path"]
         except Exception as exc:  # pragma: no cover
@@ -327,6 +587,14 @@ def auto_run(payload: legacy_workbench.AutoRunPayload) -> dict[str, Any]:
             )
             case_id = str(fallback_result["case_id"])
             case_path = fallback_result["case_path"]
+            case_yaml = fallback_result["case_yaml"] if isinstance(fallback_result.get("case_yaml"), dict) else {}
+            if case_yaml:
+                test_case_service.upsert_test_case_from_workbench(
+                    db,
+                    project_code=payload.project,
+                    case_yaml=case_yaml,
+                    source_path=str(case_path),
+                )
             test_points = fallback_result["test_points"] if isinstance(fallback_result["test_points"], dict) else {}
             test_point_path = fallback_result["test_point_path"]
 

@@ -4,6 +4,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/workbench.css?v=20260403-generate-3">
+<link rel="stylesheet" href="/static/project_manager_dialog.css?v=20260406-project-manager-2">
 {% endblock %}
 
 {% block content %}
@@ -139,9 +140,12 @@
           <h3>草稿元信息</h3>
           <div class="wb-form-grid">
             <label>项目
-              <select id="gen-project" name="project">
-                <option value="default" selected>default</option>
-              </select>
+              <div class="wb-inline-actions">
+                <select id="gen-project" name="project">
+                  <option value="atp" selected>atp</option>
+                </select>
+                <button type="button" class="btn cases-btn-secondary" id="gen-create-project">管理项目</button>
+              </div>
             </label>
             <label>页面
               <input id="gen-page" name="page" value="" placeholder="可留空，系统会自动识别">
@@ -239,9 +243,11 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/workbench_generate_shared.js?v=20260403-generate-2"></script>
+<script src="/static/projects_api.js?v=20260405-projects-1"></script>
+<script src="/static/project_manager_dialog.js?v=20260406-project-manager-3"></script>
+<script src="/static/workbench_generate_shared.js?v=20260406-generate-shared-4"></script>
 <script src="/static/workbench_generate_presenter.js?v=20260404-generate-1"></script>
 <script src="/static/workbench_generate_support.js?v=20260404-generate-1"></script>
-<script src="/static/workbench_generate_wizard.js?v=20260404-generate-1"></script>
-<script src="/static/workbench_generate.js?v=20260404-generate-1"></script>
+<script src="/static/workbench_generate_wizard.js?v=20260406-generate-2"></script>
+<script src="/static/workbench_generate.js?v=20260406-generate-4"></script>
 {% endblock %}

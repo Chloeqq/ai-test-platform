@@ -31,6 +31,38 @@
   font-weight: 600;
 }
 
+.cases-page-help {
+  margin: 0;
+}
+
+.cases-page-help summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #48698f;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.cases-page-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.cases-page-help summary::after {
+  content: "▼";
+  font-size: 10px;
+}
+
+.cases-page-help[open] summary::after {
+  content: "▲";
+}
+
+.cases-page-help .cases-page-note {
+  margin-top: 6px;
+}
+
 .cases-reference-layout {
   margin-top: 12px;
   display: grid;

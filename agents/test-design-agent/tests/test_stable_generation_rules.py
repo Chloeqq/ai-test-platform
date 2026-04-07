@@ -5,8 +5,12 @@ import sys
 SRC_ROOT = Path(__file__).resolve().parents[1]
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from src.agent import TestDesignAgent  # noqa: E402
+from shared_backend.case_ids import match_case_id  # noqa: E402
 
 
 def _build_agent_without_init() -> TestDesignAgent:
@@ -133,3 +137,66 @@ def test_render_case_from_test_points_preserves_stable_steps():
     rendered = agent._render_case_from_test_points(test_case, plan)
 
     assert rendered["execution"]["steps"] == test_case["execution"]["steps"]
+
+
+def test_legacy_case_id_is_rewritten_to_platform_case_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(TestDesignAgent, "AI_CASES_ROOT", tmp_path)
+    agent = _build_agent_without_init()
+    parsed = {
+        "id": "PROD-SEARCH-001",
+        "title": "商品搜索-输入关键字-点击搜索-展示结果",
+        "description": "验证商品搜索场景生成的本地 YAML 也遵循平台 ID 规则。",
+        "tags": ["smoke", "search"],
+        "execution": {
+            "page": "product",
+            "variables": {},
+            "steps": [{"action": "login"}],
+        },
+    }
+
+    normalized = agent._normalize_testcase(parsed, "product")
+
+    assert normalized["id"] != "PROD-SEARCH-001"
+    assert match_case_id(normalized["id"])
+    assert normalized["id"].startswith("atp-web-")
+    assert "-ai-" in normalized["id"]
+
+
+def test_requirement_spec_case_and_plan_share_platform_case_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(TestDesignAgent, "AI_CASES_ROOT", tmp_path)
+    agent = _build_agent_without_init()
+    requirement_spec = {
+        "case_id": "PROD-SEARCH-001",
+        "title": "商品搜索-输入关键字-点击搜索-展示结果",
+        "design_input": "验证商品搜索主流程",
+        "tags": ["smoke", "search"],
+        "test_intents": [
+            {
+                "intent_id": "intent-01",
+                "title": "商品搜索结果展示",
+                "intent_type": "functional",
+                "priority": "P1",
+                "steps_hint": ["输入关键字", "点击搜索", "展示商品列表"],
+            }
+        ],
+    }
+
+    requirement_rows = agent._normalize_requirement_rows(
+        requirement="验证商品搜索主流程",
+        requirement_spec=requirement_spec,
+    )
+    case = agent._build_case_from_requirement_spec(
+        requirement_spec=requirement_spec,
+        page="product",
+        requirement_rows=requirement_rows,
+    )
+    plan = agent._build_points_from_requirement_spec(
+        requirement_spec=requirement_spec,
+        page="product",
+        intents=requirement_spec["test_intents"],
+    )
+
+    assert match_case_id(case["id"])
+    assert case["id"] == plan["case_id"]
+    assert case["id"].startswith("atp-web-")
+    assert "-ai-" in case["id"]

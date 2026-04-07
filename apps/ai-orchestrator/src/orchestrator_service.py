@@ -176,7 +176,7 @@ class OrchestratorService:
         )
         self.requirement_min_test_intents = self._env_int(
             "REQUIREMENT_MIN_TEST_INTENTS",
-            default=1,
+            default=3,
         )
         self.requirement_block_high_ambiguity = self._env_bool(
             "REQUIREMENT_BLOCK_HIGH_AMBIGUITY",
@@ -638,21 +638,28 @@ class OrchestratorService:
         defect_ticket: str = "",
         runtime_logs: str = "",
     ) -> dict[str, Any]:
-        return self._requirement_parse_support.parse_requirement_spec(
-            requirement=requirement,
-            page=page,
-            source=source,
-            input_sources=input_sources,
-            openapi_spec=openapi_spec,
-            prd_text=prd_text,
-            prd_url=prd_url,
-            user_story=user_story,
-            git_diff=git_diff,
-            git_diff_path=git_diff_path,
-            openapi_url=openapi_url,
-            defect_ticket=defect_ticket,
-            runtime_logs=runtime_logs,
-        )
+        try:
+            return self._requirement_parse_support.parse_requirement_spec(
+                requirement=requirement,
+                page=page,
+                source=source,
+                input_sources=input_sources,
+                openapi_spec=openapi_spec,
+                prd_text=prd_text,
+                prd_url=prd_url,
+                user_story=user_story,
+                git_diff=git_diff,
+                git_diff_path=git_diff_path,
+                openapi_url=openapi_url,
+                defect_ticket=defect_ticket,
+                runtime_logs=runtime_logs,
+            )
+        except RuntimeError as exc:
+            raise OrchestratorError(
+                code="requirement_parser_failed",
+                message=str(exc) or "requirement parser failed",
+                status_code=HTTPStatus.BAD_GATEWAY,
+            ) from exc
 
     @staticmethod
     def _infer_page_from_text(
@@ -1062,6 +1069,98 @@ class OrchestratorService:
             mode=mode,
             stage=stage,
         )
+
+    def get_llm_health(self, *, probe: bool = True) -> dict[str, Any]:
+        api_key = str(os.getenv("OPENAI_API_KEY", "")).strip()
+        base_url = str(os.getenv("OPENAI_BASE_URL", "")).strip()
+        model = str(os.getenv("OPENAI_MODEL", "")).strip()
+        force_llm = RequirementParseSupport.is_llm_force_mode_enabled()
+
+        masked_key = ""
+        if api_key:
+            masked_key = f"{api_key[:6]}***{api_key[-4:]}" if len(api_key) > 12 else "***"
+
+        result: dict[str, Any] = {
+            "status": "ok",
+            "force_llm_mode": bool(force_llm),
+            "config": {
+                "has_api_key": bool(api_key),
+                "api_key_masked": masked_key,
+                "base_url": base_url,
+                "model": model,
+                "provider": "openai_compatible",
+            },
+            "checks": {
+                "api_key_present": bool(api_key),
+                "base_url_present": bool(base_url),
+                "model_present": bool(model),
+            },
+            "probe": {
+                "enabled": bool(probe),
+                "attempted": False,
+                "ok": False,
+                "latency_ms": 0,
+                "error_code": "",
+                "error_message": "",
+            },
+            "actionable": [],
+        }
+
+        if not api_key:
+            result["status"] = "degraded"
+            result["actionable"].append("请在 .env 中设置 OPENAI_API_KEY。")
+        if not base_url:
+            result["status"] = "degraded"
+            result["actionable"].append("请在 .env 中设置 OPENAI_BASE_URL。")
+        if not model:
+            result["status"] = "degraded"
+            result["actionable"].append("请在 .env 中设置 OPENAI_MODEL。")
+
+        if not probe or result["status"] != "ok":
+            if not result["actionable"]:
+                result["actionable"].append("配置已通过基础校验，可执行 probe=true 进行连通性检测。")
+            return result
+
+        started_at = datetime.now(UTC)
+        probe_block = result["probe"]
+        probe_block["attempted"] = True
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(
+                api_key=api_key,
+                base_url=base_url or None,
+                timeout=8,
+                max_retries=0,
+            )
+            completion = client.chat.completions.create(
+                model=model,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": "healthcheck"},
+                    {"role": "user", "content": "ping"},
+                ],
+                max_tokens=1,
+            )
+            probe_block["ok"] = True
+            usage = getattr(completion, "usage", None)
+            if usage is not None:
+                probe_block["usage"] = {
+                    "prompt_tokens": getattr(usage, "prompt_tokens", None),
+                    "completion_tokens": getattr(usage, "completion_tokens", None),
+                    "total_tokens": getattr(usage, "total_tokens", None),
+                }
+            result["actionable"].append("LLM 连通性通过。")
+        except Exception as exc:
+            result["status"] = "degraded"
+            probe_block["ok"] = False
+            probe_block["error_code"] = "llm_probe_failed"
+            probe_block["error_message"] = str(exc)[:240]
+            result["actionable"].append("LLM 探活失败，请核对 OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL。")
+        finally:
+            ended_at = datetime.now(UTC)
+            probe_block["latency_ms"] = max(0, int((ended_at - started_at).total_seconds() * 1000))
+        return result
 
     def _iter_requirement_parse_telemetry_events(self, *, limit: int) -> list[dict[str, Any]]:
         return self._analytics_query_support.iter_requirement_parse_telemetry_events(limit=limit)

@@ -21,6 +21,61 @@ def normalize_markers(markers: list[str]) -> list[str]:
     return normalize_tags(markers)
 
 
+def normalize_text_list(values: Sequence[Any] | None) -> list[str]:
+    normalized: list[str] = []
+    for item in values or []:
+        value = str(item).strip()
+        if value and value not in normalized:
+            normalized.append(value)
+    return normalized
+
+
+def normalize_case_ids(values: Sequence[Any] | None) -> list[str]:
+    normalized: list[str] = []
+    for item in values or []:
+        value = str(item).strip()
+        if value and value not in normalized:
+            normalized.append(value)
+    return normalized
+
+
+def normalize_optional_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def normalize_test_steps(steps: Sequence[Any] | None) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for step in steps or []:
+        if not isinstance(step, dict):
+            continue
+        row = {
+            key: step.get(key)
+            for key in ("action", "target", "value", "expected", "description")
+            if str(step.get(key, "")).strip()
+        }
+        if row:
+            normalized.append(row)
+    return normalized
+
+
+def render_test_steps_text(steps: Sequence[dict[str, Any]] | None) -> str:
+    lines: list[str] = []
+    for index, step in enumerate(steps or [], start=1):
+        if not isinstance(step, dict):
+            continue
+        parts = [
+            str(step.get("description", "")).strip(),
+            str(step.get("action", "")).strip(),
+            str(step.get("target", "")).strip(),
+            str(step.get("value", "")).strip(),
+            str(step.get("expected", "")).strip(),
+        ]
+        content = " | ".join(part for part in parts if part)
+        if content:
+            lines.append(f"Step{index} {content}")
+    return "\n".join(lines)
+
+
 def normalize_report_url(report_url: str, execution_id: int) -> str:
     value = str(report_url or "").strip()
     if value.startswith("http://") or value.startswith("https://"):

@@ -131,6 +131,7 @@ class GenerateCasePayload(BaseModel):
     openapi_url: str = Field(default="")
     defect_ticket: str = Field(default="")
     runtime_logs: str = Field(default="")
+    selected_candidates: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class SaveCasePayload(BaseModel):
@@ -935,7 +936,9 @@ def _build_fallback_case(
     resolved_page_url: str,
     steps: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    case_id = _safe_case_id(f"SMOKE-{page.upper()}-{datetime.now(UTC).strftime('%H%M%S')}")
+    normalized_page = _normalize_page_slug(page)
+    case_id = _safe_case_id(f"atp-web-{normalized_page}-core-fn-ai-0001")
+    page_name = PAGE_FRIENDLY_NAME.get(normalized_page, normalized_page)
     fallback_steps = steps or [
         {"action": "login"},
         {"action": "goto", "value": resolved_page_url},
@@ -944,18 +947,18 @@ def _build_fallback_case(
     return {
         "version": "v4",
         "id": case_id,
-        "title": f"SMOKE-{page.upper()}-FALLBACK",
-        "module": page,
+        "title": f"{page_name}-回退用例-基础可用性校验",
+        "module": normalized_page,
         "priority": "P1",
-        "tags": ["ai-generated", "smoke", page, "fallback"],
+        "tags": ["ai-generated", "smoke", normalized_page, "fallback"],
         "owner": "qa-team",
         "status": "automated",
-        "description": f"Fallback URL-driven smoke for {page}.",
+        "description": f"Fallback URL-driven smoke for {normalized_page}.",
         "requirement": [requirement, f"url: {resolved_page_url}"],
         "data": {},
         "execution": {
             "runner": "playwright",
-            "page": page,
+            "page": normalized_page,
             "variables": {},
             "steps": fallback_steps,
         },

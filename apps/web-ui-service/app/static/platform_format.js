@@ -1,5 +1,25 @@
 (function () {
+  function parseEpochToDate(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const raw = typeof value === "number" ? value : Number(String(value).trim());
+    if (!Number.isFinite(raw)) return null;
+    const abs = Math.abs(raw);
+    let epochMs = raw;
+    if (abs > 0 && abs < 1e11) {
+      epochMs = raw * 1000;
+    } else if (abs >= 1e14 && abs < 1e17) {
+      epochMs = raw / 1000;
+    } else if (abs >= 1e17) {
+      epochMs = raw / 1e6;
+    }
+    const parsed = new Date(epochMs);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
+  }
+
   function parseDateTime(value) {
+    const epochParsed = parseEpochToDate(value);
+    if (epochParsed) return epochParsed;
     const text = String(value || "").trim();
     if (!text) return null;
     const parsed = new Date(text);

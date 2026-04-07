@@ -50,23 +50,48 @@ def _list_value(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
-def _allocate_case_id(*, requested_case_id: str, page: str, module: str, ai_cases_root: Any) -> str:
+def _allocate_case_id(
+    *,
+    requested_case_id: str,
+    project: str,
+    page: str,
+    module: str,
+    ai_cases_root: Any,
+    existing_case_ids: list[str] | None = None,
+) -> str:
     requested = normalize_case_id(requested_case_id, fallback="").strip() if str(requested_case_id).strip() else ""
-    if requested and match_case_id(requested):
-        return requested
     assets_root = Path(ai_cases_root).resolve().parent
-    existing_case_ids: list[str] = []
+    all_existing_case_ids: list[str] = []
+    seen_case_ids: set[str] = set()
     if assets_root.exists():
         for path in assets_root.rglob("*.yaml"):
-            existing_case_ids.append(path.stem)
+            normalized_path_case_id = normalize_case_id(path.stem, fallback="").strip()
+            if normalized_path_case_id and match_case_id(normalized_path_case_id) and normalized_path_case_id not in seen_case_ids:
+                seen_case_ids.add(normalized_path_case_id)
+                all_existing_case_ids.append(normalized_path_case_id)
+    for item in existing_case_ids or []:
+        value = normalize_case_id(str(item or "").strip(), fallback="").strip()
+        if value and match_case_id(value) and value not in seen_case_ids:
+            seen_case_ids.add(value)
+            all_existing_case_ids.append(value)
+    if requested and match_case_id(requested) and requested not in seen_case_ids:
+        return requested
     sequence = next_case_sequence(
-        existing_case_ids=existing_case_ids,
+        existing_case_ids=all_existing_case_ids,
+        page=page,
+        module=module,
+        project=project,
+        case_type="FN",
+        source="AI",
+    )
+    return build_case_id(
+        project=project,
         page=page,
         module=module,
         case_type="FN",
         source="AI",
+        sequence=sequence,
     )
-    return build_case_id(page=page, module=module, case_type="FN", source="AI", sequence=sequence)
 
 
 def extract_quality_gate(payload: Any) -> dict[str, Any] | None:
@@ -304,6 +329,26 @@ def build_preview_test_points_payload(
     business_rules = _list_value(requirement_spec.get("business_rules"))
     parser_runtime = _dict_value(requirement_spec.get("parser_runtime"))
     source_summary = _dict_value(parser_runtime.get("source_summary"))
+    source_inputs = _list_value(requirement_spec.get("source_inputs"))
+    source_count = int(
+        source_summary.get(
+            "source_count",
+            parser_runtime.get("source_count", len(source_inputs)),
+        )
+        or 0
+    )
+    source_types = _list_value(source_summary.get("source_types"))
+    if not source_types:
+        source_types = [
+            str(item.get("source_type", "")).strip()
+            for item in source_inputs
+            if isinstance(item, dict) and str(item.get("source_type", "")).strip()
+        ]
+    deduped_source_types: list[str] = []
+    for item in source_types:
+        value = str(item).strip()
+        if value and value not in deduped_source_types:
+            deduped_source_types.append(value)
     change_impact = _dict_value(requirement_spec.get("change_impact"))
 
     intent_type_distribution: dict[str, int] = {}
@@ -322,8 +367,8 @@ def build_preview_test_points_payload(
             "intent_type_distribution": intent_type_distribution,
             "ambiguity_count": len(ambiguities),
             "rule_count": len(business_rules),
-            "source_count": int(source_summary.get("source_count", 0) or 0),
-            "source_types": _list_value(source_summary.get("source_types")),
+            "source_count": source_count,
+            "source_types": deduped_source_types,
             "change_impact": {
                 "impact_score": change_impact.get("impact_score", 0),
                 "changed_areas": _list_value(change_impact.get("changed_areas")),
@@ -366,6 +411,7 @@ def build_generated_case_payload(
     http_exception_cls: Any,
     bad_gateway_status: int,
     unprocessable_entity_status: int,
+    existing_case_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     orchestrator_result: dict[str, Any] = {}
     case_yaml: dict[str, Any] = {}
@@ -451,9 +497,11 @@ def build_generated_case_payload(
         menu_target, assert_target = infer_targets(fallback_page)
         fallback_case_id = _allocate_case_id(
             requested_case_id=payload.case_id,
+            project=payload.project,
             page=fallback_page,
             module=fallback_page,
             ai_cases_root=ai_cases_root,
+            existing_case_ids=existing_case_ids,
         )
         case_yaml = {
             "version": "v4",
@@ -483,9 +531,11 @@ def build_generated_case_payload(
 
     case_id = _allocate_case_id(
         requested_case_id=payload.case_id or case_yaml.get("id", ""),
+        project=payload.project,
         page=resolved_page or normalized_page or "product",
         module=str(case_yaml.get("module", "")).strip() or resolved_page or normalized_page or "product",
         ai_cases_root=ai_cases_root,
+        existing_case_ids=existing_case_ids,
     )
     case_yaml["id"] = case_id
     if payload.title.strip():
@@ -720,6 +770,7 @@ def persist_auto_run_fallback_case(
     )
     case_id = _allocate_case_id(
         requested_case_id=str(fallback_case.get("id", "")).strip(),
+        project=project,
         page=page,
         module=str(fallback_case.get("module", "")).strip() or page,
         ai_cases_root=ai_cases_root,
@@ -904,6 +955,7 @@ def persist_auto_run_generated_case(
         )
     case_id = _allocate_case_id(
         requested_case_id=str(generated_case.get("id", "")).strip(),
+        project=project,
         page=page,
         module=str(generated_case.get("module", "")).strip() or page,
         ai_cases_root=ai_cases_root,

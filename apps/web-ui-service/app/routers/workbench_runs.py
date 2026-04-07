@@ -5,9 +5,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
+from app.services import workbench_case_consistency_service
 from . import legacy_workbench
 
 
@@ -15,10 +18,18 @@ router = APIRouter(tags=["workbench-runs"])
 
 
 @router.post("/api/workbench/run")
-def run_case(payload: legacy_workbench.RunCasePayload) -> dict[str, Any]:
+def run_case(payload: legacy_workbench.RunCasePayload, db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
     normalized_case_id = legacy_workbench._safe_case_id(payload.case_id)
+    if not workbench_case_consistency_service.is_case_tracked(
+        normalized_case_id,
+        case_center_case_ids=workbench_case_consistency_service.load_case_center_case_ids(db),
+    ):
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="case_id not found in case center",
+        )
     if payload.case_path.strip():
         case_path = Path(payload.case_path).expanduser()
         if not case_path.is_absolute():
@@ -46,32 +57,51 @@ def run_case(payload: legacy_workbench.RunCasePayload) -> dict[str, Any]:
 
 
 @router.get("/api/workbench/runs")
-def list_runs(limit: int = Query(default=30, ge=1, le=200)) -> dict[str, Any]:
+def list_runs(limit: int = Query(default=30, ge=1, le=200), db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
     items = [
         legacy_workbench._attach_test_point_asset_summary(
             legacy_workbench._runtime_view_with_execution_record_preferred(item)
         )
         for item in legacy_workbench._read_json_list(legacy_workbench.RUNTIME_RUNS_FILE)
     ]
-    return {"items": items[:limit]}
+    filtered_items, _filter_meta = workbench_case_consistency_service.filter_records_by_case_center(
+        items,
+        case_center_case_ids=case_center_case_ids,
+    )
+    return {"items": filtered_items[:limit]}
 
 
 @router.get("/api/workbench/runs/{run_id}")
-def get_run(run_id: str) -> dict[str, Any]:
+def get_run(run_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
     job = legacy_workbench._get_job(run_id)
     if job:
-        return {"item": legacy_workbench._attach_test_point_asset_summary(job)}
+        item = legacy_workbench._attach_test_point_asset_summary(job)
+        if workbench_case_consistency_service.is_case_tracked(
+            item.get("case_id", ""),
+            case_center_case_ids=case_center_case_ids,
+        ):
+            return {"item": item}
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="run not found",
+        )
     for item in legacy_workbench._read_json_list(legacy_workbench.RUNTIME_RUNS_FILE):
         if legacy_workbench._runtime_run_id(item) == run_id:
-            return {
-                "item": legacy_workbench._attach_test_point_asset_summary(
-                    legacy_workbench._runtime_view_with_execution_record_preferred(item)
-                )
-            }
+            response_item = legacy_workbench._attach_test_point_asset_summary(
+                legacy_workbench._runtime_view_with_execution_record_preferred(item)
+            )
+            if workbench_case_consistency_service.is_case_tracked(
+                response_item.get("case_id", ""),
+                case_center_case_ids=case_center_case_ids,
+            ):
+                return {"item": response_item}
+            break
     raise legacy_workbench.HTTPException(
         status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
         detail="run not found",
@@ -79,9 +109,10 @@ def get_run(run_id: str) -> dict[str, Any]:
 
 
 @router.post("/api/workbench/runs/{run_id}/rerun")
-def rerun_case(run_id: str) -> dict[str, Any]:
+def rerun_case(run_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
     run_item = legacy_workbench._get_job(run_id)
     if not run_item:
         historical = next(
@@ -90,6 +121,14 @@ def rerun_case(run_id: str) -> dict[str, Any]:
         )
         run_item = legacy_workbench._runtime_view_with_execution_record_preferred(historical) if historical else None
     if not run_item:
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="run not found",
+        )
+    if not workbench_case_consistency_service.is_case_tracked(
+        run_item.get("case_id", ""),
+        case_center_case_ids=case_center_case_ids,
+    ):
         raise legacy_workbench.HTTPException(
             status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
             detail="run not found",
@@ -121,11 +160,20 @@ def rerun_case(run_id: str) -> dict[str, Any]:
 
 
 @router.get("/api/workbench/runs/{run_id}/events")
-def stream_run_events(run_id: str) -> StreamingResponse:
+def stream_run_events(run_id: str, db: Session = Depends(get_db)) -> StreamingResponse:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
     run = legacy_workbench._get_job(run_id)
     if run:
+        if not workbench_case_consistency_service.is_case_tracked(
+            run.get("case_id", ""),
+            case_center_case_ids=case_center_case_ids,
+        ):
+            raise legacy_workbench.HTTPException(
+                status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+                detail="run not found",
+            )
         log_path = Path(run["log_path"])
     else:
         historical = next(
@@ -133,6 +181,14 @@ def stream_run_events(run_id: str) -> StreamingResponse:
             None,
         )
         if not historical:
+            raise legacy_workbench.HTTPException(
+                status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+                detail="run not found",
+            )
+        if not workbench_case_consistency_service.is_case_tracked(
+            historical.get("case_id", ""),
+            case_center_case_ids=case_center_case_ids,
+        ):
             raise legacy_workbench.HTTPException(
                 status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
                 detail="run not found",
@@ -174,9 +230,10 @@ def stream_run_events(run_id: str) -> StreamingResponse:
 
 
 @router.get("/api/workbench/runs/{run_id}/analysis")
-def get_run_analysis(run_id: str) -> dict[str, Any]:
+def get_run_analysis(run_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
     run_item = legacy_workbench._get_job(run_id)
     if not run_item:
         historical = next(
@@ -185,6 +242,14 @@ def get_run_analysis(run_id: str) -> dict[str, Any]:
         )
         run_item = legacy_workbench._runtime_view_with_execution_record_preferred(historical) if historical else None
     if not run_item:
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="run not found",
+        )
+    if not workbench_case_consistency_service.is_case_tracked(
+        run_item.get("case_id", ""),
+        case_center_case_ids=case_center_case_ids,
+    ):
         raise legacy_workbench.HTTPException(
             status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
             detail="run not found",
@@ -207,9 +272,10 @@ def get_run_analysis(run_id: str) -> dict[str, Any]:
 
 
 @router.post("/api/workbench/runs/{run_id}/heal")
-def heal_run(run_id: str) -> dict[str, Any]:
+def heal_run(run_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
     run_item = legacy_workbench._get_job(run_id)
     if not run_item:
         historical = next(
@@ -218,6 +284,14 @@ def heal_run(run_id: str) -> dict[str, Any]:
         )
         run_item = legacy_workbench._runtime_view_with_execution_record_preferred(historical) if historical else None
     if not run_item:
+        raise legacy_workbench.HTTPException(
+            status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
+            detail="run not found",
+        )
+    if not workbench_case_consistency_service.is_case_tracked(
+        run_item.get("case_id", ""),
+        case_center_case_ids=case_center_case_ids,
+    ):
         raise legacy_workbench.HTTPException(
             status_code=legacy_workbench.status.HTTP_404_NOT_FOUND,
             detail="run not found",

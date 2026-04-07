@@ -1,4 +1,4 @@
-.PHONY: help venv install-dev install-hooks db-bootstrap db-upgrade db-revision test test-contracts test-orchestrator test-openapi test-runner-assets test-webui-manifest-strict test-orchestrator-manifest-strict check-console static-baseline-fast static-baseline test-e2e test-e2e-smoke test-e2e-generated allure-info allure-generate allure-open allure-summary test-e2e-generated-allure test-open-report test-e2e-open-report test-e2e-smoke-open-report test-e2e-generated-open-report
+.PHONY: help venv install-dev install-hooks db-bootstrap db-upgrade db-revision test test-contracts test-orchestrator test-openapi test-runner-assets test-webui-manifest-strict test-orchestrator-manifest-strict check-console check-webui-static check-webui-pages static-baseline-fast static-baseline test-e2e test-e2e-smoke test-e2e-generated allure-info allure-generate allure-open allure-summary test-e2e-generated-allure test-open-report test-e2e-open-report test-e2e-smoke-open-report test-e2e-generated-open-report
 
 VENV_PYTHON := .venv/bin/python
 PYTEST := $(VENV_PYTHON) -m pytest
@@ -22,6 +22,8 @@ help:
 	@echo "  make test-webui-manifest-strict Run web-ui strict manifest checks with compat scan disabled"
 	@echo "  make test-orchestrator-manifest-strict Run orchestrator strict execution_record checks with compat builder disabled"
 	@echo "  make check-console      Run static syntax check for the web console script"
+	@echo "  make check-webui-static Run static syntax checks for core web-ui-service scripts"
+	@echo "  make check-webui-pages  Smoke-check core web-ui-service pages with Playwright (requires local service)"
 	@echo "  make static-baseline-fast Run ruff + scoped mypy static baseline (no pytest)"
 	@echo "  make static-baseline    Run ruff + scoped mypy + pytest stable baseline"
 	@echo "  make asset-tool-help    Show asset CLI usage"
@@ -80,6 +82,12 @@ test-orchestrator-manifest-strict:
 
 check-console:
 	node --check apps/web-console/static/app.js
+
+check-webui-static:
+	scripts/qa/check-web-ui-static.sh
+
+check-webui-pages:
+	$(VENV_PYTHON) scripts/qa/check_web_ui_pages.py --base-url http://127.0.0.1:8013
 
 static-baseline-fast:
 	scripts/qa/run-static-baseline-fast.sh

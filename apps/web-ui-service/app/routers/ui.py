@@ -88,12 +88,12 @@ def cases_review_page(request: Request) -> HTMLResponse:
 
 
 @router.get("/assets/cases/{case_id}", response_class=HTMLResponse)
-def case_detail_page(request: Request, case_id: int) -> HTMLResponse:
+def case_detail_page(request: Request, case_id: str) -> HTMLResponse:
     return _render(
         request,
         "case_detail.html",
         current_key="assets_cases",
-        page_title=f"用例详情 #{case_id}",
+        page_title=f"用例详情 · {case_id}",
         page_description="查看用例详情、执行历史、版本差异与关联缺陷。",
         breadcrumbs=["资产中心", "用例中心", "用例详情"],
         extra_context={"case_id": case_id},

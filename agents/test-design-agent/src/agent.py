@@ -1,13 +1,27 @@
 # mypy: ignore-errors
+# ruff: noqa: E402
 
 from copy import deepcopy
 from pathlib import Path
 import os
 import re
+import sys
 import yaml
 from dotenv import load_dotenv
 from openai import OpenAI
 from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared_backend.case_ids import (
+    build_case_id,
+    build_case_metadata,
+    match_case_id,
+    next_case_sequence,
+    normalize_case_id,
+)
 
 from .prompt import SYSTEM_PROMPT, USER_TEMPLATE
 from .schema import TestCase
@@ -16,11 +30,12 @@ from .tools.page_object_loader import list_page_elements
 from .tools.target_validator import validate_targets
 
 
-ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
+ROOT_ENV = REPO_ROOT / ".env"
 load_dotenv(ROOT_ENV)
 
 
 class TestDesignAgent:
+    AI_CASES_ROOT = REPO_ROOT / "assets" / "test-cases" / "ai-generated"
     SUPPORTED_ACTIONS = {"login", "click", "fill", "wait_for", "assert_visible", "assert_url", "goto"}
     STABLE_PAGE_BASELINES = {
         "login": {
@@ -111,6 +126,62 @@ class TestDesignAgent:
 
         return cleaned
 
+    @classmethod
+    def _existing_case_ids(cls) -> list[str]:
+        case_ids: list[str] = []
+        if not cls.AI_CASES_ROOT.exists():
+            return case_ids
+        for path in cls.AI_CASES_ROOT.rglob("*.yaml"):
+            case_ids.append(path.stem)
+        return case_ids
+
+    def _build_platform_case_id(
+        self,
+        *,
+        page: str,
+        module: str,
+        title: str,
+        description: str,
+        tags: Any,
+        preferred_id: str = "",
+    ) -> str:
+        existing_case_ids = self._existing_case_ids()
+        normalized_preferred_id = normalize_case_id(preferred_id, fallback="").strip() if str(preferred_id).strip() else ""
+        if normalized_preferred_id and match_case_id(normalized_preferred_id):
+            if normalized_preferred_id not in existing_case_ids:
+                return normalized_preferred_id
+
+        metadata = build_case_metadata(
+            page=page,
+            module=module,
+            title=title,
+            description=description,
+            tags=tags,
+            source_hint="ai-generated",
+        )
+        sequence = next_case_sequence(
+            existing_case_ids=existing_case_ids,
+            page=page,
+            module=module,
+            project=metadata["project"],
+            client=metadata["client"],
+            page_code=metadata["page_code"],
+            module_code=metadata["module_code"],
+            case_type=metadata["case_type"],
+            source=metadata["source"],
+        )
+        return build_case_id(
+            page=page,
+            module=module,
+            sequence=sequence,
+            project=metadata["project"],
+            client=metadata["client"],
+            page_code=metadata["page_code"],
+            module_code=metadata["module_code"],
+            case_type=metadata["case_type"],
+            source=metadata["source"],
+        )
+
     def _normalize_testcase(self, parsed: dict, page: str) -> dict:
         """
         把模型输出归一化成当前项目已跑通的固定结构。
@@ -146,12 +217,16 @@ class TestDesignAgent:
             or default_titles.get(page, f"{page} 功能验证")
         )
 
-        normalized_id = (
-            parsed.get("id")
-            or meta.get("id")
-            or f"TC-{page.upper()}-001"
+        normalized_tags = parsed.get("tags") or meta.get("tags", [page])
+        normalized_description = parsed.get("description") or meta.get("description", "")
+        normalized_id = self._build_platform_case_id(
+            page=page,
+            module=normalized_module,
+            title=str(normalized_title),
+            description=str(normalized_description),
+            tags=normalized_tags,
+            preferred_id=str(parsed.get("id") or meta.get("id") or "").strip(),
         )
-        normalized_id = normalized_id.replace("_", "-").upper()
 
         normalized = {
             "version": "v4",
@@ -159,10 +234,10 @@ class TestDesignAgent:
             "title": normalized_title,
             "module": normalized_module,
             "priority": parsed.get("priority") or meta.get("priority", "P1"),
-            "tags": parsed.get("tags") or meta.get("tags", [page]),
+            "tags": normalized_tags,
             "owner": normalized_owner,
             "status": normalized_status,
-            "description": parsed.get("description") or meta.get("description", ""),
+            "description": normalized_description,
             "requirement": requirement,
             "data": parsed.get("data", {}),
             "execution": {
@@ -519,22 +594,31 @@ class TestDesignAgent:
     ) -> dict[str, Any]:
         intents = requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
         points = self._build_points_from_requirement_spec(page=page, requirement_spec=requirement_spec, intents=intents)
-        case_id = str(requirement_spec.get("case_id", "")).strip() or f"TC-{page.upper()}-001"
         title = (
             str(requirement_spec.get("title", "")).strip()
             or str(requirement_spec.get("design_input", "")).strip()
             or f"{page} 企业回归验证"
         )
+        tags = self._merge_tags(page=page, requirement_spec=requirement_spec)
+        description = str(requirement_spec.get("design_input", "")).strip() or str(requirement_spec.get("raw_requirement", "")).strip()
+        case_id = self._build_platform_case_id(
+            page=page,
+            module=page,
+            title=title,
+            description=description,
+            tags=tags,
+            preferred_id=str(requirement_spec.get("case_id", "")).strip(),
+        )
         case = {
             "version": "v4",
-            "id": case_id.replace("_", "-").upper(),
+            "id": case_id,
             "title": title[:120],
             "module": page,
             "priority": str(requirement_spec.get("priority", "P1")).strip() or "P1",
-            "tags": self._merge_tags(page=page, requirement_spec=requirement_spec),
+            "tags": tags,
             "owner": "qa-team",
             "status": "automated",
-            "description": str(requirement_spec.get("design_input", "")).strip() or str(requirement_spec.get("raw_requirement", "")).strip(),
+            "description": description,
             "requirement": requirement_rows,
             "data": {
                 "source": "requirement_spec",
@@ -639,10 +723,26 @@ class TestDesignAgent:
 
         points.extend(self._build_points_from_field_definitions(page=page, field_definitions=field_definitions))
 
+        title = (
+            str(requirement_spec.get("title", "")).strip()
+            or str(requirement_spec.get("design_input", "")).strip()
+            or f"{page} 企业回归验证"
+        )
+        tags = self._merge_tags(page=page, requirement_spec=requirement_spec)
+        description = str(requirement_spec.get("design_input", "")).strip() or str(requirement_spec.get("raw_requirement", "")).strip()
+        case_id = self._build_platform_case_id(
+            page=page,
+            module=page,
+            title=title,
+            description=description,
+            tags=tags,
+            preferred_id=str(requirement_spec.get("case_id", "")).strip(),
+        )
+
         plan = {
             "version": "TestPointPlanV1",
             "project": "default",
-            "case_id": str(requirement_spec.get("case_id", "")).strip() or f"TC-{page.upper()}-001",
+            "case_id": case_id,
             "page": page,
             "source_type": "requirement_intents",
             "requirement": requirement_rows,
