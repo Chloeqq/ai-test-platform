@@ -108,6 +108,7 @@ def _navigation(current_key: str) -> list[dict[str, Any]]:
             "icon": "assets",
             "children": [
                 {"key": "page_objects", "label": "页面对象", "href": "/assets/page-objects"},
+                {"key": "page_objects_recorder", "label": "页面录制", "href": "/assets/page-objects/recorder"},
                 {"key": "api_contracts", "label": "API契约", "href": "/assets/api-contracts"},
                 {"key": "test_point_assets", "label": "测试点资产", "href": "/assets/test-points"},
                 {"key": "data_templates", "label": "数据模板", "href": "/assets/data-templates"},

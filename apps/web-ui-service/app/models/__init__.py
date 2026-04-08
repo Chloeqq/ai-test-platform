@@ -6,6 +6,7 @@ from app.models.page_object import (
     PageElementVersion,
     PageObject,
     PageObjectRef,
+    PageObjectRecorderSession,
 )
 from app.models.test_case import TestCase, TestCaseDefect, TestCaseExecution, TestCaseTreeNode, TestCaseVersion
 from app.models.test_project import TestProject
@@ -27,6 +28,7 @@ __all__ = [
     "PageElementVersion",
     "PageObjectRef",
     "PageElementHealthCheck",
+    "PageObjectRecorderSession",
     "TestCase",
     "TestCaseDefect",
     "TestCaseExecution",

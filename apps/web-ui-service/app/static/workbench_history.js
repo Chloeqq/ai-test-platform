@@ -3,6 +3,9 @@
   const createSupport = window.createWorkbenchHistorySupport;
   const tableRenderer = window.WorkbenchHistoryTable;
   const listPage = window.ListPage || null;
+  const projectsApi = window.ProjectsApi;
+  const projectManager = window.ProjectManagerDialog;
+  const projectSelectorSupport = window.ProjectSelectorSupport;
   const shell = document.getElementById("workbench-history-shell");
   if (!shell || !detailHelper || !tableRenderer || typeof createSupport !== "function") return;
 
@@ -15,6 +18,8 @@
     keywordFilter: document.getElementById("wb-history-keyword"),
     keywordSearch: document.getElementById("wb-history-search"),
     keywordClear: document.getElementById("wb-history-search-clear"),
+    projectFilter: document.getElementById("wb-history-project"),
+    manageProjectBtn: document.getElementById("wb-history-manage-project"),
     actionFilter: document.getElementById("wb-history-action"),
     statusFilter: document.getElementById("wb-history-status"),
     sortKey: document.getElementById("wb-history-sort-key"),
@@ -29,6 +34,7 @@
     resetBtn: document.getElementById("wb-history-reset"),
     lastUpdated: document.getElementById("wb-history-last-updated"),
     filterSummary: document.getElementById("wb-history-filter-summary"),
+    projectNote: document.getElementById("wb-history-project-note"),
     selectionBar: document.getElementById("wb-history-selection-bar"),
     selectionCopy: document.getElementById("wb-history-selection-copy"),
     copyRunIdsBtn: document.getElementById("wb-history-copy-run-ids"),
@@ -50,10 +56,12 @@
     totalPages: 1,
     totalItems: 0,
     summary: {},
+    projectItems: [],
   };
   const storageKey = "workbench_history_filters_v3";
   const filterFields = {
     keyword: els.keywordFilter,
+    project_code: els.projectFilter,
     action: els.actionFilter,
     status: els.statusFilter,
     sort_key: els.sortKey,
@@ -63,6 +71,73 @@
     actor: els.actorFilter,
   };
   const support = createSupport({ els, filterFields, storageKey, detailHelper, listPage });
+
+  function selectedProjectCode() {
+    if (!projectSelectorSupport) {
+      return String(els.projectFilter?.value || "").trim().toLowerCase();
+    }
+    return projectSelectorSupport.normalizeCode(els.projectFilter?.value || "");
+  }
+
+  function syncProjectGovernanceNote() {
+    if (!els.projectNote) return;
+    const currentProjectCode = selectedProjectCode();
+    if (!currentProjectCode) {
+      els.projectNote.textContent = "";
+      return;
+    }
+    const currentProject = state.projectItems.find((item) => {
+      return projectSelectorSupport
+        ? projectSelectorSupport.normalizeCode(item.project_code) === currentProjectCode
+        : String(item.project_code || "").trim().toLowerCase() === currentProjectCode;
+    });
+    const projectStatus = String(currentProject?.status || "active").trim().toLowerCase() || "active";
+    els.projectNote.textContent = projectStatus === "inactive"
+      ? "当前筛选项目为 inactive，本页仍允许浏览历史；如需继续生成或保存资产，请先恢复项目为 active。"
+      : "";
+  }
+
+  function setProjectOptions(items, selectedValue) {
+    if (!projectSelectorSupport || !els.projectFilter) return;
+    state.projectItems = Array.isArray(items) ? items : [];
+    projectSelectorSupport.applyProjectOptions(els.projectFilter, state.projectItems, {
+      selectedValue: selectedValue != null ? selectedValue : (els.projectFilter.value || ""),
+      defaultProjectCode: "atp",
+      emptyOptionLabel: "全部项目",
+    });
+    syncProjectGovernanceNote();
+  }
+
+  async function loadProjects(selectedValue) {
+    if (!projectsApi || !projectSelectorSupport || !els.projectFilter) return;
+    const items = await projectSelectorSupport.loadProjectOptions({
+      projectsApi,
+      selectEl: els.projectFilter,
+      selectedValue: selectedValue != null ? selectedValue : (els.projectFilter.value || ""),
+      defaultProjectCode: "atp",
+      emptyOptionLabel: "全部项目",
+    });
+    state.projectItems = Array.isArray(items) ? items : [];
+    syncProjectGovernanceNote();
+  }
+
+  function openProjectManager() {
+    if (!projectSelectorSupport || !projectManager || !projectsApi || !els.projectFilter) return;
+    projectSelectorSupport.openProjectManager({
+      projectManager,
+      projectsApi,
+      selectEl: els.projectFilter,
+      selectedProjectCode: selectedProjectCode(),
+      defaultProjectCode: "atp",
+      deleteFallbackValue: "",
+      emptyOptionLabel: "全部项目",
+      onChanged: async ({ items, selectedProjectCode }) => {
+        setProjectOptions(items, selectedProjectCode || "");
+        state.page = 1;
+        await refresh().catch(handleLoadError);
+      },
+    });
+  }
 
   function updateHeroKpis(summary) {
     const data = summary && typeof summary === "object" ? summary : {};
@@ -202,8 +277,9 @@
   }
 
   function bindEvents() {
-    [els.actionFilter, els.statusFilter, els.riskGateFilter].forEach((node) => {
+    [els.projectFilter, els.actionFilter, els.statusFilter, els.riskGateFilter].forEach((node) => {
       node.addEventListener("change", () => {
+        syncProjectGovernanceNote();
         state.page = 1;
         refresh().catch(handleLoadError);
       });
@@ -219,6 +295,9 @@
       refresh().catch(handleLoadError);
     });
     els.refreshBtn.addEventListener("click", () => refresh().catch(handleLoadError));
+    if (els.manageProjectBtn) {
+      els.manageProjectBtn.addEventListener("click", () => openProjectManager());
+    }
     if (els.clearBtn) {
       els.clearBtn.addEventListener("click", () => clearHistory().catch(handleLoadError));
     }
@@ -283,8 +362,17 @@
     }
   }
 
-  support.restoreFilters();
-  support.updateAuthNotice();
-  bindEvents();
-  refresh().catch(handleLoadError);
+  async function init() {
+    support.restoreFilters();
+    support.updateAuthNotice();
+    bindEvents();
+    try {
+      await loadProjects(String(els.projectFilter?.value || "").trim());
+    } catch (_error) {
+      syncProjectGovernanceNote();
+    }
+    refresh().catch(handleLoadError);
+  }
+
+  init().catch(handleLoadError);
 })();

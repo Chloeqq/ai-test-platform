@@ -7,8 +7,11 @@
 
   const state = {
     project: "atp",
+    projectItems: [],
+    projectWriteBlocked: false,
     currentCaseId: "",
     currentCasePath: "",
+    persistedYamlContent: "",
     currentRunId: "",
     eventSource: null,
     logLines: [],
@@ -33,6 +36,8 @@
 
   const els = {
     projectSelect: document.getElementById("wb-project"),
+    manageProjectBtn: document.getElementById("wb-manage-project"),
+    governanceNote: document.getElementById("wb-project-governance-note"),
     refreshBtn: document.getElementById("wb-refresh"),
     caseBody: document.getElementById("wb-case-body"),
     casePagination: document.getElementById("wb-case-pagination"),
@@ -82,8 +87,9 @@
 
   function updateCurrentCaseBar(item) {
     const payload = item && typeof item === "object" ? item : {};
+    const hasCurrentCase = Boolean(String(payload.case_id || state.currentCaseId || "").trim());
     if (els.currentCaseBar) {
-      els.currentCaseBar.hidden = false;
+      els.currentCaseBar.hidden = !hasCurrentCase;
     }
     if (els.currentCaseHeader) {
       els.currentCaseHeader.textContent = shared.displayCaseId(payload.case_id || state.currentCaseId || "-");

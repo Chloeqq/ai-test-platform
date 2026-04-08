@@ -5,6 +5,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="/static/governance_pages.css?v=20260403-execution-runs-1">
 <link rel="stylesheet" href="/static/pagination.component.css?v=20260323-1">
+<link rel="stylesheet" href="/static/project_manager_dialog.css?v=20260406-project-manager-2">
 {% endblock %}
 
 {% block content %}
@@ -68,6 +69,7 @@
         </div>
         <div class="list-filter-row">
           <div class="list-filter-strip">
+            <label class="toolbar-field"><span>项目</span><select id="er-filter-project"><option value="">全部项目</option></select></label>
             <label class="toolbar-field"><span>状态</span><select id="er-filter-status"><option value="">全部状态</option></select></label>
             <label class="toolbar-field"><span>队列</span><select id="er-filter-queue"><option value="">全部队列状态</option></select></label>
             <label class="toolbar-field"><span>来源</span><select id="er-filter-source"><option value="">全部来源</option></select></label>
@@ -83,6 +85,7 @@
           </details>
         </div>
         <div class="list-filter-actions">
+          <button id="er-manage-project" class="btn" type="button">管理项目</button>
           <button id="er-apply-filters" class="btn btn-primary" type="button">应用筛选</button>
           <button id="er-refresh" class="btn" type="button">重新加载</button>
           <button id="er-reset" class="btn" type="button">重置筛选</button>
@@ -90,6 +93,7 @@
       </div>
       <div class="toolbar-meta">
         <span id="er-filter-summary">当前按默认条件展示执行任务。</span>
+        <span id="er-project-note"></span>
         <span id="er-last-updated">最后刷新：-</span>
       </div>
       <div class="selection-bar" id="er-selection-bar" hidden>
@@ -141,7 +145,10 @@
 
 {% block extra_scripts %}
 <script src="/static/pagination.component.js?v=20260323-1"></script>
+<script src="/static/projects_api.js?v=20260405-projects-1"></script>
+<script src="/static/project_manager_dialog.js?v=20260406-project-manager-3"></script>
+<script src="/static/project_selector_support.js?v=20260407-project-selector-1"></script>
 <script src="/static/execution_runs_presenter.js?v=20260406-execution-runs-2"></script>
-<script src="/static/execution_runs_support.js?v=20260404-execution-runs-2"></script>
-<script src="/static/execution_runs.js?v=20260404-execution-runs-2"></script>
+<script src="/static/execution_runs_support.js?v=20260407-execution-runs-3"></script>
+<script src="/static/execution_runs.js?v=20260407-execution-runs-3"></script>
 {% endblock %}

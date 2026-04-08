@@ -11,6 +11,7 @@
       project_code: els.filterProjectCode.value,
       source: els.filterSource.value,
       status: els.filterStatus.value,
+      test_type: els.filterTestType.value,
       q: els.searchInput.value.trim(),
       sort_field: els.sortKey.value || "updated_at",
       sort_order: els.sortDir.value || "desc",
@@ -25,6 +26,7 @@
       project_code: els.filterProjectCode.value,
       source: els.filterSource.value,
       status: els.filterStatus.value,
+      test_type: els.filterTestType.value,
       q: els.searchInput.value.trim(),
     };
   }
@@ -127,6 +129,10 @@
       els.filterStatus.value = "";
       return;
     }
+    if (targetKey === "test_type") {
+      els.filterTestType.value = "";
+      return;
+    }
     if (targetKey === "creator") {
       els.filterCreator.value = "";
       return;
@@ -151,6 +157,7 @@
       project_code: els.filterProjectCode,
       source: els.filterSource,
       status: els.filterStatus,
+      test_type: els.filterTestType,
       q: els.searchInput,
       sort_dir: els.sortDir,
       sort_key: els.sortKey,

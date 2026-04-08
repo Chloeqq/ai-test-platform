@@ -16,7 +16,6 @@ from app.models.workbench_state import (
 )
 from app.schemas.test_project import TestProjectCreate, TestProjectUpdate
 from app.services.test_case_bootstrap_service import ensure_project_seed
-from app.services.workbench_state_store import TEST_POINTS_ROOT
 
 DEFAULT_PROJECT_CODE = "atp"
 PROJECT_STATUS_VALUES = {"active", "inactive"}
@@ -61,6 +60,36 @@ def _get_project_or_404(db: Session, project_code: str) -> TestProject:
             detail=f"project not found: {project_code}",
         )
     return project
+
+
+def ensure_project_active_for_write(db: Session, project_code: str) -> TestProject:
+    ensure_project_seed(db)
+    normalized_project_code = _normalize_project_code(project_code)
+    project = _get_project_or_404(db, normalized_project_code)
+    if str(project.status or "").strip().lower() != "active":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"project is inactive: {normalized_project_code}",
+        )
+    return project
+
+
+def get_project_status(db: Session, project_code: str) -> str:
+    ensure_project_seed(db)
+    raw_project_code = str(project_code or "").strip()
+    if not raw_project_code:
+        return "active"
+    try:
+        normalized_project_code = _normalize_project_code(raw_project_code)
+    except HTTPException:
+        return "active"
+    project = db.execute(
+        select(TestProject).where(TestProject.project_code == normalized_project_code)
+    ).scalar_one_or_none()
+    if project is None:
+        return "active"
+    normalized_status = str(project.status or "").strip().lower()
+    return normalized_status if normalized_status in PROJECT_STATUS_VALUES else "active"
 
 
 def _count_test_cases(db: Session, project_code: str) -> int:
@@ -108,9 +137,8 @@ def _count_workbench_state_refs(db: Session, project_code: str) -> int:
     return runtime_count + review_count + gate_count
 
 
-def _has_workbench_state_dir(project_code: str, *, state_root: Path | None = None) -> bool:
-    root = state_root or TEST_POINTS_ROOT
-    project_dir = root / project_code
+def _has_workbench_state_dir(project_code: str, *, state_root: Path) -> bool:
+    project_dir = state_root / project_code
     if not project_dir.exists():
         return False
     return any(project_dir.iterdir())
@@ -208,7 +236,9 @@ def delete_project(db: Session, project_code: str, *, state_root: Path | None = 
             detail=f"project is referenced by {workbench_ref_count} workbench record(s): {normalized_project_code}",
         )
 
-    if _has_workbench_state_dir(normalized_project_code, state_root=state_root):
+    # File-system state checks are opt-in via explicit state_root.
+    # API delete keeps idempotent behavior and only gates on database references by default.
+    if state_root is not None and _has_workbench_state_dir(normalized_project_code, state_root=state_root):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"project has workbench state files and cannot be deleted: {normalized_project_code}",

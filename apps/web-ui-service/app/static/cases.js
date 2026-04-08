@@ -8,7 +8,8 @@
   const support = window.CasesSupport;
   const projectsApi = window.ProjectsApi;
   const projectManager = window.ProjectManagerDialog;
-  if (!shell || !api || !presenter || !tableActions || !treeModule || !listPage || !support || !projectsApi || !projectManager) return;
+  const projectSelectorSupport = window.ProjectSelectorSupport;
+  if (!shell || !api || !presenter || !tableActions || !treeModule || !listPage || !support || !projectsApi || !projectManager || !projectSelectorSupport) return;
 
   const state = {
     items: [],
@@ -19,12 +20,15 @@
     searchContext: {},
     stats: {},
     selectedIds: new Set(),
+    projectItems: [],
     treeItems: [],
     treeSelection: { product_line: "", module: "" },
     reviewMode: window.location.pathname.includes("/cases/review"),
   };
   const storageKey = "cases_filters_v5";
   const els = {
+    caseTypeTabs: document.getElementById("cases-type-tabs"),
+    caseTypeTitle: document.getElementById("cases-type-title"),
     btnArchive: document.getElementById("btn-archive"),
     btnBatchDelete: document.getElementById("btn-batch-delete"),
     btnBatchRun: document.getElementById("btn-batch-run"),
@@ -43,6 +47,7 @@
     btnTreeEdit: document.getElementById("btn-tree-edit"),
     btnTreeExpand: document.getElementById("btn-tree-expand"),
     btnTreeAdd: document.getElementById("btn-tree-add"),
+    btnTreeSearch: document.getElementById("btn-tree-search"),
     checkAll: document.getElementById("check-all"),
     filterCreator: document.getElementById("filter-creator"),
     filterLastResult: document.getElementById("filter-last-result"),
@@ -52,6 +57,8 @@
     filterProjectCode: document.getElementById("filter-project-code"),
     filterSource: document.getElementById("filter-source"),
     filterStatus: document.getElementById("filter-status"),
+    filterTestType: document.getElementById("filter-test-type"),
+    projectGovernanceNote: document.getElementById("cases-project-governance-note"),
     footerSummary: document.getElementById("cases-visible-summary"),
     lastUpdated: document.getElementById("cases-last-updated"),
     pagination: document.getElementById("cases-pagination"),
@@ -71,12 +78,15 @@
     sortKey: document.getElementById("cases-sort-key"),
     tableBody: document.getElementById("cases-table-body"),
     tree: document.getElementById("cases-tree"),
+    treeSearch: document.getElementById("cases-tree-search-input"),
     treeTotal: document.getElementById("cases-tree-total"),
   };
   const requiredElements = [
     "btnArchive",
     "btnBatchDelete",
     "btnBatchRun",
+    "caseTypeTabs",
+    "caseTypeTitle",
     "btnClearSelection",
     "btnCreateProject",
     "btnExport",
@@ -92,6 +102,7 @@
     "btnTreeEdit",
     "btnTreeExpand",
     "btnTreeAdd",
+    "btnTreeSearch",
     "checkAll",
     "filterCreator",
     "filterLastResult",
@@ -101,6 +112,8 @@
     "filterProjectCode",
     "filterSource",
     "filterStatus",
+    "filterTestType",
+    "projectGovernanceNote",
     "footerSummary",
     "lastUpdated",
     "pagination",
@@ -120,6 +133,7 @@
     "sortKey",
     "tableBody",
     "tree",
+    "treeSearch",
     "treeTotal",
   ];
   const missingElements = requiredElements.filter((key) => !els[key]);
@@ -143,14 +157,28 @@
     syncCheckAll();
   }
 
+  function closeTreeOpsMenu() {
+    const treeOps = document.getElementById("cases-tree-ops");
+    if (treeOps) treeOps.open = false;
+  }
+
   function syncTreeSelectionFromFilters() {
     support.syncTreeSelectionFromFilters(els, state);
+  }
+
+  function syncTreeContextState() {
+    const writeBlocked = isSelectedProjectWriteBlocked();
+    const hasSelection = Boolean(String(state.treeSelection.product_line || "").trim());
+    els.btnTreeAdd.disabled = writeBlocked;
+    els.btnTreeEdit.disabled = writeBlocked || !hasSelection;
+    els.btnTreeDelete.disabled = !hasSelection;
   }
 
   function updateSelectionBar() {
     const count = state.selectedIds.size;
     els.selectedCount.textContent = String(count);
     els.selectionBar.classList.toggle("hidden", count === 0);
+    syncSelectionGovernanceState();
   }
 
   function syncCheckAll() {
@@ -165,7 +193,9 @@
   }
 
   function renderTable() {
-    els.tableBody.innerHTML = presenter.tableRowsMarkup(state.items, state.selectedIds, { reviewMode: state.reviewMode });
+    els.tableBody.innerHTML = presenter.tableRowsMarkup(state.items, state.selectedIds, {
+      reviewMode: state.reviewMode,
+    });
     syncCheckAll();
   }
 
@@ -206,6 +236,33 @@
       if (username) return username;
     }
     return "admin";
+  }
+
+  function normalizeCaseType(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function detectCaseTypeTab() {
+    const explicit = normalizeCaseType(els.filterTestType.value);
+    if (explicit) return explicit;
+    const contextual = normalizeCaseType(state.searchContext && state.searchContext.test_type);
+    return contextual;
+  }
+
+  function syncCaseTypeTabs() {
+    const activeType = detectCaseTypeTab();
+    const buttons = Array.from(els.caseTypeTabs.querySelectorAll("[data-case-type]"));
+    buttons.forEach((button) => {
+      const buttonType = normalizeCaseType(button.dataset.caseType);
+      const isActive = buttonType === activeType;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+      button.setAttribute("tabindex", isActive ? "0" : "-1");
+    });
+    const activeButton = buttons.find((button) => normalizeCaseType(button.dataset.caseType) === activeType) || buttons[0] || null;
+    if (activeButton) {
+      els.caseTypeTitle.textContent = String(activeButton.textContent || "").trim() || "全部用例";
+    }
   }
 
   function detectQuickPreset() {
@@ -288,11 +345,14 @@
     els.filterPriority.value = "";
     els.filterSource.value = "";
     els.filterStatus.value = "";
+    els.filterTestType.value = "";
     els.filterProductLine.value = "";
     els.filterModule.value = "";
     els.sortKey.value = "updated_at";
     els.sortDir.value = "desc";
     syncTreeSelectionFromFilters();
+    syncTreeContextState();
+    syncCaseTypeTabs();
     syncQuickFilters();
     state.page = 1;
     clearSelection();
@@ -305,31 +365,94 @@
   }
 
   function fillProjectOptions(items, selectedValue) {
-    const options = ['<option value="">全部项目</option>'].concat(
-      (Array.isArray(items) ? items : []).map((item) => {
-        const projectCode = String(item.project_code || "").trim();
-        const projectName = String(item.project_name || projectCode).trim();
-        return `<option value="${projectCode}">${projectCode} · ${projectName}</option>`;
-      })
-    );
-    els.filterProjectCode.innerHTML = options.join("");
+    state.projectItems = Array.isArray(items) ? items : [];
+    projectSelectorSupport.applyProjectOptions(els.filterProjectCode, items, {
+      selectedValue: selectedValue || "",
+      defaultProjectCode: "atp",
+      emptyOptionLabel: "全部项目",
+    });
     els.filterProjectCode.value = selectedValue || "";
     if (window.CasesDialog && typeof window.CasesDialog.setProjectOptions === "function") {
       window.CasesDialog.setProjectOptions(items);
     }
+    syncProjectGovernanceState();
+  }
+
+  function selectedProjectMeta() {
+    const projectCode = projectSelectorSupport.normalizeCode(els.filterProjectCode.value || "");
+    if (!projectCode) return null;
+    return state.projectItems.find((item) => {
+      return projectSelectorSupport.normalizeCode(item.project_code) === projectCode;
+    }) || null;
+  }
+
+  function isSelectedProjectWriteBlocked() {
+    const project = selectedProjectMeta();
+    if (!project) return false;
+    return projectSelectorSupport.normalizeCode(project.status || "active") !== "active";
+  }
+
+  function getCaseItemById(caseId) {
+    return state.items.find((item) => Number(item.id || 0) === Number(caseId || 0)) || null;
+  }
+
+  function isCaseWriteBlocked(caseItem) {
+    if (!caseItem) return false;
+    return projectSelectorSupport.normalizeCode(caseItem.project_status || "active") !== "active";
+  }
+
+  function selectedCaseItems() {
+    const selectedIdSet = state.selectedIds instanceof Set ? state.selectedIds : new Set();
+    return state.items.filter((item) => selectedIdSet.has(item.id));
+  }
+
+  function hasBlockedSelection() {
+    return selectedCaseItems().some((item) => isCaseWriteBlocked(item));
+  }
+
+  function syncSelectionGovernanceState() {
+    const hasSelection = state.selectedIds.size > 0;
+    const blocked = hasSelection && hasBlockedSelection();
+    els.btnArchive.disabled = blocked;
+    els.btnTags.disabled = blocked;
+  }
+
+  function syncProjectGovernanceState() {
+    const writeBlocked = isSelectedProjectWriteBlocked();
+    if (els.projectGovernanceNote) {
+      if (writeBlocked) {
+        els.projectGovernanceNote.hidden = false;
+        els.projectGovernanceNote.textContent = "当前筛选项目为 inactive，仅允许浏览、运行、导出和删除；新增、审核、改标签、废弃、树节点新增/编辑已禁用。";
+      } else {
+        els.projectGovernanceNote.hidden = true;
+        els.projectGovernanceNote.textContent = "";
+      }
+    }
+    els.btnNewCase.disabled = writeBlocked;
+    syncTreeContextState();
   }
 
   async function loadProjects(selectedValue) {
-    const payload = await projectsApi.list();
-    fillProjectOptions(payload.items || [], selectedValue);
+    const items = await projectSelectorSupport.loadProjectOptions({
+      projectsApi: projectsApi,
+      selectEl: els.filterProjectCode,
+      selectedValue: selectedValue || "",
+      defaultProjectCode: "atp",
+      emptyOptionLabel: "全部项目",
+    });
+    fillProjectOptions(items, selectedValue || "");
   }
 
   function openProjectManager() {
-    projectManager.open({
-      selectedProjectCode: String(els.filterProjectCode.value || "atp").trim() || "atp",
-      onChanged: async ({ action, project_code: projectCode }) => {
-        const selectedProjectCode = action === "delete" ? "" : String(projectCode || "").trim().toLowerCase();
-        await loadProjects(selectedProjectCode);
+    projectSelectorSupport.openProjectManager({
+      projectManager: projectManager,
+      projectsApi: projectsApi,
+      selectEl: els.filterProjectCode,
+      defaultProjectCode: "atp",
+      deleteFallbackValue: "",
+      emptyOptionLabel: "全部项目",
+      onChanged: async ({ action, projectCode, items, selectedProjectCode }) => {
+        fillProjectOptions(items, selectedProjectCode || "");
         state.page = 1;
         clearSelection();
         await loadList();
@@ -353,7 +476,9 @@
     state.lastLoadedAt = new Date().toISOString();
     syncTreeSelectionFromFilters();
     syncQuickFilters();
+    syncCaseTypeTabs();
     treeController.render();
+    syncTreeContextState();
     renderStats();
     renderSearchContext();
     renderTable();
@@ -365,6 +490,7 @@
     els.filterProductLine.value = productLine || "";
     els.filterModule.value = module || "";
     syncTreeSelectionFromFilters();
+    syncTreeContextState();
     state.page = 1;
     clearSelection();
     loadList().catch((error) => window.alert(error.message || "加载失败"));
@@ -413,9 +539,11 @@
       loadList().catch((error) => window.alert(error.message || "重置失败"));
     });
     els.filterProjectCode.addEventListener("change", () => {
+      syncProjectGovernanceState();
       els.filterProductLine.value = "";
       els.filterModule.value = "";
       syncTreeSelectionFromFilters();
+      syncTreeContextState();
       treeController.render();
       state.page = 1;
       clearSelection();
@@ -433,6 +561,18 @@
       clearSelection();
       loadList().catch((error) => window.alert(error.message || "切换筛选失败"));
     });
+    els.caseTypeTabs.addEventListener("click", (event) => {
+      const trigger = event.target instanceof Element ? event.target.closest("[data-case-type]") : null;
+      if (!trigger) return;
+      const nextType = normalizeCaseType(trigger.dataset.caseType);
+      const currentType = detectCaseTypeTab();
+      if (nextType === currentType) return;
+      els.filterTestType.value = nextType;
+      syncCaseTypeTabs();
+      state.page = 1;
+      clearSelection();
+      loadList().catch((error) => window.alert(error.message || "切换用例类型失败"));
+    });
     els.btnCreateProject.addEventListener("click", () => {
       try {
         openProjectManager();
@@ -442,6 +582,10 @@
     });
     els.btnTreeAdd.addEventListener("click", async () => {
       const projectCode = String(els.filterProjectCode.value || "atp").trim() || "atp";
+      if (isSelectedProjectWriteBlocked()) {
+        window.alert("当前项目为 inactive，不能新增模块树节点。");
+        return;
+      }
       const selectedProductLine = String(state.treeSelection.product_line || "").trim();
       const selectedModule = String(state.treeSelection.module || "").trim();
       const defaultProductLine = selectedProductLine || "";
@@ -459,11 +603,15 @@
       } catch (error) {
         window.alert(error.message || "新增节点失败");
       } finally {
-        document.getElementById("cases-tree-ops").open = false;
+        closeTreeOpsMenu();
       }
     });
     els.btnTreeEdit.addEventListener("click", async () => {
       const projectCode = String(els.filterProjectCode.value || "atp").trim() || "atp";
+      if (isSelectedProjectWriteBlocked()) {
+        window.alert("当前项目为 inactive，不能编辑模块树节点。");
+        return;
+      }
       const selectedProductLine = String(state.treeSelection.product_line || "").trim();
       const selectedModule = String(state.treeSelection.module || "").trim();
       if (!selectedProductLine) {
@@ -498,7 +646,7 @@
       } catch (error) {
         window.alert(error.message || "编辑节点失败");
       } finally {
-        document.getElementById("cases-tree-ops").open = false;
+        closeTreeOpsMenu();
       }
     });
     els.btnTreeDelete.addEventListener("click", async () => {
@@ -539,7 +687,7 @@
           window.alert(message || "删除节点失败");
         }
       } finally {
-        document.getElementById("cases-tree-ops").open = false;
+        closeTreeOpsMenu();
       }
     });
     els.searchContext.addEventListener("click", (event) => {
@@ -554,6 +702,7 @@
       const { removeKey } = trigger.dataset;
       support.clearSearchContextKey(els, state, removeKey);
       syncTreeSelectionFromFilters();
+      syncTreeContextState();
       syncQuickFilters();
       state.page = 1;
       clearSelection();
@@ -565,6 +714,7 @@
     els.filterProductLine.value = "";
     els.filterModule.value = "";
     state.treeSelection = { product_line: "", module: "" };
+    syncTreeContextState();
     state.page = 1;
     clearSelection();
     loadList().catch((error) => window.alert(error.message || "删除后刷新失败"));
@@ -606,6 +756,8 @@
     },
   });
   syncTreeSelectionFromFilters();
+  syncTreeContextState();
+  syncCaseTypeTabs();
   syncQuickFilters();
   support.updateFooterMeta(els, state, formatDateTime);
   renderSearchContext();
@@ -615,6 +767,9 @@
     api,
     clearSelection,
     els,
+    getCaseItemById,
+    hasBlockedSelection,
+    isCaseWriteBlocked,
     loadList,
     renderTable,
     reviewMode: state.reviewMode,
@@ -626,5 +781,9 @@
     loadList().catch((error) => window.alert(error.message || "加载失败"));
   });
   Promise.all([loadProjects(String(els.filterProjectCode?.value || "")), loadList()])
+    .then(() => {
+      syncProjectGovernanceState();
+      renderTable();
+    })
     .catch((error) => window.alert(error.message || "加载失败"));
 })();

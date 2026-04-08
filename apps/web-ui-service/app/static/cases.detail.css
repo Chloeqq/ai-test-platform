@@ -4,6 +4,17 @@
   gap: 12px;
 }
 
+.case-detail-governance-note {
+  margin: 12px 0 0;
+  color: #667b97;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.case-detail-governance-note.is-blocked {
+  color: #8c5a12;
+}
+
 .detail-header-row {
   display: flex;
   justify-content: space-between;
@@ -42,6 +53,12 @@
   min-height: 300px;
   font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
   font-size: 12px;
+}
+
+#script-editor.is-readonly {
+  background: #f7f9fc;
+  color: #5f7290;
+  cursor: not-allowed;
 }
 
 .code-preview {

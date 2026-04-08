@@ -175,10 +175,29 @@ def test_point_coverage_matrix_page(request: Request, asset_id: str) -> HTMLResp
 
 @router.get("/assets/page-objects", response_class=HTMLResponse)
 def asset_page_objects_page(request: Request) -> HTMLResponse:
-    return ui_shell_service.render_management_console(
+    return ui_shell_service.render_template(
         request,
+        "page_objects.html",
         current_key="page_objects",
-        **ui_static_management_page_service.get_console_payload("page_objects"),
+        context={
+            "page_title": "页面对象",
+            "page_description": "统一维护页面对象与元素，保障执行链路可复用。",
+            "breadcrumbs": ["首页", "资产与配置", "页面对象"],
+        },
+    )
+
+
+@router.get("/assets/page-objects/recorder", response_class=HTMLResponse)
+def asset_page_objects_recorder_page(request: Request) -> HTMLResponse:
+    return ui_shell_service.render_template(
+        request,
+        "page_object_recorder.html",
+        current_key="page_objects_recorder",
+        context={
+            "page_title": "页面对象录制",
+            "page_description": "前端发起录制会话，后端托管 Playwright codegen，停止后自动解析并入库 page + element。",
+            "breadcrumbs": ["首页", "资产与配置", "页面对象", "页面录制"],
+        },
     )
 
 

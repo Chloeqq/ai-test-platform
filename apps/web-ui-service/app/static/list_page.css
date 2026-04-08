@@ -1,7 +1,7 @@
 .list-toolbar {
   display: grid;
-  gap: 14px;
-  padding: 0 24px 20px;
+  gap: var(--size-md);
+  padding: 0 var(--size-lg) var(--size-lg);
 }
 
 .list-toolbar-main {
@@ -26,8 +26,10 @@
   flex: 1 1 320px;
   padding: 6px 10px;
   border: 1px solid var(--gp-line-strong, #c5d3e4);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
 }
 
 .list-search-field input {
@@ -61,7 +63,7 @@
   min-height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   color: var(--gp-muted, #5f738e);
   background: transparent;
   cursor: pointer;
@@ -91,7 +93,7 @@
 
 .list-more-filters {
   border: 1px dashed rgba(90, 122, 168, 0.28);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: rgba(242, 247, 255, 0.75);
   padding: 10px 14px 14px;
 }
@@ -211,9 +213,9 @@
   min-width: 140px;
   padding: 10px;
   border: 1px solid var(--gp-line, #d8e2ee);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: #fff;
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--shadow-lg);
 }
 
 .row-more-menu-item {
@@ -221,7 +223,7 @@
   align-items: center;
   min-height: 36px;
   padding: 0 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   color: var(--gp-text, #102038);
   text-decoration: none;
   border: 0;
@@ -251,7 +253,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 16px 24px 22px;
+  padding: var(--size-md) var(--size-lg) var(--size-lg);
   border-top: 1px solid var(--gp-line, #d8e2ee);
 }
 
@@ -270,7 +272,7 @@
 .footer-page-size select {
   min-height: 40px;
   margin-left: 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--gp-line-strong, #c5d3e4);
   padding: 0 10px;
   font: inherit;

@@ -24,7 +24,12 @@ def _list_value(value: object) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
-def to_list_item(case: TestCase, *, latest_version_no: int | None = None) -> dict[str, object]:
+def to_list_item(
+    case: TestCase,
+    *,
+    latest_version_no: int | None = None,
+    project_status: str = "active",
+) -> dict[str, object]:
     data_config = case.data_config if isinstance(case.data_config, dict) else {}
     return {
         "id": case.id,
@@ -32,6 +37,7 @@ def to_list_item(case: TestCase, *, latest_version_no: int | None = None) -> dic
         "case_id": case.case_id,
         "case_title": case.name,
         "project_code": case.project_code,
+        "project_status": project_status or "active",
         "client": case.client,
         "page_code": case.page_code,
         "page_name": case.page_name,
@@ -94,10 +100,22 @@ def build_list_payload(
     stats: StatsPayload | None = None,
     latest_versions: dict[int, int] | None = None,
     search_context: SearchContextPayload | None = None,
+    project_statuses: dict[str, str] | None = None,
 ) -> dict[str, object]:
     version_map = latest_versions or {}
+    project_status_map = {
+        str(project_code or "").strip().lower(): str(status or "").strip().lower() or "active"
+        for project_code, status in (project_statuses or {}).items()
+    }
     return {
-        "items": [to_list_item(case, latest_version_no=version_map.get(case.id)) for case in cases],
+        "items": [
+            to_list_item(
+                case,
+                latest_version_no=version_map.get(case.id),
+                project_status=project_status_map.get(str(case.project_code or "").strip().lower(), "active"),
+            )
+            for case in cases
+        ],
         "pagination": pagination,
         "filters": filters,
         "stats": stats or {},
@@ -112,6 +130,7 @@ def build_case_detail_payload(
     versions: list[TestCaseVersion],
     data_config: DataConfigPayload,
     *,
+    project_status: str = "active",
     normalize_report_url: NormalizeReportUrl,
 ) -> dict[str, object]:
     asset_references = _list_value(case.artifact_links)
@@ -150,7 +169,7 @@ def build_case_detail_payload(
     )
     return {
         "basic": {
-            **to_list_item(case),
+            **to_list_item(case, project_status=project_status),
             "created_at": case.created_at,
         },
         "governance": {

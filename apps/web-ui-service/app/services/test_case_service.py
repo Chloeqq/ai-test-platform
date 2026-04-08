@@ -23,6 +23,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 import yaml
 
+from app.models.page_object import PageObjectRef
 from app.models.test_case import (
     TestCase,
     TestCaseDefect,
@@ -65,6 +66,7 @@ from app.services.test_case_search_service import (
     build_test_case_search_context,
     parse_test_case_search_query,
 )
+from app.services import test_project_service
 
 PaginationPayload: TypeAlias = dict[str, int | bool | None]
 FilterOptionsPayload: TypeAlias = dict[str, list[str]]
@@ -84,6 +86,7 @@ class TestCaseListResult:
     latest_versions: dict[int, int]
     search_context: dict[str, str]
     stats: StatsPayload
+    project_statuses: dict[str, str]
 
 
 @dataclass(frozen=True)
@@ -93,6 +96,7 @@ class TestCaseDetailResult:
     executions: list[TestCaseExecution]
     versions: list[TestCaseVersion]
     data_config: DataConfigPayload
+    project_status: str
 
 
 @dataclass(frozen=True)
@@ -144,6 +148,15 @@ def _ensure_project_exists(db: Session, project_code: str) -> None:
         )
     )
     db.commit()
+
+
+def _ensure_project_writable(db: Session, project_code: str) -> str:
+    normalized_project_code = _normalize_project_code(project_code)
+    # Keep backward compatibility for legacy paths that may write before explicit
+    # project setup, while still enforcing inactive-project write protection.
+    _ensure_project_exists(db, normalized_project_code)
+    test_project_service.ensure_project_active_for_write(db, normalized_project_code)
+    return normalized_project_code
 
 
 def _workbench_steps(case_yaml: dict[str, Any]) -> list[dict[str, Any]]:
@@ -422,6 +435,22 @@ def resolve_target_case_ids(
     return target_ids
 
 
+def _ensure_case_writable(db: Session, case: TestCase) -> None:
+    _ensure_project_writable(db, case.project_code)
+
+
+def _ensure_cases_writable(db: Session, cases: Sequence[TestCase]) -> None:
+    project_codes = sorted(
+        {
+            _normalize_project_code(item.project_code)
+            for item in cases
+            if str(item.project_code or "").strip()
+        }
+    )
+    for project_code in project_codes:
+        _ensure_project_writable(db, project_code)
+
+
 def list_test_cases(
     db: Session,
     *,
@@ -574,6 +603,25 @@ def list_test_cases(
     sources = sorted({item[0] for item in db.execute(select(TestCase.source)).all() if item[0]})
     test_types = sorted({item[0] for item in db.execute(select(TestCase.test_type)).all() if item[0]})
 
+    page_project_codes = sorted(
+        {
+            _normalize_project_code(case.project_code)
+            for case in page_cases
+            if str(case.project_code or "").strip()
+        }
+    )
+    project_status_rows = (
+        db.execute(
+            select(TestProject.project_code, TestProject.status).where(TestProject.project_code.in_(page_project_codes))
+        ).all()
+        if page_project_codes
+        else []
+    )
+    project_statuses = {
+        str(project_code or "").strip().lower(): str(status_value or "").strip().lower() or "active"
+        for project_code, status_value in project_status_rows
+    }
+
     return TestCaseListResult(
         cases=page_cases,
         pagination={
@@ -620,6 +668,7 @@ def list_test_cases(
             "automation_rate": automation_rate,
             "pass_rate": pass_rate,
         },
+        project_statuses=project_statuses,
     )
 
 
@@ -668,6 +717,7 @@ def create_test_case(db: Session, payload: TestCaseCreate) -> TestCase:
         test_type=normalized_test_type,
         pytest_path=payload.pytest_path,
     )
+    _ensure_project_writable(db, resolved_identity["project_code"])
     created_source = _created_source_from_code(resolved_identity["source"])
     normalized_test_steps_text = payload.test_steps_text.strip() or render_test_steps_text(test_steps)
     normalized_trigger_entry = normalize_optional_text(payload.trigger_entry) or (
@@ -762,7 +812,7 @@ def upsert_test_case_from_workbench(
         )
 
     normalized_project_code = _normalize_project_code(project_code)
-    _ensure_project_exists(db, normalized_project_code)
+    _ensure_project_writable(db, normalized_project_code)
 
     title = normalize_optional_text(case_yaml.get("title")) or normalized_case_id
     tags = normalize_tags(normalize_text_list(case_yaml.get("tags")))
@@ -968,12 +1018,14 @@ def get_test_case_detail(db: Session, case_id: int | str) -> TestCaseDetailResul
     normalized_data_config = normalize_data_config(
         TestCaseDataConfig.model_validate(case.data_config or {})
     )
+    project_status = test_project_service.get_project_status(db, case.project_code)
     return TestCaseDetailResult(
         case=case,
         defects=list(defects),
         executions=list(executions),
         versions=list(versions),
         data_config=normalized_data_config,
+        project_status=project_status,
     )
 
 
@@ -989,6 +1041,12 @@ def _next_version_no(db: Session, case_id: int) -> int:
 
 def update_test_case(db: Session, case_id: int | str, payload: TestCaseUpdate) -> TestCaseMutationResult:
     case = case_or_404(db, case_id)
+    target_project_code = (
+        _normalize_project_code(payload.project_code)
+        if payload.project_code is not None
+        else _normalize_project_code(case.project_code)
+    )
+    _ensure_project_writable(db, target_project_code)
     changed = False
     latest_version_no: int | None = None
 
@@ -1284,6 +1342,7 @@ def compare_case_versions(
 
 def update_script(db: Session, case_id: int | str, payload: TestCaseScriptUpdate) -> int:
     case = case_or_404(db, case_id)
+    _ensure_case_writable(db, case)
     old_lines = len((case.script_code or "").splitlines())
     new_lines = len(payload.script_code.splitlines())
     delta = new_lines - old_lines
@@ -1329,6 +1388,13 @@ def batch_delete_test_cases(
     db.query(TestCaseVersion).filter(TestCaseVersion.case_id.in_(target_ids)).delete(
         synchronize_session=False
     )
+    if deleting_case_ids:
+        db.query(PageObjectRef).filter(
+            PageObjectRef.reference_type == "test_case",
+            PageObjectRef.reference_key.in_(deleting_case_ids),
+        ).delete(
+            synchronize_session=False
+        )
     deleted_count = db.query(TestCase).filter(TestCase.id.in_(target_ids)).delete(
         synchronize_session=False
     )
@@ -1370,6 +1436,7 @@ def batch_update_test_case_tags(db: Session, payload: BatchTagsUpdatePayload) ->
 
     updated = 0
     cases = db.execute(select(TestCase).where(TestCase.id.in_(target_ids))).scalars().all()
+    _ensure_cases_writable(db, cases)
     for case in cases:
         if payload.mode == "append":
             case.tags = normalize_tags(list(case.tags or []) + target_tags)
@@ -1390,6 +1457,7 @@ def batch_update_test_case_status(db: Session, payload: BatchStatusUpdatePayload
 
     updated = 0
     cases = db.execute(select(TestCase).where(TestCase.id.in_(target_ids))).scalars().all()
+    _ensure_cases_writable(db, cases)
     for case in cases:
         if case.status == target_status:
             continue
@@ -1433,6 +1501,7 @@ def add_test_case_defect(
     defect_url: str = "",
 ) -> TestCaseDefect:
     case = case_or_404(db, case_id)
+    _ensure_case_writable(db, case)
     key = defect_key.strip()
     if not key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="defect_key must not be empty")
@@ -1452,6 +1521,7 @@ def create_module_tree_node(
 ) -> dict[str, Any]:
     ensure_seed_data(db)
     normalized_project_code = _normalize_project_code(project_code)
+    _ensure_project_writable(db, normalized_project_code)
     normalized_product_line = str(product_line or "").strip()
     normalized_module = str(module or "").strip()
     if not normalized_product_line:
@@ -1490,6 +1560,7 @@ def update_module_tree_node(
 ) -> dict[str, Any]:
     ensure_seed_data(db)
     normalized_project_code = _normalize_project_code(project_code)
+    _ensure_project_writable(db, normalized_project_code)
     old_product_line = str(product_line or "").strip()
     old_module = str(module or "").strip()
     target_product_line = str(new_product_line or "").strip()

@@ -44,13 +44,19 @@ done
 for target in \
   "apps/web-ui-service/app/routers/test_cases.py" \
   "apps/web-ui-service/app/routers/test_projects.py" \
+  "apps/web-ui-service/app/routers/page_objects.py" \
+  "apps/web-ui-service/app/routers/page_objects_recorder.py" \
   "apps/web-ui-service/app/services/test_case_mapper.py" \
   "apps/web-ui-service/app/services/test_case_export_service.py" \
   "apps/web-ui-service/app/services/test_case_search_service.py" \
   "apps/web-ui-service/app/services/test_case_service.py" \
   "apps/web-ui-service/app/services/test_project_service.py" \
+  "apps/web-ui-service/app/services/page_object_service.py" \
+  "apps/web-ui-service/app/services/page_object_recorder_service.py" \
   "apps/web-ui-service/app/schemas/test_case.py" \
-  "apps/web-ui-service/app/schemas/test_project.py"; do
+  "apps/web-ui-service/app/schemas/test_project.py" \
+  "apps/web-ui-service/app/schemas/page_object.py" \
+  "apps/web-ui-service/app/schemas/page_object_recorder.py"; do
   if [[ -f "${target}" ]]; then
     MYPY_TARGETS+=("${target}")
   fi
@@ -67,7 +73,7 @@ for target in "${MYPY_TARGETS[@]}"; do
   echo "[static-baseline-fast] mypy ${target}"
   if [[ "${target}" == apps/web-ui-service/* ]]; then
     # Incremental mode for web-ui: validate target files first, then tighten imports gradually.
-    if ! "${PYTHON_BIN}" -m mypy --follow-imports=silent --exclude "(^|/)tools/index\\.py$" "${target}"; then
+    if ! MYPYPATH=. "${PYTHON_BIN}" -m mypy --follow-imports=silent --exclude "(^|/)tools/index\\.py$" "${target}"; then
       MYPY_FAILED=1
     fi
     continue

@@ -14,6 +14,7 @@ class TestCaseListItem(BaseModel):
     id: int
     case_id: str
     project_code: str
+    project_status: str = "active"
     client: str
     page_code: str
     module_code: str

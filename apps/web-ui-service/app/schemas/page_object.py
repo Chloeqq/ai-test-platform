@@ -9,6 +9,7 @@ class PageObjectCreate(BaseModel):
     page_code: str = Field(..., min_length=2, max_length=40)
     page_name: str = Field(..., min_length=1, max_length=120)
     page_url: str = Field(default="", max_length=256)
+    precondition_state: str = Field(default="", max_length=4000)
     module_id: int = Field(default=0, ge=0)
     health_status: int = Field(default=1, ge=0, le=1)
     description: str = Field(default="", max_length=4000)
@@ -19,6 +20,7 @@ class PageObjectCreate(BaseModel):
 class PageObjectUpdate(BaseModel):
     page_name: str | None = Field(default=None, min_length=1, max_length=120)
     page_url: str | None = Field(default=None, max_length=256)
+    precondition_state: str | None = Field(default=None, max_length=4000)
     module_id: int | None = Field(default=None, ge=0)
     health_status: int | None = Field(default=None, ge=0, le=1)
     description: str | None = Field(default=None, max_length=4000)

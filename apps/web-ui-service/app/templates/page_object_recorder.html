@@ -1,0 +1,139 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/governance_pages.css?v=20260403-management-shell-1">
+<link rel="stylesheet" href="/static/project_manager_dialog.css?v=20260406-project-manager-2">
+<link rel="stylesheet" href="/static/page_object_recorder.css?v=20260408-recorder-4">
+{% endblock %}
+
+{% block content %}
+<section class="governance-shell recorder-shell">
+  <section class="page-hero">
+    <div class="page-hero-head">
+      <div class="page-hero-copy">
+        <p class="breadcrumb">
+          {% for item in breadcrumbs %}
+            <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+          {% endfor %}
+        </p>
+        <h1>{{ page_title }}</h1>
+        <p>{{ page_description }}</p>
+      </div>
+    </div>
+  </section>
+
+  <article class="panel recorder-panel">
+    <div class="recorder-grid">
+      <section class="recorder-card">
+        <h2>1. 创建录制会话</h2>
+        <p class="recorder-note">点击“开始录制”后会打开 Playwright 官方录制浏览器，操作结束后回到这里点击“停止并入库”。</p>
+        <form id="recorder-form" class="recorder-form">
+          <label>
+            <span>项目编码</span>
+            <select id="rec-project-code" required>
+              <option value="atp" selected>atp</option>
+            </select>
+          </label>
+          <label>
+            <span>项目管理</span>
+            <button id="rec-manage-project" class="btn btn-soft" type="button">管理项目</button>
+          </label>
+          <label>
+            <span>端类型</span>
+            <select id="rec-client">
+              <option value="web" selected>WEB</option>
+              <option value="api">API</option>
+              <option value="app">APP</option>
+              <option value="admin">ADMIN</option>
+            </select>
+          </label>
+          <label>
+            <span>页面编码</span>
+            <input id="rec-page-code" placeholder="例如 login-page" maxlength="40" required>
+          </label>
+          <label>
+            <span>页面名称</span>
+            <input id="rec-page-name" placeholder="例如 登录页" maxlength="120" required>
+          </label>
+          <label class="wide">
+            <span>页面 URL</span>
+            <input id="rec-url" placeholder="http://127.0.0.1:8013/login" maxlength="512" required>
+          </label>
+          <div class="button-row">
+            <button id="rec-start" class="btn btn-primary" type="submit">开始录制</button>
+            <button id="rec-heartbeat" class="btn btn-soft" type="button" disabled>发送心跳</button>
+            <button id="rec-stop" class="btn" type="button" disabled>停止并入库</button>
+            <a id="rec-manual-link" class="btn btn-soft" href="/assets/page-objects?open=create">手动补录</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="recorder-card">
+        <h2>2. 会话状态</h2>
+        <dl class="recorder-status" id="recorder-status">
+          <div><dt>session_id</dt><dd id="rec-session-id">-</dd></div>
+          <div><dt>状态</dt><dd id="rec-session-status">-</dd></div>
+          <div><dt>进程 PID</dt><dd id="rec-session-pid">-</dd></div>
+          <div><dt>脚本路径</dt><dd id="rec-session-script">-</dd></div>
+          <div><dt>开始时间</dt><dd id="rec-session-started-at">-</dd></div>
+          <div><dt>最后心跳</dt><dd id="rec-session-heartbeat-at">-</dd></div>
+          <div><dt>停止时间</dt><dd id="rec-session-stopped-at">-</dd></div>
+        </dl>
+        <div class="button-row">
+          <button id="rec-refresh" class="btn btn-soft" type="button" disabled>刷新会话</button>
+          <button id="rec-create-case" class="btn btn-soft" type="button" disabled>生成用例草稿</button>
+          <button id="rec-clean-orphan" class="btn btn-soft" type="button">清理孤儿文件</button>
+          <a id="rec-return-link" class="btn" href="/assets/page-objects">返回页面对象列表</a>
+        </div>
+      </section>
+    </div>
+
+    <div class="recorder-grid recorder-grid-secondary">
+      <section class="recorder-card recorder-result">
+        <h2>3. 候选元素与入库结果</h2>
+        <p id="rec-ingest-summary" class="recorder-note">尚未执行入库。</p>
+        <div id="rec-ingest-list" class="recorder-list empty">暂无元素</div>
+      </section>
+
+      <section class="recorder-card recorder-result">
+        <h2>4. 录制步骤</h2>
+        <p id="rec-step-summary" class="recorder-note">尚未采集步骤。</p>
+        <div id="rec-step-list" class="recorder-list empty">暂无步骤</div>
+      </section>
+    </div>
+
+    <section class="recorder-card recorder-log">
+      <h2>操作日志</h2>
+      <div id="rec-log-list" class="recorder-list empty">暂无日志</div>
+    </section>
+  </article>
+
+  <div id="rec-guide" class="recorder-guide hidden" role="dialog" aria-modal="true" aria-labelledby="rec-guide-title">
+    <div class="recorder-guide-card">
+      <h2 id="rec-guide-title">开始录制前确认</h2>
+      <ol class="recorder-guide-list">
+        <li>点击开始录制后，会打开 Playwright 录制浏览器。</li>
+        <li>在浏览器里进入目标页面，并按真实路径完成操作。</li>
+        <li>录制结束后回到当前页面，点击“停止并入库”，系统会保留元素和步骤草稿，供你确认后再返回页面对象页继续维护。</li>
+      </ol>
+      <label class="recorder-guide-check">
+        <input id="rec-guide-dismiss" type="checkbox">
+        <span>下次不再提示</span>
+      </label>
+      <div class="button-row">
+        <button id="rec-guide-cancel" class="btn btn-soft" type="button">稍后开始</button>
+        <button id="rec-guide-confirm" class="btn btn-primary" type="button">我知道了，开始录制</button>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/projects_api.js?v=20260405-projects-1"></script>
+<script src="/static/project_manager_dialog.js?v=20260406-project-manager-3"></script>
+<script src="/static/project_selector_support.js?v=20260407-project-selector-1"></script>
+<script src="/static/page_object_recorder.js?v=20260408-recorder-5"></script>
+{% endblock %}

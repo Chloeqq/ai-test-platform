@@ -1,25 +1,20 @@
-:root {
-  --bg: #eef2f7;
-  --panel: #f8fafc;
-  --panel-2: #ffffff;
-  --line: #dbe4ee;
-  --text: #0f172a;
-  --muted: #607085;
-  --accent: #1f7ae0;
-  --accent-soft: #e7f1ff;
-  --shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  --sidebar-width: 268px;
-}
+@import url("/static/enterprise-global.css?v=20260408-enterprise-1");
 
-* {
-  box-sizing: border-box;
+:root {
+  --bg: var(--neutral-50);
+  --panel: #ffffff;
+  --panel-2: #ffffff;
+  --line: var(--neutral-200);
+  --text: var(--neutral-900);
+  --muted: var(--neutral-600);
+  --accent: var(--primary);
+  --accent-soft: var(--primary-light);
+  --shadow: var(--shadow-lg);
+  --sidebar-width: 240px;
 }
 
 body {
-  margin: 0;
-  font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
   color: var(--text);
-  background: radial-gradient(circle at top right, #dfefff 0%, var(--bg) 32%, #e8edf4 100%);
 }
 
 .platform-shell {
@@ -34,11 +29,11 @@ body {
 }
 
 .topbar {
-  height: 70px;
+  min-height: 72px;
   padding: 0 24px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -50,7 +45,7 @@ body {
 .topbar-title {
   font-size: 18px;
   font-weight: 700;
-  color: #18233a;
+  color: var(--neutral-900);
 }
 
 .topbar-actions {
@@ -62,13 +57,9 @@ body {
 .icon-button {
   width: 34px;
   height: 34px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel-2);
-  color: #4b607b;
+  color: var(--neutral-700);
   display: grid;
   place-items: center;
-  cursor: pointer;
 }
 
 .icon-button svg {
@@ -79,52 +70,36 @@ body {
 .icon-button:focus-visible,
 .help-link:focus-visible,
 .auth-link:focus-visible {
-  outline: 2px solid #2f79db;
-  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
 .help-link {
   font-size: 13px;
-  color: #2b66b8;
+  color: var(--primary);
   text-decoration: none;
   font-weight: 600;
 }
 
 .help-link:hover {
-  text-decoration: underline;
+  color: var(--primary-hover);
 }
 
 .auth-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   min-width: 74px;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  color: #365e94;
   text-decoration: none;
   font-size: 13px;
   font-weight: 700;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.auth-link:hover {
-  background: #eef5ff;
-  border-color: #c4d7f5;
 }
 
 .auth-link[data-auth-state="authenticated"] {
-  color: #8f2a2a;
-  border-color: #efc8c8;
-  background: #fff4f4;
+  color: var(--danger);
+  border-color: rgba(220, 38, 38, 0.15);
+  background: var(--danger-light);
 }
 
 .auth-link[data-auth-state="authenticated"]:hover {
-  background: #ffe8e8;
-  border-color: #e6b0b0;
+  background: var(--danger);
+  border-color: var(--danger);
 }
 
 .user-box {
@@ -133,8 +108,9 @@ body {
   gap: 9px;
   border: 1px solid var(--line);
   background: var(--panel-2);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 5px 10px 5px 6px;
+  box-shadow: var(--shadow-sm);
 }
 
 .user-box[data-auth-state="anonymous"] {
@@ -148,7 +124,7 @@ body {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: linear-gradient(120deg, #2f7fe4, #5aa0ff);
+  background: linear-gradient(120deg, var(--primary), #60a5fa);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
@@ -169,15 +145,11 @@ body {
 }
 
 .content {
-  padding: 22px 24px;
+  padding: 24px;
 }
 
 .hero-card {
   max-width: 920px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--panel-2);
-  box-shadow: var(--shadow);
   padding: 24px;
 }
 
@@ -210,12 +182,10 @@ body {
   margin-top: 18px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 16px;
 }
 
 .placeholder-card {
-  border: 1px solid var(--line);
-  border-radius: 12px;
   padding: 14px;
   background: var(--panel);
 }
@@ -232,7 +202,7 @@ body {
 
 @media (max-width: 1080px) {
   :root {
-    --sidebar-width: 240px;
+    --sidebar-width: 220px;
   }
 }
 

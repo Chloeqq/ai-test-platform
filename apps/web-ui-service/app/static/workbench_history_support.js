@@ -80,6 +80,7 @@
     function updateFilterSummary(totalItems) {
       const active = [
         els.keywordFilter.value && `关键词 ${els.keywordFilter.value.trim()}`,
+        els.projectFilter.value && `项目 ${els.projectFilter.value.trim()}`,
         els.actionFilter.value && `动作 ${els.actionFilter.value.trim()}`,
         els.statusFilter.value && `状态 ${els.statusFilter.value.trim()}`,
         els.riskGateFilter.value && `门禁 ${els.riskGateFilter.value.trim()}`,

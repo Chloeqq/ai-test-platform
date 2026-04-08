@@ -5,15 +5,32 @@ import subprocess
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Response, status
+from shared_backend.case_ids import match_case_id
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.services import workbench_history_service, workbench_reporting_service
 from app.services import workbench_case_consistency_service
+from app.services import test_project_service
 from . import legacy_workbench
 
 
 router = APIRouter(tags=["workbench-reporting"])
+
+
+def _normalize_optional_project_code(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _resolve_history_project_code(item: dict[str, Any]) -> str:
+    normalized_project_code = _normalize_optional_project_code(item.get("project_code") or item.get("project"))
+    if normalized_project_code:
+        return normalized_project_code
+    case_id = str(item.get("case_id", "")).strip().lower()
+    matched = match_case_id(case_id)
+    if not matched:
+        return ""
+    return _normalize_optional_project_code(matched.group("project"))
 
 
 def _list_defect_items(case_id: str = "") -> list[dict[str, Any]]:
@@ -278,6 +295,7 @@ def workbench_history(
     limit: int = Query(default=500, ge=1, le=1000),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
+    project_code: str = Query(default=""),
     keyword: str = Query(default=""),
     sort: str = Query(default="timestamp_desc"),
     action: str = Query(default=""),
@@ -289,11 +307,28 @@ def workbench_history(
 ) -> dict[str, Any]:
     legacy_workbench._sync_stage_a_workbench_state()
     legacy_workbench._ensure_dirs()
+    project_code_value = _normalize_optional_project_code(project_code)
     history_items, _filter_meta = workbench_case_consistency_service.filter_records_by_case_center(
         legacy_workbench._read_json_list(legacy_workbench.HISTORY_FILE),
         case_center_case_ids=workbench_case_consistency_service.load_case_center_case_ids(db),
     )
-    return workbench_history_service.list_history(
+    if project_code_value:
+        history_items = [
+            item for item in history_items
+            if _resolve_history_project_code(item) == project_code_value
+        ]
+
+    project_status_cache: dict[str, str] = {}
+
+    def resolve_project_status(project_code_value_raw: str) -> str:
+        normalized_project_code = _normalize_optional_project_code(project_code_value_raw)
+        if not normalized_project_code:
+            return "active"
+        if normalized_project_code not in project_status_cache:
+            project_status_cache[normalized_project_code] = test_project_service.get_project_status(db, normalized_project_code)
+        return project_status_cache[normalized_project_code]
+
+    payload = workbench_history_service.list_history(
         history_items,
         resolve_governance_snapshot=legacy_workbench._resolve_run_governance_snapshot,
         resolve_failure_snapshot=legacy_workbench._resolve_run_failure_snapshot,
@@ -309,6 +344,13 @@ def workbench_history(
         risk_gate_decision=risk_gate_decision,
         self_healing_status=self_healing_status,
     )
+    for item in payload.get("items", []):
+        if not isinstance(item, dict):
+            continue
+        resolved_project_code = _resolve_history_project_code(item)
+        item["project_code"] = resolved_project_code
+        item["project_status"] = resolve_project_status(resolved_project_code)
+    return payload
 
 
 @router.get("/api/workbench/quality-gates/summary")

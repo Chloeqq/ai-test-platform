@@ -11,11 +11,14 @@
       parameters: [],
       rows: [],
     },
+    projectStatus: "active",
+    writeBlocked: false,
   };
 
   const els = {
     detailTitle: document.getElementById("detail-title"),
     basicInfo: document.getElementById("basic-info"),
+    governanceNote: document.getElementById("case-detail-governance-note"),
     btnSaveAssetMeta: document.getElementById("btn-save-asset-meta"),
     detailTestType: document.getElementById("detail-test-type"),
     detailStatus: document.getElementById("detail-status"),
@@ -80,6 +83,19 @@
     return String(value || "").trim() || "-";
   }
 
+  function normalizeProjectStatus(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    return normalized === "inactive" ? "inactive" : "active";
+  }
+
+  function blockedWriteMessage() {
+    return "当前用例所属项目为 inactive，仅允许浏览、版本对比和执行历史查看；资产属性、数据驱动、脚本和缺陷写操作已禁用。";
+  }
+
+  function isWriteBlocked() {
+    return Boolean(state.writeBlocked);
+  }
+
   function resultClass(status) {
     const normalized = String(status || "unknown").toLowerCase();
     if (normalized === "passed") return "result-passed";
@@ -114,6 +130,7 @@
   function renderDataConfigTable() {
     const parameters = state.dataConfig.parameters;
     const rows = state.dataConfig.rows;
+    const disabledAttr = isWriteBlocked() ? ' disabled aria-disabled="true"' : "";
 
     if (!parameters.length) {
       els.detailDdtTableHead.innerHTML = "";
@@ -132,10 +149,10 @@
         const cells = row
           .map(
             (value, colIndex) =>
-              `<td><input type="text" data-detail-ddt-row="${rowIndex}" data-detail-ddt-col="${colIndex}" value="${escapeHtml(value)}"></td>`
+              `<td><input type="text" data-detail-ddt-row="${rowIndex}" data-detail-ddt-col="${colIndex}" value="${escapeHtml(value)}"${disabledAttr}></td>`
           )
           .join("");
-        return `<tr>${cells}<td><button type="button" class="btn btn-danger" data-detail-ddt-remove="${rowIndex}">删除</button></td></tr>`;
+        return `<tr>${cells}<td><button type="button" class="btn btn-danger" data-detail-ddt-remove="${rowIndex}"${disabledAttr}>删除</button></td></tr>`;
       })
       .join("");
 
@@ -199,6 +216,54 @@
     };
   }
 
+  function setControlDisabled(element, disabled, options = {}) {
+    if (!element) return;
+    const readOnly = Boolean(options.readOnly);
+    if ("disabled" in element) {
+      element.disabled = Boolean(disabled);
+    }
+    if (readOnly && "readOnly" in element) {
+      element.readOnly = Boolean(disabled);
+    }
+  }
+
+  function syncWriteGuards() {
+    const blocked = isWriteBlocked();
+    if (els.governanceNote) {
+      els.governanceNote.hidden = !blocked;
+      els.governanceNote.textContent = blocked ? blockedWriteMessage() : "";
+      els.governanceNote.classList.toggle("is-blocked", blocked);
+    }
+    setControlDisabled(els.btnSaveAssetMeta, blocked);
+    setControlDisabled(els.btnSaveScript, blocked);
+    setControlDisabled(els.btnAddDefect, blocked);
+    setControlDisabled(els.btnSaveDataConfig, blocked);
+    setControlDisabled(els.detailTestType, blocked);
+    setControlDisabled(els.detailStatus, blocked);
+    setControlDisabled(els.detailPytestPath, blocked);
+    setControlDisabled(els.detailMarkers, blocked);
+    setControlDisabled(els.detailDdtEnabled, blocked);
+    setControlDisabled(els.detailDdtParameters, blocked);
+    setControlDisabled(els.btnDetailDdtAddRow, blocked);
+    setControlDisabled(els.btnDetailDdtClearRows, blocked);
+    setControlDisabled(els.scriptEditor, blocked, { readOnly: true });
+    els.scriptEditor.classList.toggle("is-readonly", blocked);
+    renderDataConfigTable();
+  }
+
+  async function readErrorDetail(response, fallbackText) {
+    let detail = fallbackText;
+    try {
+      const payload = await response.json();
+      if (payload && payload.detail) {
+        detail = String(payload.detail);
+      }
+    } catch (_error) {
+      detail = fallbackText;
+    }
+    return detail;
+  }
+
   function highlightPython(codeText) {
     let html = escapeHtml(codeText);
     html = html.replace(/(\".*?\"|\'.*?\')/g, '<span class="str">$1</span>');
@@ -212,6 +277,7 @@
       ["用例ID", displayCaseId(basic.case_id || basic.id)],
       ["名称", basic.name],
       ["项目", basic.project_code || "-"],
+      ["项目状态", displayStatus(basic.project_status || "active")],
       ["产品线", basic.product_line],
       ["模块", displayModule(basic.module)],
       ["优先级", basic.priority],
@@ -370,12 +436,15 @@
     }
     const payload = await response.json();
     const basic = payload.basic || {};
+    state.projectStatus = normalizeProjectStatus(basic.project_status);
+    state.writeBlocked = state.projectStatus !== "active";
     els.detailTitle.textContent = `用例详情 · ${displayCaseId(basic.case_id || basic.id || caseId)} - ${basic.name || ""}`;
     renderBasicInfo(basic);
     applyAssetMetaToForm(basic);
     applyDataConfigToForm(payload.data_config || {});
     els.scriptEditor.value = payload.script_code || "";
     els.scriptHighlight.innerHTML = highlightPython(els.scriptEditor.value);
+    syncWriteGuards();
     renderDefects(payload.defects || []);
     renderHistory(payload.executions || []);
     renderVersions(payload.versions || []);
@@ -385,6 +454,10 @@
   }
 
   async function saveScript() {
+    if (isWriteBlocked()) {
+      alert(blockedWriteMessage());
+      return;
+    }
     const scriptCode = els.scriptEditor.value;
     if (!scriptCode.trim()) {
       alert("脚本不能为空。");
@@ -396,7 +469,7 @@
       body: JSON.stringify({ script_code: scriptCode, changed_by: "admin" }),
     });
     if (!response.ok) {
-      alert("保存脚本失败");
+      alert(await readErrorDetail(response, "保存脚本失败"));
       return;
     }
     await loadDetail();
@@ -404,6 +477,10 @@
   }
 
   async function saveDataConfig() {
+    if (isWriteBlocked()) {
+      alert(blockedWriteMessage());
+      return;
+    }
     const payload = {
       data_config: buildDataConfigPayload(),
     };
@@ -413,7 +490,7 @@
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      alert("保存数据驱动配置失败");
+      alert(await readErrorDetail(response, "保存数据驱动配置失败"));
       return;
     }
     await loadDetail();
@@ -421,6 +498,10 @@
   }
 
   async function saveAssetMeta() {
+    if (isWriteBlocked()) {
+      alert(blockedWriteMessage());
+      return;
+    }
     const payload = buildAssetMetaPayload();
     const response = await fetch(`/api/test-cases/${encodedCaseId}`, {
       method: "PUT",
@@ -428,7 +509,7 @@
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      alert("保存资产属性失败");
+      alert(await readErrorDetail(response, "保存资产属性失败"));
       return;
     }
     await loadDetail();
@@ -436,13 +517,17 @@
   }
 
   async function addDefect() {
+    if (isWriteBlocked()) {
+      alert(blockedWriteMessage());
+      return;
+    }
     const defectKey = window.prompt("请输入缺陷单号（如 BUG-4001）：", "");
     if (!defectKey) return;
     const defectUrl = window.prompt("请输入缺陷链接（可选）：", "") || "";
     const query = new URLSearchParams({ defect_key: defectKey, defect_url: defectUrl });
     const response = await fetch(`/api/test-cases/${encodedCaseId}/defects?${query}`, { method: "POST" });
     if (!response.ok) {
-      alert("添加缺陷失败");
+      alert(await readErrorDetail(response, "添加缺陷失败"));
       return;
     }
     await loadDetail();
@@ -459,6 +544,10 @@
     els.detailDdtEnabled.addEventListener("change", refreshDataConfigFromForm);
     els.detailDdtParameters.addEventListener("change", refreshDataConfigFromForm);
     els.btnDetailDdtAddRow.addEventListener("click", () => {
+      if (isWriteBlocked()) {
+        alert(blockedWriteMessage());
+        return;
+      }
       refreshDataConfigFromForm();
       if (!state.dataConfig.parameters.length) {
         alert("请先填写参数。");
@@ -468,6 +557,10 @@
       renderDataConfigTable();
     });
     els.btnDetailDdtClearRows.addEventListener("click", () => {
+      if (isWriteBlocked()) {
+        alert(blockedWriteMessage());
+        return;
+      }
       state.dataConfig.rows = [];
       renderDataConfigTable();
     });

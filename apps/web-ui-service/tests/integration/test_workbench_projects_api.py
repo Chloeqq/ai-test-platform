@@ -76,7 +76,13 @@ def test_workbench_projects_api_merges_master_projects_and_legacy_state(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["items"][0] == "atp"
-    assert "mall" in payload["items"]
-    assert "default" in payload["items"]
-    assert "legacyproj" in payload["items"]
+    assert payload["codes"][0] == "atp"
+    assert "mall" in payload["codes"]
+    assert "default" in payload["codes"]
+    assert "legacyproj" in payload["codes"]
+
+    items = {str(item["project_code"]): item for item in payload["items"]}
+    assert items["atp"]["status"] == "active"
+    assert items["mall"]["project_name"] == "Mall Platform"
+    assert items["mall"]["status"] == "active"
+    assert items["legacyproj"]["source"] == "legacy_state"

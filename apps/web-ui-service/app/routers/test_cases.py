@@ -134,6 +134,7 @@ def list_test_cases(
         result.stats,
         result.latest_versions,
         result.search_context,
+        result.project_statuses,
     )
 
 
@@ -152,6 +153,7 @@ def get_test_case(case_id: str, db: Session = Depends(get_db)) -> dict[str, obje
         detail.executions,
         detail.versions,
         detail.data_config,
+        project_status=detail.project_status,
         normalize_report_url=test_case_service.normalize_report_url,
     )
 

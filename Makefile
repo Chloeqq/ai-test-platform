@@ -105,6 +105,7 @@ test-e2e:
 test-e2e-smoke:
 	$(CHECK_BASE_URL)
 	PYTHONPATH=runners/web-playwright-python $(PYTEST) -m "e2e and smoke" \
+		runners/web-playwright-python/tests/test_project_manager_smoke.py \
 		runners/web-playwright-python/tests/test_login_smoke.py \
 		runners/web-playwright-python/tests/test_order_smoke.py \
 		runners/web-playwright-python/tests/test_product_quick.py \
@@ -129,6 +130,7 @@ test-e2e-open-report:
 test-e2e-smoke-open-report:
 	$(CHECK_BASE_URL)
 	PYTHONPATH=runners/web-playwright-python $(PYTEST) -m "e2e and smoke" \
+		runners/web-playwright-python/tests/test_project_manager_smoke.py \
 		runners/web-playwright-python/tests/test_login_smoke.py \
 		runners/web-playwright-python/tests/test_order_smoke.py \
 		runners/web-playwright-python/tests/test_product_quick.py \

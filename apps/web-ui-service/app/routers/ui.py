@@ -128,7 +128,6 @@ def generation_page(request: Request) -> HTMLResponse:
 
 @router.get("/ai-generation/history", response_class=HTMLResponse)
 @router.get("/workbench/history", response_class=HTMLResponse)
-@router.get("/execution/runs", response_class=HTMLResponse)
 def generation_history_page(request: Request) -> HTMLResponse:
     return _render(
         request,

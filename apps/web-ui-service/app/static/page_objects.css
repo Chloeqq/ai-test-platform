@@ -1,0 +1,718 @@
+/* Page Objects: streamlined B-end workflow */
+.page-objects-shell {
+  --po-gutter: 24px;
+  --po-title: #1d2129;
+  --po-text: #4e5969;
+  --po-muted: #86909c;
+  --po-line: var(--neutral-200, #e5e6eb);
+  --po-line-strong: #d9dee8;
+  --po-panel-soft: #f7f8fa;
+  --po-panel-subtle: #fafcff;
+  --po-primary-soft: #e8f3ff;
+  --po-primary-border: rgba(22, 119, 255, 0.16);
+  color: var(--po-text);
+  gap: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.page-objects-shell .page-grid-2 {
+  grid-template-columns: minmax(0, 1.32fr) minmax(360px, 0.94fr);
+  align-items: start;
+}
+
+.page-objects-shell .stack {
+  gap: 24px;
+}
+
+.page-objects-shell .page-hero {
+  gap: 16px;
+  padding: 24px;
+  border-color: var(--po-line);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.page-objects-shell .page-hero-head {
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.page-objects-shell .page-hero-copy {
+  gap: 12px;
+}
+
+.page-objects-shell .page-hero-copy .breadcrumb {
+  max-width: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--po-muted);
+}
+
+.page-objects-shell .page-hero-copy .breadcrumb .crumb-sep {
+  margin: 0 6px;
+  color: var(--po-muted);
+}
+
+.page-objects-shell .page-hero-copy h1 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  letter-spacing: 0;
+  color: var(--po-title);
+}
+
+.page-objects-shell .page-hero-copy p {
+  max-width: 760px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--po-text);
+}
+
+.page-objects-shell .page-hero-actions {
+  gap: 8px;
+}
+
+.page-objects-shell .hero-side-note {
+  min-width: 260px;
+  max-width: 320px;
+  padding: 16px;
+  border: 1px solid var(--po-primary-border);
+  border-radius: 12px;
+  background: var(--po-primary-soft);
+  box-shadow: none;
+  color: var(--po-text);
+}
+
+.page-objects-shell .hero-side-note h2 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--po-title);
+}
+
+.page-objects-shell .hero-side-note p {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--po-text);
+}
+
+.page-objects-shell .panel {
+  border-color: var(--po-line);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+}
+
+.page-objects-shell .panel-head {
+  padding: 20px var(--po-gutter) 16px;
+}
+
+.page-objects-shell .po-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-objects-shell .panel-head h2,
+.page-objects-shell .po-create-drawer-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: var(--po-title);
+}
+
+.page-objects-shell .po-list-head-actions,
+.page-objects-shell .po-create-drawer-actions,
+.page-objects-shell .po-create-drawer-nav,
+.page-objects-shell .po-empty-actions,
+.page-objects-shell .po-side-section-head,
+.page-objects-shell .button-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.page-objects-shell .toolbar-meta {
+  padding: 0 var(--po-gutter) 16px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--po-muted);
+}
+
+.page-objects-shell .po-project-status-note {
+  margin-left: 8px;
+  color: #b83943;
+  font-weight: 400;
+}
+
+.page-objects-shell .btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.page-objects-shell .btn-primary {
+  font-weight: 500;
+}
+
+.page-objects-shell .btn:not(.btn-primary) {
+  font-weight: 400;
+}
+
+.page-objects-shell .btn-soft,
+.page-objects-shell #po-reset-filters,
+.page-objects-shell #po-detail-delete,
+.page-objects-shell #po-element-delete {
+  border-color: var(--po-line);
+  background: var(--po-panel-soft);
+  color: var(--po-text);
+}
+
+.page-objects-shell .btn-soft:hover,
+.page-objects-shell #po-reset-filters:hover,
+.page-objects-shell #po-detail-delete:hover,
+.page-objects-shell #po-element-delete:hover {
+  border-color: #c9d7ea;
+  background: #eef3f9;
+}
+
+.page-objects-shell #po-manage-project,
+.page-objects-shell #po-element-reset {
+  border-color: var(--po-line);
+  background: #ffffff;
+  color: var(--po-text);
+}
+
+.page-objects-shell .list-toolbar {
+  margin: 0 var(--po-gutter) 16px;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--po-line);
+  border-radius: 12px;
+  background: var(--po-panel-subtle);
+}
+
+.page-objects-shell .list-filter-row,
+.page-objects-shell .list-filter-actions,
+.page-objects-shell .list-filter-strip {
+  gap: 16px;
+}
+
+.page-objects-shell .list-filter-strip {
+  display: grid;
+  grid-template-columns: minmax(128px, 148px) minmax(128px, 148px) minmax(128px, 148px) minmax(128px, 148px) minmax(260px, 1fr) auto;
+  align-items: start;
+  width: 100%;
+}
+
+.page-objects-shell .list-filter-row,
+.page-objects-shell .list-filter-actions {
+  justify-content: flex-start;
+}
+
+.page-objects-shell .toolbar-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.page-objects-shell .toolbar-field span,
+.page-objects-shell .po-create-preview span,
+.page-objects-shell .po-drawer-step-copy p,
+.page-objects-shell .form-grid label span {
+  color: var(--po-text);
+}
+
+.page-objects-shell .toolbar-field span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+}
+
+.page-objects-shell .toolbar-placeholder {
+  visibility: hidden;
+  user-select: none;
+}
+
+.page-objects-shell .toolbar-action-field {
+  min-width: 104px;
+}
+
+.page-objects-shell .toolbar-action-field .btn {
+  width: 100%;
+}
+
+.page-objects-shell .list-toolbar .toolbar-field input,
+.page-objects-shell .list-toolbar .toolbar-field select,
+.page-objects-shell .form-grid input,
+.page-objects-shell .form-grid select,
+.page-objects-shell .po-create-step-panel input,
+.page-objects-shell .po-create-step-panel select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--po-line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--po-title);
+  font: inherit;
+  box-shadow: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.page-objects-shell .list-toolbar .toolbar-field input::placeholder,
+.page-objects-shell .form-grid input::placeholder,
+.page-objects-shell .po-create-step-panel input::placeholder {
+  color: var(--po-muted);
+  font-size: 13px;
+}
+
+.page-objects-shell .list-toolbar .toolbar-field input:focus,
+.page-objects-shell .list-toolbar .toolbar-field select:focus,
+.page-objects-shell .form-grid input:focus,
+.page-objects-shell .form-grid select:focus,
+.page-objects-shell .po-create-step-panel input:focus,
+.page-objects-shell .po-create-step-panel select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.12);
+}
+
+.page-objects-shell .form-grid {
+  margin-top: 0;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.page-objects-shell .form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.page-objects-shell .form-grid label span {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.page-objects-shell .form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.page-objects-shell .table-wrap {
+  margin: 0 var(--po-gutter) 24px;
+  border: 1px solid var(--po-line);
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.page-objects-shell .po-side-table-wrap {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.page-objects-shell .data-table th,
+.page-objects-shell .data-table td {
+  padding: 14px 16px;
+}
+
+.page-objects-shell .po-col-check {
+  width: 48px;
+  padding-right: 8px;
+  padding-left: 12px;
+}
+
+.page-objects-shell .po-col-check input,
+.page-objects-shell #po-check-all {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+
+.page-objects-shell .data-table th {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--po-text);
+  background: var(--po-panel-soft);
+}
+
+.page-objects-shell .data-table td {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--po-text);
+}
+
+.page-objects-shell .data-table td strong {
+  color: var(--po-title);
+  font-weight: 600;
+}
+
+.page-objects-shell #po-list-tbody tr,
+.page-objects-shell #po-elements-tbody tr {
+  cursor: pointer;
+}
+
+.page-objects-shell #po-list-tbody tr.selected,
+.page-objects-shell #po-elements-tbody tr.selected {
+  background: rgba(22, 119, 255, 0.08);
+}
+
+.page-objects-shell .empty-state,
+.page-objects-shell .loading-state {
+  padding: 24px 20px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--po-muted);
+}
+
+.page-objects-shell .po-empty-block {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+}
+
+.page-objects-shell .po-empty-block strong {
+  color: var(--po-title);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.page-objects-shell .po-empty-block p {
+  margin: 0;
+  max-width: 360px;
+  color: var(--po-muted);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.page-objects-shell .po-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 var(--po-gutter) 16px;
+  padding: 12px 16px;
+  border: 1px solid rgba(22, 119, 255, 0.16);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fafdff 0%, #eef5ff 100%);
+}
+
+.page-objects-shell .po-selection-copy {
+  color: var(--po-text);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.page-objects-shell .po-selection-copy strong {
+  color: var(--po-title);
+}
+
+.page-objects-shell .po-selection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.page-objects-shell #po-empty {
+  margin: 0 0 16px;
+  border: 1px dashed var(--po-line-strong);
+  border-radius: 12px;
+  background: var(--po-panel-subtle);
+}
+
+.page-objects-shell .po-side-panel {
+  overflow: hidden;
+}
+
+.page-objects-shell .po-side-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 var(--po-gutter) 16px;
+}
+
+.page-objects-shell .po-side-tab {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--po-line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--po-text);
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.page-objects-shell .po-side-tab.is-active {
+  border-color: rgba(22, 119, 255, 0.18);
+  background: var(--po-primary-soft);
+  color: var(--primary);
+}
+
+.page-objects-shell .po-side-section {
+  display: grid;
+  gap: 16px;
+  padding: 0 var(--po-gutter) var(--po-gutter);
+}
+
+.page-objects-shell .po-side-section-head {
+  justify-content: space-between;
+}
+
+.page-objects-shell .po-side-section-head h3,
+.page-objects-shell .po-drawer-step-copy h3 {
+  margin: 0;
+  color: var(--po-title);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.page-objects-shell .po-drawer-step-copy {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.page-objects-shell .po-drawer-step-copy p,
+.page-objects-shell .po-create-drawer-head p {
+  margin: 0;
+  color: var(--po-muted);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.page-objects-shell .po-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(2px);
+}
+
+.page-objects-shell .po-create-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 26;
+  width: min(560px, 100vw);
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 16px;
+  padding: 24px;
+  border-left: 1px solid var(--po-line);
+  background: #ffffff;
+  box-shadow: -12px 0 28px rgba(15, 23, 42, 0.14);
+}
+
+.page-objects-shell .po-create-drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-objects-shell .po-create-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.page-objects-shell .po-create-step-trigger {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--po-line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--po-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.page-objects-shell .po-create-step-trigger.is-active {
+  border-color: rgba(22, 119, 255, 0.18);
+  background: var(--po-primary-soft);
+  color: var(--primary);
+}
+
+.page-objects-shell .po-create-drawer-form {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-height: 0;
+  gap: 16px;
+}
+
+.page-objects-shell .po-create-step-panel {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.page-objects-shell .po-create-preview {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--po-line);
+  border-radius: 12px;
+  background: var(--po-panel-subtle);
+}
+
+.page-objects-shell .po-create-preview div {
+  display: grid;
+  gap: 4px;
+}
+
+.page-objects-shell .po-create-preview span {
+  color: var(--po-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.page-objects-shell .po-create-preview strong {
+  color: var(--po-title);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.page-objects-shell .po-create-drawer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--po-line);
+}
+
+.page-objects-shell .hidden {
+  display: none;
+}
+
+body.po-drawer-open {
+  overflow: hidden;
+}
+
+.po-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 30;
+  max-width: 420px;
+  padding: 10px 14px;
+  border: 1px solid #dbe4ff;
+  border-radius: 10px;
+  background: #f5f8ff;
+  color: #1b3f91;
+  box-shadow: 0 8px 18px rgba(42, 70, 130, 0.14);
+}
+
+.po-toast.error {
+  border-color: #f2d0d3;
+  background: #fff5f6;
+  color: #8a1f2d;
+}
+
+.po-toast.hidden {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .page-objects-shell .page-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .page-objects-shell .page-hero-head {
+    flex-direction: column;
+  }
+
+  .page-objects-shell .hero-side-note {
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .page-objects-shell .list-filter-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-objects-shell .po-selection-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-objects-shell .po-create-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .page-objects-shell {
+    --po-gutter: 16px;
+  }
+
+  .page-objects-shell .page-hero,
+  .page-objects-shell .panel-head,
+  .page-objects-shell .list-toolbar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .page-objects-shell .toolbar-meta,
+  .page-objects-shell .po-side-tabs,
+  .page-objects-shell .po-side-section {
+    padding-left: var(--po-gutter);
+    padding-right: var(--po-gutter);
+  }
+
+  .page-objects-shell .page-hero {
+    padding-top: 20px;
+    padding-bottom: 20px;
+  }
+
+  .page-objects-shell .form-grid,
+  .page-objects-shell .list-filter-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .page-objects-shell .po-create-drawer {
+    width: 100vw;
+    padding: 20px 16px;
+  }
+
+  .page-objects-shell .po-create-drawer-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-objects-shell .po-create-drawer-nav,
+  .page-objects-shell .po-create-drawer-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .page-objects-shell .po-create-drawer-nav .btn,
+  .page-objects-shell .po-create-drawer-actions .btn {
+    flex: 1 1 0;
+  }
+}

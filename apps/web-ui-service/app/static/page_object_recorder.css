@@ -1,0 +1,302 @@
+.recorder-shell {
+  max-width: 1320px;
+}
+
+.recorder-panel {
+  margin-top: 14px;
+  display: grid;
+  gap: 16px;
+}
+
+.recorder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.recorder-grid-secondary {
+  align-items: stretch;
+}
+
+.recorder-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px;
+}
+
+.recorder-card h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #203652;
+}
+
+.recorder-note {
+  margin: 8px 0 0;
+  color: #5e7591;
+  line-height: 1.7;
+}
+
+.recorder-form {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.recorder-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.recorder-form label.wide {
+  grid-column: 1 / -1;
+}
+
+.recorder-form span {
+  font-size: 12px;
+  color: #60758f;
+}
+
+.recorder-form input,
+.recorder-form select {
+  border: 1px solid #d6e3f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.recorder-form input:focus,
+.recorder-form select:focus {
+  outline: 2px solid rgba(47, 121, 219, 0.2);
+  border-color: #2f79db;
+}
+
+.recorder-status {
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+.recorder-status div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.recorder-status dt {
+  color: #60758f;
+  font-size: 12px;
+}
+
+.recorder-status dd {
+  margin: 0;
+  color: #1f344d;
+  word-break: break-all;
+}
+
+.recorder-result,
+.recorder-log {
+  display: grid;
+  gap: 10px;
+}
+
+.recorder-list {
+  border: 1px solid #d8e4f1;
+  border-radius: 12px;
+  padding: 10px;
+  min-height: 72px;
+  display: grid;
+  gap: 8px;
+}
+
+.recorder-list.empty {
+  color: #6b819c;
+}
+
+.recorder-item {
+  border: 1px solid #e1eaf4;
+  border-radius: 10px;
+  background: #f8fbff;
+  padding: 8px 10px;
+  color: #26425f;
+  font-size: 13px;
+}
+
+.recorder-item strong {
+  color: #1f354f;
+}
+
+.recorder-candidate {
+  display: grid;
+  gap: 6px;
+}
+
+.recorder-candidate-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recorder-candidate-score {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #ebf4ff;
+  color: #235ca9;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.recorder-candidate-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #4d5f74;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.recorder-candidate-ingest .recorder-candidate-action {
+  background: #e9f8ef;
+  color: #15803d;
+}
+
+.recorder-candidate-review .recorder-candidate-action {
+  background: #fff6e8;
+  color: #b45309;
+}
+
+.recorder-candidate-skip .recorder-candidate-action {
+  background: #fef0f0;
+  color: #b91c1c;
+}
+
+.recorder-candidate-meta {
+  display: grid;
+  gap: 4px;
+  color: #637a95;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.recorder-step {
+  display: grid;
+  gap: 6px;
+}
+
+.recorder-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recorder-step-index {
+  color: #6a809b;
+  font-size: 12px;
+}
+
+.recorder-step-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e9f2ff;
+  color: #215aa8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.recorder-step-target {
+  color: #1f354f;
+  font-size: 13px;
+}
+
+.recorder-step-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #6a809b;
+  font-size: 12px;
+}
+
+.recorder-guide {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.34);
+  backdrop-filter: blur(2px);
+}
+
+.recorder-guide.hidden {
+  display: none;
+}
+
+.recorder-guide-card {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid #d8e4f1;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
+}
+
+.recorder-guide-card h2 {
+  margin: 0;
+  color: #1d2129;
+  font-size: 18px;
+}
+
+.recorder-guide-list {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: #4e5969;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.recorder-guide-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+@media (max-width: 980px) {
+  .recorder-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .recorder-form {
+    grid-template-columns: 1fr;
+  }
+
+  .recorder-status div {
+    grid-template-columns: 90px minmax(0, 1fr);
+  }
+
+  .recorder-guide {
+    padding: 16px;
+  }
+
+  .recorder-guide-card {
+    padding: 20px 16px;
+  }
+}

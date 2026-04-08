@@ -66,6 +66,76 @@ def _list_projects(page: Page, *, origin: str) -> list[dict]:
     return [item for item in items if isinstance(item, dict)]
 
 
+def _assert_project_option(
+    page: Page,
+    *,
+    origin: str,
+    path: str,
+    selector: str,
+    project_code: str,
+    should_exist: bool,
+) -> None:
+    page.goto(f"{origin}{path}", wait_until="networkidle", timeout=30000)
+    page.wait_for_selector(selector, state="attached", timeout=10000)
+    page.wait_for_function(
+        """
+        ({ selector, projectCode, shouldExist }) => {
+          const node = document.querySelector(selector);
+          if (!node || !(node instanceof HTMLSelectElement)) return false;
+          const hasOption = Array.from(node.options).some(
+            (option) => String(option.value || "").trim().toLowerCase() === String(projectCode || "").trim().toLowerCase()
+          );
+          return shouldExist ? hasOption : !hasOption;
+        }
+        """,
+        arg={"selector": selector, "projectCode": project_code, "shouldExist": should_exist},
+        timeout=10000,
+    )
+
+
+def _assert_project_option_sync_across_pages(
+    page: Page,
+    *,
+    origin: str,
+    project_code: str,
+    should_exist: bool,
+) -> None:
+    checks = [
+        ("/cases?sort_dir=desc&sort_key=updated_at", "#filter-project-code"),
+        ("/ai-generation", "#gen-project"),
+        ("/execution/workbench", "#wb-project"),
+        ("/assets/page-objects", "#po-filter-project"),
+        ("/assets/page-objects/recorder", "#rec-project-code"),
+    ]
+    for path, selector in checks:
+        _assert_project_option(
+            page,
+            origin=origin,
+            path=path,
+            selector=selector,
+            project_code=project_code,
+            should_exist=should_exist,
+        )
+
+
+def _assert_workbench_inactive_readonly(page: Page, *, origin: str, project_code: str) -> None:
+    page.goto(f"{origin}/execution/workbench", wait_until="networkidle", timeout=30000)
+    page.wait_for_selector("#wb-project", state="attached", timeout=10000)
+    page.select_option("#wb-project", project_code)
+    expect(page.locator("#wb-project-governance-note")).to_be_visible()
+    expect(page.locator("#wb-project-governance-note")).to_contain_text("inactive")
+    expect(page.locator("#wb-save")).to_be_disabled()
+    page.wait_for_function(
+        """
+        () => {
+          const editor = document.getElementById('wb-yaml-editor');
+          return Boolean(editor) && editor.readOnly === true;
+        }
+        """,
+        timeout=10000,
+    )
+
+
 def test_project_manager_dialog_smoke(page: Page, base_url: str, test_username: str, test_password: str) -> None:
     origin = _resolve_origin(base_url)
     token = _fetch_token(page, origin=origin, username=test_username, password=test_password)
@@ -87,7 +157,14 @@ def test_project_manager_dialog_smoke(page: Page, base_url: str, test_username: 
         created = next((item for item in _list_projects(page, origin=origin) if item.get("project_code") == project_code), None)
         assert created is not None, f"project not created: {project_code}"
         assert str(created.get("project_name") or "").strip() == project_name
+        _assert_project_option_sync_across_pages(
+            page,
+            origin=origin,
+            project_code=project_code,
+            should_exist=True,
+        )
 
+        _open_cases_page(page, origin=origin, token=token)
         _open_project_manager(page)
         page.select_option("#project-manager-select", project_code)
         page.fill("#project-manager-name", updated_name)
@@ -99,7 +176,9 @@ def test_project_manager_dialog_smoke(page: Page, base_url: str, test_username: 
         assert updated is not None, f"project missing after update: {project_code}"
         assert str(updated.get("project_name") or "").strip() == updated_name
         assert str(updated.get("status") or "").strip() == "inactive"
+        _assert_workbench_inactive_readonly(page, origin=origin, project_code=project_code)
 
+        _open_cases_page(page, origin=origin, token=token)
         _open_project_manager(page)
         page.select_option("#project-manager-select", project_code)
         page.once("dialog", lambda dialog: dialog.accept())
@@ -108,6 +187,12 @@ def test_project_manager_dialog_smoke(page: Page, base_url: str, test_username: 
 
         deleted = next((item for item in _list_projects(page, origin=origin) if item.get("project_code") == project_code), None)
         assert deleted is None, f"project still exists after delete: {project_code}"
+        _assert_project_option_sync_across_pages(
+            page,
+            origin=origin,
+            project_code=project_code,
+            should_exist=False,
+        )
     finally:
         cleanup_response = page.request.delete(f"{origin}/api/test-projects/{project_code}")
         if cleanup_response.status not in {200, 404}:

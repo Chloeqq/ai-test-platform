@@ -86,6 +86,36 @@ def test_get_detail_accepts_business_case_id(db_session: Session) -> None:
     assert detail_by_internal_id.case.id == case.id
 
 
+def test_get_detail_includes_project_status(db_session: Session) -> None:
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code="mall",
+            name="商城详情治理校验",
+            product_line="商城",
+            module="详情",
+            script_code="def test_mall_detail(page):\n    assert True\n",
+        ),
+    )
+    test_project_service.update_project(
+        db_session,
+        "mall",
+        test_project_schema.TestProjectUpdate(status="inactive"),
+    )
+
+    detail = test_case_service.get_test_case_detail(db_session, case.case_id)
+
+    assert detail.case.id == case.id
+    assert detail.project_status == "inactive"
+
+
 def test_batch_status_update_accepts_case_ids(db_session: Session) -> None:
     case = test_case_service.create_test_case(
         db_session,
@@ -110,6 +140,74 @@ def test_batch_status_update_accepts_case_ids(db_session: Session) -> None:
     assert updated_count == 1
     assert refreshed is not None
     assert refreshed.status == "deprecated"
+
+
+def test_batch_status_update_blocked_when_project_inactive(db_session: Session) -> None:
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code="mall",
+            name="商城回归校验",
+            product_line="商城",
+            module="列表",
+            script_code="def test_mall_case(page):\n    assert True\n",
+        ),
+    )
+    test_project_service.update_project(
+        db_session,
+        "mall",
+        test_project_schema.TestProjectUpdate(status="inactive"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        test_case_service.batch_update_test_case_status(
+            db_session,
+            test_case_schema.BatchStatusUpdatePayload(case_ids=[case.case_id], status="deprecated"),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "project is inactive" in str(exc_info.value.detail).lower()
+
+
+def test_batch_tags_update_blocked_when_project_inactive(db_session: Session) -> None:
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code="mall",
+            name="商城标签治理",
+            product_line="商城",
+            module="列表",
+            script_code="def test_mall_tags(page):\n    assert True\n",
+        ),
+    )
+    test_project_service.update_project(
+        db_session,
+        "mall",
+        test_project_schema.TestProjectUpdate(status="inactive"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        test_case_service.batch_update_test_case_tags(
+            db_session,
+            test_case_schema.BatchTagsUpdatePayload(case_ids=[case.case_id], tags=["governance"], mode="append"),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "project is inactive" in str(exc_info.value.detail).lower()
 
 
 def test_create_project_and_filter_cases_by_project_code(db_session: Session) -> None:
@@ -172,6 +270,145 @@ def test_create_project_and_filter_cases_by_project_code(db_session: Session) ->
     assert "mall" in result.filters["project_codes"]
 
 
+def test_create_test_case_blocked_when_project_inactive(db_session: Session) -> None:
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    test_project_service.update_project(
+        db_session,
+        "mall",
+        test_project_schema.TestProjectUpdate(status="inactive"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        test_case_service.create_test_case(
+            db_session,
+            test_case_schema.TestCaseCreate(
+                project_code="mall",
+                name="商城查询草稿",
+                product_line="商城",
+                module="查询",
+                script_code="def test_mall_query(page):\n    assert True\n",
+            ),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "project is inactive" in str(exc_info.value.detail).lower()
+
+
+def test_add_defect_blocked_when_project_inactive(db_session: Session) -> None:
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code="mall",
+            name="商城缺陷回归",
+            product_line="商城",
+            module="详情",
+            script_code="def test_mall_detail(page):\n    assert True\n",
+        ),
+    )
+    test_project_service.update_project(
+        db_session,
+        "mall",
+        test_project_schema.TestProjectUpdate(status="inactive"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        test_case_service.add_test_case_defect(
+            db_session,
+            case.case_id,
+            "BUG-1001",
+            "",
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "project is inactive" in str(exc_info.value.detail).lower()
+
+
+def test_update_test_case_blocked_when_target_project_inactive(db_session: Session) -> None:
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code="atp",
+            name="默认项目草稿",
+            product_line="平台",
+            module="回归",
+            script_code="def test_atp_case(page):\n    assert True\n",
+        ),
+    )
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    test_project_service.update_project(
+        db_session,
+        "mall",
+        test_project_schema.TestProjectUpdate(status="inactive"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        test_case_service.update_test_case(
+            db_session,
+            case.case_id,
+            test_case_schema.TestCaseUpdate(project_code="mall"),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "project is inactive" in str(exc_info.value.detail).lower()
+
+
+def test_update_script_blocked_when_project_inactive(db_session: Session) -> None:
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code="mall",
+            name="商城脚本维护",
+            product_line="商城",
+            module="详情",
+            script_code="def test_mall_detail(page):\n    assert True\n",
+        ),
+    )
+    test_project_service.update_project(
+        db_session,
+        "mall",
+        test_project_schema.TestProjectUpdate(status="inactive"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        test_case_service.update_script(
+            db_session,
+            case.case_id,
+            test_case_schema.TestCaseScriptUpdate(
+                script_code="def test_mall_detail(page):\n    assert False\n",
+                changed_by="qa-admin",
+            ),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "project is inactive" in str(exc_info.value.detail).lower()
+
+
 def test_upsert_workbench_case_allows_self_asset_case_id_without_conflict(
     db_session: Session,
     tmp_path: Path,
@@ -216,6 +453,49 @@ def test_upsert_workbench_case_allows_self_asset_case_id_without_conflict(
     )
 
     assert created.case_id == case_id
+
+
+def test_upsert_workbench_case_blocked_when_project_inactive(
+    db_session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assets_root = tmp_path / "test-cases"
+    ai_generated_root = assets_root / "ai-generated"
+    ai_generated_root.mkdir(parents=True, exist_ok=True)
+    case_id = "mall-web-ret-query-fn-ai-0001"
+    source_path = ai_generated_root / f"{case_id}.yaml"
+    source_path.write_text("id: mall-web-ret-query-fn-ai-0001\n", encoding="utf-8")
+    monkeypatch.setattr(test_case_service, "ASSETS_CASES_ROOT", assets_root)
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    test_project_service.update_project(
+        db_session,
+        "mall",
+        test_project_schema.TestProjectUpdate(status="inactive"),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        test_case_service.upsert_test_case_from_workbench(
+            db_session,
+            project_code="mall",
+            case_yaml={
+                "id": case_id,
+                "title": "workbench generated case",
+                "module": "query",
+                "execution": {"page": "ret", "steps": []},
+            },
+            source_path=str(source_path),
+        )
+
+    assert exc_info.value.status_code == 409
+    assert "project is inactive" in str(exc_info.value.detail).lower()
 
 
 def test_list_test_cases_supports_source_filter_and_source_search_token(db_session: Session) -> None:

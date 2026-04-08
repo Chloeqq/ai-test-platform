@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -14,6 +15,7 @@ from app.models.page_object import (
     PageElementHealthCheck,
     PageElementVersion,
     PageObject,
+    PageObjectRecorderSession,
     PageObjectRef,
 )
 from app.schemas.page_object import (
@@ -24,11 +26,14 @@ from app.schemas.page_object import (
     PageObjectRefCreate,
     PageObjectUpdate,
 )
+from app.services import test_project_service
 
 PAGE_OBJECT_STATUS_VALUES = {"draft", "review", "published", "retired"}
 PAGE_ELEMENT_STATUS_VALUES = {"active", "inactive", "deprecated"}
 LOCATOR_TYPE_VALUES = {"id", "name", "css", "xpath", "text", "placeholder", "role", "data-testid"}
 REFERENCE_TYPE_VALUES = {"test_case", "script", "test_point", "plan", "suite"}
+_RECORDER_ROOT = (Path(__file__).resolve().parents[4] / "artifacts" / "page-recorder").resolve()
+_RECORDER_CLEANABLE_STATUSES = {"stopped", "failed"}
 
 
 @dataclass(frozen=True)
@@ -107,6 +112,73 @@ def _normalize_binary_health_status(value: int) -> int:
     return normalized
 
 
+def _safe_unlink(path: Path) -> bool:
+    try:
+        if path.exists():
+            path.unlink()
+            return True
+    except OSError:
+        return False
+    return False
+
+
+def _resolve_recorder_artifact_path(raw_script_path: str) -> Path | None:
+    normalized_raw = str(raw_script_path or "").strip()
+    if not normalized_raw:
+        return None
+    try:
+        resolved = Path(normalized_raw).expanduser().resolve()
+    except OSError:
+        return None
+    try:
+        resolved.relative_to(_RECORDER_ROOT)
+    except ValueError:
+        # Safety guard: never unlink outside recorder artifact root.
+        return None
+    return resolved
+
+
+def _cleanup_page_recorder_assets(
+    db: Session,
+    *,
+    project_code: str,
+    client: str,
+    page_code: str,
+) -> dict[str, int]:
+    sessions = list(
+        db.execute(
+            select(PageObjectRecorderSession).where(
+                PageObjectRecorderSession.project_code == project_code,
+                PageObjectRecorderSession.client == client,
+                PageObjectRecorderSession.page_code == page_code,
+            )
+        ).scalars().all()
+    )
+    if not sessions:
+        return {"recorder_sessions_removed_count": 0, "recorder_artifacts_removed_count": 0}
+
+    removed_sessions = 0
+    removed_artifacts = 0
+    for item in sessions:
+        if str(item.status or "").strip().lower() not in _RECORDER_CLEANABLE_STATUSES:
+            continue
+        script_path = _resolve_recorder_artifact_path(item.script_path)
+        if script_path is not None:
+            if _safe_unlink(script_path):
+                removed_artifacts += 1
+            if _safe_unlink(script_path.with_suffix(".steps.json")):
+                removed_artifacts += 1
+        db.delete(item)
+        removed_sessions += 1
+
+    if removed_sessions > 0:
+        db.commit()
+    return {
+        "recorder_sessions_removed_count": removed_sessions,
+        "recorder_artifacts_removed_count": removed_artifacts,
+    }
+
+
 def _serialize_page_object(item: PageObject, *, element_count: int = 0) -> dict[str, Any]:
     effective_element_count = int(element_count) if element_count >= 0 else int(item.element_count or 0)
     return {
@@ -117,6 +189,7 @@ def _serialize_page_object(item: PageObject, *, element_count: int = 0) -> dict[
         "page_code": item.page_code,
         "page_name": item.page_name,
         "page_url": item.page_url,
+        "precondition_state": item.precondition_state,
         "module_id": int(item.module_id or 0),
         "description": item.description,
         "status": item.status,
@@ -329,6 +402,7 @@ def list_page_objects(
 
 def create_page_object(db: Session, payload: PageObjectCreate) -> dict[str, Any]:
     normalized_project_code = _normalize_project_code(payload.project_code)
+    test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     normalized_client = normalize_client_code(payload.client)
     normalized_page_code = _normalize_identifier(payload.page_code, field_name="page_code", max_length=40)
     existing = db.execute(
@@ -349,6 +423,7 @@ def create_page_object(db: Session, payload: PageObjectCreate) -> dict[str, Any]
         page_code=normalized_page_code,
         page_name=str(payload.page_name).strip(),
         page_url=str(payload.page_url or "").strip(),
+        precondition_state=str(payload.precondition_state or "").strip(),
         module_id=int(payload.module_id or 0),
         element_count=0,
         health_status=_normalize_binary_health_status(payload.health_status),
@@ -390,9 +465,11 @@ def update_page_object(
     client: str,
     payload: PageObjectUpdate,
 ) -> dict[str, Any]:
+    normalized_project_code = _normalize_project_code(project_code)
+    test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     item = _page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=normalized_project_code,
         client=normalize_client_code(client),
         page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
@@ -406,6 +483,11 @@ def update_page_object(
         next_page_url = str(payload.page_url or "").strip()
         if item.page_url != next_page_url:
             item.page_url = next_page_url
+            changed = True
+    if payload.precondition_state is not None:
+        next_precondition_state = str(payload.precondition_state or "").strip()
+        if item.precondition_state != next_precondition_state:
+            item.precondition_state = next_precondition_state
             changed = True
     if payload.module_id is not None:
         next_module_id = int(payload.module_id)
@@ -473,12 +555,19 @@ def delete_page_object(
         db.execute(delete(PageElement).where(PageElement.id.in_(element_ids)))
     db.delete(item)
     db.commit()
+    cleanup_result = _cleanup_page_recorder_assets(
+        db,
+        project_code=item.project_code,
+        client=item.client,
+        page_code=item.page_code,
+    )
     return {
         "page_id": item.id,
         "project_code": item.project_code,
         "client": item.client,
         "page_code": item.page_code,
         "deleted_element_count": deleted_element_count,
+        **cleanup_result,
     }
 
 
@@ -576,9 +665,11 @@ def create_page_element(
     client: str,
     payload: PageElementCreate,
 ) -> dict[str, Any]:
+    normalized_project_code = _normalize_project_code(project_code)
+    test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     page_object = _page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=normalized_project_code,
         client=normalize_client_code(client),
         page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
@@ -631,9 +722,11 @@ def update_page_element(
     client: str,
     payload: PageElementUpdate,
 ) -> dict[str, Any]:
+    normalized_project_code = _normalize_project_code(project_code)
+    test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     page_object = _page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=normalized_project_code,
         client=normalize_client_code(client),
         page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
@@ -740,10 +833,27 @@ def delete_page_element(
     db.delete(element)
     db.commit()
     _sync_page_object_metrics(db, page_object_id=page_object.id)
+    remaining_element_count = int(
+        db.execute(
+            select(func.count()).select_from(PageElement).where(PageElement.page_object_id == page_object.id)
+        ).scalar_one()
+        or 0
+    )
+    cleanup_result = (
+        _cleanup_page_recorder_assets(
+            db,
+            project_code=page_object.project_code,
+            client=page_object.client,
+            page_code=page_object.page_code,
+        )
+        if remaining_element_count == 0
+        else {"recorder_sessions_removed_count": 0, "recorder_artifacts_removed_count": 0}
+    )
     return {
         "page_object_id": page_object.id,
         "element_code": element.element_code,
         "deleted": True,
+        **cleanup_result,
     }
 
 
@@ -756,9 +866,11 @@ def create_page_element_version(
     client: str,
     payload: PageElementVersionCreate,
 ) -> dict[str, Any]:
+    normalized_project_code = _normalize_project_code(project_code)
+    test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     page_object = _page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=normalized_project_code,
         client=normalize_client_code(client),
         page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
@@ -820,9 +932,11 @@ def create_page_object_ref(
     client: str,
     payload: PageObjectRefCreate,
 ) -> dict[str, Any]:
+    normalized_project_code = _normalize_project_code(project_code)
+    test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     page_object = _page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=normalized_project_code,
         client=normalize_client_code(client),
         page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
     )

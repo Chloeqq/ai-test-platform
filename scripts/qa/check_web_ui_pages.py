@@ -72,6 +72,8 @@ def main(argv: Sequence[str]) -> int:
     paths = [
         "/cases?sort_dir=desc&sort_key=status",
         "/ai-generation",
+        "/assets/page-objects",
+        "/assets/page-objects/recorder",
         "/execution/workbench?project=atp",
     ]
     failures: list[PageCheckResult] = []

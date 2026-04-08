@@ -20,6 +20,7 @@ class PageObject(Base):
     page_code: Mapped[str] = mapped_column(String(40), index=True)
     page_name: Mapped[str] = mapped_column(String(120), default="")
     page_url: Mapped[str] = mapped_column(String(256), default="")
+    precondition_state: Mapped[str] = mapped_column(Text, default="")
     module_id: Mapped[int] = mapped_column(Integer, default=0, index=True)
     element_count: Mapped[int] = mapped_column(Integer, default=0)
     health_status: Mapped[int] = mapped_column(Integer, default=1, index=True)
@@ -106,3 +107,23 @@ class PageElementHealthCheck(Base):
     detail: Mapped[str] = mapped_column(Text, default="")
     checked_by: Mapped[str] = mapped_column(String(60), default="system")
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class PageObjectRecorderSession(Base):
+    __tablename__ = "page_object_recorder_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    project_code: Mapped[str] = mapped_column(String(20), default="atp", index=True)
+    client: Mapped[str] = mapped_column(String(10), default="web", index=True)
+    page_code: Mapped[str] = mapped_column(String(40), index=True)
+    page_name: Mapped[str] = mapped_column(String(120), default="")
+    url: Mapped[str] = mapped_column(String(512), default="")
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    process_pid: Mapped[int | None] = mapped_column(nullable=True, index=True)
+    script_path: Mapped[str] = mapped_column(String(1024), default="")
+    started_by: Mapped[str] = mapped_column(String(60), default="system")
+    error_message: Mapped[str] = mapped_column(Text, default="")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)

@@ -1,14 +1,118 @@
 (function () {
   const shared = window.WorkbenchShared;
+  const sharedProjectsApi = window.ProjectsApi;
+  const projectManager = window.ProjectManagerDialog;
+  const projectSelectorSupport = window.ProjectSelectorSupport;
   if (!shared) return;
 
   function createController({ state, els, authFetch, onCaseLoaded }) {
     let casePagination = null;
 
+    const workbenchProjectsApi = {
+      async list() {
+        const resp = await authFetch("/api/workbench/projects");
+        if (!resp.ok) throw new Error("load projects failed");
+        return resp.json();
+      },
+      create: sharedProjectsApi && typeof sharedProjectsApi.create === "function"
+        ? sharedProjectsApi.create.bind(sharedProjectsApi)
+        : null,
+      update: sharedProjectsApi && typeof sharedProjectsApi.update === "function"
+        ? sharedProjectsApi.update.bind(sharedProjectsApi)
+        : null,
+      remove: sharedProjectsApi && typeof sharedProjectsApi.remove === "function"
+        ? sharedProjectsApi.remove.bind(sharedProjectsApi)
+        : null,
+    };
+
+    function normalizeProjectCode(value) {
+      if (projectSelectorSupport && typeof projectSelectorSupport.normalizeCode === "function") {
+        return projectSelectorSupport.normalizeCode(value);
+      }
+      return String(value || "").trim().toLowerCase();
+    }
+
+    function findProjectItem(projectCode) {
+      const normalizedCode = normalizeProjectCode(projectCode);
+      return (Array.isArray(state.projectItems) ? state.projectItems : []).find((item) => {
+        return normalizeProjectCode(item && item.project_code) === normalizedCode;
+      }) || null;
+    }
+
+    function isCurrentProjectActive() {
+      const currentProject = findProjectItem(state.project);
+      if (!currentProject) return true;
+      return normalizeProjectCode(currentProject.status || "active") === "active";
+    }
+
+    function workbenchGovernanceNote() {
+      return "当前项目为 inactive，Workbench 仅允许浏览已保存 YAML 与直接运行已落库版本；保存和 YAML 编辑已禁用。";
+    }
+
+    function syncWriteGuards() {
+      const writeBlocked = !isCurrentProjectActive();
+      state.projectWriteBlocked = writeBlocked;
+      if (els.governanceNote) {
+        els.governanceNote.hidden = !writeBlocked;
+        els.governanceNote.textContent = writeBlocked ? workbenchGovernanceNote() : "";
+      }
+      if (els.saveBtn) {
+        els.saveBtn.disabled = writeBlocked;
+      }
+      if (els.yamlEditor) {
+        els.yamlEditor.readOnly = writeBlocked;
+        els.yamlEditor.classList.toggle("is-readonly", writeBlocked);
+      }
+    }
+
+    function setProjectOptions(items, selectedValue) {
+      const projectItems = Array.isArray(items) ? items : [];
+      state.projectItems = projectItems;
+      if (projectSelectorSupport && typeof projectSelectorSupport.applyProjectOptions === "function") {
+        projectSelectorSupport.applyProjectOptions(els.projectSelect, projectItems, {
+          selectedValue: selectedValue || state.project || "atp",
+          defaultProjectCode: "atp",
+          includeInactive: true,
+          disableInactive: false,
+          inactiveLabelSuffix: " (inactive)",
+        });
+      } else {
+        els.projectSelect.innerHTML = projectItems
+          .map((item) => {
+            const code = normalizeProjectCode(item && item.project_code);
+            const projectName = String(item && item.project_name || code).trim() || code;
+            const selected = code === normalizeProjectCode(selectedValue || state.project || "atp") ? " selected" : "";
+            return `<option value="${shared.escapeHtml(code)}"${selected}>${shared.escapeHtml(code)} · ${shared.escapeHtml(projectName)}</option>`;
+          })
+          .join("");
+      }
+      state.project = normalizeProjectCode(els.projectSelect.value || selectedValue || state.project || "atp") || "atp";
+      syncWriteGuards();
+    }
+
+    function clearCurrentCase() {
+      state.currentCaseId = "";
+      state.currentCasePath = "";
+      state.persistedYamlContent = "";
+      els.currentCase.textContent = "未选择";
+      els.currentPath.textContent = "";
+      if (els.yamlEditor) {
+        els.yamlEditor.value = "";
+      }
+      if (typeof onCaseLoaded === "function") {
+        onCaseLoaded({});
+      }
+    }
+
     function setCurrentCase(item) {
-      const payload = item && typeof item === "object" ? item : {};
-      state.currentCaseId = String(payload.case_id || state.currentCaseId || "").trim();
-      state.currentCasePath = String(payload.path || state.currentCasePath || "").trim();
+      if (!item || typeof item !== "object") {
+        clearCurrentCase();
+        return;
+      }
+      const payload = item;
+      state.currentCaseId = String(payload.case_id || "").trim();
+      state.currentCasePath = String(payload.path || "").trim();
+      state.persistedYamlContent = String(payload.yaml_content || state.persistedYamlContent || "");
       els.currentCase.textContent = shared.displayCaseId(state.currentCaseId || "") || "未选择";
       els.currentPath.textContent = state.currentCasePath || "";
       if (typeof onCaseLoaded === "function") {
@@ -84,19 +188,13 @@
       renderCasePagination();
     }
 
-    async function loadProjects() {
-      const resp = await authFetch("/api/workbench/projects");
-      if (!resp.ok) throw new Error("load projects failed");
-      const payload = await resp.json();
-      const items = payload.items || [];
-      if (!items.length) items.push("atp");
-      els.projectSelect.innerHTML = items
-        .map((item) => `<option value="${shared.escapeHtml(item)}">${shared.escapeHtml(item)}</option>`)
-        .join("");
-      if (!items.includes(state.project)) {
-        state.project = items[0];
-      }
-      els.projectSelect.value = state.project;
+    async function loadProjects(selectedValue = state.project) {
+      const payload = await workbenchProjectsApi.list();
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      const normalizedItems = items.length
+        ? items
+        : [{ project_code: "atp", project_name: "ATP", status: "active", source: "default" }];
+      setProjectOptions(normalizedItems, selectedValue);
     }
 
     async function loadCases(page = state.casePage, pageSize = state.casePageSize, focusCaseId = "") {
@@ -138,16 +236,49 @@
       const payload = await resp.json();
       const item = payload.item || {};
       els.yamlEditor.value = item.yaml_content || "";
+      state.persistedYamlContent = String(item.yaml_content || "");
       setCurrentCase(item);
+      syncWriteGuards();
       renderCaseRows();
     }
 
+    async function openProjectManager() {
+      if (!projectSelectorSupport || !projectManager || !workbenchProjectsApi.create || !workbenchProjectsApi.update || !workbenchProjectsApi.remove) {
+        window.alert("项目管理组件未就绪。");
+        return;
+      }
+      projectSelectorSupport.openProjectManager({
+        projectManager: projectManager,
+        projectsApi: workbenchProjectsApi,
+        selectEl: els.projectSelect,
+        defaultProjectCode: "atp",
+        deleteFallbackValue: "atp",
+        includeInactive: true,
+        disableInactive: false,
+        inactiveLabelSuffix: " (inactive)",
+        onChanged: async ({ items, selectedProjectCode }) => {
+          setProjectOptions(items, selectedProjectCode || state.project || "atp");
+          clearCurrentCase();
+          await loadCases(1, state.casePageSize);
+        },
+      });
+    }
+
     async function saveEditorCase({ announce = true } = {}) {
-      const editorContent = String(els.yamlEditor.value || "").trim();
+      const rawEditorContent = String(els.yamlEditor.value || "");
+      const editorContent = rawEditorContent.trim();
       const inferredCaseId = shared.normalizeCaseId(state.currentCaseId || shared.extractCaseIdFromYaml(editorContent));
       if (!inferredCaseId) {
         window.alert("请先选择用例，或在 YAML 中补充 id。");
         return null;
+      }
+
+      if (state.projectWriteBlocked) {
+        if (rawEditorContent !== String(state.persistedYamlContent || "")) {
+          window.alert("当前项目为 inactive，Workbench 已禁用 YAML 保存；如需编辑请先恢复项目为 active。");
+          return null;
+        }
+        return inferredCaseId;
       }
 
       const resp = await authFetch(`/api/workbench/cases/${encodeURIComponent(inferredCaseId)}`, {
@@ -166,6 +297,7 @@
 
       const payload = await resp.json();
       const item = payload.item || {};
+      state.persistedYamlContent = String(item.yaml_content || els.yamlEditor.value || "");
       setCurrentCase(item);
       await loadCases(state.casePage, state.casePageSize, state.currentCaseId);
       if (announce) {
@@ -176,9 +308,16 @@
 
     function bindEvents() {
       els.projectSelect.addEventListener("change", async () => {
-        state.project = els.projectSelect.value;
-        await loadCases();
+        state.project = normalizeProjectCode(els.projectSelect.value);
+        syncWriteGuards();
+        clearCurrentCase();
+        await loadCases(1, state.casePageSize);
       });
+      if (els.manageProjectBtn) {
+        els.manageProjectBtn.addEventListener("click", () => {
+          openProjectManager().catch((error) => window.alert(error.message || "项目管理失败"));
+        });
+      }
       els.refreshBtn.addEventListener("click", () => loadCases());
       els.saveBtn.addEventListener("click", () => {
         saveEditorCase({ announce: true }).catch((error) => window.alert(error.message || "保存失败"));

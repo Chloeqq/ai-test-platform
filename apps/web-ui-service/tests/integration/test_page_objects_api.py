@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -11,10 +12,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 import app.models.page_object  # noqa: F401
+from app.models.page_object import PageObjectRecorderSession
 import app.models.test_case  # noqa: F401
+import app.models.test_project as test_project_model
 import app.models.test_project  # noqa: F401
 import app.models.workbench_state  # noqa: F401
 from app.routers.page_objects import router as page_objects_router
+from app.services import page_object_service
 
 
 @pytest.fixture()
@@ -60,6 +64,7 @@ def test_page_object_crud_element_version_and_refs(
             "page_code": "ret-query",
             "page_name": "退货查询页",
             "page_url": "/ret/query",
+            "precondition_state": "已完成登录并进入退货中心",
             "module_id": 11,
             "health_status": 1,
             "description": "页面对象初始化",
@@ -73,6 +78,7 @@ def test_page_object_crud_element_version_and_refs(
     assert page_item["client"] == "web"
     assert page_item["page_code"] == "ret-query"
     assert page_item["page_url"] == "/ret/query"
+    assert page_item["precondition_state"] == "已完成登录并进入退货中心"
     assert int(page_item["module_id"]) == 11
     assert int(page_item["health_status"]) == 1
     assert int(page_item["element_count"]) == 0
@@ -84,12 +90,19 @@ def test_page_object_crud_element_version_and_refs(
     update_page_resp = client.put(
         "/api/page-objects/ret-query",
         params={"project_code": "atp", "client": "web"},
-        json={"page_name": "退货查询页V2", "status": "published", "page_url": "/ret/query/v2", "module_id": 12},
+        json={
+            "page_name": "退货查询页V2",
+            "status": "published",
+            "page_url": "/ret/query/v2",
+            "precondition_state": "需先进入售后工作台",
+            "module_id": 12,
+        },
     )
     assert update_page_resp.status_code == 200
     assert update_page_resp.json()["item"]["page_name"] == "退货查询页V2"
     assert update_page_resp.json()["item"]["status"] == "published"
     assert update_page_resp.json()["item"]["page_url"] == "/ret/query/v2"
+    assert update_page_resp.json()["item"]["precondition_state"] == "需先进入售后工作台"
     assert int(update_page_resp.json()["item"]["module_id"]) == 12
 
     create_element_resp = client.post(
@@ -255,3 +268,167 @@ def test_page_object_delete_requires_cascade_when_has_elements(
         params={"project_code": "atp", "client": "web"},
     )
     assert get_after_delete_resp.status_code == 404
+
+
+def test_page_object_create_blocked_when_project_inactive(
+    page_objects_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = page_objects_client
+    db_session.add(
+        test_project_model.TestProject(
+            project_code="mall",
+            project_name="Mall",
+            description="",
+            status="inactive",
+            created_by="qa-admin",
+        )
+    )
+    db_session.commit()
+
+    create_page_resp = client.post(
+        "/api/page-objects",
+        json={
+            "project_code": "mall",
+            "client": "web",
+            "page_code": "mall-list",
+            "page_name": "商城列表页",
+            "description": "",
+            "status": "draft",
+            "created_by": "qa-admin",
+        },
+    )
+    assert create_page_resp.status_code == 409
+    assert "project is inactive" in str(create_page_resp.json().get("detail", "")).lower()
+
+
+def test_delete_page_object_cleans_recorder_sessions_and_artifacts(
+    page_objects_client: tuple[TestClient, Session],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    client, db_session = page_objects_client
+    monkeypatch.setattr(page_object_service, "_RECORDER_ROOT", tmp_path.resolve())
+
+    create_page_resp = client.post(
+        "/api/page-objects",
+        json={
+            "project_code": "atp",
+            "client": "web",
+            "page_code": "cleanup-page",
+            "page_name": "清理页",
+            "description": "",
+            "status": "draft",
+            "created_by": "qa-admin",
+        },
+    )
+    assert create_page_resp.status_code == 201
+
+    script_path = tmp_path / "cleanup-session.codegen.py"
+    script_path.write_text('page.get_by_text("demo").click()', encoding="utf-8")
+    steps_path = script_path.with_suffix(".steps.json")
+    steps_path.write_text("[]", encoding="utf-8")
+    db_session.add(
+        PageObjectRecorderSession(
+            session_id="cleanup-session-1",
+            project_code="atp",
+            client="web",
+            page_code="cleanup-page",
+            page_name="清理页",
+            url="http://127.0.0.1:8013/demo",
+            status="stopped",
+            process_pid=None,
+            script_path=str(script_path.resolve()),
+            started_by="qa-admin",
+        )
+    )
+    db_session.commit()
+
+    delete_page_resp = client.delete(
+        "/api/page-objects/cleanup-page",
+        params={"project_code": "atp", "client": "web", "cascade_elements": False},
+    )
+    assert delete_page_resp.status_code == 200
+    item = delete_page_resp.json()["item"]
+    assert int(item["recorder_sessions_removed_count"]) == 1
+    assert int(item["recorder_artifacts_removed_count"]) == 2
+    assert not script_path.exists()
+    assert not steps_path.exists()
+    remaining = db_session.query(PageObjectRecorderSession).filter_by(session_id="cleanup-session-1").one_or_none()
+    assert remaining is None
+
+
+def test_delete_last_element_cleans_recorder_sessions_and_artifacts(
+    page_objects_client: tuple[TestClient, Session],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    client, db_session = page_objects_client
+    monkeypatch.setattr(page_object_service, "_RECORDER_ROOT", tmp_path.resolve())
+
+    create_page_resp = client.post(
+        "/api/page-objects",
+        json={
+            "project_code": "atp",
+            "client": "web",
+            "page_code": "cleanup-elements-page",
+            "page_name": "元素清理页",
+            "description": "",
+            "status": "draft",
+            "created_by": "qa-admin",
+        },
+    )
+    assert create_page_resp.status_code == 201
+
+    create_element_resp = client.post(
+        "/api/page-objects/cleanup-elements-page/elements",
+        params={"project_code": "atp", "client": "web"},
+        json={
+            "element_code": "only-one",
+            "element_name": "唯一元素",
+            "locator_type": "css",
+            "locator_value": "#only-one",
+            "backup_locator": "",
+            "health_status": 1,
+            "role": "button",
+            "status": "active",
+            "is_primary": True,
+            "owner": "qa-team",
+            "changed_by": "qa-admin",
+            "change_summary": "首次录制",
+        },
+    )
+    assert create_element_resp.status_code == 201
+
+    script_path = tmp_path / "cleanup-session-2.codegen.py"
+    script_path.write_text('page.get_by_text("demo").click()', encoding="utf-8")
+    steps_path = script_path.with_suffix(".steps.json")
+    steps_path.write_text("[]", encoding="utf-8")
+    db_session.add(
+        PageObjectRecorderSession(
+            session_id="cleanup-session-2",
+            project_code="atp",
+            client="web",
+            page_code="cleanup-elements-page",
+            page_name="元素清理页",
+            url="http://127.0.0.1:8013/demo",
+            status="failed",
+            process_pid=None,
+            script_path=str(script_path.resolve()),
+            started_by="qa-admin",
+        )
+    )
+    db_session.commit()
+
+    delete_element_resp = client.delete(
+        "/api/page-objects/cleanup-elements-page/elements/only-one",
+        params={"project_code": "atp", "client": "web"},
+    )
+    assert delete_element_resp.status_code == 200
+    item = delete_element_resp.json()["item"]
+    assert item["deleted"] is True
+    assert int(item["recorder_sessions_removed_count"]) == 1
+    assert int(item["recorder_artifacts_removed_count"]) == 2
+    assert not script_path.exists()
+    assert not steps_path.exists()
+    remaining = db_session.query(PageObjectRecorderSession).filter_by(session_id="cleanup-session-2").one_or_none()
+    assert remaining is None

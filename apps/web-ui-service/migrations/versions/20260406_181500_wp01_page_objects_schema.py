@@ -1,7 +1,7 @@
 """wp01 page objects schema
 
 Revision ID: 20260406_181500_wp01_page_objects_schema
-Revises:
+Revises: 20260327_181500
 Create Date: 2026-04-06 18:15:00
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ from sqlalchemy.engine.reflection import Inspector
 
 # revision identifiers, used by Alembic.
 revision = "20260406_181500_wp01_page_objects_schema"
-down_revision = None
+down_revision = "20260327_181500"
 branch_labels = None
 depends_on = None
 
@@ -168,6 +168,36 @@ def _create_page_element_health_checks_table() -> None:
     _safe_create_index("ix_page_element_health_checks_checked_at", "page_element_health_checks", ["checked_at"])
 
 
+def _create_page_object_recorder_sessions_table() -> None:
+    op.create_table(
+        "page_object_recorder_sessions",
+        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
+        sa.Column("session_id", sa.String(length=64), nullable=False, unique=True),
+        sa.Column("project_code", sa.String(length=20), nullable=False, server_default="atp"),
+        sa.Column("client", sa.String(length=10), nullable=False, server_default="web"),
+        sa.Column("page_code", sa.String(length=40), nullable=False),
+        sa.Column("page_name", sa.String(length=120), nullable=False, server_default=""),
+        sa.Column("url", sa.String(length=512), nullable=False, server_default=""),
+        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column("process_pid", sa.Integer(), nullable=True),
+        sa.Column("script_path", sa.String(length=1024), nullable=False, server_default=""),
+        sa.Column("started_by", sa.String(length=60), nullable=False, server_default="system"),
+        sa.Column("error_message", sa.Text(), nullable=False, server_default=""),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column("heartbeat_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("stopped_at", sa.DateTime(timezone=True), nullable=True),
+    )
+    _safe_create_index("ix_page_object_recorder_sessions_session_id", "page_object_recorder_sessions", ["session_id"])
+    _safe_create_index("ix_page_object_recorder_sessions_project_code", "page_object_recorder_sessions", ["project_code"])
+    _safe_create_index("ix_page_object_recorder_sessions_client", "page_object_recorder_sessions", ["client"])
+    _safe_create_index("ix_page_object_recorder_sessions_page_code", "page_object_recorder_sessions", ["page_code"])
+    _safe_create_index("ix_page_object_recorder_sessions_status", "page_object_recorder_sessions", ["status"])
+    _safe_create_index("ix_page_object_recorder_sessions_process_pid", "page_object_recorder_sessions", ["process_pid"])
+    _safe_create_index("ix_page_object_recorder_sessions_started_at", "page_object_recorder_sessions", ["started_at"])
+    _safe_create_index("ix_page_object_recorder_sessions_heartbeat_at", "page_object_recorder_sessions", ["heartbeat_at"])
+    _safe_create_index("ix_page_object_recorder_sessions_stopped_at", "page_object_recorder_sessions", ["stopped_at"])
+
+
 def upgrade() -> None:
     conn = op.get_bind()
 
@@ -204,6 +234,8 @@ def upgrade() -> None:
         _create_page_object_refs_table()
     if not _has_table(conn, "page_element_health_checks"):
         _create_page_element_health_checks_table()
+    if not _has_table(conn, "page_object_recorder_sessions"):
+        _create_page_object_recorder_sessions_table()
 
 
 def downgrade() -> None:
@@ -211,6 +243,8 @@ def downgrade() -> None:
 
     if _has_table(conn, "page_element_health_checks"):
         op.drop_table("page_element_health_checks")
+    if _has_table(conn, "page_object_recorder_sessions"):
+        op.drop_table("page_object_recorder_sessions")
     if _has_table(conn, "page_object_refs"):
         op.drop_table("page_object_refs")
     if _has_table(conn, "page_element_versions"):

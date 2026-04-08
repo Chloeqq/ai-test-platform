@@ -1,27 +1,23 @@
-:root {
-  --login-bg: #edf3fb;
-  --login-panel: rgba(255, 255, 255, 0.94);
-  --login-line: #d6e0ec;
-  --login-text: #132238;
-  --login-muted: #66788f;
-  --login-primary: #1f7ae0;
-  --login-primary-deep: #155fb4;
-  --login-shadow: 0 24px 60px rgba(18, 37, 63, 0.12);
-}
+@import url("/static/enterprise-global.css?v=20260408-enterprise-1");
 
-* {
-  box-sizing: border-box;
+:root {
+  --login-bg: var(--neutral-50);
+  --login-panel: rgba(255, 255, 255, 0.96);
+  --login-line: var(--neutral-200);
+  --login-text: var(--neutral-900);
+  --login-muted: var(--neutral-600);
+  --login-primary: var(--primary);
+  --login-primary-deep: var(--primary-hover);
+  --login-shadow: var(--shadow-lg);
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
-  font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
   color: var(--login-text);
   background:
-    radial-gradient(circle at top left, rgba(93, 151, 255, 0.18), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(41, 122, 224, 0.18), transparent 24%),
-    linear-gradient(180deg, #f8fbff 0%, var(--login-bg) 100%);
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.1), transparent 24%),
+    linear-gradient(180deg, #fbfdff 0%, var(--login-bg) 100%);
 }
 
 .login-shell {
@@ -33,10 +29,6 @@ body {
 
 .login-panel {
   width: min(100%, 520px);
-  border: 1px solid var(--login-line);
-  border-radius: 24px;
-  background: var(--login-panel);
-  box-shadow: var(--login-shadow);
   padding: 32px;
 }
 
@@ -50,10 +42,10 @@ body {
 .login-mark {
   width: 52px;
   height: 52px;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #257ae5 0%, #54a4ff 100%);
+  background: linear-gradient(135deg, var(--login-primary) 0%, #60a5fa 100%);
   color: #fff;
   font-size: 17px;
   font-weight: 800;
@@ -92,11 +84,7 @@ body {
 
 .login-form input[type="text"],
 .login-form input[type="password"] {
-  width: 100%;
   height: 46px;
-  border-radius: 14px;
-  border: 1px solid var(--login-line);
-  background: #fff;
   padding: 0 14px;
   font-size: 14px;
   color: var(--login-text);
@@ -104,9 +92,7 @@ body {
 
 .login-form input[type="text"]:focus,
 .login-form input[type="password"]:focus {
-  outline: none;
-  border-color: #8ab7f2;
-  box-shadow: 0 0 0 4px rgba(31, 122, 224, 0.12);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .login-remember {
@@ -119,17 +105,18 @@ body {
 
 .login-submit {
   height: 48px;
-  border: 0;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--login-primary) 0%, #54a4ff 100%);
+  border: 1px solid var(--login-primary);
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--login-primary) 0%, #60a5fa 100%);
   color: #fff;
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
+  transition: var(--transition);
 }
 
 .login-submit:hover {
-  background: linear-gradient(135deg, var(--login-primary-deep) 0%, #3f93f6 100%);
+  background: linear-gradient(135deg, var(--login-primary-deep) 0%, #3b82f6 100%);
 }
 
 .login-submit:disabled {
@@ -145,11 +132,11 @@ body {
 }
 
 .login-status[data-state="error"] {
-  color: #b33232;
+  color: var(--danger);
 }
 
 .login-status[data-state="success"] {
-  color: #1f7a4c;
+  color: var(--success);
 }
 
 @media (max-width: 640px) {
@@ -159,7 +146,6 @@ body {
 
   .login-panel {
     padding: 22px;
-    border-radius: 20px;
   }
 
   .login-brand {

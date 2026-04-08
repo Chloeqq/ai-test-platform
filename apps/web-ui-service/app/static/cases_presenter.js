@@ -17,6 +17,8 @@
   }
 
   function displayTestType(value) {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "performance") return "性能测试";
     if (typeof window.platformDisplayTestType === "function") return window.platformDisplayTestType(value, "-");
     return String(value || "-");
   }
@@ -116,23 +118,26 @@
   }
 
   function rowActionsMarkup(item, reviewMode) {
+    const projectStatus = String(item && item.project_status || "active").trim().toLowerCase() || "active";
+    const writeBlocked = projectStatus !== "active";
+    const blockedAttr = writeBlocked ? ' disabled aria-disabled="true"' : "";
     if (reviewMode) {
       return `
         <div class="cases-row-actions">
-          <button type="button" class="btn cases-inline-btn" data-row-action="run" data-case-id="${item.id}" title="执行用例">执行</button>
-          <button type="button" class="btn cases-inline-btn" data-row-action="approve" data-case-id="${item.id}" title="审核通过">审核通过</button>
-          <button type="button" class="btn cases-inline-btn" data-row-action="reject" data-case-id="${item.id}" title="驳回">驳回</button>
-          <button type="button" class="btn cases-inline-btn cases-inline-danger" data-row-action="delete" data-case-id="${item.id}" title="删除">删除</button>
+          <button type="button" class="btn cases-inline-btn cases-row-action-btn is-run" data-row-action="run" data-case-id="${item.id}" title="执行用例">执行</button>
+          <button type="button" class="btn cases-inline-btn cases-row-action-btn is-approve" data-row-action="approve" data-case-id="${item.id}" title="审核通过"${blockedAttr}>审核通过</button>
+          <button type="button" class="btn cases-inline-btn cases-row-action-btn is-reject" data-row-action="reject" data-case-id="${item.id}" title="驳回"${blockedAttr}>驳回</button>
+          <button type="button" class="btn cases-inline-btn cases-row-action-btn is-delete" data-row-action="delete" data-case-id="${item.id}" title="删除">删除</button>
           <a class="cases-icon-btn is-edit" href="${detailHref(item)}" title="查看详情">${renderIcon("edit")}</a>
         </div>
       `;
     }
     return `
       <div class="cases-row-actions">
-        <button type="button" class="cases-icon-btn is-tag" data-row-action="run" data-case-id="${item.id}" title="执行用例">${renderIcon("run")}</button>
+        <button type="button" class="cases-icon-btn is-run" data-row-action="run" data-case-id="${item.id}" title="执行用例">${renderIcon("run")}</button>
         <a class="cases-icon-btn is-edit" href="${detailHref(item)}" title="查看详情">${renderIcon("edit")}</a>
-        <button type="button" class="cases-icon-btn is-tag" data-row-action="tag" data-case-id="${item.id}" title="修改标签">${renderIcon("tag")}</button>
-        <button type="button" class="cases-icon-btn is-archive" data-row-action="archive" data-case-id="${item.id}" title="废弃用例">${renderIcon("archive")}</button>
+        <button type="button" class="cases-icon-btn is-tag" data-row-action="tag" data-case-id="${item.id}" title="修改标签"${blockedAttr}>${renderIcon("tag")}</button>
+        <button type="button" class="cases-icon-btn is-archive" data-row-action="archive" data-case-id="${item.id}" title="废弃用例"${blockedAttr}>${renderIcon("archive")}</button>
       </div>
     `;
   }
@@ -181,27 +186,72 @@
     return normalizeTreeItems(items, projectCode).reduce((sum, group) => sum + (Number(group.count) || 0), 0);
   }
 
-  function treeMarkup(items, keyword, selection, projectCode) {
+  function treeGroupKey(group) {
+    return `${String(group && group.project_code || "").trim()}::${String(group && group.product_line || "").trim()}`;
+  }
+
+  function treeGroupDomId(key) {
+    const normalized = String(key || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return normalized || "default";
+  }
+
+  function treeMarkup(items, keyword, selection, projectCode, options) {
     const filtered = filterTreeItems(items, keyword, projectCode);
     const active = selection || {};
+    const expandedKeys = options && options.expandedKeys instanceof Set ? options.expandedKeys : null;
     if (!filtered.length) return '<div class="cases-tree-empty">没有匹配的模块目录。</div>';
     const total = totalTreeCount(filtered);
     return [
-      `<button type="button" class="cases-tree-root ${!active.product_line && !active.module ? "is-active" : ""}" data-tree-action="all">`,
+      `<button type="button" role="treeitem" class="cases-tree-root tree-node ${!active.product_line && !active.module ? "is-active" : ""}" data-tree-action="all">`,
       '<span class="cases-tree-label"><strong>全部用例</strong><span>显示所有模块下的用例资产</span></span>',
       `<span class="cases-tree-count">${total}</span>`,
       "</button>",
     ].join("") + filtered.map((group) => `
-      <details class="cases-tree-group ${active.product_line === group.product_line && !active.module ? "is-active" : ""}" open>
-        <summary data-tree-action="product-line" data-product-line="${escapeHtml(group.product_line)}">
-          <span class="cases-tree-label"><strong>${escapeHtml(group.product_line)}</strong><span>按产品线快速定位</span></span>
-          <span class="cases-tree-count">${escapeHtml(group.count)}</span>
-        </summary>
-        <div class="cases-tree-modules">
-          ${(Array.isArray(group.modules) ? group.modules : []).map((item) => `
+      ${(() => {
+        const groupKey = treeGroupKey(group);
+        const branchId = `cases-tree-branch-${treeGroupDomId(groupKey)}`;
+        const modules = Array.isArray(group.modules) ? group.modules : [];
+        const isExpanded = expandedKeys ? expandedKeys.has(groupKey) : true;
+        const hasModules = modules.length > 0;
+        const isActiveGroup = active.product_line === group.product_line && !active.module;
+        return `
+      <div class="cases-tree-group ${isExpanded ? "is-expanded" : ""}" data-tree-group="${escapeHtml(groupKey)}">
+        <div class="cases-tree-group-row">
+          <button
+            type="button"
+            class="cases-tree-toggle ${hasModules ? "" : "is-placeholder"}"
+            data-tree-action="toggle-group"
+            data-tree-group="${escapeHtml(groupKey)}"
+            data-product-line="${escapeHtml(group.product_line)}"
+            aria-label="${hasModules ? `${isExpanded ? "收起" : "展开"} ${escapeHtml(group.product_line)}` : `${escapeHtml(group.product_line)} 无下级模块`}"
+            aria-controls="${branchId}"
+            aria-expanded="${hasModules ? String(isExpanded) : "false"}"
+            ${hasModules ? "" : 'disabled tabindex="-1" aria-hidden="true"'}
+          >
+            <span class="cases-tree-toggle-icon" aria-hidden="true"></span>
+          </button>
+          <button
+            type="button"
+            role="treeitem"
+            class="cases-tree-group-button tree-node ${isActiveGroup ? "is-active" : ""}"
+            data-tree-action="product-line"
+            data-product-line="${escapeHtml(group.product_line)}"
+            aria-expanded="${hasModules ? String(isExpanded) : "false"}"
+          >
+            <span class="cases-tree-label"><strong>${escapeHtml(group.product_line)}</strong><span>按产品线快速定位</span></span>
+            <span class="cases-tree-count">${escapeHtml(group.count)}</span>
+          </button>
+        </div>
+        <div id="${branchId}" class="cases-tree-modules" role="group" ${isExpanded ? "" : "hidden"}>
+          ${modules.map((item) => `
             <button
               type="button"
-              class="cases-tree-module-button ${active.product_line === group.product_line && active.module === item.module ? "is-active" : ""}"
+              role="treeitem"
+              class="cases-tree-module-button tree-node ${active.product_line === group.product_line && active.module === item.module ? "is-active" : ""}"
               data-tree-action="module"
               data-product-line="${escapeHtml(group.product_line)}"
               data-module="${escapeHtml(item.module)}"
@@ -211,7 +261,9 @@
             </button>
           `).join("")}
         </div>
-      </details>
+      </div>
+    `;
+      })()}
     `).join("");
   }
 
@@ -244,7 +296,6 @@
       ["module", "模块", (value) => value],
       ["keyword", "关键词", (value) => value],
       ["priority", "优先级", (value) => value],
-      ["test_type", "测试类型", displayTestType],
       ["status", "状态", displayStatusLabel],
       ["creator", "创建人", (value) => value],
       ["last_result", "执行结果", displayResultLabel],
@@ -266,9 +317,9 @@
     const entries = searchContextEntries(context);
     if (!entries.length) return "";
     return `
-      <div class="cases-context-meta">
-        <span>当前搜索上下文</span>
-        <div class="cases-context-meta-actions">
+      <div class="context-header cases-context-meta">
+        <span class="context-title">当前搜索上下文</span>
+        <div class="context-actions cases-context-meta-actions">
           <span
             class="cases-context-help"
             title="单搜索框条件和左侧模块树定位会统一展示在这里，点击标签右侧关闭按钮可移除单项条件。"
@@ -281,9 +332,9 @@
           >清空全部</button>
         </div>
       </div>
-      <div class="cases-context-pills">
+      <div class="context-tags cases-context-pills">
         ${entries.map((item) => `
-          <span class="cases-context-pill">
+          <span class="badge badge-neutral cases-context-pill">
             <strong>${escapeHtml(item.label)}</strong>${escapeHtml(item.value)}
             <button
               type="button"
@@ -302,17 +353,16 @@
     const reviewMode = Boolean(options && options.reviewMode);
     const selected = selectedIds instanceof Set ? selectedIds : new Set();
     if (!Array.isArray(items) || !items.length) {
-      return '<tr class="cases-table-empty-row"><td colspan="13"><div class="cases-table-empty">当前筛选下暂无用例。可以前往 <a href="/ai-generation">AI生成</a> 创建 Draft，或手动新建草稿。</div></td></tr>';
+      return '<tr class="cases-table-empty-row empty-row"><td colspan="13" class="empty-cell"><div class="cases-table-empty empty-state">当前筛选下暂无用例。可以前往 <a href="/ai-generation" class="link">AI生成</a> 创建 Draft，或手动新建草稿。</div></td></tr>';
     }
     return items.map((item) => `
-      <tr>
+      <tr class="table-row cases-data-row">
         <td><input class="case-check" type="checkbox" data-id="${item.id}" ${selected.has(item.id) ? "checked" : ""}></td>
         <td><span class="cases-row-handle" aria-hidden="true"></span></td>
         <td><span class="mono cases-case-id">${escapeHtml(displayCaseId(item.case_id, item.id))}</span></td>
         <td>
           <div class="cases-row-name">
             <a href="${detailHref(item)}">${escapeHtml(item.name)}</a>
-            <span class="cases-row-name-meta">${escapeHtml(displaySourceLabel(item.source))} · ${escapeHtml(displayTestType(item.test_type || ""))}</span>
           </div>
         </td>
         <td>${priorityBadge(item.priority)}</td>
@@ -329,11 +379,12 @@
   }
 
   function tableLoadingMarkup() {
-    return '<tr class="cases-table-empty-row"><td colspan="13"><div class="cases-table-loading">正在加载用例列表...</div></td></tr>';
+    return '<tr class="cases-table-empty-row empty-row"><td colspan="13" class="empty-cell"><div class="cases-table-loading loading-state">正在加载用例列表...</div></td></tr>';
   }
 
   window.CasesPresenter = {
     escapeHtml,
+    filterTreeItems,
     searchContextMarkup,
     tableLoadingMarkup,
     tableRowsMarkup,

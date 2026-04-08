@@ -4,7 +4,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="/static/pagination.component.css?v=20260322-1">
-<link rel="stylesheet" href="/static/workbench.css?v=20260403-workbench-2">
+<link rel="stylesheet" href="/static/workbench.css?v=20260407-workbench-3">
 {% endblock %}
 
 {% block content %}
@@ -62,10 +62,12 @@
       项目
       <select id="wb-project"></select>
     </label>
+    <button id="wb-manage-project" class="btn" type="button">管理项目</button>
     <button id="wb-refresh" class="btn">刷新用例</button>
     <div class="toolbar-spacer"></div>
     <div class="inline-tip">提示：这里只做调试，不承担生成入口和历史总览。</div>
   </section>
+  <p id="wb-project-governance-note" class="wb-project-governance-note" hidden></p>
 
   <section class="workbench-grid workbench-grid-main">
     <article class="wb-card">
@@ -144,8 +146,11 @@
 
 {% block extra_scripts %}
 <script src="/static/pagination.component.js?v=20260322-1"></script>
+<script src="/static/projects_api.js?v=20260406-projects-api-1"></script>
+<script src="/static/project_manager_dialog.js?v=20260406-project-manager-3"></script>
+<script src="/static/project_selector_support.js?v=20260407-project-selector-1"></script>
 <script src="/static/workbench_shared.js?v=20260403-workbench-1"></script>
-<script src="/static/workbench_cases.js?v=20260406-workbench-cases-2"></script>
+<script src="/static/workbench_cases.js?v=20260407-workbench-cases-3"></script>
 <script src="/static/workbench_runs.js?v=20260403-workbench-1"></script>
-<script src="/static/workbench.js?v=20260406-workbench-3"></script>
+<script src="/static/workbench.js?v=20260407-workbench-4"></script>
 {% endblock %}

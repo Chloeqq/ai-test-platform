@@ -14,7 +14,8 @@ from app.core.database import Base, get_db
 import app.models.test_case  # noqa: F401
 import app.models.test_project  # noqa: F401
 import app.models.workbench_state  # noqa: F401
-from app.models.test_case import TestCase
+from app.models.test_case import TestCase as TestCaseModel
+from app.models.test_project import TestProject as TestProjectModel
 from app.routers import legacy_workbench
 from app.routers.workbench_reporting import router as workbench_reporting_router
 
@@ -36,7 +37,7 @@ def case_consistency_client(
 
     valid_case_id = "atp-web-ret-query-fn-ai-0001"
     session.add(
-        TestCase(
+        TestCaseModel(
             case_id=valid_case_id,
             name="退货查询校验",
             product_line="退货",
@@ -161,3 +162,55 @@ def test_case_consistency_cleanup_removes_stale_state_and_reports(
     assert (reports_root / "atp-web-ret-query-fn-ai-0001.report.json").exists()
     assert not (reports_root / "SMOKE-RETURNAPPLY-020005.report.json").exists()
     assert not (reports_root / "SMOKE-RETURNAPPLY-020005.report.md").exists()
+
+
+def test_workbench_history_supports_project_filter_and_project_status(
+    case_consistency_client: tuple[TestClient, Session, Path, Path, Path, Path],
+) -> None:
+    client, session, history_file, _runtime_runs_file, _defect_links_file, _reports_root = (
+        case_consistency_client
+    )
+    inactive_case_id = "mall-web-ret-query-fn-ai-0001"
+    session.add(
+        TestProjectModel(
+            project_code="mall",
+            project_name="Mall Platform",
+            description="",
+            status="inactive",
+            created_by="admin",
+        )
+    )
+    session.add(
+        TestCaseModel(
+            case_id=inactive_case_id,
+            name="商城退货查询校验",
+            product_line="退货",
+            module="查询",
+            project_code="mall",
+        )
+    )
+    session.commit()
+
+    rows = json.loads(history_file.read_text(encoding="utf-8"))
+    rows.append(
+        {
+            "timestamp": "2026-04-06T00:02:00+00:00",
+            "action": "run_case",
+            "case_id": inactive_case_id,
+            "project": "mall",
+        }
+    )
+    history_file.write_text(
+        json.dumps(rows, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    response = client.get("/api/workbench/history?project_code=mall")
+
+    assert response.status_code == 200
+    payload = response.json()
+    items = payload.get("items", [])
+    assert len(items) == 1
+    assert items[0]["case_id"] == inactive_case_id
+    assert items[0]["project_code"] == "mall"
+    assert items[0]["project_status"] == "inactive"

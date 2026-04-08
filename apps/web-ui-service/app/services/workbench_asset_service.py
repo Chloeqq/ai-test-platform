@@ -32,6 +32,7 @@ ClampConfidence = Callable[[Any], float]
 WriteCaseYaml = Callable[[Path, dict[str, Any]], str]
 SaveCaseState = Callable[[str, dict[str, Any], Path], dict[str, Any]]
 AppendHistory = Callable[[dict[str, Any]], None]
+EnsureProjectWritable = Callable[[str], str]
 DerivePoints = Callable[[dict[str, Any]], dict[str, Any]]
 BuildReviewAuditSummary = Callable[[dict[str, Any]], dict[str, Any]]
 BuildTestPointAssetTechniqueSummary = Callable[[dict[str, Any]], dict[str, Any]]
@@ -940,9 +941,11 @@ def build_saved_case_payload(
     save_case_state: SaveCaseState,
     append_history: AppendHistory,
     now_iso: NowIsoFn,
+    ensure_project_writable: EnsureProjectWritable,
 ) -> dict[str, Any]:
     normalized_case_id = safe_case_id(case_id)
-    case_path = resolve_case_yaml_path(project, normalized_case_id)
+    normalized_project = ensure_project_writable(project)
+    case_path = resolve_case_yaml_path(normalized_project, normalized_case_id)
     try:
         case_yaml = yaml.safe_load(yaml_content) or {}
     except Exception as exc:
@@ -958,7 +961,7 @@ def build_saved_case_payload(
             detail="; ".join(validation_errors),
         )
     final_text = write_case_yaml(case_path, case_yaml)
-    state_entry = save_case_state(project, case_yaml, case_path)
+    state_entry = save_case_state(normalized_project, case_yaml, case_path)
     append_history(
         {
             "timestamp": now_iso(),
@@ -972,7 +975,7 @@ def build_saved_case_payload(
         "message": "case saved",
         "item": {
             "case_id": normalized_case_id,
-            "project": project,
+            "project": normalized_project,
             "path": str(case_path.resolve()),
             "yaml_content": final_text,
             "state": state_entry,

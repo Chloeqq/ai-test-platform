@@ -19,6 +19,9 @@
       api,
       clearSelection,
       els,
+      getCaseItemById,
+      hasBlockedSelection,
+      isCaseWriteBlocked,
       loadList,
       renderTable,
       reviewMode,
@@ -44,6 +47,23 @@
     function resolveCaseBusinessId(numericId) {
       const target = (Array.isArray(state.items) ? state.items : []).find((item) => Number(item.id || 0) === Number(numericId || 0));
       return String(target && target.case_id || "").trim();
+    }
+
+    function ensureRowWriteAllowed(caseId) {
+      const target = typeof getCaseItemById === "function" ? getCaseItemById(caseId) : null;
+      if (typeof isCaseWriteBlocked === "function" && isCaseWriteBlocked(target)) {
+        window.alert("当前用例所属项目为 inactive，仅允许浏览、运行、导出和删除；编辑类操作已禁用。");
+        return false;
+      }
+      return true;
+    }
+
+    function ensureSelectionWriteAllowed() {
+      if (typeof hasBlockedSelection === "function" && hasBlockedSelection()) {
+        window.alert("当前选择中包含 inactive 项目的用例，仅允许运行、导出和删除；批量编辑类操作已禁用。");
+        return false;
+      }
+      return true;
     }
 
     function redirectToList(caseId) {
@@ -80,6 +100,7 @@
         return;
       }
       if (action === "approve") {
+        if (!ensureRowWriteAllowed(caseId)) return;
         api.updateStatus([caseId], "active")
           .then(() => {
             window.alert("审核通过，已更新为启用状态。");
@@ -93,6 +114,7 @@
         return;
       }
       if (action === "reject") {
+        if (!ensureRowWriteAllowed(caseId)) return;
         api.updateStatus([caseId], "deprecated")
           .then(() => {
             window.alert("已驳回，状态更新为已废弃。");
@@ -121,6 +143,7 @@
         return;
       }
       if (action === "tag") {
+        if (!ensureRowWriteAllowed(caseId)) return;
         const nextTags = window.prompt("请输入新的标签，使用逗号分隔", "smoke,regression") || "";
         api.updateTags([caseId], nextTags.split(",").map((item) => item.trim()).filter(Boolean))
           .then(() => loadList())
@@ -128,6 +151,7 @@
         return;
       }
       if (action === "archive") {
+        if (!ensureRowWriteAllowed(caseId)) return;
         if (!window.confirm("确认将该用例标记为废弃状态吗？该操作不会物理删除。")) return;
         api.updateStatus([caseId], "deprecated")
           .then(() => loadList())
@@ -147,6 +171,7 @@
     });
 
     els.btnArchive.addEventListener("click", () => {
+      if (!ensureSelectionWriteAllowed()) return;
       const ids = ensureSelection();
       if (!ids) return;
       if (!window.confirm(`确认将选中的 ${ids.length} 条用例标记为废弃状态吗？该操作不会物理删除。`)) return;
@@ -154,6 +179,7 @@
     });
 
     els.btnTags.addEventListener("click", () => {
+      if (!ensureSelectionWriteAllowed()) return;
       const ids = ensureSelection();
       if (!ids) return;
       const nextTags = window.prompt("请输入新的标签，使用逗号分隔", "smoke,regression") || "";

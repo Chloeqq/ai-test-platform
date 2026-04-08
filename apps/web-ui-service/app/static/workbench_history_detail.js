@@ -43,7 +43,7 @@
     if (!runId) return escapeHtml(label || "-");
     const params = new URLSearchParams();
     params.set("run_id", runId);
-    if (item?.project) params.set("project", String(item.project).trim());
+    if (item?.project_code || item?.project) params.set("project", String(item.project_code || item.project).trim());
     if (item?.review_type) params.set("review_type", String(item.review_type).trim());
     if (item?.page) params.set("page", String(item.page).trim());
     return `<a class="action-link" href="/execution/workbench?${params.toString()}">${escapeHtml(label || displayRunId(runId))}</a>`;
@@ -54,7 +54,7 @@
     if (!runId) return escapeHtml(label || "-");
     const params = new URLSearchParams();
     params.set("run_id", runId);
-    if (item?.project) params.set("project", String(item.project).trim());
+    if (item?.project_code || item?.project) params.set("project", String(item.project_code || item.project).trim());
     if (item?.review_type) params.set("review_type", String(item.review_type).trim());
     if (item?.page) params.set("page", String(item.page).trim());
     return `<a class="action-link" href="/ai-generation?${params.toString()}">${escapeHtml(label || displayRunId(runId))}</a>`;
@@ -138,8 +138,12 @@
           <p>${escapeHtml(displayRunId(item.run_id || "-"))}</p>
         </article>
         <article class="kv-item">
-          <span>页面 / 确认人</span>
-          <p>${escapeHtml(item.page || "-")} ｜ ${escapeHtml(item.actor_display || item.confirmed_by || "-")}</p>
+          <span>项目 / 页面</span>
+          <p>${escapeHtml(item.project_code || item.project || "-")} ｜ ${escapeHtml(item.page || "-")}</p>
+        </article>
+        <article class="kv-item">
+          <span>项目状态 / 确认人</span>
+          <p>${escapeHtml(item.project_status || "active")} ｜ ${escapeHtml(item.actor_display || item.confirmed_by || "-")}</p>
         </article>
       </div>
       <ul class="workbench-history-link-list">

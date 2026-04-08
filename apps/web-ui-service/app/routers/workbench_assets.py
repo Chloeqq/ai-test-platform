@@ -8,7 +8,7 @@ from shared_backend import get_dictionary_items
 
 from app.core.database import get_db
 from app.services import workbench_case_consistency_service
-from app.services import workbench_asset_service
+from app.services import workbench_asset_service, workbench_project_service
 from . import legacy_workbench
 
 
@@ -111,6 +111,7 @@ def save_case(
         save_case_state=legacy_workbench._save_case_state,
         append_history=legacy_workbench._append_history,
         now_iso=legacy_workbench._now_iso,
+        ensure_project_writable=lambda project_code: workbench_project_service.ensure_project_writable(db, project_code),
     )
 
 

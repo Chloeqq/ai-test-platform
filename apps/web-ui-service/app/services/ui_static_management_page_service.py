@@ -58,7 +58,8 @@ def _page_objects_payload() -> dict[str, Any]:
             {"title": "product.list", "description": "覆盖商品列表的搜索、筛选、排序和跳转入口。", "bullets": ["高频变更页面", "建议接入覆盖矩阵", "与测试点资产联动"]},
             {"title": "brand.list", "description": "新收口页面对象，当前仍需补齐列表操作和详情交互。", "bullets": ["先完成关键元素基线", "补齐断言建议", "进入 Review 后再放开复用"]},
         ],
-        "primary_action": {"label": "查看测试点资产", "href": "/assets/test-points"},
+        "primary_action": {"label": "开始页面录制", "href": "/assets/page-objects/recorder"},
+        "secondary_action": {"label": "查看测试点资产", "href": "/assets/test-points"},
     }
 
 

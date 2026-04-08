@@ -36,6 +36,7 @@
   function currentFilters(nodes) {
     return {
       keyword: String(nodes.keyword.value || "").trim(),
+      project: String(nodes.project.value || "").trim(),
       status: String(nodes.status.value || "").trim(),
       queue: String(nodes.queue.value || "").trim(),
       source: String(nodes.source.value || "").trim(),
@@ -51,6 +52,7 @@
   function buildTaskParams(nodes) {
     const params = new URLSearchParams({ limit: "300" });
     [
+      ["project_code", nodes.project],
       ["status", nodes.status],
       ["queue_status", nodes.queue],
       ["source", nodes.source],
@@ -67,6 +69,7 @@
 
   function filterAndSortItems(items, filters, listPage) {
     const keyword = filters.keyword.toLowerCase();
+    const project = filters.project.toLowerCase();
     const status = filters.status.toLowerCase();
     const queue = filters.queue.toLowerCase();
     const source = filters.source.toLowerCase();
@@ -75,6 +78,8 @@
         item.task_id,
         item.run_id,
         item.case_id,
+        item.project_code,
+        item.project,
         item.page,
         item.runner,
         item.queue,
@@ -86,6 +91,7 @@
         .map((entry) => String(entry || "").toLowerCase())
         .join(" ");
       if (keyword && !haystack.includes(keyword)) return false;
+      if (project && String(item.project_code || item.project || "").toLowerCase() !== project) return false;
       if (status && String(item.status || "").toLowerCase() !== status) return false;
       if (queue && String(item.queue_status || "").toLowerCase() !== queue) return false;
       if (source && String(item.source || "").toLowerCase() !== source) return false;
@@ -106,6 +112,7 @@
   function filterSummary(filters, count) {
     const active = [
       filters.keyword && `关键词 ${filters.keyword}`,
+      filters.project && `项目 ${filters.project}`,
       filters.status && `状态 ${filters.status}`,
       filters.queue && `队列 ${filters.queue}`,
       filters.source && `来源 ${filters.source}`,

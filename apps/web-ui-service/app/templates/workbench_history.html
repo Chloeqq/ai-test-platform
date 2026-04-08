@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="/static/governance_pages.css?v=20260403-history-1">
 <link rel="stylesheet" href="/static/workbench.css">
 <link rel="stylesheet" href="/static/workbench_history.css?v=20260403-history-1">
+<link rel="stylesheet" href="/static/project_manager_dialog.css?v=20260406-project-manager-2">
 {% endblock %}
 
 {% block content %}
@@ -80,6 +81,12 @@
         <div class="list-filter-row">
           <div class="list-filter-strip">
             <label class="toolbar-field">
+              <span>项目</span>
+              <select id="wb-history-project">
+                <option value="">全部项目</option>
+              </select>
+            </label>
+            <label class="toolbar-field">
               <span>动作</span>
               <select id="wb-history-action">
                 <option value="">全部动作</option>
@@ -136,6 +143,7 @@
             </div>
           </details>
           <div class="toolbar-actions">
+            <button id="wb-history-manage-project" class="btn" type="button">管理项目</button>
             <button id="wb-history-refresh" class="btn btn-primary" type="button">刷新历史</button>
             <button id="wb-history-clear" class="btn btn-danger" type="button">清空历史</button>
           </div>
@@ -143,6 +151,7 @@
       </div>
       <div class="toolbar-meta">
         <span id="wb-history-filter-summary">当前按默认规则展示最近历史。</span>
+        <span id="wb-history-project-note"></span>
         <span id="wb-history-last-updated">最后刷新：-</span>
       </div>
       <div class="selection-bar" id="wb-history-selection-bar" hidden>
@@ -205,8 +214,11 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="/static/projects_api.js?v=20260405-projects-1"></script>
+<script src="/static/project_manager_dialog.js?v=20260406-project-manager-3"></script>
+<script src="/static/project_selector_support.js?v=20260407-project-selector-1"></script>
 <script src="/static/workbench_history_detail.js?v=20260403-history-1"></script>
 <script src="/static/workbench_history_support.js?v=20260403-history-1"></script>
 <script src="/static/workbench_history_table.js?v=20260404-history-2"></script>
-<script src="/static/workbench_history.js?v=20260406-history-3"></script>
+<script src="/static/workbench_history.js?v=20260407-history-4"></script>
 {% endblock %}

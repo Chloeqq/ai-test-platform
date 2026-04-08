@@ -10,7 +10,7 @@
   function buildWorkbenchHref(item) {
     const params = new URLSearchParams();
     const runId = String(item?.run_id || "").trim();
-    const project = String(item?.project || "").trim();
+    const project = String(item?.project_code || item?.project || "").trim();
     if (runId) {
       params.set("run_id", runId);
     }
@@ -33,9 +33,9 @@
     return `
       <div class="detail-highlight">
         <h3>${escapeHtml(helpers.displayRunId(item.run_id || item.task_id || "-"))}</h3>
-        <p>case=${escapeHtml(helpers.displayCaseId(item.case_id || "-"))} ｜ page=${escapeHtml(item.page || "-")} ｜ runner=${escapeHtml(item.runner || "-")}</p>
+        <p>case=${escapeHtml(helpers.displayCaseId(item.case_id || "-"))} ｜ project=${escapeHtml(item.project_code || item.project || "-")} ｜ page=${escapeHtml(item.page || "-")}</p>
       </div>
-      <article class="kv-item"><span>状态</span><strong>${helpers.badge(item.status || "unknown")}</strong><p class="meta-text">queue=${escapeHtml(item.queue_status || "-")} ｜ source=${escapeHtml(item.source || "-")}</p></article>
+      <article class="kv-item"><span>状态</span><strong>${helpers.badge(item.status || "unknown")}</strong><p class="meta-text">queue=${escapeHtml(item.queue_status || "-")} ｜ source=${escapeHtml(item.source || "-")} ｜ project_status=${escapeHtml(item.project_status || "active")}</p></article>
       <article class="kv-item"><span>证据健康</span><strong>${helpers.badge(evidence.status || "unknown")}</strong><p class="meta-text">${escapeHtml(evidence.reason || "-")}</p></article>
       <article class="kv-item"><span>证据时效</span><strong>${helpers.badge(freshness.status || "unknown")}</strong><p class="meta-text">${escapeHtml(freshness.reason || "-")}</p></article>
       <article class="kv-item"><span>Strict-mode</span><strong>${helpers.badge(item.strict_mode?.status || "unknown")}</strong><p class="meta-text">${escapeHtml(item.strict_mode?.reason || "-")}</p></article>
@@ -60,7 +60,7 @@
     return `
       <tr class="${String(item.task_id) === selectedTaskId ? "is-active" : ""}" data-task-id="${escapeHtml(item.task_id)}">
         <td class="selection-col"><input class="er-check" type="checkbox" data-task-id="${escapeHtml(item.task_id)}" ${selectedIds.has(String(item.task_id)) ? "checked" : ""} aria-label="选择任务"></td>
-        <td><div class="table-title">${escapeHtml(helpers.displayRunId(item.run_id || item.task_id || "-"))}</div><div class="table-subtitle mono">case · ${escapeHtml(helpers.displayCaseId(item.case_id || "-"))}</div></td>
+        <td><div class="table-title">${escapeHtml(helpers.displayRunId(item.run_id || item.task_id || "-"))}</div><div class="table-subtitle mono">case · ${escapeHtml(helpers.displayCaseId(item.case_id || "-"))} ｜ project · ${escapeHtml(item.project_code || item.project || "-")}</div></td>
         <td>${helpers.badge(item.status || "unknown")}</td>
         <td>${helpers.badge(item.queue_status || "unknown")}</td>
         <td>${helpers.badge(item.source || "unknown")}</td>

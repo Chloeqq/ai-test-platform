@@ -1,6 +1,6 @@
 # 企业级 AI 测试平台缺口补齐工作包台账（2026-04-06）
 
-文档版本：v1.0  
+文档版本：v1.10  
 文档类型：执行台账（Execution Backlog）  
 目标：把架构缺口拆解成可交付、可验收、可回滚的工程任务包  
 关联文档：`enterprise-ai-test-platform-full-architecture-and-gap-closure-2026-04-06.md`
@@ -26,12 +26,12 @@
 
 ## 1. 全局进度看板（持续更新）
 
-更新时间：2026-04-06 17:58 (Asia/Shanghai)
+更新时间：2026-04-07 23:54 (Asia/Shanghai)
 
 | 维度 | 完成度估算 | 当前状态 | 说明 |
 |---|---:|---|---|
 | 输入源层 | 55% | 进行中 | 多源解析已接入，结构化入库与追踪仍缺失 |
-| 测试资产中心 | 49% | 进行中 | WP-01 已进入落地：模型/服务/路由/测试已就绪，迁移脚本待补 |
+| 测试资产中心 | 69% | 进行中 | WP-01 已落迁移闭环；WP-02 已完成录制会话 API + 前端录制页 + 页面对象管理页联动 + 项目治理约束前后端一致，并补齐用例详情页、Workbench、生成历史、执行任务入口的一致性 |
 | AI 编排层 | 62% | 进行中 | 主链可用，adapter/tool 空壳待补 |
 | 自动化执行层 | 58% | 进行中 | Web 主链稳定，Mobile 未落地 |
 | 执行与调度中心 | 35% | 进行中 | 汇总视图已具备，真实调度内核不足 |
@@ -40,7 +40,7 @@
 | 发布决策与治理层 | 61% | 进行中 | 门禁/审批可用，策略治理深度不足 |
 | 基础设施层 | 47% | 进行中 | docker-compose 完整，K8s/MQ/对象存储待工程化 |
 
-总体完成度（加权）：**53%（进行中）**
+总体完成度（加权）：**58%（进行中）**
 
 ---
 
@@ -49,7 +49,7 @@
 | 编号 | 工作包 | 层级 | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|---|
 | WP-01 | 页面对象中心化数据模型落库 | 测试资产中心 | P0 | 进行中 | 无 |
-| WP-02 | 页面对象录制主链（会话/捕获/确认） | 测试资产中心 | P0 | 未开始 | WP-01 |
+| WP-02 | 页面对象录制主链（会话/捕获/确认） | 测试资产中心 | P0 | 进行中 | WP-01 |
 | WP-03 | 执行层改造：步骤引用 element_code | 资产中心 + 执行层 | P0 | 未开始 | WP-01, WP-02 |
 | WP-04 | 页面对象健康巡检与告警 | 资产中心 + 质量层 | P0 | 未开始 | WP-01 |
 | WP-05 | API 契约中心（持久化 + 版本差异） | 测试资产中心 | P1 | 未开始 | WP-01 |
@@ -107,8 +107,41 @@
 - 已完成：runner 侧 schema 同步（`page_object.schema.json`、`yaml_testcase.schema.json` 增强兼容字段）。
 - 已完成：`page/element` 字段补齐（`page_url/module_id/element_count/health_status`、`backup_locator/health_status/version`）并回写页面聚合指标。
 - 已完成：Alembic 最小骨架补齐（`alembic.ini`、`migrations/env.py`、`migrations/script.py.mako`、WP-01 revision、`scripts/bootstrap_database.py`）。
-- 待完成：把历史 `pyc` 迁移版本恢复为源码 revision，形成连续演进链（当前先以 WP-01 revision 作为可执行基线）。
+- 已完成：历史 `pyc` 迁移版本恢复为源码 revision，形成连续演进链（`20260323_143500` -> `20260327_181500` -> `20260406_181500_wp01...`）。
 - 待完成：与录制器 WP-02 的会话写入接口衔接。
+
+## WP-02 当前进度（2026-04-07）
+
+- 已完成：录制会话模型 `page_object_recorder_sessions` 与迁移补齐。
+- 已完成：录制会话 API：
+  - `POST /api/page-objects/recorder/sessions`
+  - `GET /api/page-objects/recorder/sessions/{session_id}`
+  - `POST /api/page-objects/recorder/sessions/{session_id}/heartbeat`
+  - `POST /api/page-objects/recorder/sessions/{session_id}/stop`
+- 已完成：后端 `playwright codegen` 进程拉起/停止 + 录制脚本解析 + `page + element` 入库。
+- 已完成：集成测试覆盖录制会话生命周期与入库幂等。
+- 已完成：前端录制页面入口与会话状态展示（`/assets/page-objects/recorder`）。
+- 已完成：页面对象管理页接入真实后端 API（`/assets/page-objects`，含 page/element 基础 CRUD）。
+- 已完成：项目管理能力在用例列表 / 生成用例 / 页面对象 / 页面录制四个入口统一（共享 `project_selector_support.js` + 统一项目弹层回调）。
+- 已完成：项目删除规则与测试口径对齐（默认仅校验数据库引用；显式传入 `state_root` 时才校验文件状态目录）。
+- 已完成：Playwright 项目管理冒烟增强（`test_project_manager_smoke.py`）覆盖跨页面同步：`/cases`、`/ai-generation`、`/execution/workbench`、`/assets/page-objects`、`/assets/page-objects/recorder`，并校验 Workbench 在 inactive 项目下进入只读态。
+- 已完成：`check_web_ui_pages.py` 巡检范围扩展到页面对象与录制页面，纳入匿名/登录双场景巡检。
+- 已完成：inactive 项目写入约束落地（页面对象创建/更新/元素写入/录制会话创建统一校验 `project.status=active`），并补齐集成测试。
+- 已完成：inactive 项目前端治理补齐（`cases` 新建草稿弹窗、`ai-generation`、`page-object-recorder` 均禁用 inactive 项目写入；仅保留列表筛选场景可见）。
+- 已完成：用例服务写入口 active 校验补齐（`create_test_case`、`update_test_case`、`upsert_test_case_from_workbench`、`create/update_module_tree_node`、`update_script`、`batch_update_test_case_tags`、`batch_update_test_case_status`、`add_test_case_defect`），并补齐单测/集成测试。
+- 已完成：服务层剩余高频写入口回归补齐（批量标签、脚本更新、模块树更新等），当前删除/清理类操作暂保留为治理例外，用于 inactive 项目存量清理。
+- 已完成：`cases` 列表页前端治理提示与按钮收口：当筛选到单个 inactive 项目时，前端主动禁用新增、审核、改标签、废弃、树节点新增/编辑；运行、导出、删除保留。
+- 已完成：用例列表 payload 下发 `project_status`，`cases` 页支持“全部项目”视图下按行/按选中集精确治理 inactive 项目用例，不再只依赖当前筛选项目粗粒度判断。
+- 已完成：用例详情 payload 下发真实 `project_status`，详情页前端已与服务层治理规则对齐；inactive 项目下仅保留浏览、版本对比、执行历史查看，禁用资产属性、数据驱动、脚本和缺陷写入。
+- 已完成：详情页治理回归补齐（service/API/detail template 占位），避免再次回落为 mapper 默认 `active`。
+- 已完成：Workbench 项目列表改为结构化项目项（`project_code/project_name/status/source`），调试页接入统一项目管理弹层与治理提示。
+- 已完成：Workbench YAML 保存链路补齐 inactive 项目写保护；前端在 inactive 项目下切换为只读浏览态，并允许基于已保存版本继续执行。
+- 已完成：Workbench 项目 API / 保存 API / 页面模板回归补齐，确保调试入口与用例中心项目治理口径一致。
+- 已完成：`/ai-generation/history` 与 `/execution/runs` 接入统一项目选择器、项目管理弹层、`project_code/project_status` 透传与 inactive 项目提示，历史/执行侧链入口与用例中心项目治理口径一致。
+- 已完成：`/api/workbench/history`、`/api/workbench/tasks` 支持按 `project_code` 筛选，并补齐 `project_status` 返回；新增集成测试覆盖项目过滤与 inactive 项目状态透传。
+- 已完成：`check-web-ui-static.sh` 纳入 `workbench_history*`、`execution_runs*` 脚本静态检查，避免新页面遗漏基线校验。
+- 已完成：验证基线补齐并通过：`run-static-baseline-fast.sh`、页面巡检、集成测试（项目管理/页面对象/录制链路）、Playwright 项目管理冒烟。
+- 待完成：捕获候选定位器实时回传（当前为 stop 后批量解析）。
 
 ---
 
@@ -384,3 +417,9 @@ OpenAPI 不再是临时解析结果，形成契约资产中心。
 | 日期 | 版本 | 变更内容 | 作者 |
 |---|---|---|---|
 | 2026-04-06 | v1.0 | 首次创建工作包台账，按全景架构缺口拆解 13 个工作包 | Codex |
+| 2026-04-07 | v1.1 | 补记 WP-02 项目治理收口进展：四入口项目管理统一、inactive 项目写入前后端一致、验证链路补齐并通过 | Codex |
+| 2026-04-07 | v1.2 | 补记用例服务写入口治理：active 项目校验下沉至 service 层并补齐回归测试 | Codex |
+| 2026-04-07 | v1.3 | 扩展用例治理覆盖范围：脚本更新、批量标签/状态、缺陷关联写入口统一纳入 active 项目约束 | Codex |
+| 2026-04-07 | v1.4 | 补记治理例外与测试扩围：删除/清理类操作暂保留，新增批量标签/脚本/模块树更新回归覆盖 | Codex |
+| 2026-04-07 | v1.5 | 补记用例列表页 UI 治理收口：inactive 项目筛选态下的前端禁用策略与提示文案已落地 | Codex |
+| 2026-04-07 | v1.6 | 补记列表 contract 升级：新增 `project_status` 字段，支持全项目视图逐行/逐选择集治理 inactive 项目用例 | Codex |

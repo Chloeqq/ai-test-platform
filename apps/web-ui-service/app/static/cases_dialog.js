@@ -2,7 +2,8 @@
   const dialog = document.getElementById("new-case-dialog");
   const api = window.CasesApi;
   const projectsApi = window.ProjectsApi;
-  if (!dialog || !api || !projectsApi) return;
+  const projectSelectorSupport = window.ProjectSelectorSupport;
+  if (!dialog || !api || !projectsApi || !projectSelectorSupport) return;
 
   const els = {
     projectSelect: document.getElementById("new-project-code"),
@@ -18,21 +19,28 @@
   }
 
   function setProjectOptions(items) {
-    const options = (Array.isArray(items) ? items : []).map((item) => {
-      const projectCode = String(item.project_code || "").trim();
-      const projectName = String(item.project_name || projectCode).trim();
-      const selected = projectCode === "atp" ? " selected" : "";
-      return `<option value="${projectCode}"${selected}>${projectCode} · ${projectName}</option>`;
+    projectSelectorSupport.applyProjectOptions(els.projectSelect, items, {
+      selectedValue: String(els.projectSelect.value || "atp").trim().toLowerCase() || "atp",
+      defaultProjectCode: "atp",
+      disableInactive: true,
+      inactiveLabelSuffix: " (inactive,不可用)",
     });
-    els.projectSelect.innerHTML = options.join("") || '<option value="atp" selected>atp</option>';
   }
 
   async function loadProjects() {
-    const payload = await projectsApi.list();
-    setProjectOptions(payload.items || []);
+    const items = await projectSelectorSupport.loadProjectOptions({
+      projectsApi: projectsApi,
+      selectEl: els.projectSelect,
+      selectedValue: String(els.projectSelect.value || "atp").trim().toLowerCase() || "atp",
+      defaultProjectCode: "atp",
+      disableInactive: true,
+      inactiveLabelSuffix: " (inactive,不可用)",
+    });
+    setProjectOptions(items);
   }
 
   function openDialog() {
+    loadProjects().catch(() => {});
     dialog.showModal();
   }
 
@@ -49,9 +57,15 @@
 
   async function submitForm(event) {
     event.preventDefault();
+    const selectedOption = els.projectSelect.options[els.projectSelect.selectedIndex] || null;
+    const projectCode = projectSelectorSupport.normalizeCode(els.projectSelect.value || "");
+    if (!projectCode || (selectedOption && selectedOption.disabled)) {
+      window.alert("没有可用的 active 项目，请先在项目管理中创建或启用项目。");
+      return;
+    }
     const payload = {
       mode: "manual",
-      project_code: els.projectSelect.value || "atp",
+      project_code: projectCode,
       name: String(document.getElementById("new-name")?.value || "").trim(),
       product_line: String(document.getElementById("new-product-line")?.value || "").trim(),
       module: String(document.getElementById("new-module")?.value || "").trim(),

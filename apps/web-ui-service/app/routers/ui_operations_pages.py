@@ -72,6 +72,7 @@ def workbench_history_page(request: Request) -> HTMLResponse:
             "active_filters": ui_shell_service.build_active_filters(
                 request,
                 {
+                    "project_code": "项目",
                     "keyword": "关键词",
                     "action": "动作",
                     "status": "状态",
@@ -154,6 +155,7 @@ def execution_records_page(request: Request) -> HTMLResponse:
             "active_filters": ui_shell_service.build_active_filters(
                 request,
                 {
+                    "project_code": "项目",
                     "keyword": "关键词",
                     "risk_levels": "风险级别",
                     "traceability_gap": "追溯缺口",

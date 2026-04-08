@@ -3,6 +3,9 @@
   const presenter = window.ExecutionRunsPresenter;
   const listPage = window.ListPage;
   const support = window.ExecutionRunsSupport;
+  const projectsApi = window.ProjectsApi;
+  const projectManager = window.ProjectManagerDialog;
+  const projectSelectorSupport = window.ProjectSelectorSupport;
   if (!shell || !presenter || !listPage || !support) return;
 
   const els = {
@@ -13,6 +16,7 @@
     keyword: document.getElementById("er-filter-keyword"),
     search: document.getElementById("er-search"),
     searchClear: document.getElementById("er-search-clear"),
+    project: document.getElementById("er-filter-project"),
     status: document.getElementById("er-filter-status"),
     queue: document.getElementById("er-filter-queue"),
     source: document.getElementById("er-filter-source"),
@@ -24,9 +28,11 @@
     dependency: document.getElementById("er-filter-dependency"),
     advanced: document.getElementById("er-advanced-filters"),
     applyFilters: document.getElementById("er-apply-filters"),
+    manageProject: document.getElementById("er-manage-project"),
     refresh: document.getElementById("er-refresh"),
     reset: document.getElementById("er-reset"),
     filterSummary: document.getElementById("er-filter-summary"),
+    projectNote: document.getElementById("er-project-note"),
     lastUpdated: document.getElementById("er-last-updated"),
     selectionBar: document.getElementById("er-selection-bar"),
     selectionCopy: document.getElementById("er-selection-copy"),
@@ -45,6 +51,7 @@
     page: 1,
     pageSize: 20,
     summary: {},
+    projectItems: [],
   };
   const storageKey = "execution_runs_filters_v1";
 
@@ -84,10 +91,76 @@
     }
   }
 
+  function selectedProjectCode() {
+    if (!projectSelectorSupport) return String(els.project?.value || "").trim().toLowerCase();
+    return projectSelectorSupport.normalizeCode(els.project?.value || "");
+  }
+
+  function syncProjectGovernanceNote() {
+    if (!els.projectNote) return;
+    const currentProjectCode = selectedProjectCode();
+    if (!currentProjectCode) {
+      els.projectNote.textContent = "";
+      return;
+    }
+    const currentProject = state.projectItems.find((item) => {
+      return projectSelectorSupport
+        ? projectSelectorSupport.normalizeCode(item.project_code) === currentProjectCode
+        : String(item.project_code || "").trim().toLowerCase() === currentProjectCode;
+    });
+    const projectStatus = String(currentProject?.status || "active").trim().toLowerCase() || "active";
+    els.projectNote.textContent = projectStatus === "inactive"
+      ? "当前筛选项目为 inactive，本页仍允许查看执行任务；如需回到生成、保存或审核写入口，请先恢复项目为 active。"
+      : "";
+  }
+
+  function setProjectOptions(items, selectedValue) {
+    if (!projectSelectorSupport || !els.project) return;
+    state.projectItems = Array.isArray(items) ? items : [];
+    projectSelectorSupport.applyProjectOptions(els.project, state.projectItems, {
+      selectedValue: selectedValue != null ? selectedValue : (els.project.value || ""),
+      defaultProjectCode: "atp",
+      emptyOptionLabel: "全部项目",
+    });
+    syncProjectGovernanceNote();
+  }
+
+  async function loadProjects(selectedValue) {
+    if (!projectsApi || !projectSelectorSupport || !els.project) return;
+    const items = await projectSelectorSupport.loadProjectOptions({
+      projectsApi,
+      selectEl: els.project,
+      selectedValue: selectedValue != null ? selectedValue : (els.project.value || ""),
+      defaultProjectCode: "atp",
+      emptyOptionLabel: "全部项目",
+    });
+    state.projectItems = Array.isArray(items) ? items : [];
+    syncProjectGovernanceNote();
+  }
+
+  function openProjectManager() {
+    if (!projectSelectorSupport || !projectManager || !projectsApi || !els.project) return;
+    projectSelectorSupport.openProjectManager({
+      projectManager,
+      projectsApi,
+      selectEl: els.project,
+      selectedProjectCode: selectedProjectCode(),
+      defaultProjectCode: "atp",
+      deleteFallbackValue: "",
+      emptyOptionLabel: "全部项目",
+      onChanged: async ({ items, selectedProjectCode }) => {
+        setProjectOptions(items, selectedProjectCode || "");
+        state.page = 1;
+        await load().catch(() => {});
+      },
+    });
+  }
+
   function persistFilters() {
     if (typeof window.platformWriteFilterState === "function") {
       window.platformWriteFilterState(storageKey, {
         keyword: els.keyword,
+        project: els.project,
         status: els.status,
         queue: els.queue,
         source: els.source,
@@ -132,17 +205,17 @@
 
     if (!pager.items.length) {
       els.tbody.innerHTML = '<tr><td colspan="8" class="empty-state">当前筛选条件下没有执行任务。</td></tr>';
-      renderDetail(null);
+      els.detailPanel.innerHTML = presenter.renderDetail(null, { badge, displayCaseId, displayRunId, formatTime });
     } else {
       if (!state.selectedTaskId || !pager.items.some((item) => String(item.task_id) === state.selectedTaskId)) {
         state.selectedTaskId = String(pager.items[0].task_id || "");
       }
-        els.tbody.innerHTML = pager.items.map((item) => presenter.renderRow(item, state.selectedTaskId, state.selectedIds, {
-          badge,
-          displayCaseId,
-          displayRunId,
-          formatTime,
-        })).join("");
+      els.tbody.innerHTML = pager.items.map((item) => presenter.renderRow(item, state.selectedTaskId, state.selectedIds, {
+        badge,
+        displayCaseId,
+        displayRunId,
+        formatTime,
+      })).join("");
       els.detailPanel.innerHTML = presenter.renderDetail(
         items.find((item) => String(item.task_id) === state.selectedTaskId) || pager.items[0],
         { badge, displayCaseId, displayRunId, formatTime },
@@ -212,8 +285,9 @@
     }
   }
 
-  [els.status, els.queue, els.source, els.evidence, els.strict, els.retry, els.dependency].forEach((node) => {
+  [els.project, els.status, els.queue, els.source, els.evidence, els.strict, els.retry, els.dependency].forEach((node) => {
     node.addEventListener("change", () => {
+      syncProjectGovernanceNote();
       persistFilters();
     });
   });
@@ -253,14 +327,18 @@
     persistFilters();
     load().catch(() => {});
   });
+  if (els.manageProject) {
+    els.manageProject.addEventListener("click", () => openProjectManager());
+  }
   els.refresh.addEventListener("click", () => load().catch(() => {}));
   els.reset.addEventListener("click", () => {
-    [els.keyword, els.status, els.queue, els.source, els.evidence, els.strict, els.retry, els.dependency].forEach((node) => { node.value = ""; });
+    [els.keyword, els.project, els.status, els.queue, els.source, els.evidence, els.strict, els.retry, els.dependency].forEach((node) => { node.value = ""; });
     els.sortKey.value = "finished_at";
     els.sortDir.value = "desc";
     state.page = 1;
     if (typeof window.platformClearFilterState === "function") window.platformClearFilterState(storageKey);
     if (els.advanced) els.advanced.open = false;
+    syncProjectGovernanceNote();
     load().catch(() => {});
   });
   els.copyRuns.addEventListener("click", () => copySelection("run"));
@@ -269,6 +347,7 @@
   if (typeof window.platformRestoreFilterState === "function") {
     window.platformRestoreFilterState(storageKey, {
       keyword: els.keyword,
+      project: els.project,
       status: els.status,
       queue: els.queue,
       source: els.source,
@@ -281,7 +360,13 @@
     });
   }
   persistFilters();
-  load().catch((error) => {
-    els.tbody.innerHTML = `<tr><td colspan="8" class="error-state">${escapeHtml(error.message || "加载执行任务失败")}</td></tr>`;
-  });
+  loadProjects(String(els.project?.value || "").trim())
+    .catch(() => {
+      syncProjectGovernanceNote();
+    })
+    .finally(() => {
+      load().catch((error) => {
+        els.tbody.innerHTML = `<tr><td colspan="8" class="error-state">${escapeHtml(error.message || "加载执行任务失败")}</td></tr>`;
+      });
+    });
 })();

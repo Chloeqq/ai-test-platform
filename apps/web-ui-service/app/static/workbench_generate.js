@@ -5,7 +5,8 @@
   const support = window.WorkbenchGenerateSupport;
   const projectsApi = window.ProjectsApi;
   const projectManager = window.ProjectManagerDialog;
-  if (!shell || !shared || !support || !presenter || !projectsApi || !projectManager) return;
+  const projectSelectorSupport = window.ProjectSelectorSupport;
+  if (!shell || !shared || !support || !presenter || !projectsApi || !projectManager || !projectSelectorSupport) return;
 
   const state = {
     method: shared.normalizeMethod(document.getElementById("gen-method")?.value),
@@ -100,29 +101,46 @@
     els.authNotice.textContent = `${username} 已登录，生成 Draft 与后续审核动作都会保留真实审计记录。`;
   }
 
+  function selectedProjectCode() {
+    const option = els.projectSelect?.options?.[els.projectSelect.selectedIndex] || null;
+    if (!option || option.disabled) return "";
+    return projectSelectorSupport
+      ? (projectSelectorSupport.normalizeCode(option.value || "") || "")
+      : (String(option.value || "").trim().toLowerCase() || "");
+  }
+
   function setProjectOptions(items, selectedValue) {
-    const options = (Array.isArray(items) ? items : []).map((item) => {
-      const projectCode = String(item.project_code || "").trim();
-      const projectName = String(item.project_name || projectCode).trim();
-      const selected = projectCode === (selectedValue || "atp") ? " selected" : "";
-      return `<option value="${projectCode}"${selected}>${projectCode} · ${projectName}</option>`;
+    projectSelectorSupport.applyProjectOptions(els.projectSelect, items, {
+      selectedValue: selectedValue || String(els.projectSelect?.value || "atp").trim() || "atp",
+      defaultProjectCode: "atp",
+      disableInactive: true,
+      inactiveLabelSuffix: " (inactive,不可用)",
     });
-    if (els.projectSelect) {
-      els.projectSelect.innerHTML = options.join("") || '<option value="atp" selected>atp</option>';
-    }
   }
 
   async function loadProjects(selectedValue) {
-    const payload = await projectsApi.list();
-    setProjectOptions(payload.items || [], selectedValue || String(els.projectSelect?.value || "atp").trim() || "atp");
+    const items = await projectSelectorSupport.loadProjectOptions({
+      projectsApi: projectsApi,
+      selectEl: els.projectSelect,
+      selectedValue: selectedValue || String(els.projectSelect?.value || "atp").trim() || "atp",
+      defaultProjectCode: "atp",
+      disableInactive: true,
+      inactiveLabelSuffix: " (inactive,不可用)",
+    });
+    setProjectOptions(items, selectedValue || String(els.projectSelect?.value || "atp").trim() || "atp");
   }
 
   function openProjectManager() {
-    projectManager.open({
-      selectedProjectCode: String(els.projectSelect?.value || "atp").trim() || "atp",
-      onChanged: async ({ action, project_code: projectCode }) => {
-        const selectedProjectCode = action === "delete" ? "atp" : String(projectCode || "").trim().toLowerCase();
-        await loadProjects(selectedProjectCode);
+    projectSelectorSupport.openProjectManager({
+      projectManager: projectManager,
+      projectsApi: projectsApi,
+      selectEl: els.projectSelect,
+      defaultProjectCode: "atp",
+      deleteFallbackValue: "atp",
+      disableInactive: true,
+      inactiveLabelSuffix: " (inactive,不可用)",
+      onChanged: async ({ action, projectCode, items, selectedProjectCode }) => {
+        setProjectOptions(items, selectedProjectCode || "atp");
         if (action === "create") {
           presenter.setText(els.result, `项目 ${selectedProjectCode} 已创建，可直接用于生成 Draft。`);
           return;
@@ -186,8 +204,14 @@
   }
 
   async function previewPoints() {
+    const projectCode = selectedProjectCode();
+    if (!projectCode) {
+      presenter.setText(els.intentSummary, "没有可用的 active 项目，请先在项目管理中新建 active 项目。");
+      return;
+    }
     presenter.setText(els.intentSummary, "正在生成候选预览...");
     const inputSources = await collectExtraInputSources();
+    if (els.projectSelect) els.projectSelect.value = projectCode;
     const payload = shared.buildGeneratePayload(els, inputSources);
     const body = await submitJson("/api/workbench/preview-test-points", payload);
     const item = body.item || {};
@@ -205,6 +229,11 @@
 
   async function generateCase(event) {
     if (event) event.preventDefault();
+    const projectCode = selectedProjectCode();
+    if (!projectCode) {
+      presenter.setText(els.result, "没有可用的 active 项目，请先在项目管理中新建 active 项目。");
+      return;
+    }
     if (!state.previewCandidates.length) {
       presenter.setText(els.result, "请先生成候选预览，再提交 Draft。");
       if (window.WorkbenchGenerateWizard) window.WorkbenchGenerateWizard.goTo(3);
@@ -212,6 +241,7 @@
     }
     presenter.setText(els.result, "正在生成 Draft...");
     const inputSources = await collectExtraInputSources();
+    if (els.projectSelect) els.projectSelect.value = projectCode;
     const payload = shared.buildGeneratePayload(els, inputSources, state.previewCandidates);
     const body = await submitJson("/api/workbench/generate", payload);
     const items = Array.isArray(body.items) && body.items.length ? body.items : [body.item || {}];
@@ -227,9 +257,9 @@
     presenter.setText(els.yamlPreview, previewText);
     if (caseIds.length) {
       const firstCaseId = caseIds[0];
-      const projectCode = String(firstItem.project_code || payload.project || els.projectSelect?.value || "atp").trim() || "atp";
-      els.openCases.href = `/cases/review?project_code=${encodeURIComponent(projectCode)}`;
-      els.openWorkbenchResult.href = buildWorkbenchHref(firstCaseId, projectCode);
+      const resolvedProjectCode = String(firstItem.project_code || payload.project || projectCode || "atp").trim() || "atp";
+      els.openCases.href = `/cases/review?project_code=${encodeURIComponent(resolvedProjectCode)}`;
+      els.openWorkbenchResult.href = buildWorkbenchHref(firstCaseId, resolvedProjectCode);
     }
     if (window.WorkbenchGenerateWizard) window.WorkbenchGenerateWizard.goTo(4);
   }
