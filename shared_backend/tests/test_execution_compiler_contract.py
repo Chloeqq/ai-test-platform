@@ -1,0 +1,376 @@
+"""Regression tests for the strict execution compiler pipeline contract."""
+from __future__ import annotations
+
+import pytest
+from shared_backend.execution_compiler import (
+    ExecutionCompilerError,
+    compile_execution_steps,
+    normalize_test_points,
+    normalize_test_points_to_actions,
+    build_execution_ir,
+    bind_targets,
+    render_execution_steps,
+)
+
+
+_SAMPLE_PAGE_OBJECT = {
+    "elements": {
+        "search_input": {"selector": "#search", "type": "css"},
+        "product_list_title": {"selector": ".list-title", "type": "css"},
+        "product_menu": {"selector": "[data-testid='product-menu']", "type": "css"},
+    }
+}
+
+
+class TestIntentIdPrimary:
+    """RC-1: intent_id is required and key must not backfill it."""
+
+    def test_extract_intent_id_requires_intent_id_field(self) -> None:
+        """intent_id must come from the intent_id field, not fall back to key."""
+        points = [
+            {
+                "key": "intent-01",
+                "intent_id": "intent-01",
+                "action": "fill",
+                "target": "search_input",
+                "value": "test",
+                "description": "填写搜索框",
+                "steps": [{"action": "fill", "target": "search_input", "value": "test", "raw_text": "填写搜索框"}],
+                "involved_elements": ["search_input"],
+            }
+        ]
+        normalized = normalize_test_points(points)
+        assert normalized[0]["intent_id"] == "intent-01"
+
+    def test_missing_intent_id_raises(self) -> None:
+        """Points without intent_id must fail fast."""
+        points = [
+            {
+                "key": "old-key",
+                "action": "fill",
+                "target": "search_input",
+                "value": "test",
+                "description": "填写搜索框",
+                "steps": [{"action": "fill", "target": "search_input", "value": "test", "raw_text": "填写搜索框"}],
+                "involved_elements": ["search_input"],
+            }
+        ]
+        with pytest.raises(ExecutionCompilerError):
+            normalize_test_points(points)
+
+    def test_extract_intent_id_prefers_intent_id_over_key(self) -> None:
+        points = [
+            {
+                "key": "old-key",
+                "intent_id": "intent-02",
+                "action": "click",
+                "target": "product_menu",
+                "description": "点击菜单",
+                "steps": [{"action": "click", "target": "product_menu", "raw_text": "点击菜单"}],
+                "involved_elements": ["product_menu"],
+            }
+        ]
+        normalized = normalize_test_points(points)
+        assert normalized[0]["intent_id"] == "intent-02"
+
+    def test_intent_id_points_produce_resolved_ir(self) -> None:
+        points = [
+            {
+                "key": "intent-01",
+                "intent_id": "intent-01",
+                "action": "fill",
+                "target": "search_input",
+                "value": "test query",
+                "description": "搜索商品",
+                "steps": [{"action": "fill", "target": "search_input", "value": "test query", "raw_text": "搜索商品"}],
+                "involved_elements": ["search_input"],
+            }
+        ]
+        normalized = normalize_test_points(points)
+        actions = normalize_test_points_to_actions(normalized)
+        ir = build_execution_ir(actions)
+
+        has_resolved = False
+        for step in ir["steps"]:
+            if step["meta"]["compiler_status"] == "resolved":
+                has_resolved = True
+            assert step["intent_id"] == "intent-01"
+        assert has_resolved, "at least one step should be resolved when intent_id is explicitly provided"
+
+    def test_compile_end_to_end_with_intent_id(self) -> None:
+        points = [
+            {
+                "key": "intent-01",
+                "intent_id": "intent-01",
+                "action": "fill",
+                "target": "search_input",
+                "value": "test",
+                "description": "填写搜索",
+                "steps": [{"action": "fill", "target": "search_input", "value": "test", "raw_text": "填写搜索"}],
+                "involved_elements": ["search_input"],
+            }
+        ]
+        steps = compile_execution_steps(points, _SAMPLE_PAGE_OBJECT)
+        assert len(steps) > 0
+        resolved_count = sum(
+            1 for s in steps
+            if s.get("traceability", {}).get("status") == "resolved"
+            or s.get("traceability", {}).get("compiler_status") == "resolved"
+        )
+        assert resolved_count > 0, f"expected resolved steps, got: {steps}"
+
+    def test_unknown_action_is_rejected(self) -> None:
+        points = [
+            {
+                "key": "intent-strict-01",
+                "intent_id": "intent-strict-01",
+                "action": "unknown_action_xyz",
+                "description": "不可识别的操作",
+                "steps": [{"action": "unknown_action_xyz", "raw_text": "不可识别的操作"}],
+                "involved_elements": ["search_input"],
+            }
+        ]
+        with pytest.raises(ExecutionCompilerError):
+            compile_execution_steps(points, {"elements": {}})
+
+
+class TestInvolvedElements:
+    """RC-2: compiler reads involved_elements only."""
+
+    def test_involved_elements_are_read_directly(self) -> None:
+        points = [
+            {
+                "key": "intent-01",
+                "intent_id": "intent-01",
+                "action": "click",
+                "involved_elements": ["product_menu"],
+                "description": "点击产品菜单",
+                "steps": [{"action": "click", "target": "product_menu", "raw_text": "点击产品菜单"}],
+            }
+        ]
+        normalized = normalize_test_points(points)
+        assert normalized[0]["involved_elements"] == ["product_menu"]
+
+    def test_missing_involved_elements_yields_empty(self) -> None:
+        """Without involved_elements, the list is empty."""
+        points = [
+            {
+                "intent_id": "intent-01",
+                "action": "click",
+                "description": "搜索",
+                "steps": [{"action": "click", "target": "product_menu", "raw_text": "搜索"}],
+            }
+        ]
+        normalized = normalize_test_points(points)
+        assert normalized[0]["involved_elements"] == []
+
+
+class TestStepsStructurePassthrough:
+    """RC-4: points with explicit steps list should be compiled as-is."""
+
+    def test_explicit_steps_list_preserved(self) -> None:
+        points = [
+            {
+                "intent_id": "intent-01",
+                "steps": [
+                    {"action": "fill", "target": "search_input", "value": "query"},
+                    {"action": "click", "target": "product_menu"},
+                ],
+            }
+        ]
+        normalized = normalize_test_points(points)
+        assert len(normalized[0]["steps"]) == 2
+
+    def test_action_step_passthrough_when_no_steps(self) -> None:
+        points = [
+            {
+                "intent_id": "intent-01",
+                "action": "click",
+                "target": "product_menu",
+                "description": "点击菜单",
+                "steps": [{"action": "click", "target": "product_menu", "raw_text": "点击菜单"}],
+            }
+        ]
+        normalized = normalize_test_points(points)
+        assert len(normalized[0]["steps"]) == 1
+        assert normalized[0]["steps"][0]["action"] == "click"
+
+    def test_multi_step_point_produces_multiple_ir_steps(self) -> None:
+        points = [
+            {
+                "intent_id": "intent-01",
+                "steps": [
+                    {"action": "fill", "target": "search_input", "value": "query"},
+                    {"action": "click", "target": "product_menu"},
+                ],
+            }
+        ]
+        normalized = normalize_test_points(points)
+        actions = normalize_test_points_to_actions(normalized)
+        ir = build_execution_ir(actions)
+        assert len(ir["steps"]) >= 2
+
+
+class TestBindTargets:
+    """Verify selector binding against page object elements."""
+
+    def test_known_target_binds_selector(self) -> None:
+        ir = {
+            "version": "execution-ir/v1",
+            "steps": [
+                {
+                    "type": "input",
+                    "target": "search_input",
+                    "value": "test",
+                    "assertion": None,
+                    "intent_id": "intent-01",
+                    "meta": {
+                        "raw_text": "fill search",
+                        "source_point_index": 0,
+                        "source_step_index": 0,
+                        "compiler_status": "resolved",
+                        "compiler_reason": "",
+                        "confidence": 1.0,
+                    },
+                }
+            ],
+        }
+        bound = bind_targets(ir, _SAMPLE_PAGE_OBJECT)
+        step = bound["steps"][0]
+        assert step["selector"] == "#search"
+        assert step["locator_type"] == "css"
+
+    def test_unknown_target_rejected(self) -> None:
+        ir = {
+            "version": "execution-ir/v1",
+            "steps": [
+                {
+                    "type": "click",
+                    "target": "nonexistent_element",
+                    "value": None,
+                    "assertion": None,
+                    "intent_id": "intent-01",
+                    "meta": {
+                        "raw_text": "click something",
+                        "source_point_index": 0,
+                        "source_step_index": 0,
+                        "compiler_status": "resolved",
+                        "compiler_reason": "",
+                        "confidence": 1.0,
+                    },
+                }
+            ],
+        }
+        with pytest.raises(ExecutionCompilerError):
+            bind_targets(ir, _SAMPLE_PAGE_OBJECT)
+
+
+class TestEndToEndCompile:
+    """Full pipeline: orchestrator-like points → compiled executable steps."""
+
+    def test_orchestrator_style_points_compile_successfully(self) -> None:
+        """Simulates the exact shape produced by build_test_points_from_requirement_spec."""
+        points = [
+            {
+                "key": "intent-01",
+                "intent_id": "intent-01",
+                "point_type": "action",
+                "action": "fill",
+                "target": "search_input",
+                "value": "3",
+                "description": "搜索商品",
+                "priority": "P1",
+                "involved_elements": ["search_input"],
+                "steps": [{"action": "fill", "target": "search_input", "value": "3", "raw_text": "搜索商品"}],
+                "metadata": {
+                    "traceability": {
+                        "intent_ids": ["intent-01"],
+                        "source_ids": [],
+                        "origin": "requirement_intent",
+                    }
+                },
+            },
+            {
+                "key": "intent-02",
+                "intent_id": "intent-02",
+                "point_type": "action",
+                "action": "assert_visible",
+                "target": "product_list_title",
+                "description": "验证列表标题可见",
+                "priority": "P1",
+                "involved_elements": ["product_list_title"],
+                "steps": [{"action": "assert_visible", "target": "product_list_title", "raw_text": "验证列表标题可见"}],
+                "metadata": {
+                    "traceability": {
+                        "intent_ids": ["intent-02"],
+                        "source_ids": [],
+                        "origin": "requirement_intent",
+                    }
+                },
+            },
+        ]
+        steps = compile_execution_steps(points, _SAMPLE_PAGE_OBJECT)
+        assert len(steps) >= 2
+
+        resolved_steps = [
+            s for s in steps
+            if s.get("traceability", {}).get("status") == "resolved"
+        ]
+        assert len(resolved_steps) >= 1, f"expected at least 1 resolved step, got: {steps}"
+
+        for step in resolved_steps:
+            assert step.get("selector"), f"resolved step missing selector: {step}"
+            assert step.get("intent_id"), f"resolved step missing intent_id: {step}"
+
+
+class TestStrictCompilerFailures:
+    """Compiler must fail hard instead of returning partial output."""
+
+    def test_unknown_action_is_rejected_in_compile(self) -> None:
+        points = [
+            {
+                "key": "strict-01",
+                "intent_id": "strict-01",
+                "action": "nonexistent_action_xyz",
+                "description": "unresolvable action",
+                "steps": [{"action": "nonexistent_action_xyz", "raw_text": "unresolvable action"}],
+                "involved_elements": ["search_input"],
+            }
+        ]
+        with pytest.raises(ExecutionCompilerError):
+            compile_execution_steps(points, {"elements": {}})
+
+    def test_known_points_compile_strictly(self) -> None:
+        points = [
+            {
+                "key": "ok-01",
+                "intent_id": "ok-01",
+                "action": "fill",
+                "target": "search_input",
+                "value": "x",
+                "description": "ok",
+                "steps": [{"action": "fill", "target": "search_input", "value": "x", "raw_text": "ok"}],
+                "involved_elements": ["search_input"],
+            },
+            {
+                "key": "ok-02",
+                "intent_id": "ok-02",
+                "action": "click",
+                "target": "product_menu",
+                "description": "ok",
+                "steps": [{"action": "click", "target": "product_menu", "raw_text": "ok"}],
+                "involved_elements": ["product_menu"],
+            },
+            {
+                "key": "ok-03",
+                "intent_id": "ok-03",
+                "action": "assert_visible",
+                "target": "product_list_title",
+                "description": "ok",
+                "steps": [{"action": "assert_visible", "target": "product_list_title", "raw_text": "ok"}],
+                "involved_elements": ["product_list_title"],
+            },
+        ]
+        steps = compile_execution_steps(points, _SAMPLE_PAGE_OBJECT)
+        assert len(steps) == 3
+        assert all((s.get("traceability") or {}).get("status") == "resolved" for s in steps)

@@ -6,6 +6,8 @@ import subprocess
 import sys
 import json
 import logging
+
+_logger = logging.getLogger(__name__)
 import importlib.util
 from datetime_compat import UTC
 from datetime import datetime
@@ -139,6 +141,8 @@ class OrchestratorService:
     def __init__(self, repo_root: Path | None = None):
         self.repo_root = repo_root or Path(__file__).resolve().parents[3]
         self.apps_root = self.repo_root / "apps"
+        # Dev convenience: in Docker the PYTHONPATH is set; this fallback
+        # ensures the service is runnable from the repo checkout directly.
         if str(self.apps_root) not in sys.path:
             sys.path.insert(0, str(self.apps_root))
         self.requirement_parser_root = self.repo_root / "agents" / "requirement-parser-agent"
@@ -158,14 +162,6 @@ class OrchestratorService:
         self.schemas_root = self.repo_root / "apps" / "ai-orchestrator" / "src" / "schemas"
         self.tools_root = self.repo_root / "apps" / "ai-orchestrator" / "src" / "tools"
         self._runtime_module_cache: dict[str, Any] = {}
-        self.execution_record_compat_builder_enabled = self._env_bool(
-            "EXECUTION_RECORD_COMPAT_BUILDER_ENABLED",
-            default=True,
-        )
-        self.test_point_steps_authoritative = self._env_bool(
-            "TEST_POINT_STEPS_AUTHORITATIVE",
-            default=True,
-        )
         self.requirement_quality_gate_enabled = self._env_bool(
             "REQUIREMENT_QUALITY_GATE_ENABLED",
             default=True,
@@ -216,7 +212,6 @@ class OrchestratorService:
             agent_pipeline_order=self.agent_pipeline_order,
             logger=self.logger,
             runner_root=self.runner_root,
-            execution_record_compat_builder_enabled=self.execution_record_compat_builder_enabled,
         )
         self._analytics_query_support = AnalyticsQuerySupport(
             now=self._now,
@@ -261,7 +256,7 @@ class OrchestratorService:
             script_generation_root=self.script_generation_root,
             execution_planner_root=self.execution_planner_root,
             generated_scripts_root=self.generated_scripts_root,
-            test_point_steps_authoritative=self.test_point_steps_authoritative,
+            repo_root=self.repo_root,
         )
         self._orchestration_flow_support = OrchestrationFlowSupport(
             orchestration_result_cls=OrchestrationResult,
@@ -282,10 +277,8 @@ class OrchestratorService:
                 raw_requirement,
                 requirement_spec,
             ),
-            generate_script_bundle=lambda **kwargs: self._generate_script_bundle(**kwargs),
-            build_execution_plan=lambda **kwargs: self._build_execution_plan(**kwargs),
             build_test_points_preview=lambda **kwargs: self._build_test_points_preview(**kwargs),
-            render_case_steps_from_test_points=lambda **kwargs: self._render_case_steps_from_test_points(**kwargs),
+            resolve_page_object=lambda project, page: self._resolve_page_object(project=project, page=page),
             prepare_generated_case_for_assets=lambda case: self._prepare_generated_case_for_assets(case),
             save_case=lambda case: self._save_case(case),
             agent_pipeline_order=self.agent_pipeline_order,
@@ -320,11 +313,16 @@ class OrchestratorService:
         cached = self._runtime_module_cache.get(cache_key)
         if cached is not None:
             return cached
-        if not module_path.exists():
-            raise FileNotFoundError(f"module file not found: {module_path}")
-        spec = importlib.util.spec_from_file_location(cache_key, str(module_path))
+        resolved = module_path.resolve()
+        repo_root = Path(__file__).resolve().parents[3]
+        if not str(resolved).startswith(str(repo_root)):
+            raise ImportError(f"module path escapes repository root: {resolved}")
+        if not resolved.exists():
+            raise FileNotFoundError(f"module file not found: {resolved}")
+        self.logger.debug("dynamic-loading module %s from %s", cache_key, resolved)
+        spec = importlib.util.spec_from_file_location(cache_key, str(resolved))
         if spec is None or spec.loader is None:
-            raise ImportError(f"unable to load module spec: {module_path}")
+            raise ImportError(f"unable to load module spec: {resolved}")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         self._runtime_module_cache[cache_key] = module
@@ -539,8 +537,7 @@ class OrchestratorService:
         parser_runtime["llm_trace"] = {
             "attempted": bool(llm_trace.get("attempted", False)),
             "succeeded": bool(llm_trace.get("succeeded", False)),
-            "fallback_used": bool(llm_trace.get("fallback_used", False) or parser_runtime.get("mode") == "rule_based"),
-            "reason_code": str(llm_trace.get("reason_code", "")).strip() or ("fallback_rule_based" if parser_runtime.get("mode") == "rule_based" else "llm_parse"),
+            "reason_code": str(llm_trace.get("reason_code", "")).strip() or "llm_parse",
             "latency_ms": int(llm_trace.get("latency_ms", 0) or 0),
             "overlay_key_count": len(normalized_source_inputs),
             "total_tokens": llm_trace.get("total_tokens"),
@@ -556,8 +553,6 @@ class OrchestratorService:
                 prompt_version=str(parser_runtime.get("prompt_version", "")).strip(),
                 model=str(parser_runtime.get("model", "")).strip(),
                 source=str(source).strip(),
-                fallback_used=bool(parser_runtime["llm_trace"].get("fallback_used", False)),
-                fallback_reason=str(parser_runtime["llm_trace"].get("reason_code", "")).strip(),
                 instructions_version=str(parser_runtime.get("instructions_version", "")).strip(),
             )
         parser_runtime["trace_id"] = str(parser_runtime.get("trace_id", "")).strip() or str(
@@ -684,10 +679,6 @@ class OrchestratorService:
             input_sources=input_sources,
         )
 
-    @staticmethod
-    def _build_requirement_parser_runtime_fallback(*, source: str, detail: str) -> dict[str, Any]:
-        return RequirementParseSupport.build_requirement_parser_runtime_fallback(source=source, detail=detail)
-
     def _build_requirement_quality_gate(self, requirement_spec: dict[str, Any], *, stage: str) -> dict[str, Any]:
         return self._requirement_testpoint_support.build_requirement_quality_gate(requirement_spec, stage=stage)
 
@@ -724,34 +715,6 @@ class OrchestratorService:
     @staticmethod
     def _merge_case_requirements(raw_requirement: str, requirement_spec: dict[str, Any]) -> list[str]:
         return RequirementTestPointSupport.merge_case_requirements(raw_requirement, requirement_spec)
-
-    def _generate_script_bundle(
-        self,
-        *,
-        case: dict[str, Any],
-        framework: str,
-        language: str,
-    ) -> dict[str, Any]:
-        return self._agent_execution_support.generate_script_bundle(
-            case=case,
-            framework=framework,
-            language=language,
-        )
-
-    def _build_execution_plan(
-        self,
-        *,
-        case: dict[str, Any],
-        execution_requested: bool,
-        source: str,
-        execution_config: dict[str, Any],
-    ) -> dict[str, Any]:
-        return self._agent_execution_support.build_execution_plan(
-            case=case,
-            execution_requested=execution_requested,
-            source=source,
-            execution_config=execution_config,
-        )
 
     def _evaluate_risk_report(
         self,
@@ -811,33 +774,19 @@ class OrchestratorService:
             try:
                 payload = json.loads(report_path.read_text(encoding="utf-8"))
             except Exception:
+                _logger.debug("skipping unreadable report file: %s", report_path, exc_info=True)
                 continue
             if isinstance(payload, dict):
                 records.append(payload)
         return records
 
     def _normalize_test_point_plan(self, payload: dict[str, Any], *, strict: bool = False) -> dict[str, Any]:
-        try:
-            from shared_backend.schemas import normalize_test_point_plan_v1
+        from shared_backend.schemas import normalize_test_point_plan_v1
 
-            normalized, warnings = normalize_test_point_plan_v1(payload, strict=strict)
-            for warning in warnings:
-                self.logger.warning("test_point_plan normalization warning: %s", warning)
-            return normalized
-        except Exception as exc:
-            self.logger.warning("shared test_point_plan normalization unavailable, fallback to local schema: %s", exc)
-            try:
-                module = self._load_runtime_module(
-                    cache_key="ai_orchestrator_test_point_schema",
-                    module_path=self.schemas_root / "test-point.schema.py",
-                )
-                normalized, warnings = module.normalize_test_point_plan(payload, strict=strict)
-                for warning in warnings:
-                    self.logger.warning("local test_point_plan normalization warning: %s", warning)
-                return normalized
-            except Exception as fallback_exc:
-                self.logger.warning("test_point_plan normalization unavailable, keep raw payload: %s", fallback_exc)
-                return payload if isinstance(payload, dict) else {}
+        normalized, warnings = normalize_test_point_plan_v1(payload, strict=strict)
+        for warning in warnings:
+            self.logger.warning("test_point_plan normalization warning: %s", warning)
+        return normalized
 
     def _normalize_execution_record(self, payload: dict[str, Any], *, strict: bool = False) -> dict[str, Any]:
         try:
@@ -863,16 +812,59 @@ class OrchestratorService:
             self.logger.warning("evidence_manifest normalization unavailable, keep raw payload: %s", exc)
             return payload if isinstance(payload, dict) else {}
 
-    def _generate_case(self, requirement: str, page: str) -> dict[str, Any]:
-        return self._agent_execution_support.generate_case(requirement, page)
+    @staticmethod
+    def _parse_test_design_error(raw_error: str) -> dict[str, Any]:
+        text = str(raw_error or "").strip()
+        if not text:
+            return {}
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
-    def _build_design_fallback_case(self, *, requirement: str, page: str, reason: str, runner: str = "playwright") -> dict[str, Any]:
-        return AgentExecutionSupport.build_design_fallback_case(
-            requirement=requirement,
-            page=page,
-            reason=reason,
-            runner=runner,
-        )
+    def _generate_case(self, requirement: str, page: str) -> dict[str, Any]:
+        try:
+            return self._agent_execution_support.generate_case(requirement, page)
+        except RuntimeError as exc:
+            parsed = self._parse_test_design_error(str(exc))
+            if parsed:
+                code = str(parsed.get("code", "")).strip() or "test_design_failed"
+                message = str(parsed.get("message", "")).strip() or "test-design-agent failed"
+                details = parsed.get("details") if isinstance(parsed.get("details"), dict) else {}
+                reason_code = str(details.get("reason_code", "")).strip() or code
+                normalized_details = {
+                    "reason_code": reason_code,
+                    "test_design_error": {
+                        "code": code,
+                        "message": message,
+                        "details": details,
+                    },
+                }
+                if code in {"test_design_invalid_output", "test_design_bundle_invalid_output", "test_design_request_invalid"}:
+                    raise OrchestratorValidationError(message, details=normalized_details) from exc
+                if code == "test_design_llm_unavailable":
+                    raise OrchestratorError(
+                        code=code,
+                        message=message,
+                        status_code=HTTPStatus.BAD_GATEWAY,
+                        details=normalized_details,
+                    ) from exc
+                raise OrchestratorError(
+                    code=code,
+                    message=message,
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                    details=normalized_details,
+                ) from exc
+            raise OrchestratorError(
+                code="test_design_failed",
+                message="test-design-agent failed",
+                status_code=HTTPStatus.BAD_GATEWAY,
+                details={
+                    "reason_code": "test_design_failed",
+                    "upstream_error": str(exc)[:500],
+                },
+            ) from exc
 
     def _build_design_generation(self, case: dict[str, Any]) -> dict[str, Any]:
         return AgentExecutionSupport.build_design_generation(case)
@@ -887,9 +879,6 @@ class OrchestratorService:
             case=case,
             requirement_spec=requirement_spec,
         )
-
-    def _build_test_points_from_execution_steps(self, case: dict[str, Any]) -> dict[str, Any]:
-        return self._requirement_testpoint_support.build_test_points_from_execution_steps(case)
 
     def _build_test_points_from_requirement_spec(
         self,
@@ -943,18 +932,14 @@ class OrchestratorService:
         intent_type: str,
         title: str,
         steps_hint: Any,
+        page_elements: list[str] | None = None,
     ) -> tuple[str, str | None, Any]:
         return RequirementTestPointSupport.map_intent_to_step(
             page=page,
             intent_type=intent_type,
             title=title,
             steps_hint=steps_hint,
-        )
-
-    def _render_case_steps_from_test_points(self, *, case: dict[str, Any], test_points: dict[str, Any]) -> dict[str, Any]:
-        return self._agent_execution_support.render_case_steps_from_test_points(
-            case=case,
-            test_points=test_points,
+            page_elements=page_elements,
         )
 
     def _save_case(self, case: dict[str, Any]) -> Path:
@@ -974,8 +959,92 @@ class OrchestratorService:
         return prepare_generated_test_case(case)
 
     def _ensure_runner_import_path(self) -> None:
+        # Prefer PYTHONPATH in Docker; this fallback keeps the service runnable in dev.
         if str(self.runner_root) not in sys.path:
             sys.path.insert(0, str(self.runner_root))
+
+    def _resolve_page_object(self, *, project: str, page: str) -> dict[str, Any]:
+        normalized_project = str(project).strip() or "atp"
+        normalized_page = str(page).strip().lower()
+        if not normalized_page:
+            raise OrchestratorValidationError(
+                "page object identity must not be empty",
+                details={"reason_code": "page_object_not_found", "project": normalized_project, "page": normalized_page},
+            )
+        try:
+            from sqlalchemy import select
+
+            from app.core.database import SessionLocal
+            from app.models.page_object import PageElement, PageObject
+
+            with SessionLocal() as db:
+                page_object = db.execute(
+                    select(PageObject).where(
+                        PageObject.project_code == normalized_project,
+                        PageObject.client == "web",
+                        PageObject.page_code == normalized_page,
+                    )
+                ).scalar_one_or_none()
+                if page_object is None:
+                    raise OrchestratorValidationError(
+                        "page object not found",
+                        details={
+                            "reason_code": "page_object_not_found",
+                            "project": normalized_project,
+                            "page": normalized_page,
+                        },
+                    )
+                element_rows = (
+                    db.execute(
+                        select(PageElement)
+                        .where(PageElement.page_object_id == int(page_object.id))
+                        .order_by(PageElement.id.asc())
+                    )
+                    .scalars()
+                    .all()
+                )
+            if not element_rows:
+                raise OrchestratorValidationError(
+                    "page object has no elements",
+                    details={
+                        "reason_code": "page_object_empty_elements",
+                        "project": normalized_project,
+                        "page": normalized_page,
+                    },
+                )
+            elements: dict[str, dict[str, str]] = {}
+            for element in element_rows:
+                code = str(getattr(element, "element_code", "")).strip()
+                selector = str(getattr(element, "locator_value", "")).strip()
+                if not code or not selector:
+                    continue
+                elements[code] = {
+                    "selector": selector,
+                    "type": str(getattr(element, "locator_type", "")).strip() or "css",
+                    "role": str(getattr(element, "role", "")).strip(),
+                }
+            if not elements:
+                raise OrchestratorValidationError(
+                    "page object has no bindable elements",
+                    details={
+                        "reason_code": "page_object_empty_elements",
+                        "project": normalized_project,
+                        "page": normalized_page,
+                    },
+                )
+            return {"page": normalized_page, "elements": elements}
+        except OrchestratorValidationError:
+            raise
+        except Exception as exc:
+            raise OrchestratorValidationError(
+                "failed to resolve page object",
+                details={
+                    "reason_code": "page_object_not_found",
+                    "project": normalized_project,
+                    "page": normalized_page,
+                    "upstream_error": str(exc)[:500],
+                },
+            ) from exc
 
     def _build_report_summary_path(self) -> str:
         return self._execution_report_support.build_report_summary_path()
@@ -987,7 +1056,7 @@ class OrchestratorService:
         env["TEST_CASE_PATH"] = str(case_path)
 
         return subprocess.run(
-            [sys.executable, "-m", "pytest", "tests/test_yaml_ai_generated.py"],
+            [sys.executable, "-m", "pytest", "tests/test_yaml_ai_generated.py", "-rs"],
             cwd=self.runner_root,
             env=env,
             text=True,
@@ -1011,6 +1080,8 @@ class OrchestratorService:
         defect_ticket: str = "",
         runtime_logs: str = "",
     ) -> dict[str, Any]:
+        if not page.strip():
+            raise OrchestratorValidationError("page must not be empty")
         if not requirement.strip():
             if not any(
                 [
@@ -1042,8 +1113,6 @@ class OrchestratorService:
             defect_ticket=defect_ticket,
             runtime_logs=runtime_logs,
         )
-        if not str(parsed.get("page", "")).strip():
-            parsed["page"] = page.strip() or "product"
         self._attach_requirement_quality_gate(parsed, stage="parse")
         self._record_requirement_parse_telemetry(
             requirement_spec=parsed,
@@ -1107,13 +1176,13 @@ class OrchestratorService:
         }
 
         if not api_key:
-            result["status"] = "degraded"
+            result["status"] = "warning"
             result["actionable"].append("请在 .env 中设置 OPENAI_API_KEY。")
         if not base_url:
-            result["status"] = "degraded"
+            result["status"] = "warning"
             result["actionable"].append("请在 .env 中设置 OPENAI_BASE_URL。")
         if not model:
-            result["status"] = "degraded"
+            result["status"] = "warning"
             result["actionable"].append("请在 .env 中设置 OPENAI_MODEL。")
 
         if not probe or result["status"] != "ok":
@@ -1152,7 +1221,7 @@ class OrchestratorService:
                 }
             result["actionable"].append("LLM 连通性通过。")
         except Exception as exc:
-            result["status"] = "degraded"
+            result["status"] = "warning"
             probe_block["ok"] = False
             probe_block["error_code"] = "llm_probe_failed"
             probe_block["error_message"] = str(exc)[:240]
@@ -1180,17 +1249,6 @@ class OrchestratorService:
             outcome=outcome,
         )
 
-    def generate_script(
-        self,
-        *,
-        case: dict[str, Any],
-        framework: str = "playwright",
-        language: str = "python",
-    ) -> dict[str, Any]:
-        if not isinstance(case, dict) or not case:
-            raise OrchestratorValidationError("case must not be empty")
-        return self._generate_script_bundle(case=case, framework=framework, language=language)
-
     def list_runners(self) -> dict[str, Any]:
         return self._runner_registry_support.list_runners()
 
@@ -1199,23 +1257,6 @@ class OrchestratorService:
             return self._runner_registry_support.resolve_runner_profile(runner)
         except ValueError as exc:
             raise OrchestratorValidationError(str(exc)) from exc
-
-    def plan_execution(
-        self,
-        *,
-        case: dict[str, Any],
-        execution_requested: bool,
-        source: str = "manual",
-        execution_config: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        if not isinstance(case, dict) or not case:
-            raise OrchestratorValidationError("case must not be empty")
-        return self._build_execution_plan(
-            case=case,
-            execution_requested=execution_requested,
-            source=source,
-            execution_config=execution_config or {},
-        )
 
     def evaluate_risk(
         self,
@@ -1644,6 +1685,7 @@ class OrchestratorService:
         return self._failure_healing_support.analyze_failure(report_payload, stdout_text, stderr_text)
 
     def _run_failure_analysis_agent(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Dev fallback; Docker sets PYTHONPATH for agent roots.
         if str(self.failure_agent_root) not in sys.path:
             sys.path.insert(0, str(self.failure_agent_root))
         from analyze import FailureAnalysisAgent
@@ -1663,6 +1705,7 @@ class OrchestratorService:
         return FailureHealingSupport.load_self_healing_execution_preview(report_payload)
 
     def _run_self_healing_advisor_agent(self, payload: dict[str, Any]) -> dict[str, Any]:
+        # Dev fallback; Docker sets PYTHONPATH for agent roots.
         if str(self.self_healing_agent_root) not in sys.path:
             sys.path.insert(0, str(self.self_healing_agent_root))
         from agent import SelfHealingAdvisorAgent
@@ -1673,18 +1716,18 @@ class OrchestratorService:
     def _load_available_targets(self, page_name: str) -> list[str]:
         if not page_name:
             return []
-        self._ensure_runner_import_path()
-        from runner.paths import PAGE_OBJECTS_ROOT
-        from runner.yaml_loader import load_yaml_file
-
-        page_object_path = PAGE_OBJECTS_ROOT / f"{page_name}.page-object.yaml"
-        if not page_object_path.exists():
-            return []
-
-        page_object = load_yaml_file(page_object_path)
-        if not page_object:
-            return []
-        return sorted(page_object.get("elements", {}).keys())
+        try:
+            from shared_backend.db import get_db_session
+            with get_db_session() as session:
+                from shared_backend.db.models import PageElement
+                rows = session.query(PageElement.code).filter(
+                    PageElement.page_name == page_name
+                ).all()
+                if rows:
+                    return sorted(r.code for r in rows if r.code)
+        except Exception:
+            pass
+        return []
 
     @staticmethod
     def _build_summary_text(status: str, case: dict[str, Any], execution_requested: bool, metrics: dict[str, int]) -> str:

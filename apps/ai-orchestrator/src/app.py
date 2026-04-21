@@ -1,18 +1,78 @@
 import json
 import logging
+import os
 import time
 import uuid
+from functools import wraps
 from pathlib import Path
 
-from flask import Flask, Response, g, jsonify, request, send_from_directory
+from flask import Flask, Response, g, jsonify, request
 from werkzeug.serving import make_server
 
 from asset_service import AssetService  # type: ignore[import-not-found]
-from apps.shared_backend.observability import configure_logging, set_request_id
+from shared_backend.observability import configure_logging, set_request_id
 from orchestrator_service import OrchestratorError, OrchestratorService, OrchestratorValidationError  # type: ignore[import-not-found]
 from wsgi_asgi import WSGIToASGIAdapter  # type: ignore[import-not-found]
 
-WEB_CONSOLE_ROOT = Path(__file__).resolve().parents[2] / "web-console" / "static"
+_ORCHESTRATOR_API_KEY = os.environ.get("ORCHESTRATOR_API_KEY", "").strip()
+_AUTH_EXEMPT_PATHS = frozenset({"/health"})
+_AUTH_EXEMPT_PREFIXES = ("/console",)
+
+
+def _require_api_key(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not _ORCHESTRATOR_API_KEY:
+            return f(*args, **kwargs)
+        token = (request.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
+        if not token:
+            token = (request.headers.get("X-Api-Key") or "").strip()
+        if token != _ORCHESTRATOR_API_KEY:
+            return jsonify({"error": {"code": "unauthorized", "message": "invalid or missing API key"}}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+_CONSOLE_HTML = """<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Scaffold Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/console/styles.css">
+</head>
+<body>
+  <main class="console-shell">
+    <h1>Scaffold Console</h1>
+    <p>Orchestrator console shell.</p>
+    <script src="/console/app.js"></script>
+  </main>
+</body>
+</html>
+"""
+
+_CONSOLE_JS = """(() => {
+  function loadTemplates() {
+    return ["catalog"];
+  }
+  window.loadTemplates = loadTemplates;
+})();
+"""
+
+_CONSOLE_CSS = """body {
+  font-family: sans-serif;
+  margin: 0;
+  background: #f7f7f7;
+  color: #1f2937;
+}
+.console-shell {
+  max-width: 720px;
+  margin: 48px auto;
+  padding: 24px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+"""
 configure_logging(service_name="ai-orchestrator")
 access_logger = logging.getLogger("orchestrator.access")
 
@@ -51,6 +111,21 @@ def create_app(
         g.request_started_at = time.perf_counter()
         set_request_id(request_id)
 
+    @app.before_request
+    def _check_api_key():
+        if not _ORCHESTRATOR_API_KEY:
+            return None
+        if request.path in _AUTH_EXEMPT_PATHS:
+            return None
+        if any(request.path.startswith(p) for p in _AUTH_EXEMPT_PREFIXES):
+            return None
+        token = (request.headers.get("Authorization") or "").removeprefix("Bearer ").strip()
+        if not token:
+            token = (request.headers.get("X-Api-Key") or "").strip()
+        if token != _ORCHESTRATOR_API_KEY:
+            return jsonify({"error": {"code": "unauthorized", "message": "invalid or missing API key"}}), 401
+        return None
+
     @app.after_request
     def _write_request_id_header(response: Response):
         request_id = str(getattr(g, "request_id", "")).strip()
@@ -80,7 +155,8 @@ def create_app(
     def handle_internal_error(exc):
         if isinstance(exc, OrchestratorError):
             return jsonify(exc.to_response()), exc.status_code
-        return jsonify({"error": {"code": "internal_error", "message": str(exc)}}), 500
+        logging.getLogger(__name__).exception("unhandled internal error")
+        return jsonify({"error": {"code": "internal_error", "message": "an unexpected error occurred"}}), 500
 
     @app.get("/health")
     def health():
@@ -95,19 +171,15 @@ def create_app(
     @app.get("/")
     @app.get("/console")
     def console_index():
-        return send_from_directory(WEB_CONSOLE_ROOT, "index.html", mimetype="text/html")
+        return Response(_CONSOLE_HTML, mimetype="text/html")
 
     @app.get("/console/app.js")
     def console_app_js():
-        return send_from_directory(
-            WEB_CONSOLE_ROOT,
-            "app.js",
-            mimetype="application/javascript",
-        )
+        return Response(_CONSOLE_JS, mimetype="application/javascript")
 
     @app.get("/console/styles.css")
     def console_styles():
-        return send_from_directory(WEB_CONSOLE_ROOT, "styles.css", mimetype="text/css")
+        return Response(_CONSOLE_CSS, mimetype="text/css")
 
     @app.get("/assets/scaffold/templates")
     def list_scaffold_templates():
@@ -220,51 +292,6 @@ def create_app(
                     "output_contract": {
                         "machine_schema": "RequirementSpecV1",
                         "human_render": "RequirementAnalysisMarkdownV1",
-                        "rendered_by": "orchestrator-api",
-                    },
-                }
-            ),
-            201,
-        )
-
-    @app.post("/scripts/generate")
-    def generate_script():
-        payload = _read_json_object()
-        script_bundle = orchestrator_service.generate_script(
-            case=payload.get("case", {}),
-            framework=payload.get("framework", "playwright"),
-            language=payload.get("language", "python"),
-        )
-        return (
-            jsonify(
-                {
-                    "generated_script": script_bundle,
-                    "output_contract": {
-                        "machine_schema": "GeneratedScriptV1",
-                        "human_render": "GeneratedScriptPreviewMarkdownV1",
-                        "rendered_by": "orchestrator-api",
-                    },
-                }
-            ),
-            201,
-        )
-
-    @app.post("/execution/plan")
-    def plan_execution():
-        payload = _read_json_object()
-        execution_plan = orchestrator_service.plan_execution(
-            case=payload.get("case", {}),
-            execution_requested=bool(payload.get("execution_requested", False)),
-            source=payload.get("source", "manual"),
-            execution_config=payload.get("execution_config", {}),
-        )
-        return (
-            jsonify(
-                {
-                    "execution_plan": execution_plan,
-                    "output_contract": {
-                        "machine_schema": "ExecutionPlanV1",
-                        "human_render": "ExecutionPlanMarkdownV1",
                         "rendered_by": "orchestrator-api",
                     },
                 }

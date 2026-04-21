@@ -38,7 +38,7 @@
 
 主要实现集中在：
 
-- [apps/web-ui-service/app/routers/legacy_workbench.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-ui-service/app/routers/legacy_workbench.py)
+- [apps/web-ui-service/app/api/workbench/facade.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-ui-service/app/api/workbench/facade.py)
 - [apps/web-ui-service/app/core/config.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-ui-service/app/core/config.py)
 
 ## 当前确定性规则
@@ -79,7 +79,7 @@
 
 ## 当前卡点
 
-1. 门禁逻辑目前主要集中在 `legacy_workbench.py`，文件偏重。
+1. 门禁逻辑目前主要集中在 `app/api/workbench/facade.py`，仍需继续按域下沉。
 2. `execution_gate` 还没有完全抽成独立 service/controller 层。
 3. 风险评估虽然已接 Agent 优先，但仍以启发式为主，不是统计预测模型。
 

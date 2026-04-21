@@ -129,7 +129,7 @@ class ScriptGenerationAgent:
             "def _login(page):\n"
             "    login_url = os.getenv('BASE_URL', 'http://localhost:5173/login#/login')\n"
             "    username = os.getenv('TEST_USERNAME', 'admin')\n"
-            "    password = os.getenv('TEST_PASSWORD', 'macro123')\n"
+            "    password = os.getenv('TEST_PASSWORD', '')\n"
             "    page.goto(login_url, wait_until='domcontentloaded', timeout=60000)\n"
             "    page.get_by_placeholder('请输入用户名').fill(username)\n"
             "    page.get_by_placeholder('请输入密码').fill(password)\n"

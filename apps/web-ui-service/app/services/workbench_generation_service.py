@@ -1,9 +1,32 @@
+"""High-level generation orchestration — coordinates requirement parsing, test-point
+extraction, and case compilation.
+
+Boundary note:
+- This module is the *entry-point facade* called by ``workbench_generation_router``.
+- ``workbench_generation_api/`` contains the runtime pipeline (``generate_pipeline.py``,
+  ``context.py``) that this service delegates to for actual execution.
+- ``workbench_generation_compiler/`` houses the compilation layer (IR, normalization,
+  mapping) consumed by the pipeline.
+"""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
+import re
 from typing import Any, Callable
 
 from shared_backend.case_ids import build_case_id, match_case_id, next_case_sequence, normalize_case_id
+from app.services.workbench_generation_compiler.debug import (
+    build_trace_id,
+    debug_enabled,
+    log_debug_event,
+)
+from app.services.workbench_generation_compiler.runtime.generate_pipeline import (
+    run_generate_pipeline,
+)
+from app.services.workbench_generation_compiler.runtime.preview_pipeline import (
+    run_preview_pipeline,
+)
 
 
 BuildSystemRequirement = Callable[..., str]
@@ -29,7 +52,6 @@ EnhancePageObjectFromSurface = Callable[[str, dict[str, Any]], Any]
 BuildRequirementSteps = Callable[[str, str, str, dict[str, Any]], tuple[list[dict[str, Any]], dict[str, Any]]]
 BuildPageObjectQuality = Callable[[str, str, dict[str, Any], Any], dict[str, Any]]
 NormalizePageObjectDraft = Callable[..., dict[str, Any]]
-BuildFallbackCase = Callable[..., dict[str, Any]]
 ReadCaseYaml = Callable[..., tuple[dict[str, Any], str]]
 StepsToPoints = Callable[[str, str, list[dict[str, Any]]], dict[str, Any]]
 InheritTestPointConfidenceFromSurface = Callable[..., dict[str, Any]]
@@ -42,12 +64,7 @@ BuildExecutionGate = Callable[..., dict[str, Any]]
 NormalizeTestPointPlanPayload = Callable[[dict[str, Any]], dict[str, Any]]
 
 
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _list_value(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
+_LOGGER = logging.getLogger(__name__)
 
 
 def _allocate_case_id(
@@ -56,11 +73,11 @@ def _allocate_case_id(
     project: str,
     page: str,
     module: str,
-    ai_cases_root: Any,
+    ai_cases_root: Path,
     existing_case_ids: list[str] | None = None,
 ) -> str:
     requested = normalize_case_id(requested_case_id, fallback="").strip() if str(requested_case_id).strip() else ""
-    assets_root = Path(ai_cases_root).resolve().parent
+    assets_root = ai_cases_root.resolve().parent
     all_existing_case_ids: list[str] = []
     seen_case_ids: set[str] = set()
     if assets_root.exists():
@@ -93,6 +110,64 @@ def _allocate_case_id(
         sequence=sequence,
     )
 
+
+def _dict_value(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list_value(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _strip_list_prefix(text: str) -> str:
+    cleaned = str(text or "").strip()
+    cleaned = re.sub(r"^\s*(?:[-*•·]+\s*|\d+\s*[.)、]\s*)", "", cleaned)
+    return cleaned.strip()
+
+
+def _normalize_generated_case_title(value: str) -> str:
+    text = _strip_list_prefix(str(value or ""))
+    if not text:
+        return ""
+    text = text.strip("`'\" ")
+    text = re.sub(r"\s+", " ", text).strip()
+    for prefix in ["测试意图：", "测试意图:", "需求：", "需求:", "功能描述：", "功能描述:"]:
+        if text.startswith(prefix):
+            text = text[len(prefix) :].strip()
+            break
+    if re.match(r"^【[^】]{1,24}】$", text):
+        return ""
+    if re.match(r"^(模块|页面|功能|功能描述|测试点|场景|需求)\s*[:：]?$", text):
+        return ""
+    if text.endswith(("：", ":")) and len(text) <= 18:
+        return ""
+    if len(text) < 4:
+        return ""
+    return text[:120]
+
+
+def _ensure_execution_steps(
+    *,
+    case_yaml: dict[str, Any],
+    page: str,
+    title: str,
+    infer_targets: InferTargets,
+) -> None:
+    _ = page, title, infer_targets
+    execution_payload = case_yaml.get("execution")
+    if not isinstance(execution_payload, dict):
+        execution_payload = {}
+        case_yaml["execution"] = execution_payload
+    raw_steps = execution_payload.get("steps")
+    normalized_steps: list[dict[str, Any]] = []
+    if isinstance(raw_steps, list) and raw_steps:
+        for raw_step in raw_steps:
+            if not isinstance(raw_step, dict):
+                continue
+            normalized_steps.append(raw_step)
+    if not normalized_steps:
+        raise ValueError("orchestrator returned empty execution.steps in pure-ai mode")
+    execution_payload["steps"] = normalized_steps
 
 def extract_quality_gate(payload: Any) -> dict[str, Any] | None:
     if not isinstance(payload, dict):
@@ -283,7 +358,7 @@ def resolve_effective_requirement(
     )
 
 
-def build_preview_test_points_payload(
+def build_preview_response(
     *,
     effective_requirement: str,
     normalized_page: str,
@@ -302,9 +377,38 @@ def build_preview_test_points_payload(
     render_requirement_spec_markdown: RenderRequirementSpecMarkdown,
     extract_quality_gate: ExtractQualityGate,
 ) -> dict[str, Any]:
-    parse_result = run_orchestrator_parse(
-        requirement=effective_requirement,
-        page=normalized_page,
+    trace_id = build_trace_id(
+        stage="service.preview",
+        payload={
+            "page": normalized_page,
+            "source": source,
+            "requirement": effective_requirement,
+            "input_sources_count": len(input_sources),
+        },
+    )
+    log_debug_event(
+        logger=_LOGGER,
+        event="service.preview.input",
+        trace_id=trace_id,
+        payload={
+            "effective_requirement": effective_requirement,
+            "normalized_page": normalized_page,
+            "source": source,
+            "input_sources": input_sources,
+            "openapi_spec": openapi_spec,
+            "prd_text": prd_text,
+            "prd_url": prd_url,
+            "user_story": user_story,
+            "git_diff": git_diff,
+            "git_diff_path": git_diff_path,
+            "openapi_url": openapi_url,
+            "defect_ticket": defect_ticket,
+            "runtime_logs": runtime_logs,
+        },
+    )
+    result = run_preview_pipeline(
+        effective_requirement=effective_requirement,
+        normalized_page=normalized_page,
         source=source,
         input_sources=input_sources,
         openapi_spec=openapi_spec,
@@ -316,76 +420,21 @@ def build_preview_test_points_payload(
         openapi_url=openapi_url,
         defect_ticket=defect_ticket,
         runtime_logs=runtime_logs,
+        run_orchestrator_parse=run_orchestrator_parse,
+        render_requirement_spec_markdown=render_requirement_spec_markdown,
+        extract_quality_gate=extract_quality_gate,
+        list_value=_list_value,
+        dict_value=_dict_value,
+        trace_id=trace_id,
     )
-    requirement_spec = parse_result.get("requirement_spec")
-    if not isinstance(requirement_spec, dict):
-        requirement_spec = parse_result if isinstance(parse_result, dict) else {}
-    requirement_analysis_markdown = str(parse_result.get("requirement_analysis_markdown", "")).strip()
-    if not requirement_analysis_markdown:
-        requirement_analysis_markdown = render_requirement_spec_markdown(requirement_spec)
-    quality_gate = extract_quality_gate(requirement_spec)
-    test_intents = _list_value(requirement_spec.get("test_intents"))
-    ambiguities = _list_value(requirement_spec.get("ambiguities"))
-    business_rules = _list_value(requirement_spec.get("business_rules"))
-    parser_runtime = _dict_value(requirement_spec.get("parser_runtime"))
-    source_summary = _dict_value(parser_runtime.get("source_summary"))
-    source_inputs = _list_value(requirement_spec.get("source_inputs"))
-    source_count = int(
-        source_summary.get(
-            "source_count",
-            parser_runtime.get("source_count", len(source_inputs)),
-        )
-        or 0
+    log_debug_event(
+        logger=_LOGGER,
+        event="service.preview.output",
+        trace_id=trace_id,
+        payload=result,
+        extra={"compare_with_event": "runtime.preview.output"},
     )
-    source_types = _list_value(source_summary.get("source_types"))
-    if not source_types:
-        source_types = [
-            str(item.get("source_type", "")).strip()
-            for item in source_inputs
-            if isinstance(item, dict) and str(item.get("source_type", "")).strip()
-        ]
-    deduped_source_types: list[str] = []
-    for item in source_types:
-        value = str(item).strip()
-        if value and value not in deduped_source_types:
-            deduped_source_types.append(value)
-    change_impact = _dict_value(requirement_spec.get("change_impact"))
-
-    intent_type_distribution: dict[str, int] = {}
-    for item in test_intents:
-        if not isinstance(item, dict):
-            continue
-        intent_type = str(item.get("intent_type", "unknown")).strip() or "unknown"
-        intent_type_distribution[intent_type] = intent_type_distribution.get(intent_type, 0) + 1
-
-    return {
-        "item": {
-            "page": str(requirement_spec.get("page", "")).strip(),
-            "priority": str(requirement_spec.get("priority", "")).strip() or "P1",
-            "parse_confidence": requirement_spec.get("parse_confidence", 0),
-            "intent_count": len(test_intents),
-            "intent_type_distribution": intent_type_distribution,
-            "ambiguity_count": len(ambiguities),
-            "rule_count": len(business_rules),
-            "source_count": source_count,
-            "source_types": deduped_source_types,
-            "change_impact": {
-                "impact_score": change_impact.get("impact_score", 0),
-                "changed_areas": _list_value(change_impact.get("changed_areas")),
-                "risk_signal_count": len(_list_value(change_impact.get("risk_signals"))),
-                "top_factor": _dict_value(change_impact.get("top_factor")),
-                "recommended_regression_scope": _list_value(change_impact.get("recommended_regression_scope")),
-            },
-            "quality_gate": quality_gate,
-            "requirement_spec": requirement_spec,
-            "requirement_analysis_markdown": requirement_analysis_markdown,
-            "output_contract": {
-                "machine_schema": "RequirementSpecV1",
-                "human_render": "RequirementAnalysisMarkdownV1",
-                "rendered_by": "web-ui-service",
-            },
-        }
-    }
+    return result
 
 
 def build_generated_case_payload(
@@ -411,178 +460,75 @@ def build_generated_case_payload(
     http_exception_cls: Any,
     bad_gateway_status: int,
     unprocessable_entity_status: int,
+    allocate_case_id: AllocateCaseId,
     existing_case_ids: list[str] | None = None,
+    selected_candidate: dict[str, Any] | None = None,
+    mode: str = "generate",
 ) -> dict[str, Any]:
-    orchestrator_result: dict[str, Any] = {}
-    case_yaml: dict[str, Any] = {}
-    resolved_page = normalized_page
-    orchestrator_error: Any = ""
-    orchestrator_design_fallback_used = False
-    quality_gate: dict[str, Any] | None = None
-    try:
-        orchestrator_result = run_orchestrator_generate(
-            requirement=effective_requirement,
-            page=normalized_page,
-            source=payload.source,
-            input_sources=input_sources,
-            openapi_spec=openapi_spec,
-            prd_text=payload.prd_text,
-            prd_url=payload.prd_url,
-            user_story=payload.user_story,
-            git_diff=payload.git_diff,
-            git_diff_path=payload.git_diff_path,
-            openapi_url=payload.openapi_url,
-            defect_ticket=payload.defect_ticket,
-            runtime_logs=payload.runtime_logs,
-        )
-        quality_gate = extract_quality_gate(orchestrator_result.get("requirement_spec"))
-        generated_case = orchestrator_result.get("case") or {}
-        if not isinstance(generated_case, dict) or not generated_case:
-            raise http_exception_cls(status_code=bad_gateway_status, detail="orchestrator returned invalid case payload")
-        design_generation = orchestrator_result.get("design_generation")
-        if isinstance(design_generation, dict) and bool(design_generation.get("fallback_used")):
-            orchestrator_design_fallback_used = True
-            fallback_reason = str(design_generation.get("fallback_reason", "")).strip()
-            if fallback_reason and not orchestrator_error:
-                orchestrator_error = fallback_reason
-        case_yaml = generated_case
-        execution_payload = case_yaml.get("execution")
-        if not isinstance(execution_payload, dict):
-            execution_payload = {}
-            case_yaml["execution"] = execution_payload
-        resolved_page = (
-            str(execution_payload.get("page", "")).strip()
-            or str(orchestrator_result.get("requirement_spec", {}).get("page", "")).strip()
-            or normalized_page
-            or "product"
-        )
-        execution_payload["page"] = resolved_page
-        case_yaml["module"] = str(case_yaml.get("module", "")).strip() or resolved_page
-        case_yaml["description"] = (
-            str(case_yaml.get("description", "")).strip()
-            or f"AI generated from requirement: {effective_requirement or 'multi-source'}"
-        )
-    except Exception as exc:
-        if isinstance(exc, http_exception_cls):
-            is_gate_blocked, blocked_gate = is_quality_gate_blocked(getattr(exc, "detail", ""))
-            if is_gate_blocked and isinstance(blocked_gate, dict):
-                append_history(
-                    {
-                        "timestamp": now_iso(),
-                        "action": "generate_case_blocked_by_quality_gate",
-                        "case_id": payload.case_id.strip(),
-                        "page": normalized_page,
-                        "source": payload.source,
-                        "multi_source_enabled": multisource_enabled,
-                        "quality_gate": blocked_gate,
-                        "orchestrator_fallback_reason": getattr(exc, "detail", ""),
-                    }
-                )
-                raise http_exception_cls(
-                    status_code=getattr(exc, "status_code", unprocessable_entity_status)
-                    if isinstance(getattr(exc, "status_code", None), int)
-                    else unprocessable_entity_status,
-                    detail={
-                        "code": "requirement_quality_gate_blocked",
-                        "message": "requirement quality gate blocked orchestration",
-                        "quality_gate": blocked_gate,
-                        "upstream_error": getattr(exc, "detail", ""),
-                    },
-                ) from exc
-            orchestrator_error = getattr(exc, "detail", "")
-        else:
-            orchestrator_error = str(exc)
-        orchestrator_design_fallback_used = True
-        fallback_page = normalized_page or "product"
-        menu_target, assert_target = infer_targets(fallback_page)
-        fallback_case_id = _allocate_case_id(
-            requested_case_id=payload.case_id,
-            project=payload.project,
-            page=fallback_page,
-            module=fallback_page,
-            ai_cases_root=ai_cases_root,
-            existing_case_ids=existing_case_ids,
-        )
-        case_yaml = {
-            "version": "v4",
-            "id": fallback_case_id,
-            "title": payload.title.strip() or f"AI Generated {fallback_page.title()} Case",
-            "module": fallback_page,
-            "priority": payload.priority.strip() or "P1",
-            "tags": [item.strip() for item in payload.tags if item.strip()] or ["ai-generated"],
-            "owner": "qa-team",
-            "status": "automated",
-            "description": f"AI generated from requirement: {effective_requirement or 'multi-source'}",
-            "requirement": [effective_requirement or "multi-source requirement"],
-            "data": {},
-            "execution": {
-                "runner": "playwright",
-                "page": fallback_page,
-                "variables": {},
-                "steps": [
-                    {"action": "login"},
-                    {"action": "click", "target": menu_target},
-                    {"action": "wait_for", "target": assert_target},
-                    {"action": "assert_visible", "target": assert_target},
-                ],
-            },
-        }
-        resolved_page = fallback_page
-
-    case_id = _allocate_case_id(
-        requested_case_id=payload.case_id or case_yaml.get("id", ""),
-        project=payload.project,
-        page=resolved_page or normalized_page or "product",
-        module=str(case_yaml.get("module", "")).strip() or resolved_page or normalized_page or "product",
-        ai_cases_root=ai_cases_root,
-        existing_case_ids=existing_case_ids,
-    )
-    case_yaml["id"] = case_id
-    if payload.title.strip():
-        case_yaml["title"] = payload.title.strip()
-    if payload.priority.strip():
-        case_yaml["priority"] = payload.priority.strip()
-    cleaned_tags = [item.strip() for item in payload.tags if item.strip()]
-    case_yaml["tags"] = cleaned_tags or [item.strip() for item in case_yaml.get("tags", []) if str(item).strip()] or ["ai-generated"]
-    execution_payload = case_yaml.get("execution")
-    if not isinstance(execution_payload, dict):
-        execution_payload = {}
-        case_yaml["execution"] = execution_payload
-    execution_payload["page"] = resolved_page or "product"
-    case_yaml["module"] = str(case_yaml.get("module", "")).strip() or execution_payload["page"]
-
-    case_path = ai_cases_root / f"{case_id}.yaml"
-    final_text = write_case_yaml(case_path, case_yaml)
-    state_entry = save_case_state(payload.project, case_yaml, case_path)
-    append_history(
-        {
-            "timestamp": now_iso(),
-            "action": "generate_case",
-            "case_id": case_id,
-            "title": str(case_yaml.get("title", case_id)),
-            "path": str(case_path.resolve()),
-            "source": payload.source,
-            "multi_source_enabled": multisource_enabled,
-            "orchestrator_fallback_reason": orchestrator_error,
-            "orchestrator_design_fallback_used": orchestrator_design_fallback_used,
-            "quality_gate": quality_gate,
-        }
-    )
-    return {
-        "message": "case generated",
-        "item": {
-            "case_id": case_id,
-            "project": payload.project,
-            "path": str(case_path.resolve()),
-            "yaml_content": final_text,
-            "state": state_entry,
-            "page": execution_payload["page"],
-            "orchestrator_result": orchestrator_result,
-            "orchestrator_fallback_reason": orchestrator_error,
-            "orchestrator_design_fallback_used": orchestrator_design_fallback_used,
-            "quality_gate": quality_gate,
+    trace_id = build_trace_id(
+        stage="service.generate",
+        payload={
+            "project": str(getattr(payload, "project", "") or ""),
+            "page": normalized_page,
+            "requirement": effective_requirement,
+            "input_sources_count": len(input_sources),
+            "selected_candidate": selected_candidate if isinstance(selected_candidate, dict) else {},
         },
-    }
+    )
+    log_debug_event(
+        logger=_LOGGER,
+        event="service.generate.input",
+        trace_id=trace_id,
+        payload={
+            "payload": payload,
+            "normalized_page": normalized_page,
+            "effective_requirement": effective_requirement,
+            "multisource_enabled": multisource_enabled,
+            "input_sources": input_sources,
+            "openapi_spec": openapi_spec,
+            "existing_case_ids": existing_case_ids or [],
+            "selected_candidate": selected_candidate if isinstance(selected_candidate, dict) else {},
+        },
+    )
+    result = run_generate_pipeline(
+        payload=payload,
+        normalized_page=normalized_page,
+        effective_requirement=effective_requirement,
+        multisource_enabled=multisource_enabled,
+        input_sources=input_sources,
+        openapi_spec=openapi_spec,
+        run_orchestrator_generate=run_orchestrator_generate,
+        extract_quality_gate=extract_quality_gate,
+        write_case_yaml=write_case_yaml,
+        save_case_state=save_case_state,
+        append_history=append_history,
+        now_iso=now_iso,
+        is_quality_gate_blocked=is_quality_gate_blocked,
+        ai_cases_root=ai_cases_root,
+        utc=utc,
+        datetime_module=datetime_module,
+        http_exception_cls=http_exception_cls,
+        bad_gateway_status=bad_gateway_status,
+        unprocessable_entity_status=unprocessable_entity_status,
+        existing_case_ids=existing_case_ids,
+        selected_candidate=selected_candidate,
+        allocate_case_id=allocate_case_id,
+        safe_case_id=safe_case_id,
+        infer_targets=infer_targets,
+        trace_id=trace_id,
+        mode=mode,
+    )
+    log_debug_event(
+        logger=_LOGGER,
+        event="service.generate.output",
+        trace_id=trace_id,
+        payload=result,
+        extra={
+            "compare_with_event": "runtime.generate.output",
+            "debug_history_enabled": debug_enabled(),
+        },
+    )
+    return result
 
 
 def build_auto_run_summary(*, project: str, raw_urls: list[str], items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -738,84 +684,6 @@ def build_auto_run_generate_failed_item(
     }
 
 
-def persist_auto_run_fallback_case(
-    *,
-    page: str,
-    effective_requirement: str,
-    resolved_page_url: str,
-    steps: list[dict[str, Any]],
-    project: str,
-    page_object_path: Any,
-    surface: dict[str, Any],
-    coverage: dict[str, Any],
-    fallback_reason: Any,
-    build_fallback_case: BuildFallbackCase,
-    safe_case_id: SafeCaseId,
-    write_case_yaml: WriteCaseYaml,
-    read_case_yaml: ReadCaseYaml,
-    save_case_state: SaveCaseState,
-    steps_to_points: StepsToPoints,
-    inherit_test_point_confidence_from_surface: InheritTestPointConfidenceFromSurface,
-    annotate_test_point_plan_review: AnnotateTestPointPlanReview,
-    save_test_point_plan: SaveTestPointPlan,
-    append_history: AppendHistory,
-    now_iso: NowIso,
-    ai_cases_root: Any,
-) -> dict[str, Any]:
-    fallback_case = build_fallback_case(
-        page=page,
-        requirement=effective_requirement,
-        resolved_page_url=resolved_page_url,
-        steps=steps,
-    )
-    case_id = _allocate_case_id(
-        requested_case_id=str(fallback_case.get("id", "")).strip(),
-        project=project,
-        page=page,
-        module=str(fallback_case.get("module", "")).strip() or page,
-        ai_cases_root=ai_cases_root,
-    )
-    fallback_case["id"] = case_id
-    case_path = (ai_cases_root / f"{case_id}.yaml").resolve()
-    write_case_yaml(case_path, fallback_case)
-    case_yaml, _ = read_case_yaml(case_path)
-    save_case_state(project, case_yaml, case_path)
-    test_points = steps_to_points(page, effective_requirement, steps)
-    test_points["source_type"] = "fallback"
-    test_points["coverage"] = coverage
-    test_points["fallback_reason"] = fallback_reason
-    test_points = inherit_test_point_confidence_from_surface(plan=test_points, surface=surface)
-    test_points = annotate_test_point_plan_review(test_points)
-    test_point_path = save_test_point_plan(
-        project=project,
-        case_id=case_id,
-        page=page,
-        page_url=resolved_page_url,
-        requirement=effective_requirement,
-        plan=test_points,
-        case_path=case_path,
-        page_object_path=page_object_path,
-    )
-    append_history(
-        {
-            "timestamp": now_iso(),
-            "action": "auto_generate_case_fallback",
-            "case_id": case_id,
-            "page": page,
-            "page_url": resolved_page_url,
-            "path": str(case_path),
-            "fallback_reason": fallback_reason,
-        }
-    )
-    return {
-        "case_id": case_id,
-        "case_path": case_path,
-        "case_yaml": case_yaml,
-        "test_points": test_points,
-        "test_point_path": test_point_path,
-    }
-
-
 def build_auto_run_governance_context(
     *,
     project: str,
@@ -946,6 +814,7 @@ def persist_auto_run_generated_case(
     save_test_point_plan: SaveTestPointPlan,
     append_history: AppendHistory,
     now_iso: NowIso,
+    allocate_case_id: AllocateCaseId,
 ) -> dict[str, Any]:
     generated_case = orchestrator_result.get("case") or {}
     if not isinstance(generated_case, dict):
@@ -953,7 +822,7 @@ def persist_auto_run_generated_case(
             status_code=bad_gateway_status,
             detail="orchestrator returned invalid case payload",
         )
-    case_id = _allocate_case_id(
+    case_id = allocate_case_id(
         requested_case_id=str(generated_case.get("id", "")).strip(),
         project=project,
         page=page,

@@ -133,61 +133,12 @@ def collect_failure_entries_with_meta(
             if resolved_analysis_path in consumed_analysis_paths:
                 continue
             missing_manifest_count += 1
-            if not compat_scan_enabled:
-                compat_disabled_skipped += 1
-                safe_logger.warning(
-                    "evidence_manifest missing for %s; compatibility scan disabled, entry skipped",
-                    analysis_path.parent,
-                )
-                continue
-            consumed_analysis_paths.add(resolved_analysis_path)
-            safe_logger.warning("evidence_manifest missing for %s; using compatibility scan fallback", analysis_path.parent)
-            compat_used_count += 1
-            case_dir = analysis_path.parent
-            execution_record_path = case_dir / "execution_record.json"
-            suggestion_path = case_dir / "suggestion.json"
-            screenshot_path = case_dir / "failed.png"
-            html_path = case_dir / "page.html"
-            meta_path = case_dir / "meta.txt"
-            video_path = None
-            video_candidates = list(case_dir.glob("*.webm"))
-            if video_candidates:
-                video_path = max(video_candidates, key=lambda p: p.stat().st_mtime)
-            case_id = normalize_case_id(case_dir.name)
-            if execution_record_path.exists():
-                execution_record = load_execution_record_payload(execution_record_path)
-                case_id = normalize_case_id(str(execution_record.get("case_id", case_id)).strip() or case_id)
-                case_title = str(execution_record.get("case_title", case_id)).strip() or case_id
-                finished_at = str(execution_record.get("finished_at", "")).strip()
-            else:
-                case_title = case_id
-                finished_at = datetime.fromtimestamp(analysis_path.stat().st_mtime, tz=UTC).isoformat()
-
-            analysis = parse_analysis_file(analysis_path)
-            suggestion_payload = {}
-            if suggestion_path.exists():
-                try:
-                    suggestion_payload = json.loads(suggestion_path.read_text(encoding="utf-8")) or {}
-                except Exception:
-                    suggestion_payload = {}
-            entries.append(
-                {
-                    "case_id": case_id,
-                    "case_title": case_title,
-                    "finished_at": finished_at,
-                    "analysis": analysis,
-                    "suggestion": suggestion_payload,
-                    "artifact_dir": str(case_dir.resolve()),
-                    "analysis_path": str(analysis_path.resolve()),
-                    "suggestion_path": str(suggestion_path.resolve()) if suggestion_path.exists() else "",
-                    "screenshot_path": str(screenshot_path.resolve()) if screenshot_path.exists() else "",
-                    "html_path": str(html_path.resolve()) if html_path.exists() else "",
-                    "meta_path": str(meta_path.resolve()) if meta_path.exists() else "",
-                    "video_path": str(video_path.resolve()) if video_path else "",
-                    "evidence_source": "compat_scan",
-                    "manifest_path": "",
-                }
+            compat_disabled_skipped += 1
+            safe_logger.warning(
+                "evidence_manifest missing for %s; strict manifest-first mode skips this entry",
+                analysis_path.parent,
             )
+            continue
     entries.sort(key=lambda item: item.get("finished_at", ""), reverse=True)
     trimmed = entries[:200]
     manifest_count = sum(1 for item in trimmed if str(item.get("evidence_source", "")).strip().lower() == "manifest")
@@ -196,14 +147,14 @@ def collect_failure_entries_with_meta(
     if invalid_manifest_count > 0:
         warnings.append(f"检测到 {invalid_manifest_count} 个无效 evidence_manifest.json，已跳过。")
     if compat_count > 0:
-        warnings.append(f"检测到 {compat_count} 条证据通过兼容扫描回退读取，建议补齐 evidence_manifest。")
+        warnings.append(f"检测到 {compat_count} 条证据通过 compat_scan 读取，建议补齐 evidence_manifest。")
     if compat_disabled_skipped > 0:
         warnings.append(f"兼容扫描已禁用，跳过 {compat_disabled_skipped} 条缺少 manifest 的证据。")
 
     total_visible_entries = manifest_count + compat_count
     manifest_first_ratio = round((manifest_count / total_visible_entries), 3) if total_visible_entries else 1.0
-    fallback_ratio = round((compat_count / total_visible_entries), 3) if total_visible_entries else 0.0
-    policy_mode = "compat" if compat_scan_enabled else "strict"
+    compat_scan_ratio = round((compat_count / total_visible_entries), 3) if total_visible_entries else 0.0
+    policy_mode = "strict"
     if compat_count > 0:
         health = "degraded"
     elif compat_disabled_skipped > 0 or invalid_manifest_count > 0:
@@ -212,7 +163,7 @@ def collect_failure_entries_with_meta(
         health = "healthy"
 
     meta = {
-        "compat_scan_enabled": compat_scan_enabled,
+        "compat_scan_enabled": False,
         "policy_mode": policy_mode,
         "health": health,
         "manifest_entry_count": manifest_count,
@@ -223,7 +174,7 @@ def collect_failure_entries_with_meta(
         "missing_manifest_count": missing_manifest_count,
         "total_visible_entries": total_visible_entries,
         "manifest_first_ratio": manifest_first_ratio,
-        "fallback_ratio": fallback_ratio,
+        "compat_scan_ratio": compat_scan_ratio,
         "warnings": warnings,
     }
     return trimmed, meta
@@ -247,9 +198,9 @@ def normalize_failure_evidence_meta(meta: dict[str, Any] | None) -> dict[str, An
     manifest_first_ratio = source.get("manifest_first_ratio")
     if manifest_first_ratio is None:
         manifest_first_ratio = round((manifest_entry_count / total_visible_entries), 3) if total_visible_entries else 1.0
-    fallback_ratio = source.get("fallback_ratio")
-    if fallback_ratio is None:
-        fallback_ratio = round((compat_scan_entry_count / total_visible_entries), 3) if total_visible_entries else 0.0
+    compat_scan_ratio = source.get("compat_scan_ratio")
+    if compat_scan_ratio is None:
+        compat_scan_ratio = round((compat_scan_entry_count / total_visible_entries), 3) if total_visible_entries else 0.0
     policy_mode = str(source.get("policy_mode", "compat" if compat_scan_enabled else "strict")).strip() or (
         "compat" if compat_scan_enabled else "strict"
     )
@@ -265,7 +216,6 @@ def normalize_failure_evidence_meta(meta: dict[str, Any] | None) -> dict[str, An
     warnings = [str(item).strip() for item in warnings_raw] if isinstance(warnings_raw, list) else []
     warnings = [item for item in warnings if item]
     return {
-        **source,
         "compat_scan_enabled": compat_scan_enabled,
         "policy_mode": policy_mode,
         "health": health,
@@ -277,7 +227,7 @@ def normalize_failure_evidence_meta(meta: dict[str, Any] | None) -> dict[str, An
         "missing_manifest_count": missing_manifest_count,
         "total_visible_entries": total_visible_entries,
         "manifest_first_ratio": float(manifest_first_ratio),
-        "fallback_ratio": float(fallback_ratio),
+        "compat_scan_ratio": float(compat_scan_ratio),
         "warnings": warnings,
     }
 
@@ -288,34 +238,30 @@ def normalize_execution_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
     manifest_record_count = int(source.get("manifest_record_count", 0) or 0)
     compat_scan_record_count = int(source.get("compat_scan_record_count", 0) or 0)
     runtime_realtime_count = int(source.get("runtime_realtime_count", 0) or 0)
-    runtime_fallback_count = int(source.get("runtime_fallback_count", 0) or 0)
     compat_scan_used_count = int(source.get("compat_scan_used_count", compat_scan_record_count) or 0)
     compat_scan_skipped_count = int(source.get("compat_scan_skipped_count", 0) or 0)
     invalid_manifest_count = int(source.get("invalid_manifest_count", 0) or 0)
     invalid_execution_record_count = int(source.get("invalid_execution_record_count", 0) or 0)
     missing_manifest_count = int(source.get("missing_manifest_count", 0) or 0)
-    runtime_fallback_used = bool(source.get("runtime_fallback_used", False))
     total_visible_records = int(
         source.get(
             "total_visible_records",
-            manifest_record_count + compat_scan_record_count + runtime_realtime_count + runtime_fallback_count,
+            manifest_record_count + compat_scan_record_count + runtime_realtime_count,
         )
         or 0
     )
     manifest_first_ratio = source.get("manifest_first_ratio")
     if manifest_first_ratio is None:
         manifest_first_ratio = round((manifest_record_count / max(1, (manifest_record_count + compat_scan_record_count))), 3)
-    fallback_ratio = source.get("fallback_ratio")
-    if fallback_ratio is None:
-        fallback_ratio = round((compat_scan_record_count / max(1, (manifest_record_count + compat_scan_record_count))), 3)
+    compat_scan_ratio = source.get("compat_scan_ratio")
+    if compat_scan_ratio is None:
+        compat_scan_ratio = round((compat_scan_record_count / max(1, (manifest_record_count + compat_scan_record_count))), 3)
     policy_mode = str(source.get("policy_mode", "compat" if compat_scan_enabled else "strict")).strip() or (
         "compat" if compat_scan_enabled else "strict"
     )
     health = str(source.get("health", "")).strip().lower()
     if not health:
-        if runtime_fallback_used or runtime_fallback_count > 0:
-            health = "critical"
-        elif compat_scan_record_count > 0:
+        if compat_scan_record_count > 0:
             health = "degraded"
         elif compat_scan_skipped_count > 0 or invalid_manifest_count > 0 or invalid_execution_record_count > 0:
             health = "warning"
@@ -330,15 +276,13 @@ def normalize_execution_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
             1.0,
             round(
                 float(manifest_first_ratio) * 0.55
-                + (1 - float(fallback_ratio)) * 0.25
+                + (1 - float(compat_scan_ratio)) * 0.25
                 + (0.0 if missing_manifest_count > 0 else 0.1)
                 + (0.0 if invalid_manifest_count > 0 or invalid_execution_record_count > 0 else 0.1),
                 3,
             ),
         ),
     )
-    if runtime_fallback_used or runtime_fallback_count > 0:
-        readiness_score = min(readiness_score, 0.4)
     if health == "healthy" and compat_scan_record_count == 0 and missing_manifest_count == 0 and invalid_manifest_count == 0 and invalid_execution_record_count == 0:
         readiness_status = "ready"
     elif readiness_score >= 0.55:
@@ -348,9 +292,9 @@ def normalize_execution_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
     if readiness_status == "ready":
         readiness_reason = "manifest-first 路径稳定，可评估更严格环境。"
     elif readiness_status == "caution":
-        readiness_reason = "manifest-first 已占主导，但仍有 compat/runtime 回退需要清理。"
+        readiness_reason = "manifest-first 已占主导，但仍有 compat 路径需要清理。"
     else:
-        readiness_reason = "仍存在缺失 manifest、invalid record 或 runtime fallback，不建议关闭 compat builder。"
+        readiness_reason = "仍存在缺失 manifest 或 invalid record，不建议关闭 compat_scan。"
     blocking_reasons: list[str] = []
     if missing_manifest_count > 0:
         blocking_reasons.append(f"missing_manifest={missing_manifest_count}")
@@ -360,47 +304,38 @@ def normalize_execution_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
         blocking_reasons.append(f"invalid_execution_record={invalid_execution_record_count}")
     if compat_scan_record_count > 0:
         blocking_reasons.append(f"compat_scan_record={compat_scan_record_count}")
-    if runtime_fallback_count > 0 or runtime_fallback_used:
-        fallback_count = runtime_fallback_count if runtime_fallback_count > 0 else 1
-        blocking_reasons.append(f"runtime_fallback={fallback_count}")
     improvement_actions: list[str] = []
     if missing_manifest_count > 0:
         improvement_actions.append("补齐 evidence manifest 产物。")
     if compat_scan_record_count > 0:
-        improvement_actions.append("减少 compat builder 命中，优先消费 manifest-first execution record。")
-    if runtime_fallback_count > 0 or runtime_fallback_used:
-        improvement_actions.append("等待 runtime flush 完成后再评估 strict-mode。")
+        improvement_actions.append("减少 compat_scan 命中，优先消费 manifest-first execution record。")
     if invalid_manifest_count > 0 or invalid_execution_record_count > 0:
         improvement_actions.append("修复 invalid manifest / execution record 结构。")
     return {
-        **source,
         "compat_scan_enabled": compat_scan_enabled,
         "policy_mode": policy_mode,
         "health": health,
         "manifest_record_count": manifest_record_count,
         "compat_scan_record_count": compat_scan_record_count,
         "runtime_realtime_count": runtime_realtime_count,
-        "runtime_fallback_count": runtime_fallback_count,
         "compat_scan_used_count": compat_scan_used_count,
         "compat_scan_skipped_count": compat_scan_skipped_count,
         "invalid_manifest_count": invalid_manifest_count,
         "invalid_execution_record_count": invalid_execution_record_count,
         "missing_manifest_count": missing_manifest_count,
-        "runtime_fallback_used": runtime_fallback_used,
         "total_visible_records": total_visible_records,
         "manifest_first_ratio": float(manifest_first_ratio),
-        "fallback_ratio": float(fallback_ratio),
+        "compat_scan_ratio": float(compat_scan_ratio),
         "strict_mode_readiness": {
             "score": readiness_score,
             "status": readiness_status,
             "reason": readiness_reason,
-            "can_disable_compat_builder": readiness_status == "ready",
+            "can_disable_compat_scan": readiness_status == "ready",
             "blocking_reasons": blocking_reasons,
             "improvement_actions": improvement_actions[:3],
             "signals": {
                 "manifest_record_count": manifest_record_count,
                 "compat_scan_record_count": compat_scan_record_count,
-                "runtime_fallback_count": runtime_fallback_count,
                 "missing_manifest_count": missing_manifest_count,
                 "invalid_manifest_count": invalid_manifest_count,
                 "invalid_execution_record_count": invalid_execution_record_count,
@@ -491,7 +426,7 @@ def record_failure_source_calibration_sample(
         "usable_for_training": bool(confirmed_source) and normalized_feedback["decision"] in {"accepted", "corrected"},
         "confirmed_by": str(review_record.get("confirmed_by", "")).strip() or "anonymous",
         "confirmed_by_role": str(review_record.get("confirmed_by_role", "")).strip() or "unknown",
-        "confirmed_by_source": str(review_record.get("confirmed_by_source", "")).strip() or "fallback",
+        "confirmed_by_source": str(review_record.get("confirmed_by_source", "")).strip() or "system_default",
         "actor_display": reviewer_display_name_fn(review_record),
         "created_at": str(review_record.get("updated_at", "")).strip() or now_iso_fn(),
     }
@@ -1039,7 +974,7 @@ def build_report_allure(
 ) -> dict[str, Any]:
     version = get_allure_index_version() if available else 0
     summary = read_allure_summary() if available else {}
-    allure_index = ensure_allure_snapshot(version) if available else "/allure/index.html"
+    allure_index = ensure_allure_snapshot(version=version) if available else "/allure/index.html"
     return {
         "allure_index": allure_index,
         "available": available,
@@ -1066,9 +1001,9 @@ def build_report_allure_refresh(
                 "stdout": str(getattr(command_result, "stdout", "") or "").strip()[-4000:],
                 "stderr": str(getattr(command_result, "stderr", "") or "").strip()[-4000:],
             }
-        }
+    }
     version = get_allure_index_version() if available else 0
-    allure_index = ensure_allure_snapshot(version) if available else "/allure/index.html"
+    allure_index = ensure_allure_snapshot(version=version) if available else "/allure/index.html"
     return {
         "available": available,
         "version": version,

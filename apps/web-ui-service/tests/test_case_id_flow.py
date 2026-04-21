@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import Base
+import app.models.page_object as page_object_model  # noqa: F401
 import app.models.test_case as test_case_model
 import app.models.test_project  # noqa: F401
 import app.models.workbench_state as workbench_state_model  # noqa: F401
@@ -110,10 +111,236 @@ def test_get_detail_includes_project_status(db_session: Session) -> None:
         test_project_schema.TestProjectUpdate(status="inactive"),
     )
 
-    detail = test_case_service.get_test_case_detail(db_session, case.case_id)
+    detail = test_case_service.get_test_case_detail(db_session, str(case.id))
 
     assert detail.case.id == case.id
     assert detail.project_status == "inactive"
+
+
+def test_get_detail_repairs_legacy_login_steps_and_sanitizes_script(db_session: Session) -> None:
+    page_object = page_object_model.PageObject(
+        project_code="atp",
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="http://localhost:5173/#/login",
+        status="online",
+        created_by="qa",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    db_session.add_all(
+        [
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login-role---1",
+                element_name="用户名输入框",
+                locator_type="role",
+                locator_value="请输入用户名",
+                role="username",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login-role---2",
+                element_name="密码输入框",
+                locator_type="role",
+                locator_value="请输入密码",
+                role="password",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login-role---4",
+                element_name="登录按钮",
+                locator_type="role",
+                locator_value="登录",
+                role="button",
+                owner="qa",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            case_id="atp-web-login-auth-fn-ai-0098",
+            project_code="atp",
+            page_code="login",
+            name="登录页历史脏步骤修复",
+            product_line="认证中心",
+            module="登录",
+            priority="P0",
+            test_type="ui",
+            creator="qa",
+            expected_result="系统应给出符合业务规则的反馈。",
+            script_code=(
+                "id: atp-web-login-auth-fn-ai-0098\n"
+                "title: 登录页历史脏步骤修复\n"
+                "module: login\n"
+                "requirement:\n"
+                "  - 登录功能：\n"
+                "  - 登录功能：\n"
+                "  - source-01\n"
+                "  - 用户名为空点击登录提示不能为空\n"
+                "execution:\n"
+                "  page: login\n"
+                "  steps: []\n"
+            ),
+            test_steps=[
+                {
+                    "action": "custom_step",
+                    "description": "在用户名输入框输入test001",
+                    "target": "element:login-role---1",
+                    "locator_type": "role",
+                    "locator_value": "请输入用户名",
+                    "value": "test001",
+                },
+                {
+                    "action": "custom_step",
+                    "description": "在密码输入框输入123456",
+                    "target": "element:login-role---1",
+                    "locator_type": "role",
+                    "locator_value": "请输入用户名",
+                    "value": "123456",
+                },
+                {
+                    "action": "custom_step",
+                    "description": "点击登录按钮",
+                    "target": "element:login-role---1",
+                    "locator_type": "role",
+                    "locator_value": "请输入用户名",
+                },
+            ],
+        ),
+    )
+
+    detail = test_case_service.get_test_case_detail(db_session, str(case.id))
+    repaired = detail.case.test_steps if isinstance(detail.case.test_steps, list) else []
+
+    assert [str(item.get("action")) for item in repaired] == ["input", "input", "click"]
+    assert [str(item.get("target")) for item in repaired] == [
+        "element:login-role---1",
+        "element:login-role---2",
+        "element:login-role---4",
+    ]
+    assert [str(item.get("target_name")) for item in repaired] == [
+        "用户名输入框",
+        "密码输入框",
+        "登录按钮",
+    ]
+    assert "系统应给出符合业务规则的反馈" not in str(detail.case.expected_result or "")
+    assert "source-01" not in str(detail.case.script_code or "")
+    assert str(detail.case.script_code or "").count("用户名为空点击登录提示不能为空") == 1
+
+    step_rows = (
+        db_session.query(test_case_model.TestCaseStep)
+        .filter_by(case_id=int(case.id))
+        .order_by(test_case_model.TestCaseStep.step_index.asc())
+        .all()
+    )
+    assert len(step_rows) == 3
+    assert "username" in str(step_rows[0].locator_value)
+    assert "password" in str(step_rows[1].locator_value)
+    assert str(step_rows[2].locator_value) == "登录"
+
+
+def test_get_detail_repairs_login_like_steps_when_page_code_is_not_login(db_session: Session) -> None:
+    page_object = page_object_model.PageObject(
+        project_code="atp",
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="http://localhost:5173/#/login",
+        status="online",
+        created_by="qa",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    db_session.add_all(
+        [
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login-role---1",
+                element_name="用户名输入框",
+                locator_type="role",
+                locator_value="请输入用户名",
+                role="username",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login-role---2",
+                element_name="密码输入框",
+                locator_type="role",
+                locator_value="请输入密码",
+                role="password",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login-role---4",
+                element_name="登录按钮",
+                locator_type="role",
+                locator_value="登录",
+                role="button",
+                owner="qa",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            case_id="atp-web-prod-list-fn-ai-0999",
+            project_code="atp",
+            page_code="prod",
+            name="登录语义修复-跨页面编码",
+            product_line="商品",
+            module="列表",
+            priority="P1",
+            test_type="ui",
+            creator="qa",
+            script_code="def test_login_like_case(page):\n    assert True\n",
+            test_steps=[
+                {
+                    "action": "custom_step",
+                    "description": "输入用户名 test001",
+                    "target": "element:login-role---1",
+                    "locator_type": "role",
+                    "locator_value": "请输入用户名",
+                    "value": "test001",
+                },
+                {
+                    "action": "custom_step",
+                    "description": "输入密码 123456",
+                    "target": "element:login-role---1",
+                    "locator_type": "role",
+                    "locator_value": "请输入用户名",
+                    "value": "123456",
+                },
+                {
+                    "action": "custom_step",
+                    "description": "点击登录按钮",
+                    "target": "element:login-role---1",
+                    "locator_type": "role",
+                    "locator_value": "请输入用户名",
+                },
+            ],
+        ),
+    )
+
+    detail = test_case_service.get_test_case_detail(db_session, str(case.id))
+    repaired = detail.case.test_steps if isinstance(detail.case.test_steps, list) else []
+
+    assert [str(item.get("action")) for item in repaired] == ["input", "input", "click"]
+    assert [str(item.get("target")) for item in repaired] == [
+        "element:login-role---1",
+        "element:login-role---2",
+        "element:login-role---4",
+    ]
 
 
 def test_batch_status_update_accepts_case_ids(db_session: Session) -> None:

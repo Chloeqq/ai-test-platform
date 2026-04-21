@@ -67,6 +67,34 @@ class TestCase(Base):
     )
 
 
+class TestCaseStep(Base):
+    __tablename__ = "test_case_steps"
+    __table_args__ = (
+        UniqueConstraint("case_id", "step_index", name="uq_test_case_steps_identity"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("test_cases.id", ondelete="CASCADE"), index=True)
+    case_business_id: Mapped[str] = mapped_column(String(64), index=True)
+    project_code: Mapped[str] = mapped_column(String(20), default="atp", index=True)
+    page_code: Mapped[str] = mapped_column(String(40), default="", index=True)
+    step_index: Mapped[int] = mapped_column(Integer, index=True)
+    action: Mapped[str] = mapped_column(String(80), default="")
+    target: Mapped[str] = mapped_column(String(255), default="")
+    locator_type: Mapped[str] = mapped_column(String(40), default="")
+    locator_value: Mapped[str] = mapped_column(Text, default="")
+    step_data: Mapped[str] = mapped_column(Text, default="")
+    expected_result: Mapped[str] = mapped_column(Text, default="")
+    raw_payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        index=True,
+    )
+
+
 class TestCaseDefect(Base):
     __tablename__ = "test_case_defects"
 

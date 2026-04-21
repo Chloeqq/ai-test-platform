@@ -16,7 +16,8 @@ import app.models.test_project  # noqa: F401
 import app.models.workbench_state  # noqa: F401
 from app.models.test_case import TestCase as TestCaseModel
 from app.models.test_project import TestProject as TestProjectModel
-from app.routers import legacy_workbench
+from app.api.workbench import constants as workbench_constants
+from app.api.workbench import store as workbench_store
 from app.routers.workbench_reporting import router as workbench_reporting_router
 
 
@@ -100,12 +101,10 @@ def case_consistency_client(
     )
     (reports_root / "SMOKE-RETURNAPPLY-020005.report.md").write_text("stale\n", encoding="utf-8")
 
-    monkeypatch.setattr(legacy_workbench, "HISTORY_FILE", history_file)
-    monkeypatch.setattr(legacy_workbench, "RUNTIME_RUNS_FILE", runtime_runs_file)
-    monkeypatch.setattr(legacy_workbench, "DEFECT_LINKS_FILE", defect_links_file)
-    monkeypatch.setattr(legacy_workbench, "EXECUTION_REPORTS_ROOT", reports_root)
-    monkeypatch.setattr(legacy_workbench, "_sync_stage_a_workbench_state", lambda: None)
-    monkeypatch.setattr(legacy_workbench, "_ensure_dirs", lambda: None)
+    monkeypatch.setattr(workbench_store, "HISTORY_FILE", history_file)
+    monkeypatch.setattr(workbench_store, "RUNTIME_RUNS_FILE", runtime_runs_file)
+    monkeypatch.setattr(workbench_store, "DEFECT_LINKS_FILE", defect_links_file)
+    monkeypatch.setattr(workbench_constants, "EXECUTION_REPORTS_ROOT", reports_root)
 
     app = FastAPI()
     app.include_router(workbench_reporting_router)

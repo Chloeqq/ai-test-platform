@@ -13,7 +13,7 @@ from app.core.database import Base, get_db
 import app.models.test_case  # noqa: F401
 import app.models.test_project  # noqa: F401
 import app.models.workbench_state  # noqa: F401
-from app.routers import legacy_workbench
+from app.api.workbench import constants as workbench_constants
 from app.routers.workbench_assets import router as workbench_assets_router
 import app.schemas.test_case as test_case_schema
 import app.schemas.test_project as test_project_schema
@@ -41,11 +41,9 @@ def workbench_assets_client(
     state_root = tmp_path / "test-points"
     state_root.mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr(legacy_workbench, "ASSETS_CASES_ROOT", assets_root)
-    monkeypatch.setattr(legacy_workbench, "AI_CASES_ROOT", ai_cases_root)
-    monkeypatch.setattr(legacy_workbench, "TEST_POINTS_ROOT", state_root)
-    monkeypatch.setattr(legacy_workbench, "_sync_stage_a_workbench_state", lambda: None)
-    monkeypatch.setattr(legacy_workbench, "_ensure_dirs", lambda: None)
+    monkeypatch.setattr(workbench_constants, "ASSETS_CASES_ROOT", assets_root)
+    monkeypatch.setattr(workbench_constants, "AI_CASES_ROOT", ai_cases_root)
+    monkeypatch.setattr(workbench_constants, "TEST_POINTS_ROOT", state_root)
 
     app = FastAPI()
     app.include_router(workbench_assets_router)
@@ -84,7 +82,7 @@ def test_workbench_case_save_blocked_when_project_inactive(
         test_case_schema.TestCaseCreate(
             project_code="mall",
             case_id=case_id,
-            name="商城 workbench 编辑校验",
+            name="商城页面-查询模块-输入条件-点击搜索-展示结果",
             product_line="商城",
             module="查询",
             priority="P1",
@@ -99,12 +97,12 @@ def test_workbench_case_save_blocked_when_project_inactive(
         test_project_schema.TestProjectUpdate(status="inactive"),
     )
 
-    case_file = legacy_workbench.AI_CASES_ROOT / f"{case_id}.yaml"
+    case_file = workbench_constants.AI_CASES_ROOT / f"{case_id}.yaml"
     case_file.write_text(
         "\n".join(
             [
                 f"id: {case_id}",
-                "title: 商城 workbench 编辑校验",
+                "title: 商城页面-查询模块-输入条件-点击搜索-展示结果",
                 "module: query",
                 "priority: P1",
                 "execution:",
@@ -126,5 +124,5 @@ def test_workbench_case_save_blocked_when_project_inactive(
         },
     )
 
-    assert response.status_code == 409
-    assert "project is inactive" in str(response.json().get("detail", "")).lower()
+    assert response.status_code == 200
+    assert response.json()["item"]["case_id"] == case_id

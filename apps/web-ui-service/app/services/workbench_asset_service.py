@@ -127,9 +127,9 @@ def build_test_point_asset_semantic_summary(
         for point in normalized_plan.get("points", [])
         if isinstance(point, dict) and str(point.get("action", "")).strip()
     }
-    dependent_elements = {
+    involved_elements = {
         str(item).strip().lower()
-        for item in normalized_plan.get("dependent_elements", [])
+        for item in (normalized_plan.get("involved_elements") or [])
         if str(item).strip()
     }
 
@@ -154,7 +154,7 @@ def build_test_point_asset_semantic_summary(
         business_domain = "generic"
 
     primary_actions: list[str] = []
-    if {"search_input", "search_button"} & dependent_elements:
+    if {"search_input", "search_button"} & involved_elements:
         primary_actions.append("search")
     if "assert_visible" in actions or page_type == "list":
         primary_actions.append("view_results")
@@ -650,11 +650,10 @@ def save_test_point_plan(
                 "raw_plan_keys": sorted((plan or {}).keys()) if isinstance(plan, dict) else [],
                 **((plan or {}).get("metadata", {}) if isinstance((plan or {}).get("metadata"), dict) else {}),
             },
-            "dependent_elements": (plan or {}).get("dependent_elements", []) if isinstance(plan, dict) else [],
+            "involved_elements": (plan or {}).get("involved_elements", []) if isinstance(plan, dict) else [],
             "confidence": (plan or {}).get("confidence") if isinstance(plan, dict) else None,
             "warnings": (plan or {}).get("warnings", []) if isinstance(plan, dict) else [],
             "requires_review": (plan or {}).get("requires_review", False) if isinstance(plan, dict) else False,
-            "fallback_reason": (plan or {}).get("fallback_reason", "") if isinstance(plan, dict) else "",
         },
         False,
     )
@@ -765,7 +764,7 @@ def upsert_test_point_asset_snapshot(
         "coverage": _dict_value(normalized_plan.get("coverage")),
         "semantic_summary": semantic_summary,
         "technique_summary": technique_summary,
-        "dependent_elements": _list_value(normalized_plan.get("dependent_elements")),
+        "involved_elements": _list_value(normalized_plan.get("involved_elements")),
         "confidence": max(0.0, min(1.0, _float_value(normalized_plan.get("confidence", existing_confidence)))),
         "warnings": _list_value(normalized_plan.get("warnings")),
         "requires_review": bool(normalized_plan.get("requires_review", existing.get("requires_review", False))),
@@ -811,7 +810,7 @@ def load_test_point_asset_with_root(project: str, case_id: str, *, state_root: P
             asset.setdefault("point_count", int(plan_payload.get("point_count", len(plan_payload.get("points", []) if isinstance(plan_payload.get("points"), list) else [])) or 0))
             asset.setdefault("review_summary", plan_payload.get("review_summary", {}) if isinstance(plan_payload.get("review_summary"), dict) else {})
             asset.setdefault("coverage", plan_payload.get("coverage", {}) if isinstance(plan_payload.get("coverage"), dict) else {})
-            asset.setdefault("dependent_elements", plan_payload.get("dependent_elements", []) if isinstance(plan_payload.get("dependent_elements"), list) else [])
+            asset.setdefault("involved_elements", plan_payload.get("involved_elements", []) if isinstance(plan_payload.get("involved_elements"), list) else [])
             asset.setdefault("confidence", max(0.0, min(1.0, float(plan_payload.get("confidence", 0) or 0))))
             asset.setdefault("requires_review", bool(plan_payload.get("requires_review", False)))
     if isinstance(asset, dict):
@@ -1147,7 +1146,7 @@ def build_test_point_asset_detail(
             "semantic_summary": asset.get("semantic_summary", {}) if isinstance(asset.get("semantic_summary"), dict) else {},
             "technique_summary": asset.get("technique_summary", {}) if isinstance(asset.get("technique_summary"), dict) else {},
             "review_summary": asset.get("review_summary", {}) if isinstance(asset.get("review_summary"), dict) else {},
-            "dependent_elements": asset.get("dependent_elements", []) if isinstance(asset.get("dependent_elements"), list) else [],
+            "involved_elements": asset.get("involved_elements", []) if isinstance(asset.get("involved_elements"), list) else [],
             "confidence": clamp_confidence(asset.get("confidence", 0)),
             "requires_review": bool(asset.get("requires_review", False)),
             "warnings": asset.get("warnings", []) if isinstance(asset.get("warnings"), list) else [],

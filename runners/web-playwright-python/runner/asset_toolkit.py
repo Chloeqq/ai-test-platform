@@ -494,6 +494,8 @@ def apply_scaffold_element(
 def prepare_generated_test_case(test_case: dict) -> dict:
     normalized = deepcopy(test_case)
     page = normalized["execution"]["page"]
+    module = str(normalized.get("module", "")).strip() or page
+    title = str(normalized.get("title", "")).strip()
 
     tags = list(normalized.get("tags", []))
     if "ai-generated" not in tags:
@@ -502,6 +504,7 @@ def prepare_generated_test_case(test_case: dict) -> dict:
         tags.append(page)
 
     normalized["tags"] = tags
+    normalized["title"] = _ensure_structured_title(page=page, module=module, title=title)
     normalized.setdefault("owner", "qa-team")
     normalized.setdefault("status", "automated")
 

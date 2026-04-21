@@ -1,3 +1,9 @@
+"""Database-backed test-case CRUD and tree management.
+
+These endpoints operate on the ``test_cases`` PostgreSQL table.  For the
+YAML/file-system asset APIs (dictionaries, test-point assets), see
+``workbench_assets.py`` (``/api/workbench/cases``).
+"""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -105,10 +111,14 @@ def list_test_cases(
     test_type: str = Query(default=""),
     sort_field: str = Query(default="updated_at"),
     sort_order: str = Query(default="desc"),
+    sort: str = Query(default=""),
+    order: str = Query(default=""),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
+    effective_sort_field = str(sort or "").strip() or str(sort_field or "").strip() or "updated_at"
+    effective_sort_order = str(order or "").strip() or str(sort_order or "").strip() or "desc"
     result = test_case_service.list_test_cases(
         db,
         q=q,
@@ -122,8 +132,8 @@ def list_test_cases(
         product_line=product_line,
         module=module,
         test_type=test_type,
-        sort_field=sort_field,
-        sort_order=sort_order,
+        sort_field=effective_sort_field,
+        sort_order=effective_sort_order,
         page=page,
         page_size=page_size,
     )

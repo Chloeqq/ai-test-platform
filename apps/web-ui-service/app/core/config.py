@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[2] / "dev.db"
 STRICT_EVIDENCE_POLICY_ENVS = {"prod", "production", "staging", "stage", "preprod", "pre", "uat"}
+DEVLIKE_APP_ENVS = {"dev", "development", "local", "test", "testing"}
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -43,7 +44,7 @@ def _parse_csv(raw: str) -> list[str]:
 def _default_page_surface_allowed_hosts() -> list[str]:
     configured = _parse_csv(os.getenv("PAGE_SURFACE_ALLOWED_HOSTS", ""))
     hosts: list[str] = []
-    base_url = str(os.getenv("BASE_URL", "")).strip()
+    base_url = _default_base_url()
     if base_url:
         hostname = urlsplit(base_url).hostname
         if hostname:
@@ -85,6 +86,39 @@ def _default_execution_gate_dual_approval_roles() -> list[str]:
     return normalized or ["admin"]
 
 
+def _current_app_env() -> str:
+    return str(os.getenv("APP_ENV", "dev")).strip().lower()
+
+
+def _default_base_url() -> str:
+    raw = str(os.getenv("BASE_URL", "")).strip()
+    if raw:
+        return raw
+    if _current_app_env() in DEVLIKE_APP_ENVS:
+        return "http://localhost:5173/login#/login"
+    return ""
+
+
+def _default_jwt_secret_key() -> str:
+    return str(os.getenv("JWT_SECRET_KEY", "")).strip()
+
+
+def _default_admin_username() -> str:
+    return str(os.getenv("ADMIN_USERNAME", "")).strip()
+
+
+def _default_admin_password() -> str:
+    return str(os.getenv("ADMIN_PASSWORD", "")).strip()
+
+
+def _default_admin_role() -> str:
+    return str(os.getenv("ADMIN_ROLE", "")).strip()
+
+
+def _default_database_auto_create_tables() -> bool:
+    return _env_bool("DATABASE_AUTO_CREATE_TABLES", False)
+
+
 class Settings(BaseModel):
     app_name: str = "AI Test Platform FastAPI"
     app_env: str = Field(default_factory=lambda: os.getenv("APP_ENV", "dev"))
@@ -99,18 +133,18 @@ class Settings(BaseModel):
     database_max_overflow: int = Field(default_factory=lambda: int(os.getenv("DATABASE_MAX_OVERFLOW", "20")))
     database_pool_recycle_seconds: int = Field(default_factory=lambda: int(os.getenv("DATABASE_POOL_RECYCLE_SECONDS", "1800")))
     database_auto_create_tables: bool = Field(
-        default_factory=lambda: _env_bool("DATABASE_AUTO_CREATE_TABLES", True)
+        default_factory=_default_database_auto_create_tables
     )
     redis_url: str = Field(default_factory=lambda: os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0"))
     redis_enabled: bool = Field(default_factory=lambda: _env_bool("REDIS_ENABLED", True))
     redis_prefix: str = Field(default_factory=lambda: os.getenv("REDIS_PREFIX", "aitest"))
-    orchestrator_timeout_seconds: int = Field(default_factory=lambda: int(os.getenv("ORCHESTRATOR_TIMEOUT_SECONDS", "45")))
-    jwt_secret_key: str = Field(default_factory=lambda: os.getenv("JWT_SECRET_KEY", "dev-jwt-secret-change-me"))
+    orchestrator_timeout_seconds: int = Field(default_factory=lambda: int(os.getenv("ORCHESTRATOR_TIMEOUT_SECONDS", "300")))
+    jwt_secret_key: str = Field(default_factory=_default_jwt_secret_key)
     jwt_algorithm: str = Field(default_factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))
     jwt_expire_minutes: int = Field(default_factory=lambda: int(os.getenv("JWT_EXPIRE_MINUTES", "120")))
-    default_admin_username: str = Field(default_factory=lambda: os.getenv("ADMIN_USERNAME", "admin"))
-    default_admin_password: str = Field(default_factory=lambda: os.getenv("ADMIN_PASSWORD", "admin123"))
-    default_admin_role: str = Field(default_factory=lambda: os.getenv("ADMIN_ROLE", "admin"))
+    default_admin_username: str = Field(default_factory=_default_admin_username)
+    default_admin_password: str = Field(default_factory=_default_admin_password)
+    default_admin_role: str = Field(default_factory=_default_admin_role)
     evidence_manifest_policy: str = Field(default_factory=_resolve_evidence_manifest_policy)
     evidence_manifest_compat_scan_enabled: bool = Field(
         default_factory=lambda: _env_bool(
@@ -121,7 +155,7 @@ class Settings(BaseModel):
     page_surface_login_url: str = Field(
         default_factory=lambda: os.getenv(
             "PAGE_SURFACE_LOGIN_URL",
-            os.getenv("BASE_URL", "http://localhost:5173/login#/login"),
+            _default_base_url(),
         )
     )
     page_surface_allowed_hosts: list[str] = Field(default_factory=_default_page_surface_allowed_hosts)

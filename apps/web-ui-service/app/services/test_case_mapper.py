@@ -3,7 +3,11 @@ from __future__ import annotations
 import csv
 import io
 import json
-from typing import Callable, TypeAlias
+import re
+from pathlib import Path
+from typing import Any, Callable, TypeAlias
+
+import yaml
 
 from app.models.test_case import TestCase, TestCaseDefect, TestCaseExecution, TestCaseVersion
 from app.schemas.test_case import TestCaseDataConfig
@@ -16,12 +20,240 @@ SearchContextPayload: TypeAlias = dict[str, str]
 StatsPayload: TypeAlias = dict[str, int | float]
 NormalizeReportUrl: TypeAlias = Callable[[str, int], str]
 NormalizeDataConfig: TypeAlias = Callable[[TestCaseDataConfig | None], DataConfigPayload]
+REPO_ROOT = Path(__file__).resolve().parents[4]
+GENERIC_EXPECTED_TEXT = "系统应给出符合业务规则的反馈。"
+SECTION_LABELS = {
+    "测试意图": "test_intent",
+    "测试类型": "test_type",
+    "前置条件": "precondition",
+    "操作步骤": "operation_steps",
+    "涉及元素": "involved_elements",
+    "断言点": "assertion_points",
+    "整体预期结果": "overall_expected",
+    "预期结果": "overall_expected",
+}
 
 
 def _list_value(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _clean_inline_item(value: str) -> str:
+    cleaned = re.sub(r"^\s*[-*•·]+\s*", "", str(value or "").strip())
+    cleaned = re.sub(r"^\s*\d+\s*[\.\)、]\s*", "", cleaned)
+    return cleaned.strip()
+
+
+def _split_inline_items(value: str, *, separators: str = r"[，,；;]") -> list[str]:
+    text = _text(value)
+    if not text:
+        return []
+    items = [
+        item.strip(" \t\r\n。；;，,、")
+        for item in re.split(separators, text)
+        if item.strip(" \t\r\n。；;，,、")
+    ]
+    return items or [text]
+
+
+def _looks_generic_expected(value: str) -> bool:
+    text = _text(value)
+    if not text:
+        return True
+    if any(token in text for token in ("测试意图：", "测试类型：", "前置条件：", "操作步骤：", "涉及元素：")):
+        return True
+    generic_tokens = {
+        GENERIC_EXPECTED_TEXT,
+        "系统应给出符合业务规则的反馈",
+        "符合预期",
+        "系统提示正确",
+        "登录功能：",
+    }
+    return text in generic_tokens
+
+
+def _load_case_yaml(case: TestCase) -> tuple[dict[str, Any], str]:
+    source_ref = _text(case.source_ref)
+    candidates: list[Path] = []
+    if source_ref:
+        source_path = Path(source_ref).expanduser()
+        if not source_path.is_absolute():
+            source_path = (REPO_ROOT / source_path).resolve()
+        candidates.append(source_path)
+    script_code = _text(case.script_code)
+    for candidate in candidates:
+        try:
+            if candidate.exists():
+                payload = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
+                if isinstance(payload, dict):
+                    return payload, str(candidate)
+        except (OSError, yaml.YAMLError):
+            continue
+    if script_code:
+        try:
+            payload = yaml.safe_load(script_code) or {}
+            if isinstance(payload, dict):
+                return payload, source_ref
+        except yaml.YAMLError:
+            return {}, source_ref
+    return {}, source_ref
+
+
+def _parse_requirement_block(raw_block: str) -> dict[str, Any]:
+    sections: dict[str, Any] = {
+        "raw_requirement_block": _text(raw_block),
+        "requirement_scope": [],
+        "test_intent": "",
+        "test_type": "",
+        "precondition": [],
+        "operation_steps": [],
+        "involved_elements": [],
+        "assertion_points": [],
+        "overall_expected": [],
+    }
+    current_section = "requirement_scope"
+    for raw_line in _text(raw_block).replace("\r\n", "\n").split("\n"):
+        line = raw_line.strip()
+        if not line:
+            continue
+        matched_key = None
+        matched_value = ""
+        for label, key in SECTION_LABELS.items():
+            prefix_cn = f"{label}："
+            prefix_en = f"{label}:"
+            if line.startswith(prefix_cn):
+                matched_key = key
+                matched_value = line[len(prefix_cn):].strip()
+                break
+            if line.startswith(prefix_en):
+                matched_key = key
+                matched_value = line[len(prefix_en):].strip()
+                break
+        if matched_key:
+            current_section = matched_key
+            if matched_key in {"test_intent", "test_type"}:
+                sections[matched_key] = matched_value
+            elif matched_value:
+                sections[matched_key].append(matched_value)
+            continue
+
+        if current_section in {"test_intent", "test_type"}:
+            if not sections[current_section]:
+                sections[current_section] = line
+            else:
+                sections[current_section] = f"{sections[current_section]} {line}".strip()
+            continue
+        sections[current_section].append(line)
+
+    sections["requirement_scope"] = [_clean_inline_item(item) for item in sections["requirement_scope"] if _clean_inline_item(item)]
+    sections["precondition"] = [_clean_inline_item(item) for item in sections["precondition"] if _clean_inline_item(item)]
+    sections["operation_steps"] = [_clean_inline_item(item) for item in sections["operation_steps"] if _clean_inline_item(item)]
+    sections["assertion_points"] = [_clean_inline_item(item) for item in sections["assertion_points"] if _clean_inline_item(item)]
+    if sections["overall_expected"]:
+        sections["overall_expected"] = [_clean_inline_item(item) for item in sections["overall_expected"] if _clean_inline_item(item)]
+    involved: list[str] = []
+    for item in sections["involved_elements"]:
+        involved.extend(_split_inline_items(item, separators=r"[、，,/／]"))
+    sections["involved_elements"] = [item for item in involved if item]
+    if len(sections["precondition"]) == 1:
+        sections["precondition"] = _split_inline_items(sections["precondition"][0])
+    return sections
+
+
+def _dedupe_keep_order(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for raw in items:
+        item = _text(raw)
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        ordered.append(item)
+    return ordered
+
+
+def _steps_from_case_payload(case: TestCase) -> list[str]:
+    raw_steps = case.test_steps if isinstance(case.test_steps, list) else []
+    normalized: list[str] = []
+    for index, raw in enumerate(raw_steps, start=1):
+        if isinstance(raw, dict):
+            action = _text(raw.get("action"))
+            target = _text(raw.get("target")) or _text(raw.get("target_name")) or _text(raw.get("element"))
+            value = _text(raw.get("value")) or _text(raw.get("step_data"))
+            parts = [part for part in [action, target, value] if part]
+            if parts:
+                normalized.append(f"{index}. {' / '.join(parts)}")
+            continue
+        cleaned = _clean_inline_item(_text(raw))
+        if cleaned:
+            normalized.append(cleaned)
+    if normalized:
+        return normalized
+    return [_clean_inline_item(item) for item in _text(case.test_steps_text).splitlines() if _clean_inline_item(item)]
+
+
+def _build_detail_content(case: TestCase) -> dict[str, Any]:
+    case_yaml, source_path = _load_case_yaml(case)
+    requirement_rows = _list_value(case_yaml.get("requirement"))
+    if not requirement_rows and _text(case.test_steps_text):
+        requirement_rows = [_text(case.test_steps_text)]
+    primary_requirement = requirement_rows[0] if requirement_rows else ""
+    parsed = _parse_requirement_block(primary_requirement)
+
+    description = _text(case_yaml.get("description")) or ""
+    if "前置条件：" in description and not parsed["precondition"]:
+        _, _, possible_precondition = description.partition("前置条件：")
+        parsed["precondition"] = _split_inline_items(possible_precondition)
+        description = description.split("前置条件：", 1)[0].strip(" 。；;，,")
+
+    overall_expected = _dedupe_keep_order(
+        list(parsed.get("overall_expected") or [])
+        or ([] if _looks_generic_expected(case.expected_result) else _split_inline_items(case.expected_result))
+    )
+    assertion_points = _dedupe_keep_order(
+        list(parsed.get("assertion_points") or [])
+    )
+    operation_steps = _dedupe_keep_order(list(parsed.get("operation_steps") or []))
+    involved_elements = _dedupe_keep_order(list(parsed.get("involved_elements") or []))
+    precondition = _dedupe_keep_order(list(parsed.get("precondition") or []))
+    split_suggestions = _dedupe_keep_order(
+        [item for item in requirement_rows[1:] if re.match(r"^\[P\d\]", _text(item))]
+    )
+
+    if not operation_steps:
+        operation_steps = _steps_from_case_payload(case)
+
+    return {
+        "source_path": source_path,
+        "description": description,
+        "requirement_scope": _dedupe_keep_order(list(parsed.get("requirement_scope") or [])),
+        "raw_requirement_block": _text(primary_requirement),
+        "test_intent": _text(parsed.get("test_intent")) or _text(case.name),
+        "test_type": _text(parsed.get("test_type")) or _text(case.case_type),
+        "precondition": precondition,
+        "operation_steps": operation_steps,
+        "involved_elements": involved_elements,
+        "overall_expected": overall_expected,
+        "assertion_points": assertion_points,
+        "split_suggestions": split_suggestions,
+        "missing_sections": [
+            key
+            for key, value in {
+                "overall_expected": overall_expected,
+                "assertion_points": assertion_points,
+                "precondition": precondition,
+                "operation_steps": operation_steps,
+                "involved_elements": involved_elements,
+            }.items()
+            if not value
+        ],
+    }
 
 
 def to_list_item(
@@ -137,6 +369,7 @@ def build_case_detail_payload(
     source_ref = str(case.source_ref or "").strip()
     if source_ref:
         asset_references = [source_ref, *asset_references]
+    detail_content = _build_detail_content(case)
     version_history = [
         {
             "version_no": item.version_no,
@@ -173,7 +406,7 @@ def build_case_detail_payload(
             "created_at": case.created_at,
         },
         "governance": {
-            "internal_id": case.id,
+            "internal_id":   case.id,
             "project_code": case.project_code,
             "product_line": case.product_line,
             "business_module": case.module,
@@ -194,6 +427,7 @@ def build_case_detail_payload(
             "test_point_summary": test_point_summary,
         },
         "script_code": case.script_code,
+        "detail_content": detail_content,
         "data_config": data_config,
         "defects": [build_defect_item(item) for item in defects],
         "executions": [

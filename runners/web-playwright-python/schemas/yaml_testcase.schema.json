@@ -138,6 +138,15 @@
               "target": {
                 "type": ["string", "null"]
               },
+              "selector": {
+                "type": ["string", "null"]
+              },
+              "locator_type": {
+                "type": ["string", "null"]
+              },
+              "intent_id": {
+                "type": ["string", "null"]
+              },
               "element_code": {
                 "type": ["string", "null"]
               },

@@ -1,9 +1,0 @@
-{
-  "name": "@ai-test-platform/web-console",
-  "private": true,
-  "version": "0.1.0",
-  "description": "Static scaffold console served by ai-orchestrator",
-  "scripts": {
-    "check": "node --check static/app.js"
-  }
-}

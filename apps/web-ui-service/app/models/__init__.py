@@ -8,7 +8,15 @@ from app.models.page_object import (
     PageObjectRef,
     PageObjectRecorderSession,
 )
-from app.models.test_case import TestCase, TestCaseDefect, TestCaseExecution, TestCaseTreeNode, TestCaseVersion
+from app.models.test_case import (
+    TestCase,
+    TestCaseDefect,
+    TestCaseExecution,
+    TestCaseStep,
+    TestCaseTreeNode,
+    TestCaseVersion,
+)
+from app.models.test_point import TestPoint
 from app.models.test_project import TestProject
 from app.models.workbench_state import (
     WorkbenchDefectLink,
@@ -32,8 +40,10 @@ __all__ = [
     "TestCase",
     "TestCaseDefect",
     "TestCaseExecution",
+    "TestCaseStep",
     "TestCaseTreeNode",
     "TestCaseVersion",
+    "TestPoint",
     "WorkbenchRuntimeRun",
     "WorkbenchReviewDecision",
     "WorkbenchExecutionGateDecision",

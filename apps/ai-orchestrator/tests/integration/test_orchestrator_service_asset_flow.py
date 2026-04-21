@@ -7,6 +7,59 @@ import yaml
 pytestmark = [pytest.mark.integration]
 
 
+@pytest.fixture(autouse=True)
+def _seed_page_object_element_codes(monkeypatch: pytest.MonkeyPatch) -> None:
+    import services.requirement_testpoint_support as requirement_testpoint_support_module
+    import orchestrator_service as orchestrator_service_module
+
+    def _fake_page_element_codes(page: str, project: str = "atp", client: str = "web") -> list[str]:
+        base_codes = {
+            "login": [
+                "login_username",
+                "login_password",
+                "login_submit",
+                "login_button",
+                "login_form",
+            ],
+            "product": [
+                "product_menu",
+                "product_list_title",
+                "search_input",
+                "search_button",
+                "product_title",
+            ],
+            "billing": [
+                "billing_menu",
+                "billing_result",
+                "billing_list_title",
+                "search_input",
+                "search_button",
+            ],
+            "returnapply": [
+                "returnapply_menu",
+                "returnapply_list_title",
+                "returnapply_breadcrumb",
+            ],
+        }
+        return base_codes.get(page, ["search_input", f"{page}_menu", f"{page}_list_title"])
+
+    monkeypatch.setattr(requirement_testpoint_support_module, "_fetch_page_element_codes", _fake_page_element_codes)
+
+    def _fake_resolve_page_object(self, *, project: str, page: str) -> dict[str, object]:
+        page_name = str(page).strip()
+        elements = {
+            code: {
+                "selector": f"#{code}",
+                "type": "css",
+                "role": "",
+            }
+            for code in _fake_page_element_codes(page_name, project=project)
+        }
+        return {"page": page_name, "elements": elements}
+
+    monkeypatch.setattr(orchestrator_service_module.OrchestratorService, "_resolve_page_object", _fake_resolve_page_object)
+
+
 def test_orchestrator_service_persists_generated_case_via_asset_toolkit(tmp_path: Path):
     import sys
 
@@ -61,7 +114,8 @@ def test_orchestrator_service_persists_generated_case_via_asset_toolkit(tmp_path
 
     assert "ai-generated" in saved_case["tags"]
     assert "product" in saved_case["tags"]
-    assert result.case["id"] == "tc-product-GEN-001"
+    assert str(result.case.get("id", "")).strip()
+    assert result.case["id"] == saved_case["id"]
     assert result.test_points["page"] == "product"
     assert result.test_points["points"][0]["action"] == "login"
     assert result.execution_record["status"] == "generated"
@@ -69,17 +123,17 @@ def test_orchestrator_service_persists_generated_case_via_asset_toolkit(tmp_path
     assert result.execution_record["step_summary"]["total_steps"] == len(result.case["execution"]["steps"])
     assert result.execution_record["metadata"]["multisource"]["traceability_summary"]["source_input_count"] >= 1
     assert "traceability_completeness" in result.execution_record["metadata"]["multisource"]["traceability_summary"]
-    assert result.design_generation["fallback_used"] is False
+    assert result.design_generation["ai_status"] == "generated"
+    assert result.design_generation["change_source"] == "ai"
     assert result.report is not None
     assert result.report["status"] == "generated"
-    assert result.report["design_generation"]["fallback_used"] is False
+    assert result.report["design_generation"]["ai_status"] == "generated"
     assert result.report["execution_record"]["status"] == "generated"
     assert result.report["execution_record"]["version"] == "ExecutionRecordV1"
     assert result.report["execution_record_meta"]["version"] == "ExecutionRecordResolutionMetaV1"
     assert result.report["execution_record_meta"]["source"] == "generated"
     assert result.report["execution_record_meta"]["manifest_status"] == "no_entry"
     assert result.report["execution_record_meta"]["resolution_reason"] == "generated_without_execution_artifacts"
-    assert result.report["execution_record_meta"]["compat_builder_used"] is False
     assert result.report["request_context"]["mode"] == "generate_only"
     assert result.report["request_context"]["source"] == "manual"
     assert result.report["request_context"]["technique_summary"]["has_structured_constraints"] is False
@@ -92,6 +146,61 @@ def test_orchestrator_service_persists_generated_case_via_asset_toolkit(tmp_path
     assert Path(result.report_json_path).exists()
     assert Path(result.report_markdown_path).exists()
     assert result.report_summary_path == ""
+
+
+def test_orchestrator_service_main_flow_does_not_call_script_or_plan_agents(tmp_path: Path):
+    import sys
+
+    src_root = Path(__file__).resolve().parents[2] / "src"
+    if str(src_root) not in sys.path:
+        sys.path.insert(0, str(src_root))
+
+    from orchestrator_service import OrchestratorService
+
+    service = OrchestratorService(repo_root=Path(__file__).resolve().parents[4])
+    service.generated_cases_root = tmp_path / "assets" / "test-cases" / "ai-generated"
+    service.generated_cases_root.mkdir(parents=True)
+
+    def fake_generate_case(requirement: str, page: str):
+        return {
+            "version": "v4",
+            "id": "tc-product-GEN-001",
+            "title": "商品页-列表展示-基础生成-执行验证-关键元素可见",
+            "module": "product",
+            "priority": "P1",
+            "tags": ["product"],
+            "owner": "qa-team",
+            "status": "automated",
+            "description": "根据需求自动生成的商品列表测试用例。",
+            "requirement": [requirement],
+            "data": {},
+            "execution": {
+                "runner": "playwright",
+                "page": page,
+                "variables": {},
+                "steps": [
+                    {"action": "login"},
+                    {"action": "assert_visible", "target": "product_list_title"},
+                ],
+            },
+        }
+
+    service._generate_case = fake_generate_case  # type: ignore[method-assign]
+    service._generate_script_bundle = lambda **_kwargs: (_ for _ in ()).throw(AssertionError("script generation must not run in main flow"))  # type: ignore[method-assign]
+    service._build_execution_plan = lambda **_kwargs: (_ for _ in ()).throw(AssertionError("execution planning must not run in main flow"))  # type: ignore[method-assign]
+
+    result = service.orchestrate(
+        requirement="验证商品列表展示",
+        page="product",
+        execute=False,
+    )
+
+    assert result.generated_script["metadata"]["runner"] == "playwright"
+    assert "mode" not in result.generated_script["metadata"]
+    assert result.execution_plan["metadata"]["runner"] == "playwright"
+    assert "mode" not in result.execution_plan["metadata"]
+    assert "source" not in result.generated_script["metadata"]
+    assert "source" not in result.execution_plan["metadata"]
 
 
 def test_orchestrator_service_parses_structured_requirement_without_collapsing_title(tmp_path: Path):
@@ -130,7 +239,7 @@ def test_orchestrator_service_parses_structured_requirement_without_collapsing_t
     assert isinstance(steps_hint, list)
     assert "assert" in [str(item).strip().lower() for item in steps_hint]
     parser_runtime = parsed.get("parser_runtime") if isinstance(parsed.get("parser_runtime"), dict) else {}
-    assert "orchestrator_fallback" not in str(parser_runtime.get("detail", "")).lower()
+    assert "compat" not in str(parser_runtime.get("detail", "")).lower()
 
 
 def test_orchestrator_service_supports_generate_only_api_runner(tmp_path: Path):
@@ -201,7 +310,45 @@ def test_orchestrator_service_rejects_execute_for_mobile_runner(tmp_path: Path):
     assert "does not support execute=true" in str(exc_info.value)
 
 
-def test_orchestrator_service_exposes_design_fallback_metadata(tmp_path: Path):
+def test_orchestrator_service_maps_test_design_invalid_output_to_validation_error(tmp_path: Path):
+    import json
+    import sys
+
+    src_root = Path(__file__).resolve().parents[2] / "src"
+    if str(src_root) not in sys.path:
+        sys.path.insert(0, str(src_root))
+
+    from orchestrator_service import OrchestratorService, OrchestratorValidationError
+
+    service = OrchestratorService(repo_root=Path(__file__).resolve().parents[4])
+
+    def _raise_design_error(_requirement: str, _page: str):
+        raise RuntimeError(
+            json.dumps(
+                {
+                    "code": "test_design_invalid_output",
+                    "message": "test-design-agent returned invalid structured output",
+                    "details": {
+                        "reason_code": "test_design_invalid_output",
+                        "attempts": 3,
+                        "last_error": "execution.page field required",
+                    },
+                },
+                ensure_ascii=False,
+            )
+        )
+
+    service._agent_execution_support.generate_case = _raise_design_error  # type: ignore[method-assign]
+
+    with pytest.raises(OrchestratorValidationError) as exc_info:
+        service._generate_case("登录功能", "login")
+
+    details = exc_info.value.details
+    assert details["reason_code"] == "test_design_invalid_output"
+    assert details["test_design_error"]["code"] == "test_design_invalid_output"
+
+
+def test_orchestrator_service_ignores_design_legacy_markers(tmp_path: Path):
     import sys
 
     src_root = Path(__file__).resolve().parents[2] / "src"
@@ -217,13 +364,13 @@ def test_orchestrator_service_exposes_design_fallback_metadata(tmp_path: Path):
     service._generate_case = lambda requirement, page: {  # type: ignore[method-assign]
         "version": "v4",
         "id": "SMOKE-PRODUCT-000001",
-        "title": "商品页-核心流程-回退生成-执行基础冒烟-关键元素可见",
+        "title": "商品页-核心流程-旧标记-执行基础冒烟-关键元素可见",
         "module": "product",
         "priority": "P1",
-        "tags": ["ai-generated", "smoke", "product", "fallback"],
+        "tags": ["ai-generated", "smoke", "product", "legacy"],
         "owner": "qa-team",
         "status": "automated",
-        "description": "由于测试设计代理生成失败，平台已回退生成基础冒烟用例。失败原因：invalid yaml from llm",
+        "description": "由于测试设计代理生成失败，平台已生成基础冒烟用例。失败原因：invalid yaml from llm",
         "requirement": ["商品列表流程验证"],
         "data": {},
         "execution": {
@@ -244,10 +391,10 @@ def test_orchestrator_service_exposes_design_fallback_metadata(tmp_path: Path):
     )
 
     assert result.design_generation["generator"] == "test-design-agent"
-    assert result.design_generation["fallback_used"] is True
-    assert "invalid yaml" in result.design_generation["fallback_reason"]
+    assert result.design_generation["ai_status"] == "generated"
+    assert result.design_generation["change_source"] == "ai"
     assert result.report is not None
-    assert result.report["design_generation"]["fallback_used"] is True
+    assert result.report["design_generation"]["ai_status"] == "generated"
 
 
 def test_orchestrator_service_surfaces_constraint_technique_summary_in_test_points(tmp_path: Path):
@@ -266,6 +413,7 @@ def test_orchestrator_service_surfaces_constraint_technique_summary_in_test_poin
     service._parse_requirement_spec = lambda **_kwargs: {  # type: ignore[method-assign]
         "version": "RequirementSpecV1",
         "page": "billing",
+        "source_type": "openapi_spec",
         "design_input": "账单查询需要覆盖日期、金额和页码约束",
         "parse_confidence": 0.92,
         "source_inputs": [
@@ -524,7 +672,6 @@ def test_orchestrator_service_builds_execution_report_after_runner_success(tmp_p
     assert result.report["execution_record_meta"]["source"] == "manifest"
     assert result.report["execution_record_meta"]["manifest_status"] == "loaded"
     assert result.report["execution_record_meta"]["resolution_reason"] == "execution_record_loaded_from_manifest"
-    assert result.report["execution_record_meta"]["compat_builder_used"] is False
     assert result.report["evidence"]["execution_record_files"]
     assert result.report["request_context"]["mode"] == "generate_and_run"
     assert result.report["request_context"]["execution_requested"] is True
@@ -662,7 +809,6 @@ def test_orchestrator_service_builds_failure_reason_and_analysis_for_failed_run(
     assert details["report"]["execution_record_meta"]["source"] == "manifest"
     assert details["report"]["execution_record_meta"]["manifest_status"] == "loaded"
     assert details["report"]["execution_record_meta"]["resolution_reason"] == "execution_record_loaded_from_manifest"
-    assert details["report"]["execution_record_meta"]["compat_builder_used"] is False
     assert details["report"]["evidence"]["analysis_files"]
     assert details["report"]["evidence"]["suggestion_files"]
     assert details["report"]["evidence"]["self_healing_result_files"]
@@ -742,82 +888,11 @@ def test_orchestrator_service_reads_latest_and_named_reports(tmp_path: Path):
     assert latest_report["report_summary_preview"]["actionable_self_healing_case_details"][1]["target"] == "product_table"
 
 
-def test_orchestrator_service_strict_mode_blocks_compat_execution_record_builder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    import sys
-    import subprocess
-
-    monkeypatch.setenv("EXECUTION_RECORD_COMPAT_BUILDER_ENABLED", "false")
-
-    src_root = Path(__file__).resolve().parents[2] / "src"
-    if str(src_root) not in sys.path:
-        sys.path.insert(0, str(src_root))
-
-    from orchestrator_service import OrchestratorService, OrchestratorValidationError
-
-    service = OrchestratorService(repo_root=Path(__file__).resolve().parents[4])
-    service.generated_cases_root = tmp_path / "assets" / "test-cases" / "ai-generated"
-    service.report_root = tmp_path / "reports" / "executions"
-    service.runner_root = tmp_path / "runner"
-    service.generated_cases_root.mkdir(parents=True)
-
-    def fake_generate_case(requirement: str, page: str):
-            return {
-                "version": "v4",
-                "id": "tc-product-STRICT-001",
-                "title": "商品页-列表展示-严格模式-执行验证-缺少记录即阻断",
-                "module": "product",
-                "priority": "P1",
-                "tags": ["product"],
-                "owner": "qa-team",
-                "status": "automated",
-                "description": "用于验证严格模式下缺少 execution_record 时会直接阻断。",
-            "requirement": [requirement],
-            "data": {},
-            "execution": {
-                "runner": "playwright",
-                "page": page,
-                "variables": {},
-                "steps": [
-                    {"action": "login"},
-                    {"action": "assert_visible", "target": "product_list_title"},
-                ],
-            },
-        }
-
-    service._generate_case = fake_generate_case  # type: ignore[method-assign]
-
-    artifact_dir = service.runner_root / "artifacts" / "strict-missing-record"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-
-    def fake_run_case(case_id: str, case_path: Path):
-        (artifact_dir / "analysis.txt").write_text("Summary: strict mode check", encoding="utf-8")
-        (artifact_dir / "suggestion.json").write_text('{"advice_type":"no_change"}', encoding="utf-8")
-        (artifact_dir / "failed.png").write_bytes(b"png")
-        return subprocess.CompletedProcess(
-            args=["pytest"],
-            returncode=0,
-            stdout="============================== 1 passed in 0.12s ==============================\n",
-            stderr="",
-        )
-
-    service._run_case = fake_run_case  # type: ignore[method-assign]
-
-    with pytest.raises(OrchestratorValidationError, match="execution_record missing in evidence_manifest"):
-        service.orchestrate(
-            requirement="验证商品列表展示",
-            page="product",
-            execute=True,
-        )
-
-
-def test_orchestrator_service_marks_compat_builder_usage_in_execution_record_meta(
+def test_orchestrator_service_builds_generated_execution_record_meta_without_extra_flags(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     import sys
     import subprocess
-
-    monkeypatch.setenv("EXECUTION_RECORD_COMPAT_BUILDER_ENABLED", "true")
 
     src_root = Path(__file__).resolve().parents[2] / "src"
     if str(src_root) not in sys.path:
@@ -851,14 +926,38 @@ def test_orchestrator_service_marks_compat_builder_usage_in_execution_record_met
                 {"action": "login"},
                 {"action": "assert_visible", "target": "product_list_title"},
             ],
-        },
+            },
+        }
+    service._triage_failure = lambda **_kwargs: {  # type: ignore[method-assign]
+        "version": "FailureTriageV1",
+        "triage_label": "unknown:low:generated",
+        "failure_class": "unknown",
+        "severity": "S4",
+        "owner_team": "qa-triage",
+        "queue": "manual-triage",
+        "bucket_key": "unknown|fallback",
+        "duplicate_of": "",
+        "requires_manual_review": False,
+        "confidence": 1.0,
+        "signals": {},
+        "actions": [],
+        "metadata": {"source": "fake-service"},
+    }
+    service._evaluate_risk_report = lambda **_kwargs: {  # type: ignore[method-assign]
+        "version": "RiskReportV1",
+        "risk_score": 30,
+        "risk_level": "low",
+        "gate_decision": "allow",
+        "recommendation": "风险可控。",
+        "factors": [{"factor": "fake", "score": 30, "reason": "integration-test"}],
+        "metadata": {"source": "fake-service"},
     }
 
-    artifact_dir = service.runner_root / "artifacts" / "compat-missing-record"
+    artifact_dir = service.runner_root / "artifacts" / "generated-record"
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     def fake_run_case(case_id: str, case_path: Path):
-        (artifact_dir / "analysis.txt").write_text("Summary: compat builder check", encoding="utf-8")
+        (artifact_dir / "analysis.txt").write_text("Summary: generated record check", encoding="utf-8")
         (artifact_dir / "suggestion.json").write_text('{"advice_type":"no_change"}', encoding="utf-8")
         (artifact_dir / "failed.png").write_bytes(b"png")
         return subprocess.CompletedProcess(
@@ -877,11 +976,11 @@ def test_orchestrator_service_marks_compat_builder_usage_in_execution_record_met
     )
 
     meta = result.report["execution_record_meta"]
-    assert meta["source"] == "compat_builder"
-    assert meta["compat_builder_used"] is True
-    assert meta["strict_violation"] is False
+    assert meta["source"] == "generated"
     assert meta["manifest_status"] == "no_entry"
-    assert meta["resolution_reason"] == "compat_builder_fallback:no_entry"
+    assert meta["resolution_reason"] == "generated_without_execution_artifacts"
+    assert all("compat" not in key for key in meta)
+    assert all("strict" not in key for key in meta)
 
 
 def test_orchestrator_service_previews_self_healing_advice_without_mutating_assets(tmp_path: Path):

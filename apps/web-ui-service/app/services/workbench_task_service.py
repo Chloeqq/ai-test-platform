@@ -88,7 +88,7 @@ def _strict_mode_status_for_item(
         return "ready", "任务已稳定走 manifest-first 路径，可作为 strict-mode 候选。"
     if normalized_source == "runtime_realtime" or normalized_action == "await_runtime_flush" or runtime_realtime:
         return "caution", "任务仍依赖 runtime 视图补充，建议等待 evidence manifest 落盘后再收紧。"
-    return "blocked", "任务仍依赖 compat builder、缺失 manifest 或存在 runtime fallback，暂不适合关闭 compat builder。"
+    return "blocked", "任务仍依赖 compat_scan 或缺失 manifest，暂不适合关闭 compat_scan。"
 
 
 def parse_optional_bool_query(value: Any) -> bool | None:
@@ -222,6 +222,9 @@ def collect_execution_records_with_meta(
             break
 
     active_statuses = {"queued", "running", "pending"}
+    # State source hierarchy: in-memory cache (active processes) + persistent store (completed runs).
+    # Persistent store (file/DB via workbench_state_store) is the single source of truth;
+    # in-memory runtime_jobs supplements with transient process state that hasn't been flushed yet.
     runtime_items: list[dict[str, Any]] = [dict(item) for item in runtime_jobs]
     runtime_items.extend(read_json_list(runtime_runs_file))
     for runtime_item in runtime_items:
@@ -273,34 +276,6 @@ def collect_execution_records_with_meta(
         reverse=True,
     )
 
-    runtime_fallback_used = False
-    if not deduped:
-        runtime_fallback_used = True
-        for runtime_item in read_json_list(runtime_runs_file):
-            run_view = runtime_view_from_entry(runtime_item)
-            execution_record = _dict_value(run_view.get("execution_record"))
-            if not execution_record:
-                continue
-            deduped.append(
-                {
-                    "run_id": str(execution_record.get("run_id", "")).strip(),
-                    "case_id": str(execution_record.get("case_id", "")).strip(),
-                    "status": str(execution_record.get("status", "queued")).strip() or "queued",
-                    "finished_at": execution_record_time_value(execution_record),
-                    "execution_record": execution_record,
-                    "execution_record_path": "",
-                    "manifest_path": "",
-                    "source": "runtime_fallback",
-                }
-            )
-        deduped.sort(
-            key=lambda item: (
-                str(item.get("finished_at", "")),
-                str(_dict_value(item.get("execution_record")).get("started_at", "")),
-            ),
-            reverse=True,
-        )
-
     trimmed = deduped[:limit]
     source_counts: dict[str, int] = defaultdict(int)
     for item in trimmed:
@@ -313,22 +288,21 @@ def collect_execution_records_with_meta(
         warnings.append(f"检测到 {invalid_record_count} 个无效 execution_record.json，已跳过。")
     if int(source_counts.get("compat_scan", 0)) > 0:
         warnings.append(
-            f"检测到 {int(source_counts.get('compat_scan', 0))} 条 execution_record 通过兼容扫描回退读取，建议 runner 全量输出 manifest。"
+            f"检测到 {int(source_counts.get('compat_scan', 0))} 条 execution_record 通过 compat_scan 读取，建议 runner 全量输出 manifest。"
         )
     if compat_disabled_skipped > 0:
         warnings.append(f"兼容扫描已禁用，跳过 {compat_disabled_skipped} 条未绑定 manifest 的 execution_record。")
-    if runtime_fallback_used:
-        warnings.append("未发现可用 execution_record 落盘记录，当前报告临时回退 runtime-runs.json。")
+    if not trimmed:
+        warnings.append("未发现可用 execution_record 落盘记录。")
 
     manifest_record_count = int(source_counts.get("manifest", 0))
     compat_scan_record_count = int(source_counts.get("compat_scan", 0))
     runtime_realtime_count = int(source_counts.get("runtime_realtime", 0))
-    runtime_fallback_count = int(source_counts.get("runtime_fallback", 0))
-    total_visible_records = manifest_record_count + compat_scan_record_count + runtime_realtime_count + runtime_fallback_count
+    total_visible_records = manifest_record_count + compat_scan_record_count + runtime_realtime_count
     manifest_first_ratio = round((manifest_record_count / max(1, (manifest_record_count + compat_scan_record_count))), 3)
-    fallback_ratio = round((compat_scan_record_count / max(1, (manifest_record_count + compat_scan_record_count))), 3)
+    compat_scan_ratio = round((compat_scan_record_count / max(1, (manifest_record_count + compat_scan_record_count))), 3)
     policy_mode = "compat" if compat_scan_enabled else "strict"
-    if runtime_fallback_used or runtime_fallback_count > 0:
+    if not trimmed:
         health = "critical"
     elif compat_scan_record_count > 0:
         health = "degraded"
@@ -344,16 +318,14 @@ def collect_execution_records_with_meta(
         "manifest_record_count": manifest_record_count,
         "compat_scan_record_count": compat_scan_record_count,
         "runtime_realtime_count": runtime_realtime_count,
-        "runtime_fallback_count": runtime_fallback_count,
         "compat_scan_used_count": compat_used_count,
         "compat_scan_skipped_count": compat_disabled_skipped,
         "invalid_manifest_count": invalid_manifest_count,
         "invalid_execution_record_count": invalid_record_count,
         "missing_manifest_count": missing_manifest_count,
-        "runtime_fallback_used": runtime_fallback_used,
         "total_visible_records": total_visible_records,
         "manifest_first_ratio": manifest_first_ratio,
-        "fallback_ratio": fallback_ratio,
+        "compat_scan_ratio": compat_scan_ratio,
         "warnings": warnings,
     }
     return trimmed, meta
@@ -384,19 +356,6 @@ def build_task_evidence_freshness(
             "stale": False,
             "source_window_hours": 0,
         }
-    if source_value == "runtime_fallback":
-        reference_time = finished_at or started_at or created_at
-        reference_dt = parse_iso_datetime(reference_time)
-        age_seconds = max(0, int((utc_now() - reference_dt).total_seconds())) if reference_dt else None
-        return {
-            "status": "stale",
-            "reason": "任务当前仅依赖 runtime_fallback，缺少稳定落盘证据事实源。",
-            "age_seconds": age_seconds,
-            "reference_time": reference_time,
-            "stale": True,
-            "source_window_hours": 0,
-        }
-
     reference_time = finished_at or started_at or created_at
     reference_dt = parse_iso_datetime(reference_time)
     if reference_dt is None:
@@ -566,9 +525,9 @@ def build_execution_task_view(
         manifest_action = "ok"
     elif task_source == "compat_scan":
         evidence_health_status = "degraded"
-        evidence_health_reason = "任务通过 execution_record 兼容扫描回退读取。"
+        evidence_health_reason = "任务通过 execution_record compat_scan 读取。"
         manifest_action = "backfill_manifest"
-    elif task_source in {"runtime_realtime", "runtime_fallback"}:
+    elif task_source == "runtime_realtime":
         evidence_health_status = "warning"
         evidence_health_reason = "任务当前依赖 runtime 视图补充，证据落盘仍待完成。"
         manifest_action = "await_runtime_flush"
@@ -869,8 +828,8 @@ def build_execution_task_summary(
             dependency_task_count += 1
     total_tasks = len(items)
     manifest_first_task_count = int(source_counts.get("manifest", 0) or 0)
-    compat_fallback_task_count = int(source_counts.get("compat_scan", 0) or 0)
-    runtime_supplement_task_count = int(source_counts.get("runtime_realtime", 0) or 0) + int(source_counts.get("runtime_fallback", 0) or 0)
+    compat_scan_task_count = int(source_counts.get("compat_scan", 0) or 0)
+    runtime_supplement_task_count = int(source_counts.get("runtime_realtime", 0) or 0)
     if int(manifest_backfill_freshness_counts.get("stale", 0) or 0) > 0:
         manifest_backfill_priority = "urgent"
     elif int(manifest_backfill_freshness_counts.get("aging", 0) or 0) > 0:
@@ -900,7 +859,7 @@ def build_execution_task_summary(
     strict_mode_ready_task_count = int(strict_mode_status_counts.get("ready", 0) or 0)
     strict_mode_caution_task_count = int(strict_mode_status_counts.get("caution", 0) or 0)
     strict_mode_blocked_task_count = int(strict_mode_status_counts.get("blocked", 0) or 0)
-    strict_mode_can_disable_compat_builder = bool(strict_mode_readiness.get("can_disable_compat_builder", False)) or (
+    strict_mode_can_disable_compat_scan = bool(strict_mode_readiness.get("can_disable_compat_scan", False)) or (
         total_tasks > 0
         and strict_mode_ready_task_count == total_tasks
         and strict_mode_caution_task_count == 0
@@ -923,7 +882,7 @@ def build_execution_task_summary(
         "manifest_action_counts": dict(sorted(manifest_action_counts.items())),
         "strict_mode_status_counts": dict(sorted(strict_mode_status_counts.items())),
         "manifest_first_task_count": manifest_first_task_count,
-        "compat_fallback_task_count": compat_fallback_task_count,
+        "compat_scan_task_count": compat_scan_task_count,
         "runtime_supplement_task_count": runtime_supplement_task_count,
         "manifest_backfill_candidate_count": manifest_backfill_candidate_count,
         "manifest_backfill_freshness_counts": dict(sorted(manifest_backfill_freshness_counts.items())),
@@ -945,13 +904,13 @@ def build_execution_task_summary(
         "retry_enabled_task_count": retry_enabled_task_count,
         "dependency_task_count": dependency_task_count,
         "manifest_first_ratio_visible": round((manifest_first_task_count / max(1, total_tasks)), 3),
-        "compat_fallback_ratio_visible": round((compat_fallback_task_count / max(1, total_tasks)), 3),
+        "compat_scan_ratio_visible": round((compat_scan_task_count / max(1, total_tasks)), 3),
         "runtime_supplement_ratio_visible": round((runtime_supplement_task_count / max(1, total_tasks)), 3),
         "strict_mode_ready_task_count": strict_mode_ready_task_count,
         "strict_mode_caution_task_count": strict_mode_caution_task_count,
         "strict_mode_blocked_task_count": strict_mode_blocked_task_count,
         "strict_mode_ready_ratio_visible": round((strict_mode_ready_task_count / max(1, total_tasks)), 3),
-        "strict_mode_can_disable_compat_builder": strict_mode_can_disable_compat_builder,
+        "strict_mode_can_disable_compat_scan": strict_mode_can_disable_compat_scan,
         "retry_enabled_ratio_visible": round((retry_enabled_task_count / max(1, total_tasks)), 3),
         "dependency_ratio_visible": round((dependency_task_count / max(1, total_tasks)), 3),
         "strict_mode_readiness": strict_mode_readiness,

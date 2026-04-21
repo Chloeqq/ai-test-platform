@@ -146,9 +146,9 @@ def normalize_test_point_plan_model(
         )
         normalized["coverage"] = coverage
         review_summary = _dict_value(normalized.get("review_summary"))
-        if "dependent_element_count" not in review_summary:
-            review_summary["dependent_element_count"] = len(
-                [item for item in _list_value(normalized.get("dependent_elements")) if str(item).strip()]
+        if "involved_element_count" not in review_summary:
+            review_summary["involved_element_count"] = len(
+                [item for item in _list_value(normalized.get("involved_elements")) if str(item).strip()]
             )
         normalized["review_summary"] = review_summary
         return normalized

@@ -18,6 +18,9 @@ else
   echo "[start-all] env file not found, continue with current shell environment."
 fi
 
+# Ensure root-level shared modules (e.g. datetime_compat.py) are importable.
+export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
+
 if lsof -iTCP:8000 -sTCP:LISTEN -n -P >/dev/null 2>&1; then
   echo "[start-all] port 8000 is already in use, skip orchestrator start."
 else

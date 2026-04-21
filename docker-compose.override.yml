@@ -1,0 +1,26 @@
+# Dev overrides — bind-mounts and infra port exposure for local development.
+# This file is auto-loaded by `docker compose up`. Do NOT use in production.
+services:
+  web:
+    volumes:
+      - .:/app
+
+  orchestrator:
+    volumes:
+      - .:/app
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  elasticsearch:
+    ports:
+      - "${ELASTICSEARCH_HOST_PORT:-19200}:9200"
+
+  kibana:
+    ports:
+      - "${KIBANA_HOST_PORT:-15601}:5601"

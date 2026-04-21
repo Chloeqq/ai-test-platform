@@ -1,9 +1,8 @@
 """Shared backend contracts and utilities."""
 
 from .case_ids import (
-    build_case_metadata,
     build_case_id,
-    build_case_prefix,
+    build_case_metadata,
     infer_case_type,
     infer_client_code,
     infer_module_code,
@@ -31,45 +30,26 @@ from .case_rules import (
     validate_case_title,
 )
 from .state_machines import (
-    get_ai_status_name,
-    get_case_status_name,
     get_run_status_name,
-    normalize_ai_status,
-    normalize_case_status,
     normalize_run_status,
-    validate_state_transition,
+)
+from .execution_compiler import (
+    ExecutionCompilerError,
+    PreviewTestPointsCompiler,
+    compile_execution_steps,
 )
 
 __all__ = [
-    "build_case_metadata",
     "build_case_id",
-    "build_case_prefix",
-    "infer_case_type",
-    "infer_client_code",
-    "infer_module_code",
-    "infer_page_code",
-    "infer_source_code",
-    "match_case_id",
-    "next_case_sequence",
-    "normalize_case_id",
-    "slugify_case_part",
-    "split_run_id",
-    "get_alias_code_map",
-    "get_code_name_map",
-    "get_dictionary_items",
-    "load_case_dictionaries",
-    "resolve_dictionary_code",
-    "resolve_dictionary_name",
+    "build_case_metadata",
     "CaseRuleViolation",
+    "compile_execution_steps",
     "enrich_case_metadata",
-    "validate_case_description",
-    "validate_case_payload",
-    "validate_case_title",
-    "get_ai_status_name",
-    "get_case_status_name",
+    "ExecutionCompilerError",
+    "get_dictionary_items",
     "get_run_status_name",
-    "normalize_ai_status",
-    "normalize_case_status",
+    "normalize_case_id",
     "normalize_run_status",
-    "validate_state_transition",
+    "PreviewTestPointsCompiler",
+    "validate_case_payload",
 ]

@@ -2,9 +2,58 @@
 
 from __future__ import annotations
 
-import sys
+import logging
 from pathlib import Path
 from typing import Any
+
+_logger = logging.getLogger(__name__)
+
+
+def _fetch_page_element_codes(page: str, project: str = "atp", client: str = "web") -> list[str] | None:
+    """Fetch element codes from DB for PO Store validation. Returns None on failure."""
+    try:
+        from sqlalchemy import select
+
+        from app.core.database import SessionLocal
+        from app.models.page_object import PageElement, PageObject
+
+        db = SessionLocal()
+        try:
+            page_obj = db.execute(
+                select(PageObject).where(
+                    PageObject.project_code == project,
+                    PageObject.client == client,
+                    PageObject.page_code == page,
+                )
+            ).scalar_one_or_none()
+            if page_obj is None:
+                return None
+            elements = db.execute(
+                select(PageElement.element_code).where(PageElement.page_object_id == page_obj.id)
+            ).scalars().all()
+            return list(elements)
+        finally:
+            db.close()
+    except Exception:
+        _logger.debug("PO Store lookup failed for %s", page, exc_info=True)
+        return None
+
+
+def _validate_raw_points_against_contract(points: list[dict[str, Any]]) -> None:
+    """Validate freshly built point dicts against the shared TestPointV1 model.
+
+    Logs warnings for any points that don't conform but does not raise,
+    to avoid blocking the pipeline for non-critical schema mismatches.
+    """
+    try:
+        from shared_backend.schemas.models import TestPointV1
+    except ImportError:
+        return
+    for idx, raw in enumerate(points):
+        try:
+            TestPointV1.model_validate(raw)
+        except Exception as exc:
+            _logger.warning("point[%d] does not conform to TestPointV1: %s", idx, exc)
 
 
 class RequirementTestPointSupport:
@@ -33,6 +82,23 @@ class RequirementTestPointSupport:
         self._requirement_max_coverage_gap_ratio = requirement_max_coverage_gap_ratio
         self._blocker_catalog = blocker_catalog
 
+    _SOURCE_TYPE_THRESHOLDS: dict[str, dict[str, float]] = {
+        "prd_text": {"min_test_intents": 3, "min_parse_confidence": 0.6, "max_coverage_gap_ratio": 0.5},
+        "openapi_spec": {"min_test_intents": 1, "min_parse_confidence": 0.4, "max_coverage_gap_ratio": 0.8},
+        "git_diff": {"min_test_intents": 1, "min_parse_confidence": 0.3, "max_coverage_gap_ratio": 0.8},
+        "user_story": {"min_test_intents": 2, "min_parse_confidence": 0.5, "max_coverage_gap_ratio": 0.6},
+        "defect_ticket": {"min_test_intents": 1, "min_parse_confidence": 0.4, "max_coverage_gap_ratio": 0.8},
+        "mixed": {"min_test_intents": 2, "min_parse_confidence": 0.5, "max_coverage_gap_ratio": 0.6},
+    }
+
+    def _resolve_gate_thresholds(self, source_type: str) -> dict[str, float]:
+        overrides = self._SOURCE_TYPE_THRESHOLDS.get(source_type, {})
+        return {
+            "min_test_intents": overrides.get("min_test_intents", self._requirement_min_test_intents),
+            "min_parse_confidence": overrides.get("min_parse_confidence", self._requirement_min_parse_confidence),
+            "max_coverage_gap_ratio": overrides.get("max_coverage_gap_ratio", self._requirement_max_coverage_gap_ratio),
+        }
+
     def build_requirement_quality_gate(self, requirement_spec: dict[str, Any], *, stage: str) -> dict[str, Any]:
         intents = requirement_spec.get("test_intents")
         intent_list = intents if isinstance(intents, list) else []
@@ -40,6 +106,12 @@ class RequirementTestPointSupport:
         ambiguity_list = ambiguities if isinstance(ambiguities, list) else []
         coverage_matrix = requirement_spec.get("coverage_matrix")
         coverage_list = coverage_matrix if isinstance(coverage_matrix, list) else []
+
+        source_type = str(requirement_spec.get("source_type", "manual")).strip().lower()
+        thresholds = self._resolve_gate_thresholds(source_type)
+        effective_min_intents = max(1, int(thresholds["min_test_intents"]))
+        effective_min_confidence = float(thresholds["min_parse_confidence"])
+        effective_max_gap_ratio = float(thresholds["max_coverage_gap_ratio"])
 
         high_ambiguity_count = 0
         medium_ambiguity_count = 0
@@ -77,7 +149,7 @@ class RequirementTestPointSupport:
         has_page = bool(str(requirement_spec.get("page", "")).strip())
 
         blockers: list[dict[str, Any]] = []
-        min_test_intents = max(1, self._requirement_min_test_intents)
+        min_test_intents = effective_min_intents
         if len(intent_list) < min_test_intents:
             blockers.append(
                 self.build_requirement_quality_blocker(
@@ -87,13 +159,13 @@ class RequirementTestPointSupport:
                     threshold=min_test_intents,
                 )
             )
-        if parse_confidence_value < self._requirement_min_parse_confidence:
+        if parse_confidence_value < effective_min_confidence:
             blockers.append(
                 self.build_requirement_quality_blocker(
                     code="low_parse_confidence",
-                    message=f"parse_confidence below threshold: {round(parse_confidence_value, 2)} < {self._requirement_min_parse_confidence}",
+                    message=f"parse_confidence below threshold: {round(parse_confidence_value, 2)} < {effective_min_confidence}",
                     value=round(parse_confidence_value, 2),
-                    threshold=self._requirement_min_parse_confidence,
+                    threshold=effective_min_confidence,
                 )
             )
         if self._requirement_block_high_ambiguity and high_ambiguity_count > 0:
@@ -105,13 +177,13 @@ class RequirementTestPointSupport:
                     threshold=0,
                 )
             )
-        if coverage_gap_ratio > self._requirement_max_coverage_gap_ratio:
+        if coverage_gap_ratio > effective_max_gap_ratio:
             blockers.append(
                 self.build_requirement_quality_blocker(
                     code="coverage_gap_ratio_high",
-                    message=f"coverage_gap_ratio above threshold: {coverage_gap_ratio} > {self._requirement_max_coverage_gap_ratio}",
+                    message=f"coverage_gap_ratio above threshold: {coverage_gap_ratio} > {effective_max_gap_ratio}",
                     value=coverage_gap_ratio,
-                    threshold=self._requirement_max_coverage_gap_ratio,
+                    threshold=effective_max_gap_ratio,
                 )
             )
         if not has_design_input:
@@ -157,10 +229,11 @@ class RequirementTestPointSupport:
                 "blocker_codes": [str(item.get("code", "")).strip() for item in blockers if isinstance(item, dict)],
             },
             "thresholds": {
-                "min_parse_confidence": self._requirement_min_parse_confidence,
+                "min_parse_confidence": effective_min_confidence,
                 "min_test_intents": min_test_intents,
                 "block_high_ambiguity": bool(self._requirement_block_high_ambiguity),
-                "max_coverage_gap_ratio": self._requirement_max_coverage_gap_ratio,
+                "max_coverage_gap_ratio": effective_max_gap_ratio,
+                "source_type": source_type,
             },
         }
 
@@ -237,56 +310,7 @@ class RequirementTestPointSupport:
             case=case,
             requirement_spec=requirement_spec,
         )
-        if intent_based.get("points"):
-            return self.apply_constraint_summary_to_test_points(intent_based, requirement_spec=requirement_spec)
-        return self.apply_constraint_summary_to_test_points(
-            self.build_test_points_from_execution_steps(case),
-            requirement_spec=requirement_spec,
-        )
-
-    def build_test_points_from_execution_steps(self, case: dict[str, Any]) -> dict[str, Any]:
-        if str(self._agent_root) not in sys.path:
-            sys.path.insert(0, str(self._agent_root))
-
-        from src.test_points import build_test_point_plan  # type: ignore[import-not-found]
-
-        requirement = case.get("requirement") or []
-        if isinstance(requirement, str):
-            requirement = [requirement]
-
-        execution = case.get("execution", {})
-        plan = build_test_point_plan(
-            page=execution.get("page", ""),
-            requirement=requirement,
-            steps=execution.get("steps", []),
-        )
-        raw_plan = plan.model_dump(exclude_none=True)
-        payload = {
-            "version": "TestPointPlanV1",
-            "project": "default",
-            "case_id": str(case.get("id", "")).strip(),
-            "page": str(execution.get("page", "")).strip(),
-            "source_type": "execution_steps",
-            "requirement": requirement,
-            "points": raw_plan.get("points", []),
-            "generated_at": self._now(),
-            "metadata": {
-                "upstream_schema": str(raw_plan.get("version", "")).strip(),
-                "point_count": len(raw_plan.get("points", [])) if isinstance(raw_plan.get("points"), list) else 0,
-                "build_source": "execution_steps",
-                "traceability_summary": {
-                    "source_input_count": 0,
-                    "source_type_distribution": {},
-                    "intent_count": 0,
-                    "point_count": len(raw_plan.get("points", [])) if isinstance(raw_plan.get("points"), list) else 0,
-                    "linked_point_count": 0,
-                    "coverage_row_count": 0,
-                    "gap_count": 0,
-                    "covered_count": 0,
-                },
-            },
-        }
-        return self._normalize_test_point_plan(payload)
+        return self.apply_constraint_summary_to_test_points(intent_based, requirement_spec=requirement_spec)
 
     def build_test_points_from_requirement_spec(
         self,
@@ -312,24 +336,31 @@ class RequirementTestPointSupport:
             requirement_rows = [row for row in requirement_rows if row]
 
         intents = requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
+        precondition_id = f"{page}-00"
         points: list[dict[str, Any]] = [
             {
-                "key": f"{page}-00",
+                "key": precondition_id,
+                "intent_id": precondition_id,
                 "point_type": "precondition",
                 "action": "login",
                 "description": "Use shared login precondition.",
                 "priority": "P0",
                 "dependencies": [],
                 "source_ids": [],
+                "steps": [{"action": "login", "raw_text": "Use shared login precondition."}],
+                "involved_elements": [],
                 "metadata": {
                     "traceability": {
-                        "intent_ids": [],
+                        "intent_ids": [precondition_id],
                         "source_ids": [],
                         "origin": "precondition",
                     }
                 },
             }
         ]
+        page_elements = _fetch_page_element_codes(page)
+        if not page_elements:
+            raise ValueError(f"page object element_codes not found for page '{page}'")
         for index, intent in enumerate(intents[:80], start=1):
             if not isinstance(intent, dict):
                 continue
@@ -343,18 +374,35 @@ class RequirementTestPointSupport:
                 intent_type=intent_type,
                 title=title,
                 steps_hint=intent.get("steps_hint"),
+                page_elements=page_elements,
             )
+            intent_id_value = str(intent.get("intent_id", "")).strip()
+            if not intent_id_value:
+                raise ValueError(f"requirement_spec.test_intents[{index - 1}] missing intent_id")
+            if action != "login" and (target is None or not str(target).strip()):
+                raise ValueError(
+                    f"requirement_spec.test_intents[{index - 1}] unresolved target for action '{action}' on page '{page}'"
+                )
+            step_entry: dict[str, Any] = {"action": action, "raw_text": title[:200]}
+            if target:
+                step_entry["target"] = target
+            if value is not None:
+                step_entry["value"] = value
+            involved = [target] if target else []
             point = {
-                "key": str(intent.get("intent_id", f"intent-{index:02d}")).strip() or f"intent-{index:02d}",
+                "key": intent_id_value,
+                "intent_id": intent_id_value,
                 "point_type": self.map_intent_type_to_point_type(intent_type),
                 "action": action,
                 "description": title[:200],
                 "priority": priority,
                 "dependencies": [str(item).strip() for item in dependencies if str(item).strip()],
                 "source_ids": [str(item).strip() for item in source_ids if str(item).strip()],
+                "steps": [step_entry],
+                "involved_elements": involved,
                 "metadata": {
                     "traceability": {
-                        "intent_ids": [str(intent.get("intent_id", f"intent-{index:02d}")).strip() or f"intent-{index:02d}"],
+                        "intent_ids": [intent_id_value],
                         "source_ids": [str(item).strip() for item in source_ids if str(item).strip()],
                         "origin": "requirement_intent",
                     }
@@ -365,6 +413,8 @@ class RequirementTestPointSupport:
             if value is not None:
                 point["value"] = value
             points.append(point)
+
+        _validate_raw_points_against_contract(points)
 
         payload = {
             "version": "TestPointPlanV1",
@@ -538,28 +588,53 @@ class RequirementTestPointSupport:
             return None
 
     @staticmethod
+    def _validate_target_against_po(
+        target: str | None,
+        page_elements: list[str] | None,
+    ) -> str | None:
+        """Validate a target against the current PO element list."""
+        if target is None or page_elements is None or not page_elements:
+            return target
+        if target in page_elements:
+            return target
+        raise ValueError(f"target '{target}' not found in PO Store element_codes")
+
+    @staticmethod
     def map_intent_to_step(
         *,
         page: str,
         intent_type: str,
         title: str,
         steps_hint: Any,
+        page_elements: list[str] | None = None,
     ) -> tuple[str, str | None, Any]:
         hints = [str(item).strip().lower() for item in (steps_hint if isinstance(steps_hint, list) else []) if str(item).strip()]
         lowered_title = title.lower()
         if any(item == "login" or item == "auth_check" for item in hints) or any(token in lowered_title for token in ["登录", "鉴权", "auth"]):
             return "login", None, None
         if any(item.startswith("open:") for item in hints):
-            return "click", f"{page}_menu", None
+            target = f"{page}_menu"
+            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
+            return "click", target, None
         if any(item.startswith("api:") or item == "api" for item in hints) or intent_type == "api":
-            return "assert_visible", f"{page}_list_title", None
+            target = f"{page}_list_title"
+            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
+            return "assert_visible", target, None
         if any(item in {"search", "query"} for item in hints) or any(token in lowered_title for token in ["搜索", "查询", "筛选"]):
-            return "fill", "search_input", "3"
+            target = "search_input"
+            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
+            return "fill", target, "3"
         if any(item in {"create", "update", "delete", "submit", "approve"} for item in hints):
-            return "click", f"{page}_menu", None
+            target = f"{page}_menu"
+            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
+            return "click", target, None
         if any(item in {"assert", "negative", "regression", "smoke"} for item in hints):
-            return "assert_visible", f"{page}_list_title", None
-        return "wait_for", f"{page}_list_title", None
+            target = f"{page}_list_title"
+            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
+            return "assert_visible", target, None
+        target = f"{page}_list_title"
+        target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
+        return "wait_for", target, None
 
     @staticmethod
     def render_requirement_spec_markdown(requirement_spec: dict[str, Any]) -> str:

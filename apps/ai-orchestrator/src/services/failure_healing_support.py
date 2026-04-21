@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -262,7 +263,11 @@ class FailureHealingSupport:
             }
 
     def build_self_healing_advice(self, case: dict[str, Any], report_payload: dict[str, Any]) -> dict[str, Any]:
-        available_targets = self._load_available_targets(case.get("execution", {}).get("page", ""))
+        available_targets = self._collect_available_targets(
+            page=case.get("execution", {}).get("page", ""),
+            failure_reason=str(report_payload.get("failure_reason", "")).strip(),
+            case=case,
+        )
         payload = {
             "page": case.get("execution", {}).get("page", ""),
             "failure_reason": report_payload.get("failure_reason", ""),
@@ -371,7 +376,48 @@ class FailureHealingSupport:
             "page": normalized_page,
             "failure_reason": str(failure_reason).strip(),
             "failure_analysis": normalized_failure_analysis,
-            "available_targets": self._load_available_targets(normalized_page),
+            "available_targets": self._collect_available_targets(
+                page=normalized_page,
+                failure_reason=str(failure_reason).strip(),
+                case=normalized_case,
+            ),
             "case": normalized_case,
         }
         return self._run_self_healing_advisor_agent(payload)
+
+    def _collect_available_targets(self, *, page: str, failure_reason: str, case: dict[str, Any]) -> list[str]:
+        candidates: list[str] = []
+        seen: set[str] = set()
+
+        def push(raw: Any) -> None:
+            target = str(raw or "").strip()
+            if target.startswith("element:"):
+                target = str(target.removeprefix("element:")).strip()
+            if not target:
+                return
+            if target.startswith(("http://", "https://", "/", "#")):
+                return
+            if ":" in target:
+                prefix = str(target.split(":", 1)[0]).strip().lower()
+                if prefix in {"css", "xpath", "text", "role", "id", "name", "url"}:
+                    return
+            if target not in seen:
+                seen.add(target)
+                candidates.append(target)
+
+        for target in self._load_available_targets(str(page or "").strip()):
+            push(target)
+
+        execution = case.get("execution", {}) if isinstance(case, dict) else {}
+        steps = execution.get("steps", []) if isinstance(execution, dict) else []
+        if isinstance(steps, list):
+            for raw_step in steps:
+                step = raw_step if isinstance(raw_step, dict) else {}
+                push(step.get("target"))
+
+        reason_text = str(failure_reason or "").strip()
+        if reason_text:
+            for token in re.findall(r"\b[a-zA-Z][a-zA-Z0-9]*_[a-zA-Z0-9_]+\b", reason_text):
+                push(token)
+
+        return candidates

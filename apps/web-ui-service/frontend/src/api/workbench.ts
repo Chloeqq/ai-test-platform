@@ -1,0 +1,168 @@
+import { getJson, postJson } from "../lib/http";
+
+export interface ProjectItem {
+  project_code: string;
+  project_name?: string;
+  status?: string;
+}
+
+export interface ListProjectsResponse {
+  items: ProjectItem[];
+  codes: string[];
+}
+
+export interface ExecutionTask {
+  task_id: string;
+  run_id?: string;
+  case_id?: string;
+  project_code?: string;
+  status?: string;
+  queue_status?: string;
+  source?: string;
+  created_at?: string;
+  updated_at?: string;
+  evidence_health?: {
+    status?: string;
+  };
+}
+
+export interface ListExecutionTasksResponse {
+  items: ExecutionTask[];
+  summary?: {
+    total_tasks?: number;
+    queue_status_counts?: Record<string, number>;
+    governance_risk_priority?: string;
+  };
+}
+
+export interface TaskQuery {
+  limit?: number;
+  project_code?: string;
+  status?: string;
+  source?: string;
+}
+
+export interface GenerateCasePayload {
+  project: string;
+  page: string;
+  requirement: string;
+  title?: string;
+  priority?: string;
+  source?: string;
+}
+
+export interface GenerateCaseResponse {
+  message?: string;
+  count?: number;
+  item?: Record<string, unknown>;
+  items?: Array<Record<string, unknown>>;
+}
+
+export interface FullChainRunPayload {
+  project: string;
+  page: string;
+  requirement: string;
+  source?: string;
+  max_cases?: number;
+  run_after_generate?: boolean;
+  wait_seconds?: number;
+}
+
+export interface FullChainRunResponse {
+  summary?: Record<string, unknown>;
+  stages?: Record<string, unknown>;
+  generated?: Record<string, unknown>;
+}
+
+export interface WorkbenchHistoryItem {
+  timestamp?: string;
+  action?: string;
+  case_id?: string;
+  run_id?: string;
+  page?: string;
+  status?: string;
+  detail_summary?: string;
+  project_code?: string;
+}
+
+export interface WorkbenchHistoryResponse {
+  items?: WorkbenchHistoryItem[];
+  summary?: Record<string, unknown>;
+  pagination?: {
+    page?: number;
+    page_size?: number;
+    total_items?: number;
+    total_pages?: number;
+  };
+  meta?: Record<string, unknown>;
+}
+
+export interface HistoryQuery {
+  limit?: number;
+  page?: number;
+  page_size?: number;
+  project_code?: string;
+  keyword?: string;
+  sort?: string;
+  action?: string;
+  actor?: string;
+  status?: string;
+  risk_gate_decision?: string;
+  self_healing_status?: string;
+}
+
+function toQuery(params: TaskQuery): string {
+  return toLooseQuery({
+    limit: typeof params.limit === "number" ? String(params.limit) : "",
+    project_code: params.project_code || "",
+    status: params.status || "",
+    source: params.source || "",
+  });
+}
+
+function toLooseQuery(params: Record<string, string>): string {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    const text = String(value || "").trim();
+    if (text) {
+      query.set(key, text);
+    }
+  });
+  return query.toString();
+}
+
+export async function listProjects(): Promise<ListProjectsResponse> {
+  return getJson<ListProjectsResponse>("/api/workbench/projects");
+}
+
+export async function listExecutionTasks(params: TaskQuery): Promise<ListExecutionTasksResponse> {
+  const query = toQuery(params);
+  const path = query ? `/api/workbench/tasks?${query}` : "/api/workbench/tasks";
+  return getJson<ListExecutionTasksResponse>(path);
+}
+
+export async function generateCase(payload: GenerateCasePayload): Promise<GenerateCaseResponse> {
+  return postJson<GenerateCaseResponse>("/api/workbench/generate", payload);
+}
+
+export async function runFullChain(payload: FullChainRunPayload): Promise<FullChainRunResponse> {
+  return postJson<FullChainRunResponse>("/api/workbench/full-chain/run", payload);
+}
+
+export async function listWorkbenchHistory(params: HistoryQuery): Promise<WorkbenchHistoryResponse> {
+  const query = toLooseQuery({
+    limit: typeof params.limit === "number" ? String(params.limit) : "",
+    page: typeof params.page === "number" ? String(params.page) : "",
+    page_size: typeof params.page_size === "number" ? String(params.page_size) : "",
+    project_code: params.project_code || "",
+    keyword: params.keyword || "",
+    sort: params.sort || "",
+    action: params.action || "",
+    actor: params.actor || "",
+    status: params.status || "",
+    risk_gate_decision: params.risk_gate_decision || "",
+    self_healing_status: params.self_healing_status || "",
+  });
+  const path = query ? `/api/workbench/history?${query}` : "/api/workbench/history";
+  return getJson<WorkbenchHistoryResponse>(path);
+}

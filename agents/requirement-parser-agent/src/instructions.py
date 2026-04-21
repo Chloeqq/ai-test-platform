@@ -2,9 +2,8 @@
 Requirement Parser Agent runtime notes.
 
 Current mode:
-- Deterministic rule-based parser is the default execution path.
-- Optional LLM path is reserved for future rollout and should preserve
-  RequirementSpecV1 schema compatibility.
+- Pure LLM only.
+- Any parser failure must fail fast; no fallback/spec salvage is allowed.
 
 Input contracts:
 - requirement/user_story/prd_text/git_diff/defect_ticket/runtime_logs (text)

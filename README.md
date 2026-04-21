@@ -181,7 +181,7 @@ make allure-open
 - 当前命令依赖根目录 `.venv`，依赖清单见 [requirements-dev.txt](/Users/bettyhuang/PycharmProjects/ai-test-platform/requirements-dev.txt)
 - 当前这套入口面向非 E2E 校验；真正跑 Playwright 页面测试时仍需要额外执行 `playwright install`
 - 根级 [pytest.ini](/Users/bettyhuang/PycharmProjects/ai-test-platform/pytest.ini) 默认只收集当前稳定的非 E2E 测试，不会直接跑业务页面 smoke 用例
-- 提交前资产校验配置见 [`.pre-commit-config.yaml`](/Users/bettyhuang/PycharmProjects/ai-test-platform/.pre-commit-config.yaml)
+- 提交前资产校验配置见 `[.pre-commit-config.yaml](/Users/bettyhuang/PycharmProjects/ai-test-platform/.pre-commit-config.yaml)`
 
 ## 6. CI 分阶段策略
 
@@ -281,3 +281,4 @@ Staging 发布所需 Secrets/Variables、回滚方式、故障排查见：
 - [platform-gap-analysis.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/product/platform-gap-analysis.md)
 - [next-phase-roadmap.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/product/next-phase-roadmap.md)
 - [project-structure.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/architecture/project-structure.md)
+

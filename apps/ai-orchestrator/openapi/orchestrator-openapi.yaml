@@ -19,6 +19,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
+  /health/llm:
+    get:
+      summary: Probe the LLM health status
+      operationId: getLlmHealth
+      parameters:
+        - in: query
+          name: probe
+          required: false
+          schema:
+            type: boolean
+            default: true
+      responses:
+        "200":
+          description: LLM health response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
   /assets/scaffold/templates:
     get:
       summary: List available scaffold templates
@@ -230,6 +249,154 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Internal requirement parsing failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /requirements/telemetry/summary:
+    get:
+      summary: Summarize requirement parse telemetry
+      operationId: getRequirementParseTelemetrySummary
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 500
+        - in: query
+          name: prompt_version
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: model
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: mode
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: stage
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Telemetry summary
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /risk/evaluate:
+    post:
+      summary: Evaluate risk for a requirement and execution plan
+      operationId: postRiskEvaluate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                requirement_spec:
+                  $ref: "#/components/schemas/RequirementSpecV1"
+                execution_plan:
+                  type: object
+                  additionalProperties: true
+                execution_record:
+                  $ref: "#/components/schemas/ExecutionRecordV1"
+                failure_analysis:
+                  type: object
+                  additionalProperties: true
+                failure_triage:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Risk report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskReportResponse"
+        "400":
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal risk evaluation failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /failures/triage:
+    post:
+      summary: Triage a failure and recommend follow-up actions
+      operationId: postFailureTriage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                failure_analysis:
+                  type: object
+                  additionalProperties: true
+                execution_record:
+                  $ref: "#/components/schemas/ExecutionRecordV1"
+                evidence_manifest:
+                  $ref: "#/components/schemas/EvidenceManifestV1"
+                report:
+                  type: object
+                  additionalProperties: true
+      responses:
+        "201":
+          description: Failure triage result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailureTriageResponse"
+        "400":
+          description: Invalid JSON payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Request validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal failure triage failure
           content:
             application/json:
               schema:
@@ -469,6 +636,12 @@ components:
           type: string
         git_diff:
           type: string
+        git_diff_path:
+          type: string
+        prd_url:
+          type: string
+        openapi_url:
+          type: string
         defect_ticket:
           type: string
         runtime_logs:
@@ -502,9 +675,15 @@ components:
           additionalProperties: true
         prd_text:
           type: string
+        prd_url:
+          type: string
         user_story:
           type: string
         git_diff:
+          type: string
+        git_diff_path:
+          type: string
+        openapi_url:
           type: string
         defect_ticket:
           type: string
@@ -515,9 +694,29 @@ components:
       additionalProperties: false
       required:
         - requirement_spec
+        - requirement_analysis_markdown
+        - output_contract
       properties:
         requirement_spec:
           $ref: "#/components/schemas/RequirementSpecV1"
+        requirement_analysis_markdown:
+          type: string
+        output_contract:
+          $ref: "#/components/schemas/OutputContractV1"
+    OutputContractV1:
+      type: object
+      additionalProperties: false
+      required:
+        - machine_schema
+        - human_render
+        - rendered_by
+      properties:
+        machine_schema:
+          type: string
+        human_render:
+          type: string
+        rendered_by:
+          type: string
     RequirementInputSourceV1:
       type: object
       additionalProperties: false
@@ -532,6 +731,14 @@ components:
           type: string
         source_ref:
           type: string
+        summary:
+          type: string
+        content_preview:
+          type: string
+        reference_ids:
+          type: array
+          items:
+            type: string
         content:
           type: string
         metadata:
@@ -601,6 +808,22 @@ components:
           type: string
         priority:
           type: string
+        precondition:
+          type: string
+        steps:
+          type: array
+          items:
+            type: string
+        expected_result:
+          type: string
+        scene_type:
+          type: string
+        test_data_type:
+          type: string
+        involved_elements:
+          type: array
+          items:
+            type: string
         dependencies:
           type: array
           items:
@@ -620,7 +843,11 @@ components:
         - text
         - severity
       properties:
+        item_id:
+          type: string
         text:
+          type: string
+        reason:
           type: string
         severity:
           type: string
@@ -647,6 +874,8 @@ components:
           type: string
         severity:
           type: string
+        confidence:
+          type: number
         source_ids:
           type: array
           items:
@@ -667,6 +896,14 @@ components:
           items:
             type: string
         coverage_status:
+          type: string
+        requirement_id:
+          type: string
+        requirement_text:
+          type: string
+        coverage_ratio:
+          type: number
+        traceability_status:
           type: string
     RequirementQualityGateBlockerV1:
       type: object
@@ -739,38 +976,94 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RequirementQualityGateBlockerV1"
+    RequirementEntityV1:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - entity_type
+      properties:
+        name:
+          type: string
+        entity_type:
+          type: string
+        confidence:
+          type: number
+    RequirementSourceInputV1:
+      type: object
+      additionalProperties: false
+      required:
+        - source_id
+        - source_type
+      properties:
+        source_id:
+          type: string
+        source_type:
+          type: string
+        content_preview:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+    RequirementParserRuntimeV1:
+      type: object
+      additionalProperties: true
+    RequirementChangeImpactV1:
+      type: object
+      additionalProperties: true
     RequirementSpecV1:
       type: object
       additionalProperties: false
       required:
         - version
-        - source
+        - source_type
         - requirement
         - page
         - parse_confidence
+        - raw_requirement
+        - normalized_requirement
+        - source_inputs
+        - entities
         - test_intents
         - ambiguities
         - business_rules
         - coverage_matrix
+        - dependency_graph
+        - historical_patterns
+        - change_impact
+        - design_input
+        - parser_runtime
         - quality_gate
       properties:
         version:
           type: string
           const: RequirementSpecV1
-        source:
+        source_type:
           type: string
         requirement:
           type: string
         page:
           type: string
+        raw_requirement:
+          type: string
+        normalized_requirement:
+          type: string
         parse_confidence:
           type: number
         priority:
           type: string
+        source_inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequirementSourceInputV1"
         input_sources:
           type: array
           items:
             $ref: "#/components/schemas/RequirementInputSourceV1"
+        entities:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequirementEntityV1"
         test_intents:
           type: array
           items:
@@ -787,13 +1080,46 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RequirementCoverageEntryV1"
+        field_definitions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        parameter_constraints:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        dependency_graph:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        historical_patterns:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        change_impact:
+          $ref: "#/components/schemas/RequirementChangeImpactV1"
+        design_input:
+          type: string
+        parser_runtime:
+          $ref: "#/components/schemas/RequirementParserRuntimeV1"
         quality_gate:
           $ref: "#/components/schemas/RequirementQualityGateV1"
     OrchestrationResult:
       type: object
       additionalProperties: false
       required:
+        - requirement_spec
         - case
+        - generated_script
+        - execution_plan
+        - design_generation
+        - risk_report
+        - failure_triage
+        - agent_pipeline
         - test_points
         - execution_record
         - case_path
@@ -806,9 +1132,30 @@ components:
         - report_markdown_path
         - report_summary_path
       properties:
+        requirement_spec:
+          $ref: "#/components/schemas/RequirementSpecV1"
         case:
           type: object
           description: Generated YAML test case as a JSON object
+        generated_script:
+          type: object
+          additionalProperties: true
+        execution_plan:
+          type: object
+          additionalProperties: true
+        design_generation:
+          type: object
+          additionalProperties: true
+        risk_report:
+          type: object
+          additionalProperties: true
+        failure_triage:
+          type: object
+          additionalProperties: true
+        agent_pipeline:
+          type: array
+          items:
+            type: string
         test_points:
           $ref: "#/components/schemas/TestPointPlanV1"
         execution_record:
@@ -837,6 +1184,30 @@ components:
         report_summary_path:
           type: string
           description: Absolute path to the aggregated report_summary.txt file when execution was requested
+    RiskReportResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - risk_report
+        - output_contract
+      properties:
+        risk_report:
+          type: object
+          additionalProperties: true
+        output_contract:
+          $ref: "#/components/schemas/OutputContractV1"
+    FailureTriageResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - failure_triage
+        - output_contract
+      properties:
+        failure_triage:
+          type: object
+          additionalProperties: true
+        output_contract:
+          $ref: "#/components/schemas/OutputContractV1"
     TestPointV1:
       type: object
       additionalProperties: false
@@ -918,10 +1289,39 @@ components:
             $ref: "#/components/schemas/TestPointV1"
         coverage:
           type: object
+          additionalProperties: true
         metadata:
           type: object
+          additionalProperties: true
+        review_summary:
+          type: object
+          additionalProperties: true
     TestPointPlan:
       $ref: "#/components/schemas/TestPointPlanV1"
+    ExecutionTestPointsSummaryV1:
+      type: object
+      additionalProperties: false
+      required:
+        - page
+        - point_count
+        - review_summary
+        - technique_summary
+        - traceability_summary
+      properties:
+        page:
+          type: string
+        point_count:
+          type: integer
+          minimum: 0
+        review_summary:
+          type: object
+          additionalProperties: true
+        technique_summary:
+          type: object
+          additionalProperties: true
+        traceability_summary:
+          type: object
+          additionalProperties: true
     ExecutionReport:
       type: object
       additionalProperties: false
@@ -943,6 +1343,13 @@ components:
         - failure_reason
         - self_healing_enabled
         - self_healing_attempted
+        - requirement_spec
+        - test_points_summary
+        - generated_script
+        - execution_plan
+        - design_generation
+        - agent_pipeline
+        - risk_report
         - failure_analysis
         - self_healing_advice
         - self_healing_suggestion_preview
@@ -979,6 +1386,8 @@ components:
             - regression
         request_context:
           $ref: "#/components/schemas/ExecutionRequestContext"
+        test_points_summary:
+          $ref: "#/components/schemas/ExecutionTestPointsSummaryV1"
         started_at:
           type: string
           format: date-time
@@ -999,8 +1408,26 @@ components:
           type: boolean
         self_healing_attempted:
           type: boolean
+        requirement_spec:
+          $ref: "#/components/schemas/RequirementSpecV1"
         failure_analysis:
           $ref: "#/components/schemas/FailureAnalysis"
+        generated_script:
+          type: object
+          additionalProperties: true
+        execution_plan:
+          type: object
+          additionalProperties: true
+        design_generation:
+          type: object
+          additionalProperties: true
+        agent_pipeline:
+          type: array
+          items:
+            type: string
+        risk_report:
+          type: object
+          additionalProperties: true
         self_healing_advice:
           $ref: "#/components/schemas/SelfHealingAdvice"
         self_healing_suggestion_preview:
@@ -1046,6 +1473,13 @@ components:
         - mode
         - source
         - execution_requested
+        - runner
+        - runner_profile
+        - requirement_parser
+        - technique_summary
+        - source_summary
+        - page_resolution
+        - change_impact
       properties:
         page:
           type: string
@@ -1062,6 +1496,25 @@ components:
             - regression
         execution_requested:
           type: boolean
+        runner:
+          type: string
+        runner_profile:
+          $ref: "#/components/schemas/RunnerProfile"
+        requirement_parser:
+          type: object
+          additionalProperties: true
+        technique_summary:
+          type: object
+          additionalProperties: true
+        source_summary:
+          type: object
+          additionalProperties: true
+        page_resolution:
+          type: object
+          additionalProperties: true
+        change_impact:
+          type: object
+          additionalProperties: true
     EvidenceManifestV1:
       type: object
       additionalProperties: false

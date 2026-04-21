@@ -712,8 +712,11 @@ def extract_page_surface(
 
     login_url = str(getattr(settings, "page_surface_login_url", "")).strip() or os.getenv("BASE_URL", "http://localhost:5173/login#/login")
     validate_page_surface_url_fn(login_url)
-    username = os.getenv("TEST_USERNAME", "admin")
-    password = os.getenv("TEST_PASSWORD", "macro123")
+    username = os.getenv("TEST_USERNAME", "")
+    password = os.getenv("TEST_PASSWORD", "")
+    if not username or not password:
+        _LOGGER.warning("TEST_USERNAME / TEST_PASSWORD not set; skipping page surface analysis")
+        return {}
 
     try:
         with sync_playwright() as playwright:
@@ -907,14 +910,17 @@ def steps_to_points(page: str, requirement: str, steps: list[dict[str, Any]]) ->
         else:
             point_type = "action"
             description = "Execute interaction step."
+        point_key = f"{page}-{index:02d}"
         point = {
-            "key": f"{page}-{index:02d}",
+            "key": point_key,
+            "intent_id": point_key,
             "point_type": point_type,
             "action": action,
             "description": description,
             "step_index": index,
             "dependencies": [],
             "source_ids": [f"step:{index:02d}"],
+            "steps": [{"action": action, "target": (step or {}).get("target", ""), "value": (step or {}).get("value")}],
             "warnings": [],
             "requires_review": False,
         }
@@ -924,9 +930,9 @@ def steps_to_points(page: str, requirement: str, steps: list[dict[str, Any]]) ->
             point["value"] = step["value"]
         target_value = str(point.get("target", "")).strip()
         if target_value and not target_value.startswith(("http://", "https://", "/", "#")):
-            point["dependent_elements"] = [target_value]
+            point["involved_elements"] = [target_value]
         else:
-            point["dependent_elements"] = []
+            point["involved_elements"] = []
         confidence = 0.9
         point_warnings: list[str] = []
         if action == "login":
@@ -1023,7 +1029,7 @@ def inherit_test_point_confidence_from_surface(*, plan: dict[str, Any], surface:
     for point in points:
         if not isinstance(point, dict):
             continue
-        deps = [str(item).strip() for item in _list_value(point.get("dependent_elements")) if str(item).strip()]
+        deps = [str(item).strip() for item in _list_value(point.get("involved_elements")) if str(item).strip()]
         if not deps:
             continue
         base_confidence = _clamp_confidence(point.get("confidence", 0))
@@ -1104,7 +1110,7 @@ def inherit_test_point_confidence_from_surface(*, plan: dict[str, Any], surface:
         point["dependency_review"] = {
             "mode": "rule_first_surface",
             "propagated": True,
-            "dependent_elements": _dedup_keep_order(deps),
+            "involved_elements": _dedup_keep_order(deps),
             "matched_elements": _dedup_keep_order(matched_elements),
             "low_confidence_dependencies": low_confidence_dependencies,
             "low_confidence_dependency_count": len(low_confidence_dependencies),
@@ -1134,7 +1140,7 @@ def annotate_test_point_plan_review(plan: dict[str, Any]) -> dict[str, Any]:
     low_confidence_dependency_point_count = 0
     missing_dependency_point_count = 0
     dependency_skip_count = 0
-    dependent_elements: list[str] = []
+    involved_elements: list[str] = []
     for point in points:
         if not isinstance(point, dict):
             continue
@@ -1186,14 +1192,14 @@ def annotate_test_point_plan_review(plan: dict[str, Any]) -> dict[str, Any]:
             execute_suggestion_count += 1
         if point.get("suggestion") == "review":
             review_suggestion_count += 1
-        dependent_elements.extend([str(item).strip() for item in _list_value(point.get("dependent_elements")) if str(item).strip()])
+        involved_elements.extend([str(item).strip() for item in _list_value(point.get("involved_elements")) if str(item).strip()])
         confidence_values.append(point["confidence"])
         warnings.extend(point_warnings)
         requires_review = requires_review or bool(point["requires_review"])
     plan["confidence"] = _clamp_confidence(sum(confidence_values) / len(confidence_values)) if confidence_values else 0.0
     plan["warnings"] = _dedup_keep_order(warnings)
     plan["requires_review"] = requires_review or bool(plan["warnings"]) or plan["confidence"] < 0.75
-    plan["dependent_elements"] = _dedup_keep_order(dependent_elements)
+    plan["involved_elements"] = _dedup_keep_order(involved_elements)
     plan["review_summary"] = {
         "pending_review_count": pending_review_count,
         "skip_suggestion_count": skip_suggestion_count,
@@ -1205,7 +1211,7 @@ def annotate_test_point_plan_review(plan: dict[str, Any]) -> dict[str, Any]:
         "missing_dependency_point_count": missing_dependency_point_count,
         "dependency_skip_count": dependency_skip_count,
         "total_points": len([point for point in points if isinstance(point, dict)]),
-        "dependent_element_count": len(plan["dependent_elements"]),
+        "involved_element_count": len(plan["involved_elements"]),
     }
     return normalize_test_point_plan_model(plan, strict=False)
 
@@ -1224,11 +1230,11 @@ def build_test_point_review_items(plan: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         review_items.append(
             {
-                "key": str(point.get("key", "")).strip() or f"point-{len(review_items) + 1:02d}",
+                "key": str(point.get("intent_id") or point.get("key", "")).strip() or f"point-{len(review_items) + 1:02d}",
                 "label": str(point.get("description", "")).strip() or str(point.get("key", "")).strip() or "测试点",
                 "action": str(point.get("action", "")).strip(),
                 "target": str(point.get("target", "")).strip(),
-                "dependent_elements": [str(item).strip() for item in _list_value(point.get("dependent_elements")) if str(item).strip()],
+                "involved_elements": [str(item).strip() for item in _list_value(point.get("involved_elements")) if str(item).strip()],
                 "description": str(point.get("description", "")).strip(),
                 "confidence": confidence,
                 "warnings": warnings,
@@ -1782,7 +1788,7 @@ def evaluate_risk_report(
             }
             return risk_report
     except http_exception_cls as exc:
-        fallback = build_risk_report_fn(
+        default_report = build_risk_report_fn(
             page=page,
             final_status=final_status,
             page_surface_summary=consumed_surface_summary,
@@ -1791,15 +1797,15 @@ def evaluate_risk_report(
             test_points=consumed_test_points,
             review_state=review_state,
         )
-        fallback["source"] = "local-fallback"
-        fallback["warnings"] = [f"risk-evaluation-agent unavailable: {getattr(exc, 'detail', str(exc))}"]
-        fallback["metadata"] = {
-            **(fallback.get("metadata", {}) if isinstance(fallback.get("metadata"), dict) else {}),
+        default_report["source"] = "local_default"
+        default_report["warnings"] = [f"risk-evaluation-agent unavailable: {getattr(exc, 'detail', str(exc))}"]
+        default_report["metadata"] = {
+            **(default_report.get("metadata", {}) if isinstance(default_report.get("metadata"), dict) else {}),
             "consumed_models": consumed_model_versions,
         }
-        return fallback
+        return default_report
     except Exception as exc:  # pragma: no cover - keep risk path non-blocking
-        fallback = build_risk_report_fn(
+        default_report = build_risk_report_fn(
             page=page,
             final_status=final_status,
             page_surface_summary=consumed_surface_summary,
@@ -1808,15 +1814,15 @@ def evaluate_risk_report(
             test_points=consumed_test_points,
             review_state=review_state,
         )
-        fallback["source"] = "local-fallback"
-        fallback["warnings"] = [f"risk-evaluation-agent failed: {exc}"]
-        fallback["metadata"] = {
-            **(fallback.get("metadata", {}) if isinstance(fallback.get("metadata"), dict) else {}),
+        default_report["source"] = "local_default"
+        default_report["warnings"] = [f"risk-evaluation-agent failed: {exc}"]
+        default_report["metadata"] = {
+            **(default_report.get("metadata", {}) if isinstance(default_report.get("metadata"), dict) else {}),
             "consumed_models": consumed_model_versions,
         }
-        return fallback
+        return default_report
 
-    fallback = build_risk_report_fn(
+    default_report = build_risk_report_fn(
         page=page,
         final_status=final_status,
         page_surface_summary=consumed_surface_summary,
@@ -1825,11 +1831,11 @@ def evaluate_risk_report(
         test_points=consumed_test_points,
         review_state=review_state,
     )
-    fallback["metadata"] = {
-        **(fallback.get("metadata", {}) if isinstance(fallback.get("metadata"), dict) else {}),
+    default_report["metadata"] = {
+        **(default_report.get("metadata", {}) if isinstance(default_report.get("metadata"), dict) else {}),
         "consumed_models": consumed_model_versions,
     }
-    return fallback
+    return default_report
 
 
 def build_risk_review_items(risk_report: dict[str, Any]) -> list[dict[str, Any]]:

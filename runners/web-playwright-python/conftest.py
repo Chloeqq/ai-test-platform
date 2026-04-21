@@ -1,9 +1,12 @@
 import os
-import sys
 import json
 from pathlib import Path
-from datetime_compat import UTC
-from datetime import datetime
+from datetime import datetime, timezone
+
+try:
+    from datetime import UTC
+except ImportError:  # Python < 3.11
+    UTC = timezone.utc
 from urllib.parse import urlsplit
 
 import pytest
@@ -19,13 +22,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(ROOT_ENV)
-APPS_ROOT = Path(__file__).resolve().parents[2] / "apps"
-if str(APPS_ROOT) not in sys.path:
-    sys.path.insert(0, str(APPS_ROOT))
-FAILURE_ANALYSIS_AGENT_ROOT = Path(__file__).resolve().parents[2] / "agents" / "failure-analysis-agent"
-SELF_HEALING_ADVISOR_AGENT_ROOT = Path(__file__).resolve().parents[2] / "agents" / "self-healing-advisor-agent"
 PAGE_OBJECTS_ROOT = Path(__file__).resolve().parents[2] / "assets" / "page-objects" / "web"
-RUNNER_TOOLS_ROOT = Path(__file__).resolve().parent / "tools"
 
 try:
     from shared_backend.schemas import normalize_evidence_manifest_v1, normalize_execution_record_v1
@@ -166,9 +163,6 @@ def render_meta_text(
 
 
 def run_failure_analysis(payload: dict) -> dict:
-    if str(FAILURE_ANALYSIS_AGENT_ROOT) not in sys.path:
-        sys.path.insert(0, str(FAILURE_ANALYSIS_AGENT_ROOT))
-
     from analyze import FailureAnalysisAgent
 
     agent = FailureAnalysisAgent()
@@ -400,9 +394,6 @@ def build_self_healing_payload(
 
 
 def run_self_healing_advisor(payload: dict) -> dict:
-    if str(SELF_HEALING_ADVISOR_AGENT_ROOT) not in sys.path:
-        sys.path.insert(0, str(SELF_HEALING_ADVISOR_AGENT_ROOT))
-
     from suggest import SelfHealingAdvisor
 
     agent = SelfHealingAdvisor()
@@ -441,9 +432,6 @@ def resolve_case_yaml_path(request) -> Path | None:
 
 
 def run_self_healing_cycle(*, artifact_dir: Path, case_path: Path, previous_attempts: int = 0) -> dict:
-    if str(SELF_HEALING_ADVISOR_AGENT_ROOT) not in sys.path:
-        sys.path.insert(0, str(SELF_HEALING_ADVISOR_AGENT_ROOT))
-
     from self_healing_orchestrator import SelfHealingOrchestrator
 
     orchestrator = SelfHealingOrchestrator()
@@ -752,25 +740,31 @@ def attach_allure_failure_artifacts(case_dir: Path) -> dict[str, bool]:
 
 ARTIFACTS_DIR = resolve_artifacts_dir()
 
-if str(RUNNER_TOOLS_ROOT) not in sys.path:
-    sys.path.insert(0, str(RUNNER_TOOLS_ROOT))
-
 from check_base_url import check_base_url_reachable  # noqa: E402
 
 
 @pytest.fixture(scope="session")
 def base_url() -> str:
-    return os.getenv("BASE_URL", "http://localhost:5173/login#/login")
+    value = os.getenv("BASE_URL", "").strip()
+    if not value:
+        raise RuntimeError("BASE_URL must be set for runner tests")
+    return value
 
 
 @pytest.fixture(scope="session")
 def test_username() -> str:
-    return os.getenv("TEST_USERNAME", "admin")
+    value = os.getenv("TEST_USERNAME", "").strip()
+    if not value:
+        raise RuntimeError("TEST_USERNAME must be set for runner tests")
+    return value
 
 
 @pytest.fixture(scope="session")
 def test_password() -> str:
-    return os.getenv("TEST_PASSWORD", "macro123")
+    value = os.getenv("TEST_PASSWORD", "").strip()
+    if not value:
+        raise RuntimeError("TEST_PASSWORD must be set for runner tests")
+    return value
 
 
 @pytest.fixture(scope="session")

@@ -14,20 +14,26 @@
 
 ### `apps/web-ui-service/`
 
-- 当前 Web UI 主服务，FastAPI 模板 + 原生 JS。
-- 负责 workbench、generate、history、report、auth、dashboard 等页面和 API。
+- 当前 Web UI 主服务，FastAPI + TypeScript/React。
+- 负责 workbench、generate、history、report、auth、dashboard 等页面入口和 API。
+- Workbench 的主编排收口在 `app/api/workbench/facade.py`（唯一编排中心）。
 - 关键子目录：
   - `app/routers/`
+  - `app/api/`
   - `app/core/`
-  - `app/templates/`
-  - `app/static/`
+  - `app/templates/react_app.html`（仅 React 壳）
+  - `app/static/react/`（仅 React 构建产物）
+  - `frontend/`（TypeScript + React 源码）
   - `app/models/`
   - `app/schemas/`
 
-### `apps/shared_backend/`
+### `shared_backend/` (仓库根目录)
 
-- 当前共享契约与归一化层。
+- 当前共享契约与归一化层（注意：位于仓库根目录，不是 `apps/` 下）。
 - `schemas/contracts.py` 是 `PageSurfaceV1 / PageObjectDraftV1 / TestPointPlanV1 / ExecutionRecordV1 / EvidenceManifestV1` 的关键事实源。
+- `schemas/models.py` 定义了共享 Pydantic 模型（`TestPointV1` / `TestPointPlanV1` 等）。
+- `schemas/validator.py` 提供 `ContractValidator` 层间校验。
+- `execution_compiler.py` 是测试用例编译核心。
 
 ### `runners/`
 
@@ -53,28 +59,35 @@
 
 ## 兼容与运行态目录
 
-### `apps/web-console/`
+### `apps/web-console/`（已退役）
 
-- 静态控制台资源目录。
-- 当前仍存在，但不是 URL-first workbench 的主事实入口。
+- 历史 scaffold 控制台目录，主链已不再使用。
+- 若本地仍有历史拷贝，仅作归档参考，不应作为运行入口。
 
 ### `web-ui/`
 
-- 历史兼容入口。
-- 包含旧服务脚本与运行态文件。
+- 历史兼容与运行态目录。
+- 主要承载旧状态、报告和兼容产物，不是当前源码主入口。
 - 新功能不建议继续堆在这里。
 
-### `apps/web-ui/state/`
+### `web-ui/state/`
 
 - 运行态状态与缓存目录。
 - 包含 `history.json`、`runtime-runs.json`、`reporting/` 等。
 - 这是运行产物层，不应当手工维护为长期业务真相。
 
+### `agents/`
+
+- AI Agent 子项目。目录使用连字符命名（`test-design-agent`）以保持 npm/repo 风格一致。
+- Agent 内部 Python 包用下划线。运行时通过 `sys.path` 或 `PYTHONPATH` 桥接。
+- 当前 Agent：`test-design-agent`、`script-generation-agent`、`data-generation-agent`、
+  `self-healing-advisor-agent`、`requirement-parser-agent`。
+
 ## 当前理解原则
 
-1. 先看 `apps/web-ui-service + apps/ai-orchestrator + apps/shared_backend + runners/web-playwright-python`。
+1. 先看 `apps/web-ui-service` + `apps/ai-orchestrator` + `shared_backend/`（仓库根）+ `runners/web-playwright-python`。
 2. 再看 `assets/`，理解平台复用的测试资产。
-3. 最后再看 `web-ui/`、`apps/web-console/` 这类兼容或补充层。
+3. 最后再看 `web-ui/`、`apps/web-console/` 这类兼容或归档层。
 
 ## 当前卡点
 

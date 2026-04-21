@@ -18,7 +18,6 @@ def test_allocate_case_id_rejects_legacy_smoke_preferred(tmp_path: Path) -> None
         script_generation_root=tmp_path / "agents" / "script-generation-agent",
         execution_planner_root=tmp_path / "agents" / "execution-planner-agent",
         generated_scripts_root=tmp_path / "reports" / "generated-scripts",
-        test_point_steps_authoritative=True,
     )
     support._assets_cases_root = tmp_path / "assets" / "test-cases"
     support._assets_cases_root.mkdir(parents=True, exist_ok=True)

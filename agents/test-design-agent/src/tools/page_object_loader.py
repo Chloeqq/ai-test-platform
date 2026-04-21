@@ -1,57 +1,52 @@
-from pathlib import Path
-import yaml
+from __future__ import annotations
+
+import json
+import logging
+import os
+import urllib.request
+
+_logger = logging.getLogger(__name__)
+
+_API_BASE_URL = os.environ.get("PAGE_OBJECT_API_URL", "http://localhost:8000").rstrip("/")
 
 
-PAGE_OBJECT_ROOT = Path(__file__).resolve().parents[4] / "assets" / "page-objects" / "web"
-
-
-def _validate_page_object(page_object: dict, expected_page: str) -> None:
-    if not isinstance(page_object, dict):
-        raise ValueError("Page object content must be a YAML object")
-
-    if page_object.get("page") != expected_page:
-        raise ValueError(
-            f"Page object page mismatch: expected '{expected_page}', got '{page_object.get('page')}'"
-        )
-
-    elements = page_object.get("elements")
-    if not isinstance(elements, dict):
-        raise ValueError(f"Page object '{expected_page}' must contain an elements mapping")
-
-    for element_name, element in elements.items():
-        if not isinstance(element, dict):
-            raise ValueError(f"Element '{element_name}' in page '{expected_page}' must be an object")
-
-        locator_type = element.get("locator_type")
-        locator_value = element.get("locator_value")
-
-        if locator_type not in {"placeholder", "text", "css", "role"}:
-            raise ValueError(
-                f"Element '{element_name}' in page '{expected_page}' has unsupported locator_type '{locator_type}'"
-            )
-
-        if not locator_value:
-            raise ValueError(
-                f"Element '{element_name}' in page '{expected_page}' must define locator_value"
-            )
-
-        if locator_type == "role" and not element.get("role"):
-            raise ValueError(
-                f"Element '{element_name}' in page '{expected_page}' must define role when locator_type=role"
-            )
+def _load_page_object_from_api(page_name: str, project: str = "atp", client: str = "web") -> dict | None:
+    """Fetch page object from the DB-backed REST API. Returns None on any failure."""
+    try:
+        url = f"{_API_BASE_URL}/api/page-objects/{page_name}?project_code={project}&client={client}"
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+        item = data.get("item") if isinstance(data, dict) else None
+        if not isinstance(item, dict):
+            return None
+        elements_raw = item.get("elements") if isinstance(item.get("elements"), list) else []
+        elements: dict[str, dict] = {}
+        for elem in elements_raw:
+            if not isinstance(elem, dict):
+                continue
+            code = str(elem.get("element_code", "")).strip()
+            if not code:
+                continue
+            elements[code] = {
+                "locator_type": str(elem.get("locator_type", "css")).strip(),
+                "locator_value": str(elem.get("locator_value", "")).strip(),
+                "role": str(elem.get("role", "")).strip(),
+            }
+        if not elements:
+            return None
+        return {"page": page_name, "elements": elements}
+    except Exception:
+        _logger.debug("API page-object fetch failed for %s", page_name, exc_info=True)
+        return None
 
 
 def load_page_object(page_name: str) -> dict:
-    file_path = PAGE_OBJECT_ROOT / f"{page_name}.page-object.yaml"
-
-    if not file_path.exists():
-        raise FileNotFoundError(f"Page object not found: {file_path}")
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        page_object = yaml.safe_load(f)
-
-    _validate_page_object(page_object, page_name)
-    return page_object
+    """Load page object from DB API (single source of truth)."""
+    api_result = _load_page_object_from_api(page_name)
+    if api_result is not None:
+        return api_result
+    raise FileNotFoundError(f"Page object not found in DB API for page: {page_name}")
 
 
 def list_page_elements(page_name: str) -> list[str]:

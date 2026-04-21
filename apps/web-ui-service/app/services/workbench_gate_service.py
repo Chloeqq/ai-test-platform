@@ -16,7 +16,9 @@ PAGE_ALIAS_MAP = {
     "add-product": "addproduct",
 }
 
-SETTINGS = get_settings()
+
+def _settings() -> Any:
+    return get_settings()
 
 
 def _now_iso() -> str:
@@ -95,9 +97,10 @@ def normalized_role(value: str) -> str:
 
 def is_execution_gate_privileged_role(role: str) -> bool:
     normalized = normalized_role(role)
+    settings = _settings()
     allowed = {
         normalized_role(item)
-        for item in getattr(SETTINGS, "execution_gate_decision_privileged_roles", [])
+        for item in getattr(settings, "execution_gate_decision_privileged_roles", [])
         if str(item).strip()
     }
     if not allowed:
@@ -107,9 +110,10 @@ def is_execution_gate_privileged_role(role: str) -> bool:
 
 def can_bypass_dual_approval(role: str) -> bool:
     normalized = normalized_role(role)
+    settings = _settings()
     bypass_roles = {
         normalized_role(item)
-        for item in getattr(SETTINGS, "execution_gate_dual_approval_bypass_roles", [])
+        for item in getattr(settings, "execution_gate_dual_approval_bypass_roles", [])
         if str(item).strip()
     }
     if not bypass_roles:
@@ -124,6 +128,7 @@ def require_execution_gate_decision_permission(actor: dict[str, str], decision: 
         return
     if is_execution_gate_privileged_role(role):
         return
+    settings = _settings()
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
@@ -132,7 +137,7 @@ def require_execution_gate_decision_permission(actor: dict[str, str], decision: 
             "allowed_roles": sorted(
                 {
                     normalized_role(item)
-                    for item in getattr(SETTINGS, "execution_gate_decision_privileged_roles", [])
+                    for item in getattr(settings, "execution_gate_decision_privileged_roles", [])
                     if str(item).strip()
                 }
                 or {"admin"}
@@ -146,7 +151,8 @@ def upsert_execution_gate_decision(payload: Any, *, actor: dict[str, str] | None
     actor_info = actor if isinstance(actor, dict) else {}
     actor_role = normalized_role(actor_info.get("confirmed_by_role", ""))
     normalized_decision = normalize_execution_gate_decision(str(_payload_value(payload, "decision", "")).strip())
-    dual_approval_enabled = bool(getattr(SETTINGS, "execution_gate_dual_approval_enabled", False))
+    settings = _settings()
+    dual_approval_enabled = bool(getattr(settings, "execution_gate_dual_approval_enabled", False))
     approval_status = "approved"
     if normalized_decision == "block" and dual_approval_enabled and not can_bypass_dual_approval(actor_role):
         approval_status = "pending_second_approval"
@@ -167,7 +173,7 @@ def upsert_execution_gate_decision(payload: Any, *, actor: dict[str, str] | None
         "note": str(_payload_value(payload, "note", "") or "").strip(),
         "decided_by": str(actor_info.get("confirmed_by", "")).strip() or "anonymous",
         "decided_by_role": str(actor_info.get("confirmed_by_role", "")).strip() or "unknown",
-        "decided_by_source": str(actor_info.get("confirmed_by_source", "")).strip() or "fallback",
+        "decided_by_source": str(actor_info.get("confirmed_by_source", "")).strip() or "system_default",
         "updated_at": _now_iso(),
     }
     identity = execution_gate_decision_identity(entry)
@@ -235,7 +241,7 @@ def execution_gate_decision_for_run(
             "note": str(item.get("note", "")).strip(),
             "decided_by": str(item.get("decided_by", "")).strip() or "anonymous",
             "decided_by_role": str(item.get("decided_by_role", "")).strip() or "unknown",
-            "decided_by_source": str(item.get("decided_by_source", "")).strip() or "fallback",
+            "decided_by_source": str(item.get("decided_by_source", "")).strip() or "system_default",
             "updated_at": str(item.get("updated_at", "")).strip(),
             "created_at": str(item.get("created_at", "")).strip(),
         }
@@ -389,53 +395,54 @@ def resolve_execution_gate_audit_snapshot(
 
 
 def execution_gate_policy_baseline() -> dict[str, Any]:
+    settings = _settings()
     block_missing_required_threshold = max(
         1,
-        int(getattr(SETTINGS, "execution_gate_block_missing_required_threshold", 2) or 2),
+        int(getattr(settings, "execution_gate_block_missing_required_threshold", 2) or 2),
     )
     block_missing_dependency_points_threshold = max(
         1,
-        int(getattr(SETTINGS, "execution_gate_block_missing_dependency_points_threshold", 1) or 1),
+        int(getattr(settings, "execution_gate_block_missing_dependency_points_threshold", 1) or 1),
     )
     decision_privileged_roles = [
         str(item).strip().lower()
-        for item in getattr(SETTINGS, "execution_gate_decision_privileged_roles", [])
+        for item in getattr(settings, "execution_gate_decision_privileged_roles", [])
         if str(item).strip()
     ] or ["admin"]
     dual_approval_bypass_roles = [
         str(item).strip().lower()
-        for item in getattr(SETTINGS, "execution_gate_dual_approval_bypass_roles", [])
+        for item in getattr(settings, "execution_gate_dual_approval_bypass_roles", [])
         if str(item).strip()
     ] or ["admin"]
-    dual_approval_enabled = bool(getattr(SETTINGS, "execution_gate_dual_approval_enabled", False))
+    dual_approval_enabled = bool(getattr(settings, "execution_gate_dual_approval_enabled", False))
     return {
         "version": "ExecutionGatePolicyBaselineV1",
         "system_decision_rules": {
             "block": _dedup_keep_order(
                 [
                     "执行状态为 failed/generate_failed 时直接阻断。"
-                    if bool(getattr(SETTINGS, "execution_gate_block_on_failed_status", True))
+                    if bool(getattr(settings, "execution_gate_block_on_failed_status", True))
                     else "",
                     f"Page Object 缺失必需元素达到 {block_missing_required_threshold} 个时阻断。",
                     f"未识别依赖元素影响测试点达到 {block_missing_dependency_points_threshold} 个时阻断。",
                     "风险评估 gate_decision=block 时阻断。"
-                    if bool(getattr(SETTINGS, "execution_gate_block_on_risk_block", True))
+                    if bool(getattr(settings, "execution_gate_block_on_risk_block", True))
                     else "",
                 ]
             ),
             "manual_review": _dedup_keep_order(
                 [
                     "存在待确认分组时进入人工复核。"
-                    if bool(getattr(SETTINGS, "execution_gate_warn_on_pending_reviews", True))
+                    if bool(getattr(settings, "execution_gate_warn_on_pending_reviews", True))
                     else "",
                     "存在低置信度页面元素时进入人工复核。"
-                    if bool(getattr(SETTINGS, "execution_gate_warn_on_low_confidence_elements", True))
+                    if bool(getattr(settings, "execution_gate_warn_on_low_confidence_elements", True))
                     else "",
                     "存在待确认测试点时进入人工复核。"
-                    if bool(getattr(SETTINGS, "execution_gate_warn_on_pending_test_points", True))
+                    if bool(getattr(settings, "execution_gate_warn_on_pending_test_points", True))
                     else "",
                     "存在受低置信度依赖元素影响的测试点时进入人工复核。"
-                    if bool(getattr(SETTINGS, "execution_gate_warn_on_low_confidence_dependency_points", True))
+                    if bool(getattr(settings, "execution_gate_warn_on_low_confidence_dependency_points", True))
                     else "",
                     "覆盖状态非 full 时进入人工复核。",
                     "存在 skip 建议测试点时进入人工复核。",
@@ -485,6 +492,7 @@ def build_execution_gate(
     test_point_asset_context: dict[str, Any] | None = None,
     dedup_keep_order_fn: Any | None = None,
 ) -> dict[str, Any]:
+    settings = _settings()
     dedup_keep_order = dedup_keep_order_fn if callable(dedup_keep_order_fn) else _dedup_keep_order
     status_value = str(final_status or "").strip().lower() or "unknown"
     coverage_status = str((coverage or {}).get("status", "full")).strip().lower() or "full"
@@ -509,18 +517,18 @@ def build_execution_gate(
     asset_selection_state = str(asset_selection_summary.get("selection_state", "")).strip().lower()
     asset_ready_for_regression = bool(asset_selection_summary.get("ready_for_regression", False))
     asset_selection_reasons = asset_selection_summary.get("reasons", []) if isinstance(asset_selection_summary.get("reasons"), list) else []
-    block_missing_required_threshold = max(1, int(getattr(SETTINGS, "execution_gate_block_missing_required_threshold", 2) or 2))
+    block_missing_required_threshold = max(1, int(getattr(settings, "execution_gate_block_missing_required_threshold", 2) or 2))
     block_missing_dependency_points_threshold = max(
         1,
-        int(getattr(SETTINGS, "execution_gate_block_missing_dependency_points_threshold", 1) or 1),
+        int(getattr(settings, "execution_gate_block_missing_dependency_points_threshold", 1) or 1),
     )
-    block_on_failed_status = bool(getattr(SETTINGS, "execution_gate_block_on_failed_status", True))
-    block_on_risk_block = bool(getattr(SETTINGS, "execution_gate_block_on_risk_block", True))
-    warn_on_pending_reviews = bool(getattr(SETTINGS, "execution_gate_warn_on_pending_reviews", True))
-    warn_on_low_confidence_elements = bool(getattr(SETTINGS, "execution_gate_warn_on_low_confidence_elements", True))
-    warn_on_pending_test_points = bool(getattr(SETTINGS, "execution_gate_warn_on_pending_test_points", True))
+    block_on_failed_status = bool(getattr(settings, "execution_gate_block_on_failed_status", True))
+    block_on_risk_block = bool(getattr(settings, "execution_gate_block_on_risk_block", True))
+    warn_on_pending_reviews = bool(getattr(settings, "execution_gate_warn_on_pending_reviews", True))
+    warn_on_low_confidence_elements = bool(getattr(settings, "execution_gate_warn_on_low_confidence_elements", True))
+    warn_on_pending_test_points = bool(getattr(settings, "execution_gate_warn_on_pending_test_points", True))
     warn_on_low_confidence_dependency_points = bool(
-        getattr(SETTINGS, "execution_gate_warn_on_low_confidence_dependency_points", True)
+        getattr(settings, "execution_gate_warn_on_low_confidence_dependency_points", True)
     )
 
     blockers: list[str] = []

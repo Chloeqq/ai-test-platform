@@ -21,7 +21,14 @@ def _build_token_response(user: User) -> Token:
     return Token(access_token=access_token, user=UserRead.model_validate(user))
 
 
-@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=UserRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Self-registration (limited roles)",
+    description="Creates a new user account. Roles are restricted to viewer/tester/developer. "
+    "Admin accounts must be provisioned via bootstrap or direct DB insert.",
+)
 def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserRead:
     existing = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
     if existing:

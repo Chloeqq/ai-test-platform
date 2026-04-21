@@ -64,7 +64,6 @@ class AnalyticsQuerySupport:
         blocked_count = 0
         llm_attempted_count = 0
         llm_succeeded_count = 0
-        llm_fallback_count = 0
         groups: dict[str, dict[str, Any]] = {}
 
         for event in filtered:
@@ -83,8 +82,6 @@ class AnalyticsQuerySupport:
                 llm_attempted_count += 1
             if bool(llm.get("succeeded", False)):
                 llm_succeeded_count += 1
-            if bool(llm.get("fallback_used", False)):
-                llm_fallback_count += 1
 
             group_prompt = str(runtime.get("prompt_version", "")).strip() or "unknown"
             group_model = str(runtime.get("model", "")).strip() or "unknown"
@@ -101,7 +98,6 @@ class AnalyticsQuerySupport:
                     "blocked_count": 0,
                     "llm_attempted_count": 0,
                     "llm_succeeded_count": 0,
-                    "llm_fallback_count": 0,
                 },
             )
             group["total"] += 1
@@ -113,14 +109,11 @@ class AnalyticsQuerySupport:
                 group["llm_attempted_count"] += 1
             if bool(llm.get("succeeded", False)):
                 group["llm_succeeded_count"] += 1
-            if bool(llm.get("fallback_used", False)):
-                group["llm_fallback_count"] += 1
 
         group_items = sorted(groups.values(), key=lambda item: int(item.get("total", 0)), reverse=True)
         for item in group_items:
             total = max(1, int(item.get("total", 0)))
             item["allow_rate"] = round(int(item.get("allow_count", 0)) / total, 3)
-            item["llm_fallback_rate"] = round(int(item.get("llm_fallback_count", 0)) / total, 3)
 
         total_filtered = len(filtered)
         return {
@@ -139,8 +132,6 @@ class AnalyticsQuerySupport:
             "allow_rate": round(allow_count / max(1, total_filtered), 3),
             "llm_attempted_count": llm_attempted_count,
             "llm_succeeded_count": llm_succeeded_count,
-            "llm_fallback_count": llm_fallback_count,
-            "llm_fallback_rate": round(llm_fallback_count / max(1, total_filtered), 3),
             "groups": group_items[:100],
         }
 
@@ -220,7 +211,6 @@ class AnalyticsQuerySupport:
             "llm_trace": {
                 "attempted": bool(llm.get("attempted", False)),
                 "succeeded": bool(llm.get("succeeded", False)),
-                "fallback_used": bool(llm.get("fallback_used", False)),
                 "reason_code": str(llm.get("reason_code", "")).strip(),
                 "latency_ms": int(llm.get("latency_ms", 0) or 0),
                 "total_tokens": llm.get("total_tokens"),

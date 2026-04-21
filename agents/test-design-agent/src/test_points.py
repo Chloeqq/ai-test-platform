@@ -71,7 +71,7 @@ def _point_confidence(action: str, point_type: str, target: str | None, value: A
 
 def _build_point_fields(action: str, point_type: str, target: str | None, value: Any) -> dict[str, Any]:
     confidence, warnings, suggestion, review_reason = _point_confidence(action, point_type, target, value)
-    dependent_elements = [_normalize_text(target)] if _normalize_text(target) else []
+    involved_elements = [_normalize_text(target)] if _normalize_text(target) else []
     requires_review = confidence < 0.75 or bool(warnings) or suggestion == "review"
     return {
         "confidence": confidence,
@@ -79,7 +79,8 @@ def _build_point_fields(action: str, point_type: str, target: str | None, value:
         "requires_review": requires_review,
         "suggestion": suggestion,
         "review_reason": review_reason,
-        "dependent_elements": dependent_elements,
+        "involved_elements": involved_elements,
+        "steps": [{"action": action, "target": target or "", "value": value}],
         "source_ids": [],
         "technique_type": "normal",
         "technique_source": "step_action",
@@ -104,15 +105,15 @@ def _build_plan_summary(points: list[TestPoint]) -> dict[str, Any]:
     skip_suggestion_count = sum(1 for point in points if _normalize_text(point.suggestion).lower() == "skip")
     review_suggestion_count = sum(1 for point in points if _normalize_text(point.suggestion).lower() == "review")
     execute_suggestion_count = sum(1 for point in points if _normalize_text(point.suggestion).lower() == "execute")
-    dependent_elements = []
+    involved_elements = []
     seen: set[str] = set()
     for point in points:
-        for item in point.dependent_elements or []:
+        for item in point.involved_elements or []:
             normalized = _normalize_text(item)
             if not normalized or normalized in seen:
                 continue
             seen.add(normalized)
-            dependent_elements.append(normalized)
+            involved_elements.append(normalized)
 
     confidence = round(sum(confidences) / len(confidences), 2) if confidences else 0.0
     technique_distribution = _build_technique_distribution(points)
@@ -127,10 +128,10 @@ def _build_plan_summary(points: list[TestPoint]) -> dict[str, Any]:
             "execute_suggestion_count": execute_suggestion_count,
             "low_confidence_point_count": low_confidence_count,
             "total_points": len(points),
-            "dependent_element_count": len(dependent_elements),
+            "involved_element_count": len(involved_elements),
             "technique_distribution": technique_distribution,
         },
-        "dependent_elements": dependent_elements,
+        "involved_elements": involved_elements,
     }
 
 
@@ -147,9 +148,15 @@ def build_test_point_plan(
     points: list[TestPoint] = []
 
     for index, step in enumerate(steps, start=1):
-        action = step["action"]
-        target = step.get("target")
-        value = step.get("value")
+        if not isinstance(step, dict):
+            continue
+        action = _normalize_text(step.get("action"))
+        if not action:
+            continue
+        normalized_target = _normalize_text(step.get("target"))
+        target = normalized_target or None
+        raw_value = step.get("value")
+        value = None if raw_value is None else _normalize_text(raw_value)
 
         if action == "login":
             point_type = "precondition"
@@ -172,9 +179,11 @@ def build_test_point_plan(
 
         point_fields = _build_point_fields(action=action, point_type=point_type, target=target, value=value)
 
+        point_key = f"{page}-{index:02d}"
         points.append(
             TestPoint(
-                key=f"{page}-{index:02d}",
+                key=point_key,
+                intent_id=point_key,
                 point_type=point_type,
                 description=description,
                 action=action,
@@ -185,7 +194,8 @@ def build_test_point_plan(
                 requires_review=point_fields["requires_review"],
                 suggestion=point_fields["suggestion"],
                 review_reason=point_fields["review_reason"],
-                dependent_elements=point_fields["dependent_elements"],
+                involved_elements=point_fields["involved_elements"],
+                steps=point_fields["steps"],
                 source_ids=point_fields["source_ids"],
                 technique_type=point_fields["technique_type"],
                 technique_source=point_fields["technique_source"],
@@ -244,9 +254,11 @@ def build_test_point_plan_from_openapi(
                 target=sanitized_operation or method.lower(),
                 value=f"{method.upper()} {path_name}",
             )
+            api_point_key = f"{page}-{index:02d}"
             points.append(
                 TestPoint(
-                    key=f"{page}-{index:02d}",
+                    key=api_point_key,
+                    intent_id=api_point_key,
                     point_type="action",
                     description=f"Validate API operation: {summary}",
                     action="api_request",
@@ -257,7 +269,8 @@ def build_test_point_plan_from_openapi(
                     requires_review=point_fields["requires_review"],
                     suggestion=point_fields["suggestion"],
                     review_reason=point_fields["review_reason"],
-                    dependent_elements=point_fields["dependent_elements"],
+                    involved_elements=point_fields["involved_elements"],
+                    steps=point_fields["steps"],
                     source_ids=point_fields["source_ids"],
                     technique_type=point_fields["technique_type"],
                     technique_source=point_fields["technique_source"],

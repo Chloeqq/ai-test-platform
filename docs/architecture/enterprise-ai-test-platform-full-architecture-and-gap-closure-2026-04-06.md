@@ -104,7 +104,7 @@ sequenceDiagram
   participant DB as test_cases + versions
 
   UI->>WG: POST /api/workbench/preview-test-points
-  WG->>WGS: build_preview_test_points_payload
+  WG->>WGS: build_preview_response
   WGS->>ORC: /requirements/parse
   ORC-->>WGS: RequirementSpec + markdown
   WGS-->>UI: 预览测试点
@@ -344,7 +344,7 @@ sequenceDiagram
 
 ## 6.6 证据采集层
 
-- manifest-first 已有但兼容回退仍较多，需持续清零 compat scan。
+- manifest-first 已有但 compat_scan 命中仍较多，需持续清零。
 - 缺 Trace 统一检索索引（run_id/case_id/source_id 一键追踪）。
 - 缺视频/截图保留策略与冷热分层。
 
@@ -430,14 +430,14 @@ sequenceDiagram
 ## Phase 3（P1，调度与证据治理增强，2 周）
 
 1. 任务队列化调度（优先级/并发槽位/重试策略）。
-2. manifest-first 治理清零 compat 回退。
+2. manifest-first 治理清零 compat_scan。
 3. evidence 索引统一（run_id/case_id/source_id）。
 
 验收标准：
 
 - 调度计划可执行，不仅是只读汇总。
 - 关键任务 evidence 健康度达到 ready。
-- 报表不再依赖 runtime fallback。
+- 报表不再依赖 runtime 实时补充。
 
 ## Phase 4（P2，质量与门禁产品化，2 周）
 
@@ -531,4 +531,3 @@ sequenceDiagram
 要从“可运行”走向“可治理、可扩展、可审计、可回滚”，必须把 **测试资产中心（尤其页面对象）** 作为第一优先级补齐，再向调度、证据、质量、门禁做纵向强化。
 
 这份文档可直接作为后续落地的统一执行基线。
-

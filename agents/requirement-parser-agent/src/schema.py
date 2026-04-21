@@ -25,6 +25,12 @@ class TestIntent:
     title: str
     intent_type: str
     priority: str
+    precondition: str = ""
+    steps: list[str] = field(default_factory=list)
+    expected_result: str = ""
+    scene_type: str = ""
+    test_data_type: str = ""
+    involved_elements: list[str] = field(default_factory=list)
     steps_hint: list[str] = field(default_factory=list)
     dependencies: list[str] = field(default_factory=list)
     source_ids: list[str] = field(default_factory=list)

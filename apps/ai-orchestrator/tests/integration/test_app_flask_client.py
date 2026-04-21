@@ -1,5 +1,7 @@
+import importlib.util
 import sys
 import asyncio
+from types import ModuleType
 from pathlib import Path
 
 import pytest
@@ -13,7 +15,24 @@ SRC_ROOT = PROJECT_ROOT / "apps" / "ai-orchestrator" / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from app import app as asgi_app, create_app  # noqa: E402
+
+def _load_orchestrator_app_module() -> ModuleType:
+    module_name = "_ai_orchestrator_app_test_client"
+    existing = sys.modules.get(module_name)
+    if isinstance(existing, ModuleType):
+        return existing
+    spec = importlib.util.spec_from_file_location(module_name, SRC_ROOT / "app.py")
+    if spec is None or spec.loader is None:
+        raise ImportError("unable to load ai-orchestrator app module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_APP_MODULE = _load_orchestrator_app_module()
+asgi_app = _APP_MODULE.app
+create_app = _APP_MODULE.create_app
 
 
 class FakeService:
@@ -44,6 +63,75 @@ class FakeService:
             "force_llm_mode": True,
             "probe": {"enabled": probe, "attempted": probe, "ok": True},
         }
+
+    def parse_requirement(self, **kwargs):
+        return {
+            "version": "RequirementSpecV1",
+            "source_type": kwargs.get("source", "manual"),
+            "requirement": kwargs.get("requirement", ""),
+            "page": kwargs.get("page", ""),
+            "raw_requirement": kwargs.get("requirement", ""),
+            "normalized_requirement": str(kwargs.get("requirement", "")).strip(),
+            "parse_confidence": 0.99,
+            "priority": "P1",
+            "source_inputs": [
+                {
+                    "source_id": "input.manual.001",
+                    "source_type": kwargs.get("source", "manual"),
+                    "content_preview": str(kwargs.get("requirement", ""))[:120],
+                    "metadata": {},
+                }
+            ],
+            "input_sources": kwargs.get("input_sources", []),
+            "entities": [],
+            "test_intents": [],
+            "ambiguities": [],
+            "business_rules": [],
+            "coverage_matrix": [],
+            "dependency_graph": [],
+            "historical_patterns": [],
+            "change_impact": {},
+            "design_input": kwargs.get("requirement", ""),
+            "parser_runtime": {
+                "agent": "requirement-parser-agent",
+                "prompt_version": "requirement-parser.prompt.test",
+                "model": "fake",
+                "instructions_version": "test",
+                "mode": "llm",
+                "source_summary": {
+                    "source_count": 1,
+                    "source_types": [kwargs.get("source", "manual")],
+                    "has_multisource_inputs": False,
+                },
+                "llm_trace": {
+                    "attempted": True,
+                    "succeeded": True,
+                    "reason_code": "llm_parse",
+                    "latency_ms": 1,
+                    "overlay_key_count": 1,
+                    "total_tokens": None,
+                },
+                "page_resolution": {
+                    "candidate_page": kwargs.get("page", ""),
+                    "selected_page": kwargs.get("page", ""),
+                    "source_types": [kwargs.get("source", "manual")],
+                    "candidate_details": [],
+                },
+                "trace_id": "trace-001",
+                "ai_trace": {"trace_id": "trace-001"},
+            },
+            "quality_gate": {
+                "version": "RequirementQualityGateV1",
+                "stage": "parse",
+                "gate_enabled": True,
+                "decision": "allow",
+                "metrics": {},
+                "blockers": [],
+            },
+        }
+
+    def render_requirement_spec_markdown(self, requirement_spec):
+        return f"# {requirement_spec.get('page', '-')}\n"
 
 
 class FakeAssetService:
@@ -96,6 +184,19 @@ def test_flask_client_latest_report_returns_summary_preview(flask_client):
     assert response.status_code == 200
     assert payload["report"]["case_id"] == "tc-product-999"
     assert payload["report_summary_preview"]["total_failed_cases"] == 0
+
+
+def test_flask_client_requirement_parse_returns_envelope(flask_client):
+    response = flask_client.post(
+        "/requirements/parse",
+        json={"requirement": "支持按商品名称查询", "page": "product"},
+    )
+
+    payload = response.get_json()
+    assert response.status_code == 201
+    assert payload["requirement_spec"]["page"] == "product"
+    assert payload["requirement_analysis_markdown"].startswith("# product")
+    assert payload["output_contract"]["machine_schema"] == "RequirementSpecV1"
 
 
 def test_flask_client_rejects_non_json_post(flask_client):

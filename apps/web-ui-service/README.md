@@ -21,12 +21,50 @@ cd /Users/bettyhuang/PycharmProjects/ai-test-platform
 ./.venv/bin/python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 127.0.0.1 --port 8013 --reload
 ```
 
+## 前端（TypeScript + React）
+
+仓库已新增 `apps/web-ui-service/frontend`（Vite + React + TypeScript）作为统一前端主工程，前端页面按模块逐步迁移到该主工程。
+
+```bash
+cd /Users/bettyhuang/PycharmProjects/ai-test-platform
+make frontend-install
+make frontend-dev
+```
+
+构建到 FastAPI 静态目录：
+
+```bash
+cd /Users/bettyhuang/PycharmProjects/ai-test-platform
+make frontend-build
+```
+
+构建后入口：
+
+- `http://127.0.0.1:8013/react`
+- `http://127.0.0.1:8013/execution/runs`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/react/execution/runs`
+- `http://127.0.0.1:8013/execution/results`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/react/execution/results`
+- `http://127.0.0.1:8013/ai-generation`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/react/ai-generation`
+- `http://127.0.0.1:8013/ai-generation/history`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/ai-generation/prompts`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/execution/plans`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/dashboard`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/quality/flaky`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/quality/failure-clusters`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/quality/trends`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/quality/gates`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/defects`（主入口，307 到 React 页面）
+- `http://127.0.0.1:8013/settings/scheduler`（主入口，307 到 React 页面）
+
 ## 默认开发数据库
 
 - SQLite（默认）：`sqlite:////Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-ui-service/dev.db`（运行时按本机绝对路径生成）
 - 可通过环境变量覆盖：`DATABASE_URL`
 - 开发环境默认允许自动建表：`DATABASE_AUTO_CREATE_TABLES=true`
-- Docker / PostgreSQL 环境建议通过 Alembic 迁移建表，并设置：`DATABASE_AUTO_CREATE_TABLES=false`
+- 非开发环境不会再默认启用自动建表或默认管理员初始化，缺少安全配置会在启动时直接失败
+- Docker / PostgreSQL 环境建议通过 Alembic 迁移建表，并显式设置：`DATABASE_AUTO_CREATE_TABLES=false`
 
 ## 数据库迁移
 
@@ -66,7 +104,8 @@ make db-revision MSG="add new table"
 
 - 登录接口：`POST /api/auth/login`
 - 获取当前用户：`GET /api/auth/me`（`Authorization: Bearer <token>`）
-- 启动时会自动初始化默认管理员账号（环境变量可配置）：
-  - `ADMIN_USERNAME`（默认 `admin`）
-  - `ADMIN_PASSWORD`（默认 `admin123`）
-  - `ADMIN_ROLE`（默认 `admin`）
+- 开发环境下会使用默认管理员种子账号；生产或其他非开发环境必须显式配置：
+  - `JWT_SECRET_KEY`
+  - `ADMIN_USERNAME`
+  - `ADMIN_PASSWORD`
+  - `ADMIN_ROLE`

@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
-from app.routers import legacy_workbench
+from app.api.workbench import constants as workbench_constants
 from app.routers.workbench_tasks import router as workbench_tasks_router
 import app.models.test_project  # noqa: F401
 import app.schemas.test_project as test_project_schema
@@ -34,8 +34,7 @@ def workbench_projects_client(
 
     state_root = tmp_path / "test-points"
     state_root.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(legacy_workbench, "TEST_POINTS_ROOT", state_root)
-    monkeypatch.setattr(legacy_workbench, "_ensure_dirs", lambda: None)
+    monkeypatch.setattr(workbench_constants, "TEST_POINTS_ROOT", state_root)
 
     app = FastAPI()
     app.include_router(workbench_tasks_router)
@@ -68,7 +67,7 @@ def test_workbench_projects_api_merges_master_projects_and_legacy_state(
             project_name="Mall Platform",
         ),
     )
-    state_root = legacy_workbench.TEST_POINTS_ROOT
+    state_root = workbench_constants.TEST_POINTS_ROOT
     (state_root / "default").mkdir(parents=True, exist_ok=True)
     (state_root / "legacyproj").mkdir(parents=True, exist_ok=True)
 

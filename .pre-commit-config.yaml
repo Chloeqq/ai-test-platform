@@ -1,9 +1,27 @@
 repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
   - repo: local
     hooks:
       - id: runner-asset-contracts
         name: runner asset contracts
-        entry: bash -lc 'cd PycharmProjects/ai-test-platform && bash scripts/ci/check_asset_contracts.sh "$@"' --
+        entry: bash scripts/ci/check_asset_contracts.sh
         language: system
         pass_filenames: true
         files: (^|/)assets/(test-cases|page-objects)/.*\.ya?ml$
+      - id: workbench-architecture-guard
+        name: workbench architecture guard
+        entry: python3 scripts/ci/check_workbench_architecture.py
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: pipeline-contract-tests
+        name: pipeline contract tests
+        entry: .venv/bin/python -m pytest shared_backend/tests/ --tb=short -q
+        language: system
+        pass_filenames: false
+        files: (^shared_backend/|^apps/ai-orchestrator/src/services/)

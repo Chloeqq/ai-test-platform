@@ -73,7 +73,7 @@ def _sanitize_review_items(items: list[dict[str, Any]], *, review_type: str) -> 
     for index, raw in enumerate(items, start=1):
         if not isinstance(raw, dict):
             continue
-        key = str(raw.get("key") or raw.get("id") or f"{review_type}-{index:02d}").strip()
+        key = str(raw.get("intent_id") or raw.get("key") or raw.get("id") or f"{review_type}-{index:02d}").strip()
         label = str(raw.get("label") or raw.get("description") or key).strip() or key
         warnings = [str(item).strip() for item in raw.get("warnings", []) if str(item).strip()] if isinstance(raw.get("warnings"), list) else []
         entry = {
@@ -90,10 +90,11 @@ def _sanitize_review_items(items: list[dict[str, Any]], *, review_type: str) -> 
             text = str(value).strip()
             if text:
                 entry[field] = text
-        if isinstance(raw.get("dependent_elements"), list):
-            entry["dependent_elements"] = [
+        raw_involved = raw.get("involved_elements")
+        if isinstance(raw_involved, list):
+            entry["involved_elements"] = [
                 str(item).strip()
-                for item in raw.get("dependent_elements", [])
+                for item in raw_involved
                 if str(item).strip()
             ]
         dependency_review = _dict_value(raw.get("dependency_review"))
@@ -102,9 +103,9 @@ def _sanitize_review_items(items: list[dict[str, Any]], *, review_type: str) -> 
             entry["dependency_review"] = {
                 "mode": str(dependency_review.get("mode", "")).strip() or "none",
                 "propagated": bool(dependency_review.get("propagated")),
-                "dependent_elements": [
+                "involved_elements": [
                     str(item).strip()
-                    for item in _list_value(dependency_review.get("dependent_elements"))
+                    for item in _list_value(dependency_review.get("involved_elements"))
                     if str(item).strip()
                 ],
                 "matched_elements": [
@@ -188,7 +189,7 @@ def review_decisions_for_run(
             "note": str(item.get("note", "")).strip(),
             "confirmed_by": str(item.get("confirmed_by", "")).strip() or "anonymous",
             "confirmed_by_role": str(item.get("confirmed_by_role", "")).strip() or "unknown",
-            "confirmed_by_source": str(item.get("confirmed_by_source", "")).strip() or "fallback",
+            "confirmed_by_source": str(item.get("confirmed_by_source", "")).strip() or "system_default",
             "updated_at": str(item.get("updated_at", "")).strip(),
             "created_at": str(item.get("created_at", "")).strip(),
         }
@@ -349,14 +350,14 @@ def extract_review_actor(request: Request) -> dict[str, str]:
     return {
         "confirmed_by": "anonymous",
         "confirmed_by_role": "unknown",
-        "confirmed_by_source": "fallback",
+        "confirmed_by_source": "system_default",
     }
 
 
 def require_authenticated_review_actor(actor: dict[str, str]) -> dict[str, str]:
     source = str(actor.get("confirmed_by_source", "")).strip().lower()
     username = str(actor.get("confirmed_by", "")).strip()
-    if source != "fallback" and username and username.lower() != "anonymous":
+    if source != "system_default" and username and username.lower() != "anonymous":
         return actor
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -393,7 +394,7 @@ def upsert_review_decision(payload: Any, *, actor: dict[str, str] | None = None)
         "note": str(_payload_value(payload, "note", "") or "").strip(),
         "confirmed_by": str(actor_info.get("confirmed_by", "")).strip() or "anonymous",
         "confirmed_by_role": str(actor_info.get("confirmed_by_role", "")).strip() or "unknown",
-        "confirmed_by_source": str(actor_info.get("confirmed_by_source", "")).strip() or "fallback",
+        "confirmed_by_source": str(actor_info.get("confirmed_by_source", "")).strip() or "system_default",
         "updated_at": datetime.now(UTC).isoformat(),
     }
     identity = _review_entry_identity(entry)

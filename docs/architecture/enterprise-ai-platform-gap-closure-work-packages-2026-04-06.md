@@ -35,7 +35,7 @@
 | AI 编排层 | 62% | 进行中 | 主链可用，adapter/tool 空壳待补 |
 | 自动化执行层 | 58% | 进行中 | Web 主链稳定，Mobile 未落地 |
 | 执行与调度中心 | 35% | 进行中 | 汇总视图已具备，真实调度内核不足 |
-| 证据采集层 | 64% | 进行中 | manifest-first 已启用，兼容回退待清零 |
+| 证据采集层 | 64% | 进行中 | manifest-first 已启用，compat_scan 待清零 |
 | 质量分析与洞察层 | 50% | 进行中 | 摘要有，趋势/聚类/评分产品化不足 |
 | 发布决策与治理层 | 61% | 进行中 | 门禁/审批可用，策略治理深度不足 |
 | 基础设施层 | 47% | 进行中 | docker-compose 完整，K8s/MQ/对象存储待工程化 |
@@ -57,7 +57,7 @@
 | WP-07 | 统一资产写入口（case 写服务收口） | 应用编排层 | P1 | 未开始 | WP-01, WP-05, WP-06 |
 | WP-08 | AI adapter/tool 空壳补齐 | AI 编排层 | P1 | 未开始 | 无 |
 | WP-09 | 调度中心队列化（非只读汇总） | 执行与调度中心 | P1 | 未开始 | WP-03 |
-| WP-10 | manifest-first 治理清零 compat fallback | 证据采集层 | P1 | 未开始 | WP-03, WP-09 |
+| WP-10 | manifest-first 治理清零 compat_scan | 证据采集层 | P1 | 未开始 | WP-03, WP-09 |
 | WP-11 | 质量分析产品化（Flaky/趋势/评分） | 质量分析层 | P2 | 未开始 | WP-10 |
 | WP-12 | 门禁策略模板化与豁免治理 | 发布治理层 | P2 | 未开始 | WP-11 |
 | WP-13 | 基础设施升级（MQ/对象存储/K8s） | 基础设施层 | P2 | 未开始 | WP-09, WP-10 |
@@ -317,10 +317,10 @@ OpenAPI 不再是临时解析结果，形成契约资产中心。
 
 ---
 
-## WP-10 manifest-first 清零 compat fallback（P1）
+## WP-10 manifest-first 清零 compat_scan（P1）
 
 目标：
-证据链标准化，尽量消灭兼容回退路径。
+证据链标准化，尽量消灭 compat_scan 路径。
 
 改动目录：
 
@@ -331,8 +331,7 @@ OpenAPI 不再是临时解析结果，形成契约资产中心。
 验收标准：
 
 1. `compat_scan_entry_count` 连续一周为 0（目标环境）。
-2. `runtime_fallback_used` 为 false。
-3. 证据健康状态达到 `healthy/ready`。
+2. 证据健康状态达到 `healthy/ready`。
 
 ---
 

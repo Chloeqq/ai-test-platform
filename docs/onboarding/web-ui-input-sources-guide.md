@@ -1,7 +1,8 @@
 # Web UI 输入源使用说明（新手版）
 
 > 迁移标注（2026-03-19）  
-> 旧命令 `python web-ui/app.py` 仍可用（兼容入口），但推荐使用 FastAPI 入口：  
+> `web-ui` 目录仅保留历史兼容语义，不再作为当前主链源码目录。
+> 推荐使用 FastAPI 入口：
 > `python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 127.0.0.1 --port 8013`
 
 这份文档是给第一次用 `web-ui` 生成功能的同学准备的。  

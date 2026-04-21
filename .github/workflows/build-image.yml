@@ -52,7 +52,27 @@ jobs:
             org.opencontainers.image.description=AI Test Platform web-ui-service runtime image
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
-      - name: Build and push Docker image
+      - name: Compute orchestrator image repository
+        id: orch_image_repo
+        run: |
+          owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          echo "repo=ghcr.io/${owner}/ai-test-platform-orchestrator" >> "${GITHUB_OUTPUT}"
+
+      - name: Extract orchestrator Docker metadata
+        id: orch_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.orch_image_repo.outputs.repo }}
+          tags: |
+            type=sha,prefix=sha-
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=ai-test-platform-orchestrator
+            org.opencontainers.image.description=AI Test Platform orchestrator runtime image
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push web Docker image
         id: build_and_push
         uses: docker/build-push-action@v6
         with:
@@ -63,20 +83,38 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Build and push orchestrator Docker image
+        id: build_and_push_orch
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./apps/ai-orchestrator/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.orch_meta.outputs.tags }}
+          labels: ${{ steps.orch_meta.outputs.labels }}
+
       - name: Print image tags
         run: |
-          echo "Published image tags:"
+          echo "Published web image tags:"
           echo "${{ steps.meta.outputs.tags }}"
+          echo ""
+          echo "Published orchestrator image tags:"
+          echo "${{ steps.orch_meta.outputs.tags }}"
 
       - name: Publish build summary
         env:
           IMAGE_REPO: ${{ steps.image_repo.outputs.repo }}
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
           IMAGE_DIGEST: ${{ steps.build_and_push.outputs.digest }}
+          ORCH_REPO: ${{ steps.orch_image_repo.outputs.repo }}
+          ORCH_TAGS: ${{ steps.orch_meta.outputs.tags }}
+          ORCH_DIGEST: ${{ steps.build_and_push_orch.outputs.digest }}
         run: |
           {
             echo "## Image Build Summary"
             echo ""
+            echo "### Web UI"
             echo "- Repository: ${IMAGE_REPO}"
             echo "- Digest: ${IMAGE_DIGEST}"
             echo "- Tags:"
@@ -84,4 +122,13 @@ jobs:
               [[ -z "${line}" ]] && continue
               echo "  - ${line}"
             done <<< "${IMAGE_TAGS}"
+            echo ""
+            echo "### Orchestrator"
+            echo "- Repository: ${ORCH_REPO}"
+            echo "- Digest: ${ORCH_DIGEST}"
+            echo "- Tags:"
+            while IFS= read -r line; do
+              [[ -z "${line}" ]] && continue
+              echo "  - ${line}"
+            done <<< "${ORCH_TAGS}"
           } >> "${GITHUB_STEP_SUMMARY}"

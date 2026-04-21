@@ -8,7 +8,6 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.core.security import decode_access_token
-from app.services import ui_management_console_service
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -171,28 +170,6 @@ def safe_next_path(value: str) -> str:
     return candidate
 
 
-def build_active_filters(
-    request: Request,
-    labels: dict[str, str] | None = None,
-) -> list[dict[str, str]]:
-    filters: list[dict[str, str]] = []
-    label_map = labels or {}
-    for key, value in request.query_params.multi_items():
-        text = str(value or "").strip()
-        if not text:
-            continue
-        values = [item.strip() for item in text.split(",") if item.strip()]
-        rendered = " / ".join(values) if values else text
-        filters.append(
-            {
-                "key": key,
-                "label": label_map.get(key, key.replace("_", " ").title()),
-                "value": rendered,
-            }
-        )
-    return filters
-
-
 def render_template(
     request: Request,
     template_name: str,
@@ -204,68 +181,3 @@ def render_template(
     if context:
         template_context.update(context)
     return templates.TemplateResponse(request, template_name, template_context)
-
-
-def render_page(
-    request: Request,
-    *,
-    current_key: str,
-    page_title: str,
-    page_description: str,
-    breadcrumbs: list[str],
-    filter_labels: dict[str, str] | None = None,
-) -> HTMLResponse:
-    return render_template(
-        request,
-        "page.html",
-        current_key=current_key,
-        context={
-            "page_title": page_title,
-            "page_description": page_description,
-            "breadcrumbs": breadcrumbs,
-            "active_filters": build_active_filters(request, filter_labels),
-        },
-    )
-
-
-def render_management_console(
-    request: Request,
-    *,
-    current_key: str,
-    page_title: str,
-    page_description: str,
-    page_responsibility: str,
-    breadcrumbs: list[str],
-    left_heading: str,
-    left_items: list[dict[str, Any]],
-    detail_panels: list[dict[str, Any]],
-    primary_action: dict[str, str] | None = None,
-    secondary_action: dict[str, str] | None = None,
-    console_config: dict[str, Any] | None = None,
-) -> HTMLResponse:
-    management_items = ui_management_console_service.build_management_items(left_items, detail_panels)
-    return render_template(
-        request,
-        "management_console.html",
-        current_key=current_key,
-        context={
-            "page_title": page_title,
-            "page_description": page_description,
-            "page_responsibility": page_responsibility,
-            "breadcrumbs": breadcrumbs,
-            "left_heading": left_heading,
-            "management_items": management_items,
-            "primary_action": primary_action or {},
-            "secondary_action": secondary_action or {},
-            "console_config": ui_management_console_service.build_management_console_config(console_config),
-            "active_filters": build_active_filters(
-                request,
-                {
-                    "keyword": "关键词",
-                    "status": "状态",
-                    "meta": "补充关键词",
-                    "sort": "排序",
-                },
-            ),
-        },
-    )

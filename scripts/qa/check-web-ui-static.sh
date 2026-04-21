@@ -4,34 +4,37 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "[check-web-ui-static] Missing node executable." >&2
+TEMPLATES_DIR="apps/web-ui-service/app/templates"
+STATIC_DIR="apps/web-ui-service/app/static"
+REACT_TEMPLATE="${TEMPLATES_DIR}/react_app.html"
+
+if [[ ! -f "${REACT_TEMPLATE}" ]]; then
+  echo "[check-web-ui-static] Missing React shell template: ${REACT_TEMPLATE}" >&2
   exit 1
 fi
 
-FILES=(
-  "apps/web-ui-service/app/static/cases.js"
-  "apps/web-ui-service/app/static/cases_dialog.js"
-  "apps/web-ui-service/app/static/projects_api.js"
-  "apps/web-ui-service/app/static/project_manager_dialog.js"
-  "apps/web-ui-service/app/static/project_selector_support.js"
-  "apps/web-ui-service/app/static/workbench_generate_shared.js"
-  "apps/web-ui-service/app/static/workbench_generate.js"
-  "apps/web-ui-service/app/static/workbench_cases.js"
-  "apps/web-ui-service/app/static/workbench.js"
-  "apps/web-ui-service/app/static/workbench_history_detail.js"
-  "apps/web-ui-service/app/static/workbench_history_support.js"
-  "apps/web-ui-service/app/static/workbench_history.js"
-  "apps/web-ui-service/app/static/execution_runs_support.js"
-  "apps/web-ui-service/app/static/execution_runs.js"
-  "apps/web-ui-service/app/static/execution_runs_presenter.js"
-  "apps/web-ui-service/app/static/page_object_recorder.js"
-  "apps/web-ui-service/app/static/page_objects.js"
-)
+legacy_templates=$(find "${TEMPLATES_DIR}" -maxdepth 1 -type f ! -name "react_app.html" | sort || true)
+if [[ -n "${legacy_templates}" ]]; then
+  echo "[check-web-ui-static] Legacy templates must be removed; found:" >&2
+  echo "${legacy_templates}" >&2
+  exit 1
+fi
 
-for file in "${FILES[@]}"; do
-  echo "[check-web-ui-static] node --check ${file}"
-  node --check "${file}"
-done
+legacy_static=$(find "${STATIC_DIR}" -maxdepth 1 -type f | sort || true)
+if [[ -n "${legacy_static}" ]]; then
+  echo "[check-web-ui-static] Legacy static root files must be removed; found:" >&2
+  echo "${legacy_static}" >&2
+  exit 1
+fi
 
-echo "[check-web-ui-static] Completed."
+if ! rg -n "/static/react/assets/main.css" "${REACT_TEMPLATE}" >/dev/null 2>&1; then
+  echo "[check-web-ui-static] React shell is missing /static/react/assets/main.css reference." >&2
+  exit 1
+fi
+
+if ! rg -n "/static/react/assets/main.js" "${REACT_TEMPLATE}" >/dev/null 2>&1; then
+  echo "[check-web-ui-static] React shell is missing /static/react/assets/main.js reference." >&2
+  exit 1
+fi
+
+echo "[check-web-ui-static] React-only static policy passed."

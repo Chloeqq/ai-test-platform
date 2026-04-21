@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
+from shared_backend.schemas.validator import ContractValidator
+
 
 class OrchestrationFlowSupport:
     def __init__(
@@ -22,10 +25,8 @@ class OrchestrationFlowSupport:
         generate_case: Callable[..., dict[str, Any]],
         build_design_generation: Callable[[dict[str, Any]], dict[str, Any]],
         merge_case_requirements: Callable[[str, dict[str, Any]], list[str]],
-        generate_script_bundle: Callable[..., dict[str, Any]],
-        build_execution_plan: Callable[..., dict[str, Any]],
         build_test_points_preview: Callable[..., dict[str, Any]],
-        render_case_steps_from_test_points: Callable[..., dict[str, Any]],
+        resolve_page_object: Callable[[str, str], dict[str, Any]],
         prepare_generated_case_for_assets: Callable[[dict[str, Any]], dict[str, Any]],
         save_case: Callable[[dict[str, Any]], Path],
         agent_pipeline_order: Callable[[], list[str]],
@@ -50,10 +51,8 @@ class OrchestrationFlowSupport:
         self._generate_case = generate_case
         self._build_design_generation = build_design_generation
         self._merge_case_requirements = merge_case_requirements
-        self._generate_script_bundle = generate_script_bundle
-        self._build_execution_plan = build_execution_plan
         self._build_test_points_preview = build_test_points_preview
-        self._render_case_steps_from_test_points = render_case_steps_from_test_points
+        self._resolve_page_object = resolve_page_object
         self._prepare_generated_case_for_assets = prepare_generated_case_for_assets
         self._save_case = save_case
         self._agent_pipeline_order = agent_pipeline_order
@@ -65,6 +64,97 @@ class OrchestrationFlowSupport:
         self._build_evidence_manifest = build_evidence_manifest
         self._build_and_save_report = build_and_save_report
         self._build_report_summary_path = build_report_summary_path
+
+    @staticmethod
+    def _build_generated_script_shell(*, case: dict[str, Any], runner_profile: dict[str, Any]) -> dict[str, Any]:
+        execution = case.get("execution") if isinstance(case.get("execution"), dict) else {}
+        return {
+            "version": "GeneratedScriptV1",
+            "framework": str(runner_profile.get("framework", "playwright")).strip() or "playwright",
+            "language": str(runner_profile.get("language", "python")).strip() or "python",
+            "case_id": str(case.get("id", "")).strip(),
+            "page": str(execution.get("page", "")).strip(),
+            "filename": "",
+            "entrypoint": "",
+            "script_code": "",
+            "script_path": "",
+            "metadata": {
+                "runner": str(runner_profile.get("runner", "playwright")).strip() or "playwright",
+            },
+        }
+
+    @staticmethod
+    def _build_execution_plan_shell(
+        *,
+        case: dict[str, Any],
+        execute: bool,
+        source: str,
+        runner_profile: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "version": "ExecutionPlanV1",
+            "run_mode": "generate_and_run" if execute else "generate_only",
+            "source": source,
+            "priority": str(case.get("priority", "P1")).strip() or "P1",
+            "environment": "test",
+            "parallelism": 1,
+            "retry_policy": {
+                "enabled": bool(execute),
+                "max_retries": 0,
+                "backoff_seconds": 0,
+            },
+            "stages": [],
+            "scheduling_hints": {
+                "queue": str(runner_profile.get("environment_pool", "normal")).strip() or "normal",
+                "expected_total_seconds": 60,
+                "resource_profile": str(runner_profile.get("channel", "default")).strip() or "default",
+            },
+            "metadata": {
+                "runner": str(runner_profile.get("runner", "playwright")).strip() or "playwright",
+            },
+        }
+
+    @staticmethod
+    def _materialize_compiled_steps(*, case: dict[str, Any], compiled_steps: list[dict[str, Any]]) -> dict[str, Any]:
+        normalized_case = dict(case) if isinstance(case, dict) else {}
+        execution = normalized_case.get("execution") if isinstance(normalized_case.get("execution"), dict) else {}
+        execution = dict(execution)
+        materialized_steps: list[dict[str, Any]] = []
+        for index, raw_step in enumerate(compiled_steps):
+            step = raw_step if isinstance(raw_step, dict) else {}
+            action = str(step.get("action", "")).strip()
+            if not action:
+                continue
+            traceability = step.get("traceability") if isinstance(step.get("traceability"), dict) else {}
+            source_point_key = str(step.get("source_point_key", "")).strip()
+            if not source_point_key:
+                intent_id = str(step.get("intent_id", "")).strip()
+                if intent_id:
+                    source_point_key = intent_id
+                else:
+                    source_index = traceability.get("source_point_index")
+                    if isinstance(source_index, int) and source_index >= 0:
+                        source_point_key = f"point-{source_index + 1:02d}"
+            materialized_step: dict[str, Any] = {
+                "action": action,
+                "target": str(step.get("target", "")).strip() or None,
+                "selector": str(step.get("selector", "")).strip() or None,
+                "locator_type": str(step.get("locator_type", "")).strip() or None,
+                "intent_id": str(step.get("intent_id", "")).strip() or None,
+                "traceability": traceability,
+            }
+            if source_point_key:
+                materialized_step["source_point_key"] = source_point_key
+            if step.get("value") is not None:
+                materialized_step["value"] = step.get("value")
+            if action == "assert_count" and step.get("count") is not None:
+                materialized_step["count"] = step.get("count")
+            materialized_steps.append(materialized_step)
+
+        if materialized_steps:
+            execution["steps"] = materialized_steps
+            normalized_case["execution"] = execution
+        return normalized_case
 
     def orchestrate(
         self,
@@ -87,6 +177,9 @@ class OrchestrationFlowSupport:
         runner: str = "playwright",
     ):
         normalized_requirement = requirement.strip()
+        normalized_page = page.strip()
+        if not normalized_page:
+            raise self._validation_error_cls("page must not be empty")
         if not normalized_requirement:
             has_multisource_inputs = any(
                 [
@@ -117,7 +210,7 @@ class OrchestrationFlowSupport:
 
         requirement_spec = self._parse_requirement_spec(
             requirement=requirement,
-            page=page.strip(),
+            page=normalized_page,
             source=normalized_source,
             input_sources=input_sources,
             openapi_spec=openapi_spec,
@@ -130,12 +223,8 @@ class OrchestrationFlowSupport:
             defect_ticket=defect_ticket,
             runtime_logs=runtime_logs,
         )
-        resolved_page = str(requirement_spec.get("page", "")).strip() or page.strip()
-        if not resolved_page:
-            resolved_page = "product"
-            requirement_spec["page"] = resolved_page
-        else:
-            requirement_spec["page"] = resolved_page
+        resolved_page = str(requirement_spec.get("page", "")).strip() or normalized_page
+        requirement_spec["page"] = resolved_page
 
         try:
             self._enforce_requirement_quality_gate(requirement_spec, stage="orchestrate")
@@ -156,7 +245,12 @@ class OrchestrationFlowSupport:
 
         design_requirement = str(requirement_spec.get("design_input", "")).strip() or normalized_requirement
         if not design_requirement:
-            design_requirement = str(requirement_spec.get("normalized_requirement", "")).strip() or "基础流程验证"
+            design_requirement = str(requirement_spec.get("normalized_requirement", "")).strip()
+        if not design_requirement:
+            raise self._validation_error_cls(
+                "design requirement is empty",
+                details={"reason_code": "test_design_request_invalid"},
+            )
 
         case = self._generate_case(requirement=design_requirement, page=resolved_page)
         execution = case.get("execution") if isinstance(case.get("execution"), dict) else {}
@@ -168,24 +262,84 @@ class OrchestrationFlowSupport:
             raw_requirement=requirement or design_requirement,
             requirement_spec=requirement_spec,
         )
-        generated_script = self._generate_script_bundle(
+        generated_script = self._build_generated_script_shell(case=case, runner_profile=runner_profile)
+        execution_plan = self._build_execution_plan_shell(
             case=case,
-            framework=str(runner_profile.get("framework", "playwright")).strip() or "playwright",
-            language=str(runner_profile.get("language", "python")).strip() or "python",
-        )
-        execution_plan = self._build_execution_plan(
-            case=case,
-            execution_requested=execute,
+            execute=execute,
             source=normalized_source,
-            execution_config={"runner_profile": runner_profile},
+            runner_profile=runner_profile,
         )
         test_points = self._build_test_points_preview(
             case=case,
             requirement_spec=requirement_spec,
         )
-        case = self._render_case_steps_from_test_points(case=case, test_points=test_points)
-        case = self._prepare_generated_case_for_assets(case)
-        case_path = self._save_case(case)
+        points = test_points.get("points") if isinstance(test_points.get("points"), list) else []
+        if not points:
+            raise self._validation_error_cls(
+                "test points are empty",
+                details={"reason_code": "execution_compiler_missing_test_points"},
+            )
+        project = str(case.get("project", "")).strip() or str(requirement_spec.get("project", "")).strip() or "atp"
+        try:
+            page_object = self._resolve_page_object(project, resolved_page)
+        except Exception as exc:
+            if isinstance(exc, self._validation_error_cls):
+                raise
+            raise self._validation_error_cls(
+                "page object resolution failed",
+                details={
+                    "reason_code": "page_object_not_found",
+                    "project": project,
+                    "page": resolved_page,
+                    "upstream_error": str(exc)[:500],
+                },
+            ) from exc
+        validation_result = ContractValidator().validate_full(
+            requirement_spec if isinstance(requirement_spec, dict) else None,
+            points,
+            page_object,
+            strict=True,
+        )
+        if not validation_result.valid:
+            raise self._validation_error_cls(
+                "test point contract validation failed",
+                details={
+                    "reason_code": "test_point_contract_validation_failed",
+                    "errors": validation_result.errors,
+                    "warnings": validation_result.warnings,
+                },
+            )
+        try:
+            compiled_steps = compile_execution_steps(points, page_object)
+        except ExecutionCompilerError as exc:
+            raise self._validation_error_cls(
+                "execution compiler failed",
+                details=exc.to_detail(),
+            ) from exc
+        case = self._materialize_compiled_steps(case=case, compiled_steps=compiled_steps)
+        try:
+            case = self._prepare_generated_case_for_assets(case)
+        except Exception as exc:
+            raise self._validation_error_cls(
+                "generated case failed asset validation",
+                details={
+                    "reason_code": "asset_validation_failed",
+                    "upstream_error": str(exc)[:500],
+                },
+            ) from exc
+        try:
+            case_path = self._save_case(case)
+        except Exception as exc:
+            raise self._validation_error_cls(
+                "generated case asset persist failed",
+                details={
+                    "reason_code": "asset_persist_failed",
+                    "upstream_error": str(exc)[:500],
+                },
+            ) from exc
+        # save_test_case() may normalize/reallocate case id during persistence.
+        # Keep runtime identity consistent with the persisted asset so TEST_CASE_ID filtering is accurate.
+        case["id"] = str(case_path.stem).strip()
         started_at = self._now()
 
         result = self._orchestration_result_cls(

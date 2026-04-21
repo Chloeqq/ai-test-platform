@@ -111,7 +111,7 @@
 - 已接入过滤入口：`/api/workbench/history`、`/api/report/failures`、`/api/report/overview`、`/api/report/context`、`/api/report/performance`、`/api/defects`、`/api/workbench/runs*`、`/api/workbench/tasks*`、`/api/workbench/cases*`、`/api/workbench/test-point-assets*`、`/api/workbench/reviews`、`/api/workbench/execution-gate/*`。
 - 新增清理接口：`POST /api/workbench/case-consistency/cleanup`，清理 `history/runtime-runs/defect-links/review-decisions/execution-gate-decisions/failure-source-calibrations` 与 `reports/executions` 中非 case center 的历史记录。
 - 本地历史脏数据清理：已删除 `reports/executions` 下遗留 `SMOKE-*` / `TC-*` 报告，以及 `assets/test-cases/ai-generated` 下遗留 `SMOKE-*` 资产文件。
-- 生成回退命名已收口：`legacy_workbench._build_fallback_case` 不再生成 `SMOKE-*` 风格 ID 与标题。
+- 生成回退命名已收口：不再生成 `SMOKE-*` 风格 ID 与标题。
 
 模块树治理增量（2026-04-06）：
 

@@ -1,0 +1,23 @@
+version: 1
+architecture:
+  source_of_truth_chain:
+    - router
+    - facade
+    - service
+    - store
+    - filesystem
+  frozen_edges:
+    - router -> facade
+    - facade -> service
+    - service -> store
+    - store -> filesystem
+    - service -> FastAPI
+    - service -> Request
+    - service -> Response
+    - service -> filesystem
+    - store -> business_logic
+rules:
+  no_legacy_import_in_router: true
+  no_io_in_service: true
+  no_business_logic_in_store: true
+  no_backward_edge: true

@@ -35,7 +35,6 @@ class ExecutionReportSupport:
         agent_pipeline_order: Callable[[], list[str]],
         logger: Any,
         runner_root: Path,
-        execution_record_compat_builder_enabled: bool,
     ) -> None:
         self._ensure_runner_import_path = ensure_runner_import_path
         self._normalize_execution_record = normalize_execution_record
@@ -55,7 +54,6 @@ class ExecutionReportSupport:
         self._agent_pipeline_order = agent_pipeline_order
         self._logger = logger
         self._runner_root = runner_root
-        self._execution_record_compat_builder_enabled = execution_record_compat_builder_enabled
 
     def build_report_summary_path(self) -> str:
         self._ensure_runner_import_path()
@@ -338,9 +336,6 @@ class ExecutionReportSupport:
             "manifest_record_path": "",
             "manifest_status": "not_checked",
             "resolution_reason": "generated_without_artifacts",
-            "compat_builder_enabled": bool(self._execution_record_compat_builder_enabled),
-            "compat_builder_used": False,
-            "strict_violation": False,
         }
 
         manifest_inspection = self.inspect_execution_record_manifest(evidence_manifest)
@@ -354,26 +349,6 @@ class ExecutionReportSupport:
                 self._normalize_execution_record(manifest_execution_record),
                 execution_metadata,
             ), meta
-
-        if execution_requested and int(evidence_manifest.get("total_files", 0) or 0) > 0:
-            if not self._execution_record_compat_builder_enabled:
-                meta["source"] = "strict_blocked"
-                meta["strict_violation"] = True
-                meta["resolution_reason"] = f"strict_mode_blocked:{meta['manifest_status']}"
-                self._logger.error(
-                    "execution_record manifest path missing/invalid for case %s; strict mode blocks compatibility builder",
-                    case.get("id", ""),
-                )
-                raise ValueError(
-                    "execution_record missing in evidence_manifest and compatibility builder is disabled"
-                )
-            meta["source"] = "compat_builder"
-            meta["compat_builder_used"] = True
-            meta["resolution_reason"] = f"compat_builder_fallback:{meta['manifest_status']}"
-            self._logger.warning(
-                "execution_record manifest path missing/invalid for case %s; using compatibility record builder",
-                case.get("id", ""),
-            )
 
         execution_record = self.build_execution_record(
             case=case,
@@ -451,7 +426,6 @@ class ExecutionReportSupport:
             requirement_spec.get("change_impact") if isinstance(requirement_spec.get("change_impact"), dict) else {}
         )
         active_runner_profile = runner_profile if isinstance(runner_profile, dict) else {}
-        llm_trace = parser_runtime.get("llm_trace") if isinstance(parser_runtime.get("llm_trace"), dict) else {}
         ai_trace = parser_runtime.get("ai_trace") if isinstance(parser_runtime.get("ai_trace"), dict) else {}
         if not ai_trace:
             ai_trace = build_ai_trace_context(
@@ -459,8 +433,6 @@ class ExecutionReportSupport:
                 prompt_version=str(parser_runtime.get("prompt_version", "")).strip(),
                 model=str(parser_runtime.get("model", "")).strip(),
                 source=str(requirement_spec.get("source_type", "")).strip() or "manual",
-                fallback_used=bool(llm_trace.get("fallback_used", False)),
-                fallback_reason=str(llm_trace.get("reason_code", "")).strip(),
                 instructions_version=str(parser_runtime.get("instructions_version", "")).strip(),
             )
         return {
@@ -470,8 +442,6 @@ class ExecutionReportSupport:
                 "trace_id": str(ai_trace.get("trace_id", "")).strip(),
                 "prompt_version": str(ai_trace.get("prompt_version", "")).strip(),
                 "model": str(ai_trace.get("model", "")).strip(),
-                "fallback_used": bool(ai_trace.get("fallback_used", False)),
-                "fallback_reason": str(ai_trace.get("fallback_reason", "")).strip(),
                 "instructions_version": str(ai_trace.get("instructions_version", "")).strip(),
             },
             "multisource": {
@@ -526,6 +496,7 @@ class ExecutionReportSupport:
                     "meta_files": len(evidence_manifest.get("meta_files", [])),
                     "analysis_files": len(evidence_manifest.get("analysis_files", [])),
                     "suggestion_files": len(evidence_manifest.get("suggestion_files", [])),
+                    "execution_record_files": len(evidence_manifest.get("execution_record_files", [])),
                     "self_healing_result_files": len(evidence_manifest.get("self_healing_result_files", [])),
                     "videos": len(evidence_manifest.get("videos", [])),
                     "other_files": len(evidence_manifest.get("other_files", [])),
@@ -739,9 +710,6 @@ class ExecutionReportSupport:
             f"- Manifest Record Path: {execution_record_meta.get('manifest_record_path', '-') or '-'}",
             f"- Manifest Status: {execution_record_meta.get('manifest_status', '-')}",
             f"- Resolution Reason: {execution_record_meta.get('resolution_reason', '-')}",
-            f"- Compat Builder Enabled: {execution_record_meta.get('compat_builder_enabled', False)}",
-            f"- Compat Builder Used: {execution_record_meta.get('compat_builder_used', False)}",
-            f"- Strict Violation: {execution_record_meta.get('strict_violation', False)}",
             "",
             "## Evidence",
             "",

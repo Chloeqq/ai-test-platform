@@ -1,35 +1,37 @@
 services:
   web:
     image: ai-test-platform-web-ui
+    build:
+      context: .
+      dockerfile: Dockerfile
     command: /bin/sh -c "cd /app && python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 0.0.0.0 --port 8013"
     restart: unless-stopped
     environment:
       APP_ENV: docker
-      DATABASE_URL: postgresql+psycopg2://aitest:aitest@postgres:5432/ai_test_platform
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
       DATABASE_AUTO_CREATE_TABLES: "false"
       WORKBENCH_STATE_BACKEND: database
       REDIS_URL: redis://redis:6379/0
       REDIS_ENABLED: "true"
       REDIS_PREFIX: aitest
       ORCHESTRATOR_URL: http://orchestrator:8000
-      JWT_SECRET_KEY: dev-jwt-secret-change-me
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
       JWT_ALGORITHM: HS256
       JWT_EXPIRE_MINUTES: "120"
-      ADMIN_USERNAME: admin
-      ADMIN_PASSWORD: admin123
-      ADMIN_ROLE: admin
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?ADMIN_USERNAME must be set}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      ADMIN_ROLE: ${ADMIN_ROLE:?ADMIN_ROLE must be set}
       LOG_LEVEL: INFO
       LOG_FORMAT: json
       LOG_FILE_PATH: /var/log/ai-test-platform/web-ui-service.log
-      BASE_URL: http://192.168.65.254:5173/login#/login
-      TEST_USERNAME: admin
-      TEST_PASSWORD: macro123
+      BASE_URL: ${BASE_URL:?BASE_URL must be set}
+      TEST_USERNAME: ${TEST_USERNAME:?TEST_USERNAME must be set}
+      TEST_PASSWORD: ${TEST_PASSWORD:?TEST_PASSWORD must be set}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8013:8013"
+      - "${WEB_HOST_PORT:-8013}:8013"
     volumes:
-      - .:/app
       - platform_logs:/var/log/ai-test-platform
     depends_on:
       postgres:
@@ -37,7 +39,14 @@ services:
       redis:
         condition: service_healthy
       orchestrator:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8013/health/ready', timeout=2)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       - platform
 
@@ -52,14 +61,21 @@ services:
       LOG_FORMAT: json
       LOG_FILE_PATH: /var/log/ai-test-platform/ai-orchestrator.log
       PYTHONPATH: /app:/app/apps/ai-orchestrator/src
+      ORCHESTRATOR_API_KEY: ${ORCHESTRATOR_API_KEY:?ORCHESTRATOR_API_KEY must be set}
     ports:
-      - "8000:8000"
+      - "${ORCHESTRATOR_HOST_PORT:-8000}:8000"
     volumes:
-      - .:/app
       - platform_logs:/var/log/ai-test-platform
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       - platform
 
@@ -67,15 +83,13 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ai_test_platform
-      POSTGRES_USER: aitest
-      POSTGRES_PASSWORD: aitest
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aitest -d ai_test_platform"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -86,8 +100,6 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -103,10 +115,8 @@ services:
     restart: unless-stopped
     environment:
       discovery.type: single-node
-      xpack.security.enabled: "false"
+      xpack.security.enabled: ${ELASTICSEARCH_SECURITY_ENABLED:-false}
       ES_JAVA_OPTS: -Xms512m -Xmx512m
-    ports:
-      - "${ELASTICSEARCH_HOST_PORT:-19200}:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
@@ -122,11 +132,14 @@ services:
     restart: unless-stopped
     environment:
       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
-    ports:
-      - "${KIBANA_HOST_PORT:-15601}:5601"
     depends_on:
       elasticsearch:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5601/api/status >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
     networks:
       - platform
 
@@ -139,6 +152,11 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9600 >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
     networks:
       - platform
 

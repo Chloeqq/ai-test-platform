@@ -146,5 +146,8 @@ class AssetService:
             raise OrchestratorValidationError(str(exc)) from exc
 
     def _ensure_runner_import_path(self) -> None:
-        if str(self.runner_root) not in sys.path:
-            sys.path.insert(0, str(self.runner_root))
+        # Runtime import of runner module. Prefer PYTHONPATH in production;
+        # this fallback keeps the service runnable in dev without Docker.
+        runner_str = str(self.runner_root)
+        if runner_str not in sys.path:
+            sys.path.insert(0, runner_str)

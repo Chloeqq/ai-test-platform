@@ -4,10 +4,7 @@ from playwright.sync_api import Page
 
 from runner.action_registry import ACTION_DEFINITIONS
 from runner.locator_resolver import resolve_locator
-from runner.page_object_validator import validate_page_object_schema
-from runner.paths import PAGE_OBJECTS_ROOT
 from runner.variable_resolver import resolve_variables
-from runner.yaml_loader import load_yaml_file
 
 
 class YamlExecutor:
@@ -16,7 +13,6 @@ class YamlExecutor:
         self.username = username
         self.password = password
         self.base_url = base_url
-        self._page_object_cache: dict[str, dict] = {}
 
     def execute(self, test_case: dict) -> None:
         execution = test_case.get("execution")
@@ -72,28 +68,6 @@ class YamlExecutor:
             raise ValueError(f"Step {step_index} cannot resolve page name")
         return page_name
 
-    def _load_page_object(self, page_name: str, *, step_index: int) -> dict:
-        page_object_path = PAGE_OBJECTS_ROOT / f"{page_name}.page-object.yaml"
-
-        if not page_object_path.exists():
-            raise FileNotFoundError(
-                f"Page object not found for step {step_index} page '{page_name}': {page_object_path}"
-            )
-
-        page_object = load_yaml_file(page_object_path)
-        if page_object is None:
-            raise ValueError(
-                f"Page object is empty for step {step_index} page '{page_name}': {page_object_path}"
-            )
-
-        validate_page_object_schema(page_object, expected_page=page_name)
-        return page_object
-
-    def _get_page_object(self, page_name: str, *, step_index: int) -> dict:
-        if page_name not in self._page_object_cache:
-            self._page_object_cache[page_name] = self._load_page_object(page_name, step_index=step_index)
-        return self._page_object_cache[page_name]
-
     def _execute_step(
         self,
         step: dict,
@@ -111,31 +85,44 @@ class YamlExecutor:
 
         target = step.get("target")
         locator = None
-        page_object = self._get_page_object(page_name, step_index=step_index)
 
         if action_definition["requires_target"]:
             if not target:
                 raise ValueError(
                     f"Step {step_index} requires target for action '{action}' on page '{page_name}'"
                 )
-
-            elements = page_object.get("elements", {})
-            element = elements.get(target)
-
-            if not element:
+            selector = str(step.get("selector") or "").strip()
+            locator_type = str(step.get("locator_type") or "").strip()
+            role = str(step.get("role") or "").strip()
+            if not selector or not locator_type:
                 raise ValueError(
-                    f"Step {step_index} references missing target '{target}' on page '{page_name}'"
+                    f"Step {step_index} requires compiled selector binding for action '{action}' on page '{page_name}'"
                 )
-
-            locator = resolve_locator(self.page, element)
+            locator = resolve_locator(
+                self.page,
+                {
+                    "locator_type": locator_type,
+                    "locator_value": selector,
+                    "role": role,
+                },
+            )
         elif target:
-            elements = page_object.get("elements", {})
-            element = elements.get(target)
-            if not element:
-                raise ValueError(
-                    f"Step {step_index} references missing target '{target}' on page '{page_name}'"
+            selector = str(step.get("selector") or "").strip()
+            locator_type = str(step.get("locator_type") or "").strip()
+            role = str(step.get("role") or "").strip()
+            if selector and locator_type:
+                locator = resolve_locator(
+                    self.page,
+                    {
+                        "locator_type": locator_type,
+                        "locator_value": selector,
+                        "role": role,
+                    },
                 )
-            locator = resolve_locator(self.page, element)
+            else:
+                raise ValueError(
+                    f"Step {step_index} references target '{target}' without compiled selector binding"
+                )
 
         action_definition["handler"](
             page=self.page,

@@ -477,7 +477,7 @@ def runtime_view_from_entry(
                 "evidence_index": execution_record.get("evidence_index", {}),
                 "metadata": {
                     **(execution_record.get("metadata", {}) if isinstance(execution_record.get("metadata"), dict) else {}),
-                    "runtime_state_source": "runtime-runs.json",
+                    "runtime_state_source": "runtime-store",
                     "case_path": str(source.get("case_path", "")).strip(),
                     "log_path": str(source.get("log_path", "")).strip(),
                     "artifacts_dir": str(source.get("artifacts_dir", "")).strip(),
@@ -539,12 +539,12 @@ def find_run_item(
     runtime_run_id_fn: Callable[[dict[str, Any]], str],
     runtime_view_with_execution_record_preferred_fn: Callable[[dict[str, Any]], dict[str, Any]],
 ) -> dict[str, Any] | None:
-    job = get_job(run_id)
-    if job:
-        return job
     for item in read_runtime_runs():
         if runtime_run_id_fn(item) == run_id:
             return runtime_view_with_execution_record_preferred_fn(item)
+    job = get_job(run_id)
+    if job:
+        return job
     return None
 
 

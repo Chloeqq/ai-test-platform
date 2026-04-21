@@ -28,6 +28,10 @@ WEB_UI_REPORTING_DIR = WEB_UI_STATE_ROOT / "reporting"
 TEST_POINTS_ROOT = WEB_UI_STATE_ROOT / "test-points"
 ASSETS_CASES_ROOT = REPO_ROOT / "assets" / "test-cases"
 AI_CASES_ROOT = ASSETS_CASES_ROOT / "ai-generated"
+RUNNER_ROOT = REPO_ROOT / "runners" / "web-playwright-python"
+ALLURE_RESULTS_ROOT = RUNNER_ROOT / "allure-results"
+ALLURE_REPORT_ROOT = RUNNER_ROOT / "allure-report"
+EXECUTION_REPORTS_ROOT = REPO_ROOT / "reports" / "executions"
 ALLURE_SNAPSHOTS_ROOT = REPO_ROOT / "runners" / "web-playwright-python" / "allure-report-snapshots"
 
 HISTORY_FILE = WEB_UI_DEFAULT_STATE_DIR / "history.json"
@@ -39,8 +43,6 @@ FAILURE_SOURCE_CALIBRATIONS_FILE = WEB_UI_REPORTING_DIR / "failure-source-calibr
 
 FILE_LOCK = threading.Lock()
 
-_DB_BACKED_PATHS: set[Path] = set()
-
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -51,13 +53,15 @@ def now_iso() -> str:
 
 
 def _resolve_state_backend() -> str:
-    raw = str(os.getenv("WORKBENCH_STATE_BACKEND", "auto")).strip().lower()
+    raw = str(os.getenv("WORKBENCH_STATE_BACKEND", "database")).strip().lower()
     if raw in {"file", "database"}:
         return raw
-    database_url = str(os.getenv("DATABASE_URL", "")).strip().lower()
-    if database_url.startswith("postgresql"):
-        return "database"
-    return "file"
+    if raw == "auto":
+        database_url = str(os.getenv("DATABASE_URL", "")).strip().lower()
+        if database_url.startswith("postgresql"):
+            return "database"
+        return "file"
+    raise RuntimeError(f"invalid WORKBENCH_STATE_BACKEND: {raw}")
 
 
 def _is_db_enabled_for_path(path: Path) -> bool:
@@ -334,31 +338,24 @@ def ensure_dirs() -> None:
     WEB_UI_REPORTING_DIR.mkdir(parents=True, exist_ok=True)
     AI_CASES_ROOT.mkdir(parents=True, exist_ok=True)
     ALLURE_SNAPSHOTS_ROOT.mkdir(parents=True, exist_ok=True)
-    if not HISTORY_FILE.exists():
-        HISTORY_FILE.write_text("[]\n", encoding="utf-8")
-    if not RUNTIME_RUNS_FILE.exists():
-        RUNTIME_RUNS_FILE.write_text("[]\n", encoding="utf-8")
-    if not DEFECT_LINKS_FILE.exists():
-        DEFECT_LINKS_FILE.write_text("[]\n", encoding="utf-8")
-    if not REVIEW_DECISIONS_FILE.exists():
-        REVIEW_DECISIONS_FILE.write_text("[]\n", encoding="utf-8")
-    if not EXECUTION_GATE_DECISIONS_FILE.exists():
-        EXECUTION_GATE_DECISIONS_FILE.write_text("[]\n", encoding="utf-8")
-    if not FAILURE_SOURCE_CALIBRATIONS_FILE.exists():
-        FAILURE_SOURCE_CALIBRATIONS_FILE.write_text("[]\n", encoding="utf-8")
+    if _resolve_state_backend() == "file":
+        if not HISTORY_FILE.exists():
+            HISTORY_FILE.write_text("[]\n", encoding="utf-8")
+        if not RUNTIME_RUNS_FILE.exists():
+            RUNTIME_RUNS_FILE.write_text("[]\n", encoding="utf-8")
+        if not DEFECT_LINKS_FILE.exists():
+            DEFECT_LINKS_FILE.write_text("[]\n", encoding="utf-8")
+        if not REVIEW_DECISIONS_FILE.exists():
+            REVIEW_DECISIONS_FILE.write_text("[]\n", encoding="utf-8")
+        if not EXECUTION_GATE_DECISIONS_FILE.exists():
+            EXECUTION_GATE_DECISIONS_FILE.write_text("[]\n", encoding="utf-8")
+        if not FAILURE_SOURCE_CALIBRATIONS_FILE.exists():
+            FAILURE_SOURCE_CALIBRATIONS_FILE.write_text("[]\n", encoding="utf-8")
 
 
 def read_json_list(path: Path) -> list[dict[str, Any]]:
     if _is_db_enabled_for_path(path):
-        items = _read_db_items(path)
-        if items:
-            return items
-        if path.exists():
-            file_items = _read_file_json_list(path)
-            if file_items:
-                _replace_db_items(path, file_items)
-                return file_items
-        return []
+        return _read_db_items(path)
     return _read_file_json_list(path)
 
 
@@ -377,6 +374,7 @@ def _read_file_json_list(path: Path) -> list[dict[str, Any]]:
 def write_json_list(path: Path, items: list[dict[str, Any]]) -> None:
     if _is_db_enabled_for_path(path):
         _replace_db_items(path, items)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(items, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -387,8 +385,6 @@ def append_history(entry: dict[str, Any]) -> None:
             payload = dict(entry)
             payload.setdefault("timestamp", _now_iso())
             _upsert_db_item(HISTORY_FILE, payload)
-            items = _read_db_items(HISTORY_FILE)[:500]
-            HISTORY_FILE.write_text(json.dumps(items, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             return
         items = read_json_list(HISTORY_FILE)
         items.insert(0, entry)
@@ -401,8 +397,6 @@ def append_runtime_run(entry: dict[str, Any]) -> None:
             payload = dict(entry)
             payload.setdefault("updated_at", _now_iso())
             _upsert_db_item(RUNTIME_RUNS_FILE, payload)
-            items = _read_db_items(RUNTIME_RUNS_FILE)[:1000]
-            RUNTIME_RUNS_FILE.write_text(json.dumps(items, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             return
         items = read_json_list(RUNTIME_RUNS_FILE)
         items.insert(0, entry)
@@ -429,8 +423,6 @@ def update_runtime_run(run_id: str, updates: dict[str, Any]) -> None:
             if not updated:
                 payload = {"run_id": normalized_run_id, **updates, "updated_at": _now_iso()}
                 _upsert_db_item(RUNTIME_RUNS_FILE, payload)
-            refreshed = _read_db_items(RUNTIME_RUNS_FILE)[:1000]
-            RUNTIME_RUNS_FILE.write_text(json.dumps(refreshed, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             return
         items = read_json_list(RUNTIME_RUNS_FILE)
         updated = False

@@ -1,8 +1,10 @@
+import importlib.util
 import json
 import sys
 import threading
 import uuid
 from pathlib import Path
+from types import ModuleType
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -14,7 +16,25 @@ SRC_ROOT = PROJECT_ROOT / "apps" / "ai-orchestrator" / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from app import create_app, create_server  # noqa: E402
+
+def _load_orchestrator_app_module() -> ModuleType:
+    module_name = "_ai_orchestrator_app_test_endpoint"
+    existing = sys.modules.get(module_name)
+    if isinstance(existing, ModuleType):
+        return existing
+    spec = importlib.util.spec_from_file_location(module_name, SRC_ROOT / "app.py")
+    if spec is None or spec.loader is None:
+        raise ImportError("unable to load ai-orchestrator app module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_APP_MODULE = _load_orchestrator_app_module()
+create_app = _APP_MODULE.create_app
+create_server = _APP_MODULE.create_server
+
 from orchestrator_service import OrchestratorValidationError, RunnerExecutionError  # noqa: E402
 
 
@@ -28,8 +48,6 @@ class FakeService:
         self.calls = []
         self.healing_calls = []
         self.requirement_parse_calls = []
-        self.script_generation_calls = []
-        self.execution_plan_calls = []
         self.risk_evaluation_calls = []
         self.failure_triage_calls = []
         self.failure_clusters_calls = []
@@ -48,8 +66,11 @@ class FakeService:
         input_sources=None,
         openapi_spec=None,
         prd_text: str = "",
+        prd_url: str = "",
         user_story: str = "",
         git_diff: str = "",
+        git_diff_path: str = "",
+        openapi_url: str = "",
         defect_ticket: str = "",
         runtime_logs: str = "",
     ):
@@ -64,8 +85,11 @@ class FakeService:
                 "input_sources": input_sources,
                 "openapi_spec": openapi_spec,
                 "prd_text": prd_text,
+                "prd_url": prd_url,
                 "user_story": user_story,
                 "git_diff": git_diff,
+                "git_diff_path": git_diff_path,
+                "openapi_url": openapi_url,
                 "defect_ticket": defect_ticket,
                 "runtime_logs": runtime_logs,
             }
@@ -74,10 +98,179 @@ class FakeService:
             raise self.error
 
         return {
+            "requirement_spec": {
+                "version": "RequirementSpecV1",
+                "source_type": source,
+                "requirement": requirement,
+                "page": page,
+                "raw_requirement": requirement,
+                "normalized_requirement": requirement.strip(),
+                "source_inputs": [
+                    {
+                        "source_id": "input.manual.001",
+                        "source_type": source,
+                        "content_preview": requirement[:120],
+                        "metadata": {},
+                    }
+                ],
+                "entities": [{"entity_type": "page", "name": page, "confidence": 1.0}],
+                "test_intents": [
+                    {
+                        "intent_id": "intent-01",
+                        "title": "验证核心功能",
+                        "intent_type": "functional",
+                        "priority": "P1",
+                        "summary": "验证核心功能",
+                        "precondition": "",
+                        "steps": [],
+                        "expected_result": "",
+                        "scene_type": "",
+                        "test_data_type": "",
+                        "involved_elements": [],
+                        "steps_hint": ["open", "assert"],
+                        "dependencies": [],
+                    }
+                ],
+                "ambiguities": [],
+                "business_rules": [
+                    {
+                        "rule_id": "rule-01",
+                        "rule_type": "functional",
+                        "rule_text": "验证核心功能",
+                        "confidence": 1.0,
+                    }
+                ],
+                "coverage_matrix": [
+                    {
+                        "requirement_id": "REQ-001",
+                        "requirement_text": requirement,
+                        "intent_ids": ["intent-01"],
+                        "coverage_ratio": 1.0,
+                        "traceability_status": "covered",
+                    }
+                ],
+                "dependency_graph": [],
+                "historical_patterns": [],
+                "change_impact": {},
+                "design_input": requirement,
+                "parser_runtime": {
+                    "agent": "requirement-parser-agent",
+                    "prompt_version": "requirement-parser.prompt.test",
+                    "model": "fake",
+                    "instructions_version": "test",
+                    "mode": "llm",
+                    "source_summary": {
+                        "source_count": 1,
+                        "source_types": [source],
+                        "has_multisource_inputs": False,
+                    },
+                    "llm_trace": {
+                        "attempted": True,
+                        "succeeded": True,
+                        "reason_code": "llm_parse",
+                        "latency_ms": 1,
+                        "overlay_key_count": 1,
+                        "total_tokens": None,
+                    },
+                    "page_resolution": {
+                        "candidate_page": page,
+                        "selected_page": page,
+                        "source_types": [source],
+                        "candidate_details": [],
+                    },
+                    "trace_id": "trace-001",
+                    "ai_trace": {"trace_id": "trace-001"},
+                },
+                "priority": "P1",
+                "parse_confidence": 0.9,
+                "quality_gate": {
+                    "version": "RequirementQualityGateV1",
+                    "stage": "parse",
+                    "gate_enabled": True,
+                    "decision": "allow",
+                    "metrics": {},
+                    "blockers": [],
+                },
+            },
             "case": {
                 "id": "tc-product-999",
                 "title": "Fake case",
             },
+            "generated_script": {
+                "version": "GeneratedScriptV1",
+                "framework": "playwright",
+                "language": "python",
+                "case_id": "tc-product-999",
+                "page": "product",
+                "filename": "fake.generated.py",
+                "entrypoint": "test_fake_generated",
+                "script_code": "def test_fake_generated():\n    assert True\n",
+                "script_path": "/tmp/fake.generated.py",
+                "metadata": {"generated_by": "fake-service"},
+            },
+            "execution_plan": {
+                "version": "ExecutionPlanV1",
+                "run_mode": "generate_and_run" if execute else "generate_only",
+                "source": source,
+                "priority": "P1",
+                "environment": "test",
+                "parallelism": 1,
+                "retry_policy": {"enabled": execute, "max_retries": 1, "backoff_seconds": 5},
+                "stages": [
+                    {
+                        "stage_id": "stage-prepare",
+                        "stage_name": "prepare_artifacts",
+                        "runner": "orchestrator",
+                        "estimated_seconds": 10,
+                        "retry_limit": 0,
+                        "depends_on": [],
+                    }
+                ],
+                "scheduling_hints": {"queue": "high", "expected_total_seconds": 10, "resource_profile": "default"},
+            },
+            "design_generation": {
+                "generator": "test-design-agent",
+            },
+            "risk_report": {
+                "version": "RiskReportV1",
+                "risk_score": 42,
+                "risk_level": "low",
+                "gate_decision": "allow",
+                "recommendation": "风险可控。",
+                "factors": [{"factor": "fake", "score": 42, "reason": "integration-test"}],
+                "metadata": {"source": "fake-service"},
+            },
+            "failure_triage": {
+                "version": "FailureTriageV1",
+                "triage_label": "case_design:assertion:medium:failed",
+                "failure_class": "assertion",
+                "severity": "S2",
+                "owner_team": "qa-design",
+                "queue": "case-design-review",
+                "bucket_key": "case_design|assertion|product|click,login",
+                "duplicate_of": "",
+                "requires_manual_review": True,
+                "confidence": 0.78,
+                "signals": {"status": "failed", "risk_level": "medium", "page": "product", "failure_source": "case_design"},
+                "actions": [
+                    {
+                        "action": "create_ticket:case-design-review",
+                        "owner": "qa-design",
+                        "reason": "按来源 case_design / 分类 assertion 进入 case-design-review 队列处理。",
+                    }
+                ],
+                "metadata": {"source": "fake-service", "failure_source": "case_design"},
+            },
+            "agent_pipeline": [
+                "requirement-parser-agent",
+                "test-design-agent",
+                "script-generation-agent",
+                "execution-planner-agent",
+                "risk-evaluation-agent",
+                "failure-analysis-agent",
+                "failure-triage-agent",
+                "self-healing-advisor-agent",
+            ],
             "test_points": {
                 "page": "product",
                 "requirement": [requirement],
@@ -521,20 +714,55 @@ class FakeService:
             "safe_to_apply_manually": True,
         }
 
-    def parse_requirement(self, *, requirement: str, page: str, source: str = "manual"):
+    def parse_requirement(
+        self,
+        *,
+        requirement: str,
+        page: str,
+        source: str = "manual",
+        input_sources=None,
+        openapi_spec=None,
+        prd_text: str = "",
+        prd_url: str = "",
+        user_story: str = "",
+        git_diff: str = "",
+        git_diff_path: str = "",
+        openapi_url: str = "",
+        defect_ticket: str = "",
+        runtime_logs: str = "",
+    ):
         self.requirement_parse_calls.append(
             {
                 "requirement": requirement,
                 "page": page,
                 "source": source,
+                "input_sources": input_sources,
+                "openapi_spec": openapi_spec,
+                "prd_text": prd_text,
+                "prd_url": prd_url,
+                "user_story": user_story,
+                "git_diff": git_diff,
+                "git_diff_path": git_diff_path,
+                "openapi_url": openapi_url,
+                "defect_ticket": defect_ticket,
+                "runtime_logs": runtime_logs,
             }
         )
         return {
             "version": "RequirementSpecV1",
             "source_type": source,
+            "requirement": requirement,
             "page": page,
             "raw_requirement": requirement,
-            "normalized_requirement": requirement,
+            "normalized_requirement": requirement.strip(),
+            "source_inputs": [
+                {
+                    "source_id": "input.manual.001",
+                    "source_type": source,
+                    "content_preview": requirement[:120],
+                    "metadata": {},
+                }
+            ],
             "entities": [{"entity_type": "page", "name": page, "confidence": 1.0}],
             "test_intents": [
                 {
@@ -542,8 +770,24 @@ class FakeService:
                     "title": "验证核心功能",
                     "intent_type": "functional",
                     "priority": "P1",
+                    "summary": "验证核心功能",
+                    "precondition": "",
+                    "steps": [],
+                    "expected_result": "",
+                    "scene_type": "",
+                    "test_data_type": "",
+                    "involved_elements": [],
                     "steps_hint": ["open", "assert"],
                     "dependencies": [],
+                }
+            ],
+            "ambiguities": [],
+            "business_rules": [
+                {
+                    "rule_id": "rule-01",
+                    "rule_type": "functional",
+                    "rule_text": "验证核心功能",
+                    "confidence": 1.0,
                 }
             ],
             "coverage_matrix": [
@@ -552,69 +796,51 @@ class FakeService:
                     "requirement_text": requirement,
                     "intent_ids": ["intent-01"],
                     "coverage_ratio": 1.0,
+                    "traceability_status": "covered",
                 }
             ],
+            "dependency_graph": [],
+            "historical_patterns": [],
+            "change_impact": {},
             "priority": "P1",
             "design_input": requirement,
+            "parser_runtime": {
+                "agent": "requirement-parser-agent",
+                "prompt_version": "requirement-parser.prompt.test",
+                "model": "fake",
+                "instructions_version": "test",
+                "mode": "llm",
+                "source_summary": {
+                    "source_count": 1,
+                    "source_types": [source],
+                    "has_multisource_inputs": False,
+                },
+                "llm_trace": {
+                    "attempted": True,
+                    "succeeded": True,
+                    "reason_code": "llm_parse",
+                    "latency_ms": 1,
+                    "overlay_key_count": 1,
+                    "total_tokens": None,
+                },
+                "page_resolution": {
+                    "candidate_page": page,
+                    "selected_page": page,
+                    "source_types": [source],
+                    "candidate_details": [],
+                },
+                "trace_id": "trace-001",
+                "ai_trace": {"trace_id": "trace-001"},
+            },
             "parse_confidence": 0.9,
-        }
-
-    def generate_script(self, *, case: dict, framework: str = "playwright", language: str = "python"):
-        self.script_generation_calls.append(
-            {
-                "case": case,
-                "framework": framework,
-                "language": language,
-            }
-        )
-        return {
-            "version": "GeneratedScriptV1",
-            "framework": framework,
-            "language": language,
-            "case_id": str(case.get("id", "")),
-            "page": str((case.get("execution") or {}).get("page", "")),
-            "filename": "fake.generated.py",
-            "entrypoint": "test_fake_generated",
-            "script_code": "def test_fake_generated():\n    assert True\n",
-            "script_path": "/tmp/fake.generated.py",
-            "metadata": {"generated_by": "fake-service"},
-        }
-
-    def plan_execution(
-        self,
-        *,
-        case: dict,
-        execution_requested: bool,
-        source: str = "manual",
-        execution_config: dict | None = None,
-    ):
-        self.execution_plan_calls.append(
-            {
-                "case": case,
-                "execution_requested": execution_requested,
-                "source": source,
-                "execution_config": execution_config or {},
-            }
-        )
-        return {
-            "version": "ExecutionPlanV1",
-            "run_mode": "generate_and_run" if execution_requested else "generate_only",
-            "source": source,
-            "priority": str(case.get("priority", "P1")),
-            "environment": "test",
-            "parallelism": 1,
-            "retry_policy": {"enabled": execution_requested, "max_retries": 1, "backoff_seconds": 5},
-            "stages": [
-                {
-                    "stage_id": "stage-prepare",
-                    "stage_name": "prepare_artifacts",
-                    "runner": "orchestrator",
-                    "estimated_seconds": 10,
-                    "retry_limit": 0,
-                    "depends_on": [],
-                }
-            ],
-            "scheduling_hints": {"queue": "high", "expected_total_seconds": 10, "resource_profile": "default"},
+            "quality_gate": {
+                "version": "RequirementQualityGateV1",
+                "stage": "parse",
+                "gate_enabled": True,
+                "decision": "allow",
+                "metrics": {},
+                "blockers": [],
+            },
         }
 
     def evaluate_risk(
@@ -717,8 +943,6 @@ class FakeService:
             "allow_rate": 0.833,
             "llm_attempted_count": 9,
             "llm_succeeded_count": 7,
-            "llm_fallback_count": 2,
-            "llm_fallback_rate": 0.167,
             "groups": [
                 {
                     "prompt_version": "requirement-parser.prompt.v1.0.0",
@@ -729,9 +953,7 @@ class FakeService:
                     "blocked_count": 1,
                     "llm_attempted_count": 9,
                     "llm_succeeded_count": 7,
-                    "llm_fallback_count": 2,
                     "allow_rate": 0.889,
-                    "llm_fallback_rate": 0.222,
                 }
             ],
         }
@@ -1168,50 +1390,6 @@ def test_post_requirements_parse_returns_201_and_payload(orchestrator_server):
     assert payload["output_contract"]["machine_schema"] == "RequirementSpecV1"
     assert payload["output_contract"]["human_render"] == "RequirementAnalysisMarkdownV1"
     assert orchestrator_server["service"].requirement_parse_calls[-1]["requirement"] == "验证商品搜索功能"
-
-
-def test_post_scripts_generate_returns_201_and_payload(orchestrator_server):
-    status, payload = _request_json(
-        orchestrator_server["base_url"],
-        "POST",
-        "/scripts/generate",
-        {
-            "framework": "playwright",
-            "language": "python",
-            "case": {
-                "id": "tc-product-001",
-                "execution": {"page": "product", "steps": []},
-            },
-        },
-    )
-
-    assert status == 201
-    assert payload["generated_script"]["version"] == "GeneratedScriptV1"
-    assert payload["generated_script"]["case_id"] == "tc-product-001"
-    assert payload["output_contract"]["machine_schema"] == "GeneratedScriptV1"
-    assert payload["output_contract"]["human_render"] == "GeneratedScriptPreviewMarkdownV1"
-    assert orchestrator_server["service"].script_generation_calls[-1]["framework"] == "playwright"
-
-
-def test_post_execution_plan_returns_201_and_payload(orchestrator_server):
-    status, payload = _request_json(
-        orchestrator_server["base_url"],
-        "POST",
-        "/execution/plan",
-        {
-            "case": {"id": "tc-product-001", "priority": "P1", "execution": {"page": "product"}},
-            "execution_requested": True,
-            "source": "manual",
-            "execution_config": {"parallelism": 1},
-        },
-    )
-
-    assert status == 201
-    assert payload["execution_plan"]["version"] == "ExecutionPlanV1"
-    assert payload["execution_plan"]["run_mode"] == "generate_and_run"
-    assert payload["output_contract"]["machine_schema"] == "ExecutionPlanV1"
-    assert payload["output_contract"]["human_render"] == "ExecutionPlanMarkdownV1"
-    assert orchestrator_server["service"].execution_plan_calls[-1]["execution_requested"] is True
 
 
 def test_post_risk_evaluate_returns_201_and_payload(orchestrator_server):

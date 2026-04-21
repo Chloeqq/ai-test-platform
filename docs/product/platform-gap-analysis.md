@@ -6,7 +6,7 @@
 
 阅读时请注意：
 
-1. 这里保留了部分 `web-ui` 时代的描述，因此需要和当前 FastAPI/Web UI 主链分开理解。
+1. 这里保留了部分 `web-ui` 时代的描述，因此需要和当前 FastAPI/Web UI 主链明确分开理解。
 2. 当前真实能力状态，优先参考：
    - [../architecture/current-architecture-and-flows.md](../architecture/current-architecture-and-flows.md)
    - [../architecture/project-inventory-and-risk-audit-2026-03-21.md](../architecture/project-inventory-and-risk-audit-2026-03-21.md)

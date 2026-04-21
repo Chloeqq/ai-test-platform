@@ -1,7 +1,23 @@
+from __future__ import annotations
+
+import re
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+_SQL_DANGEROUS_PATTERN = re.compile(
+    r"\b(DROP|ALTER|TRUNCATE|EXEC|EXECUTE|xp_|sp_|GRANT|REVOKE|CREATE\s+USER)\b",
+    re.IGNORECASE,
+)
+
+
+def _check_sql_safety(value: str | None) -> str | None:
+    if value is None:
+        return value
+    if _SQL_DANGEROUS_PATTERN.search(value):
+        raise ValueError("SQL contains prohibited DDL/DCL statements")
+    return value
 
 
 class TestCaseDataConfig(BaseModel):
@@ -86,6 +102,8 @@ class TestCaseCreate(BaseModel):
     requirement: str = ""
     data_config: TestCaseDataConfig = Field(default_factory=TestCaseDataConfig)
 
+    _sanitize_sql = field_validator("setup_sql", "assert_sql", mode="before")(_check_sql_safety)
+
 
 class TestCaseUpdate(BaseModel):
     case_id: str | None = Field(default=None, max_length=64)
@@ -131,6 +149,8 @@ class TestCaseUpdate(BaseModel):
     source_ref: str | None = Field(default=None, max_length=255)
     script_code: str | None = None
     data_config: TestCaseDataConfig | None = None
+
+    _sanitize_sql = field_validator("setup_sql", "assert_sql", mode="before")(_check_sql_safety)
 
 
 class TestCaseScriptUpdate(BaseModel):

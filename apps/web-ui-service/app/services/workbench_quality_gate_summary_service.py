@@ -14,20 +14,6 @@ def _extract_history_quality_gate(entry: dict[str, Any]) -> dict[str, Any] | Non
     direct = entry.get("quality_gate")
     if isinstance(direct, dict):
         return direct
-    fallback_reason = entry.get("fallback_reason")
-    if isinstance(fallback_reason, dict):
-        nested = fallback_reason.get("quality_gate")
-        if isinstance(nested, dict):
-            return nested
-        if "decision" in fallback_reason or "blockers" in fallback_reason:
-            return fallback_reason
-    orchestrator_reason = entry.get("orchestrator_fallback_reason")
-    if isinstance(orchestrator_reason, dict):
-        nested = orchestrator_reason.get("quality_gate")
-        if isinstance(nested, dict):
-            return nested
-        if "decision" in orchestrator_reason or "blockers" in orchestrator_reason:
-            return orchestrator_reason
     return None
 
 

@@ -4,7 +4,13 @@ from copy import copy
 from io import BytesIO
 from pathlib import Path
 
-from openpyxl import load_workbook  # type: ignore[import-untyped]
+try:
+    from openpyxl import load_workbook  # type: ignore[import-untyped]
+except Exception as exc:  # pragma: no cover - import guard for lightweight runtime images
+    load_workbook = None  # type: ignore[assignment]
+    _OPENPYXL_IMPORT_ERROR = exc
+else:
+    _OPENPYXL_IMPORT_ERROR = None
 
 from app.models.test_case import TestCase
 from app.services.test_case_data_service import render_test_steps_text
@@ -112,6 +118,11 @@ def build_template_row(case: TestCase) -> list[str]:
 
 
 def _load_template():
+    if load_workbook is None:
+        message = "openpyxl is required for xlsx export. install dependency: pip install openpyxl>=3.1,<4.0"
+        if _OPENPYXL_IMPORT_ERROR is not None:
+            message = f"{message} (import error: {_OPENPYXL_IMPORT_ERROR})"
+        raise RuntimeError(message)
     if not EXPORT_TEMPLATE_PATH.exists():
         raise FileNotFoundError(f"Excel export template not found: {EXPORT_TEMPLATE_PATH}")
     workbook = load_workbook(EXPORT_TEMPLATE_PATH)

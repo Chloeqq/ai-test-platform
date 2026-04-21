@@ -14,15 +14,12 @@ def build_ai_trace_context(
     prompt_version: str = "",
     model: str = "",
     source: str = "",
-    fallback_used: bool = False,
-    fallback_reason: str = "",
     instructions_version: str = "",
 ) -> dict[str, Any]:
     normalized_page = _text(page) or "common"
     normalized_prompt_version = _text(prompt_version) or "unknown"
     normalized_model = _text(model) or "rule-engine"
     normalized_source = _text(source) or "manual"
-    normalized_reason = _text(fallback_reason)
     normalized_instructions = _text(instructions_version) or "unknown"
     digest = hashlib.sha1(
         "|".join(
@@ -31,8 +28,6 @@ def build_ai_trace_context(
                 normalized_prompt_version,
                 normalized_model,
                 normalized_source,
-                "fallback" if fallback_used else "primary",
-                normalized_reason,
                 normalized_instructions,
             ]
         ).encode("utf-8")
@@ -42,8 +37,6 @@ def build_ai_trace_context(
         "prompt_version": normalized_prompt_version,
         "model": normalized_model,
         "source": normalized_source,
-        "fallback_used": bool(fallback_used),
-        "fallback_reason": normalized_reason,
         "instructions_version": normalized_instructions,
     }
 

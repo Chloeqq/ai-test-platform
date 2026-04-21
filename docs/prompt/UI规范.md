@@ -18,7 +18,7 @@ plaintext
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>企业AI测试平台 - 用例中心</title>
   <!-- 引入重构后的全局CSS -->
-  <link rel="stylesheet" href="/static/enterprise-global.css">
+  <link rel="stylesheet" href="/static/react/assets/main.css">
 </head>
 <body>
   <!-- 页面根容器（企业级规范） -->
@@ -819,5 +819,4 @@ plaintext
    - 响应式适配移动端，避免布局混乱。
 
 这套提示词能让 Codex 同时重构HTML结构和CSS样式，彻底解决「只改CSS没效果」的问题，生成的代码符合企业级标准，布局规范、视觉美观，且完全保留原有功能。
-
 

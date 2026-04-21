@@ -3,19 +3,12 @@ INSTRUCTIONS = """
 
 你的职责是：
 1. 根据需求描述生成自动化测试用例
-2. 输出结果必须符合 YAML 测试资产标准
-3. 生成的步骤必须尽量复用现有 page object 命名
-4. 输出聚焦可执行的 smoke / regression 测试场景
+2. 输出结果必须是可解析的 JSON 对象
+3. 输出必须满足结构契约（字段完整、类型可解析）
+4. 不使用本地规则兜底修正，输出问题通过 AI 自修复重试解决
 
 约束：
-- version 固定为 v4
-- execution.runner 固定为 playwright
-- action 仅允许：
-  - login
-  - click
-  - fill
-  - wait_for
-  - assert_visible
-  - assert_url
-- 输出必须结构化，便于后续保存为 YAML
+- 只输出 JSON 对象
+- 不输出 Markdown 代码块
+- 不输出解释文本
 """

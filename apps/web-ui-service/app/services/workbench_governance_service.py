@@ -160,17 +160,17 @@ def _build_strict_manifest_policy(
     readiness = strict_mode_readiness if isinstance(strict_mode_readiness, dict) else {}
     mode = str(readiness.get("status", "")).strip() or "unknown"
     if strict_mode_blocked_task_count > 0:
-        next_action = "优先消化 blocked 任务，再考虑关闭 compat builder。"
+        next_action = "优先消化 blocked 任务，再考虑关闭 compat_scan。"
     elif strict_mode_caution_task_count > 0:
         next_action = "优先推动 runtime flush / manifest 落盘，继续观察 caution 任务。"
     elif strict_mode_ready_task_count > 0:
-        next_action = "可以选择小范围禁用 compat builder，验证 strict manifest-first。"
+        next_action = "可以选择小范围禁用 compat_scan，验证 strict manifest-first。"
     else:
         next_action = "当前暂无足够样本，继续积累 manifest-first 任务。"
     return {
         "mode": mode,
         "score": round(_float_value(readiness.get("score")), 3),
-        "can_disable_compat_builder": bool(readiness.get("can_disable_compat_builder", False)),
+        "can_disable_compat_scan": bool(readiness.get("can_disable_compat_scan", False)),
         "ready_task_count": strict_mode_ready_task_count,
         "caution_task_count": strict_mode_caution_task_count,
         "blocked_task_count": strict_mode_blocked_task_count,
@@ -464,7 +464,7 @@ def _build_execution_strategy(
     }
 
 
-def _fallback_gate_recommendation(item: dict[str, Any]) -> tuple[str, str]:
+def _default_gate_recommendation(item: dict[str, Any]) -> tuple[str, str]:
     level = str(item.get("governance_risk_level", "")).strip().lower()
     has_gap = bool(item.get("has_traceability_gap", False))
     source_count = _int_value(item.get("source_count"))
@@ -535,7 +535,7 @@ def _build_manager_summary(
     if blocked_24h > 0 and top_alert_code:
         weekly_focus = f"优先收敛门禁阻断，重点跟进 {top_alert_code}。"
     elif strict_mode_blocked_task_count > 0:
-        weekly_focus = "优先清理 compat builder / runtime fallback 任务，提升 strict-mode readiness。"
+        weekly_focus = "优先清理 compat_scan 任务，提升 strict-mode readiness。"
     elif strict_mode_caution_task_count > 0:
         weekly_focus = "优先推动 runtime flush 与 manifest 落盘，降低 strict-mode 风险。"
     elif traceability_gap_task_count > 0:
@@ -926,7 +926,7 @@ def build_governance_overview(
         gate_recommendation = str(item.get("gate_recommendation", "")).strip()
         gate_recommendation_reason = str(item.get("gate_recommendation_reason", "")).strip()
         if not gate_recommendation:
-            gate_recommendation, gate_recommendation_reason = _fallback_gate_recommendation(item)
+            gate_recommendation, gate_recommendation_reason = _default_gate_recommendation(item)
         score_breakdown = _build_governance_item_score_breakdown(item)
         top_governance_risks.append(
             {
@@ -1182,9 +1182,9 @@ def build_governance_overview(
             "traceability_gap_task_count": "多源任务中 traceability 不完整的任务数量。",
             "top_alert_code": "最近 24 小时 quality gate 命中次数最高的告警码。",
             "pressure_score": "按门禁阻断、风险阻断、需复核和自愈关注度聚合的治理压力指标。",
-            "strict_mode_readiness": "manifest-first 稳定度指标，用于评估是否适合收紧 execution_record compat builder。",
-            "strict_mode_blocked_task_count": "当前不适合关闭 compat builder 的任务数量，通常包含缺失 manifest、compat scan 或 runtime fallback。",
-            "strict_manifest_policy": "strict manifest-first 当前建议策略，包含是否建议关闭 compat builder 以及下一步动作。",
+            "strict_mode_readiness": "manifest-first 稳定度指标，用于评估是否适合收紧 execution_record compat_scan。",
+            "strict_mode_blocked_task_count": "当前不适合关闭 compat_scan 的任务数量，通常包含缺失 manifest 或 compat scan 命中。",
+            "strict_manifest_policy": "strict manifest-first 当前建议策略，包含是否建议关闭 compat_scan 以及下一步动作。",
             "recommended_regression_pack": "根据变更影响、多源追溯状态与治理风险生成的推荐执行范围。",
             "gate_recommendation": "治理服务建议采用的执行门禁等级，取值为 allow / manual_review / block。",
         },

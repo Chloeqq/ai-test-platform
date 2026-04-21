@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Sequence, TypeAlias
 
 from app.schemas.test_case import TestCaseDataConfig
 
 DataConfigValue: TypeAlias = bool | list[str] | list[list[str]]
 DataConfigPayload: TypeAlias = dict[str, DataConfigValue]
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def normalize_tags(tags: list[str]) -> list[str]:
@@ -44,15 +52,36 @@ def normalize_optional_text(value: Any) -> str:
 
 
 def normalize_test_steps(steps: Sequence[Any] | None) -> list[dict[str, Any]]:
+    if not _env_flag("NORMALIZE_TEST_STEPS_ENABLED", True):
+        passthrough: list[dict[str, Any]] = []
+        for step in steps or []:
+            if isinstance(step, dict):
+                row = dict(step)
+                if row:
+                    passthrough.append(row)
+                continue
+            text = str(step or "").strip()
+            if text:
+                passthrough.append({"description": text})
+        return passthrough
+
     normalized: list[dict[str, Any]] = []
+    allowed_keys = (
+        "action",
+        "target",
+        "value",
+        "expected",
+        "expected_result",
+        "description",
+        "locator_type",
+        "locator_value",
+    )
     for step in steps or []:
         if not isinstance(step, dict):
             continue
-        row = {
-            key: step.get(key)
-            for key in ("action", "target", "value", "expected", "description")
-            if str(step.get(key, "")).strip()
-        }
+        row = {key: step.get(key) for key in allowed_keys if str(step.get(key, "")).strip()}
+        if "expected" not in row and str(row.get("expected_result", "")).strip():
+            row["expected"] = str(row.get("expected_result", "")).strip()
         if row:
             normalized.append(row)
     return normalized
@@ -68,7 +97,7 @@ def render_test_steps_text(steps: Sequence[dict[str, Any]] | None) -> str:
             str(step.get("action", "")).strip(),
             str(step.get("target", "")).strip(),
             str(step.get("value", "")).strip(),
-            str(step.get("expected", "")).strip(),
+            str(step.get("expected", "")).strip() or str(step.get("expected_result", "")).strip(),
         ]
         content = " | ".join(part for part in parts if part)
         if content:
@@ -80,7 +109,7 @@ def normalize_report_url(report_url: str, execution_id: int) -> str:
     value = str(report_url or "").strip()
     if value.startswith("http://") or value.startswith("https://"):
         return value
-    return f"/reports/{execution_id}"
+    return f"/execution/results/{execution_id}"
 
 
 def positive_ids(values: Sequence[Any]) -> list[int]:
@@ -192,8 +221,7 @@ def compose_data_driven_script(original_script: str, data_config: DataConfigPayl
         "import pytest\n\n"
         f"@pytest.mark.parametrize(\"{parameter_names}\", [\n{case_rows}\n])\n"
         f"def test_data_driven_case({parameter_names}):\n"
-        "    # TODO: replace with real assertions\n"
-        "    assert True\n"
+        "    assert True  # placeholder — add real assertions\n"
     )
 
 
@@ -237,6 +265,5 @@ def generate_ai_script(requirement: str, module: str) -> str:
         f"def test_ai_generated_{module.lower().replace(' ', '_')}(page):\n"
         f"    # AI根据需求生成：{normalized_requirement}\n"
         "    page.goto('/')\n"
-        "    # TODO: 补充关键操作步骤\n"
-        "    assert page.title() is not None\n"
+        "    assert page.title() is not None  # placeholder — add steps per requirement\n"
     )

@@ -1,5 +1,8 @@
 # Console Scaffold Guide
 
+> 状态：归档（2026-04）
+> `apps/web-console` 与 `/console` 入口已退役。当前请使用 `apps/web-ui-service/frontend` 提供的 React 主入口（`/react/*`）。
+
 > 入口边界说明：
 > 这份手册对应的是 `Scaffold Console`，用于快速创建 page object 和 smoke scaffold。
 > 如果你要体验当前主 workbench 的 URL-first 生成、确认点、风险决策与历史回显，请改看 `/workbench` 相关文档，而不是 `/console`。
@@ -24,17 +27,16 @@
 
 它不是一个完整前端系统，而是由 `ai-orchestrator` 直接托管的静态页面。
 
-入口：
+历史入口（已退役）：
 
-- 控制台页面：[http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
-- 健康检查：[http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+- 控制台页面：`/console`
+- 健康检查：`/health`
 
 相关代码：
 
 - [app.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/ai-orchestrator/src/app.py)
 - [asset_service.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/ai-orchestrator/src/asset_service.py)
-- [index.html](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-console/static/index.html)
-- [app.js](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-console/static/app.js)
+- `apps/web-console/static/*`（历史目录，已删除）
 
 ## 2. 它能帮你做什么
 

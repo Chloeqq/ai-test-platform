@@ -6,17 +6,22 @@ from typing import Any
 
 from datetime_compat import UTC
 from shared_backend.case_ids import (
-    build_case_id,
     build_case_metadata,
     infer_client_code,
-    match_case_id,
-    next_case_sequence,
     normalize_case_id,
 )
 from sqlalchemy import func, inspect, select, text
 from sqlalchemy.orm import Session
 
-from app.models.test_case import TestCase, TestCaseDefect, TestCaseExecution, TestCaseTreeNode, TestCaseVersion
+from app.models.test_case import (
+    TestCase,
+    TestCaseDefect,
+    TestCaseExecution,
+    TestCaseStep,
+    TestCaseTreeNode,
+    TestCaseVersion,
+)
+from app.models.test_point import TestPoint
 from app.models.test_project import TestProject
 from app.services.test_case_data_service import (
     normalize_status,
@@ -24,9 +29,11 @@ from app.services.test_case_data_service import (
     normalize_text_list,
     render_test_steps_text,
 )
+from app.services.workbench_generation_api.repository import WorkbenchGenerationRepository
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 ASSETS_CASES_ROOT = REPO_ROOT / "assets" / "test-cases"
+AI_CASES_ROOT = ASSETS_CASES_ROOT / "ai-generated"
 DEFAULT_PROJECT_CODE = "atp"
 DEFAULT_PROJECT_NAME = "AI Test Platform"
 
@@ -89,44 +96,23 @@ def _resolve_case_metadata(case: TestCase) -> dict[str, str]:
     return metadata
 
 
-def _build_case_id_for_case(case: TestCase, *, existing_case_ids: list[str]) -> str:
-    raw_case_id = str(case.case_id or "").strip()
-    normalized_existing = normalize_case_id(raw_case_id, fallback="").strip() if raw_case_id else ""
-    if normalized_existing and match_case_id(normalized_existing) and normalized_existing not in existing_case_ids:
-        existing_case_ids.append(normalized_existing)
-        return normalized_existing
-
-    metadata = _resolve_case_metadata(case)
-    sequence = next_case_sequence(
-        existing_case_ids=existing_case_ids,
-        page=case.module or case.product_line or metadata["page_code"],
-        module=case.module or case.product_line or metadata["module_code"],
-        project=metadata["project"],
-        client=metadata["client"],
-        page_code=metadata["page_code"],
-        module_code=metadata["module_code"],
-        case_type=case.case_type or metadata["case_type"],
-        source=case.source or metadata["source"],
-    )
-    generated = build_case_id(
-        page=case.module or case.product_line or metadata["page_code"],
-        module=case.module or case.product_line or metadata["module_code"],
-        sequence=sequence,
-        project=metadata["project"],
-        client=metadata["client"],
-        page_code=metadata["page_code"],
-        module_code=metadata["module_code"],
-        case_type=case.case_type or metadata["case_type"],
-        source=case.source or metadata["source"],
-    )
-    existing_case_ids.append(generated)
-    return generated
-
-
-def _assign_case_defaults(case: TestCase, *, existing_case_ids: list[str], latest_report_urls: dict[int, str]) -> bool:
+def _assign_case_defaults(
+    case: TestCase,
+    *,
+    existing_case_ids: list[str],
+    latest_report_urls: dict[int, str],
+    case_id_repository: WorkbenchGenerationRepository,
+) -> bool:
     changed = False
     metadata = _resolve_case_metadata(case)
-    resolved_case_id = _build_case_id_for_case(case, existing_case_ids=existing_case_ids)
+    resolved_case_id = case_id_repository.allocate_case_id(
+        requested_case_id=str(case.case_id or "").strip(),
+        project=metadata["project"],
+        page=case.module or case.product_line or metadata["page_code"],
+        module=case.module or case.product_line or metadata["module_code"],
+        ai_cases_root=AI_CASES_ROOT,
+        existing_case_ids=existing_case_ids,
+    )
 
     def assign(attr: str, value: Any) -> None:
         nonlocal changed
@@ -276,6 +262,7 @@ def backfill_test_case_metadata(db: Session) -> None:
     cases = list(db.execute(select(TestCase).order_by(TestCase.id.asc())).scalars().all())
     if not cases:
         return
+    case_id_repository = WorkbenchGenerationRepository(db)
     execution_rows = db.execute(
         select(
             TestCaseExecution.case_id,
@@ -314,7 +301,11 @@ def backfill_test_case_metadata(db: Session) -> None:
             case,
             existing_case_ids=seen_case_ids,
             latest_report_urls=latest_report_urls,
+            case_id_repository=case_id_repository,
         ) or changed
+        resolved_case_id = normalize_case_id(str(case.case_id or "").strip(), fallback="").strip()
+        if resolved_case_id and resolved_case_id not in seen_case_ids:
+            seen_case_ids.append(resolved_case_id)
         db.add(case)
 
     if changed:
@@ -327,8 +318,11 @@ def backfill_test_case_metadata(db: Session) -> None:
 
 def ensure_seed_data(db: Session) -> None:
     TestCaseTreeNode.__table__.create(bind=db.get_bind(), checkfirst=True)
+    TestCaseStep.__table__.create(bind=db.get_bind(), checkfirst=True)
+    TestPoint.__table__.create(bind=db.get_bind(), checkfirst=True)
     ensure_test_cases_schema_compatibility(db)
     ensure_project_seed(db)
+    case_id_repository = WorkbenchGenerationRepository(db)
     existing_count = db.execute(select(func.count(TestCase.id))).scalar_one()
     if existing_count and existing_count > 0:
         backfill_test_case_metadata(db)
@@ -517,7 +511,15 @@ def ensure_seed_data(db: Session) -> None:
     ]
     existing_case_ids = _existing_asset_case_ids()
     for case in seed_cases:
-        _assign_case_defaults(case, existing_case_ids=existing_case_ids, latest_report_urls={})
+        _assign_case_defaults(
+            case,
+            existing_case_ids=existing_case_ids,
+            latest_report_urls={},
+            case_id_repository=case_id_repository,
+        )
+        normalized_case_id = normalize_case_id(str(case.case_id or "").strip(), fallback="").strip()
+        if normalized_case_id and normalized_case_id not in existing_case_ids:
+            existing_case_ids.append(normalized_case_id)
     db.add_all(seed_cases)
     db.commit()
     backfill_test_case_metadata(db)
@@ -555,31 +557,31 @@ def ensure_seed_data(db: Session) -> None:
                 case_id=cases[0].id,
                 status="passed",
                 duration_ms=18240,
-                report_url="/reports/101",
+                report_url="/execution/results/101",
             ),
             TestCaseExecution(
                 case_id=cases[0].id,
                 status="passed",
                 duration_ms=16900,
-                report_url="/reports/102",
+                report_url="/execution/results/102",
             ),
             TestCaseExecution(
                 case_id=cases[1].id,
                 status="failed",
                 duration_ms=23100,
-                report_url="/reports/201",
+                report_url="/execution/results/201",
             ),
             TestCaseExecution(
                 case_id=cases[1].id,
                 status="passed",
                 duration_ms=21090,
-                report_url="/reports/202",
+                report_url="/execution/results/202",
             ),
             TestCaseExecution(
                 case_id=cases[2].id,
                 status="skipped",
                 duration_ms=0,
-                report_url="/reports/301",
+                report_url="/execution/results/301",
             ),
         ]
     )

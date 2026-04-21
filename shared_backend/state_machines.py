@@ -46,19 +46,6 @@ def normalize_run_status(value: Any, *, fallback: str = "generated") -> str:
     return normalized if normalized in RUN_STATUS_CODES else fallback
 
 
-def normalize_ai_status(value: Any, *, fallback: str = "generated") -> str:
-    normalized = str(value or "").strip().lower()
-    return normalized if normalized in AI_STATUS_CODES else fallback
-
-
-def validate_state_transition(machine: dict[str, set[str]], *, from_status: str, to_status: str) -> bool:
-    if not from_status:
-        return True
-    if from_status == to_status:
-        return True
-    allowed = machine.get(from_status, set())
-    return to_status in allowed
-
 
 def get_case_status_name(code: str) -> str:
     return resolve_dictionary_name("case_status", code, fallback=str(code or "").strip())

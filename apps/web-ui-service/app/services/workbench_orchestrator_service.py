@@ -8,7 +8,7 @@ from urllib import request as url_request
 
 from fastapi import status
 
-from apps.shared_backend.observability import get_request_id
+from shared_backend.observability import get_request_id
 
 HttpExceptionFactory = Callable[..., Exception]
 

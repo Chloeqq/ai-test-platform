@@ -28,6 +28,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: apps/web-ui-service/frontend/package-lock.json
+
+      - name: Build TypeScript + React frontend
+        working-directory: apps/web-ui-service/frontend
+        run: |
+          npm ci
+          npm run build
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -36,8 +49,17 @@ jobs:
       - name: Install root dev dependencies
         run: make install-dev
 
+      - name: Run all contract tests
+        run: make test-contracts
+
       - name: Run static baseline (ruff + mypy + pytest)
         run: make static-baseline
+
+      - name: Install Playwright browser for orchestrate smoke
+        run: .venv/bin/playwright install --with-deps chromium
+
+      - name: Run orchestrate execute=true smoke chain
+        run: make test-orchestrate-e2e-smoke
 
   e2e-smoke:
     if: github.event_name == 'workflow_dispatch' && (inputs.suite == 'e2e-smoke' || inputs.suite == 'all')
@@ -60,9 +82,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show Python version on self-hosted runner
-        run: |
-          python3 --version
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
 
       - name: Install root dev dependencies
         run: make install-dev
@@ -100,9 +123,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show Python version on self-hosted runner
-        run: |
-          python3 --version
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
 
       - name: Install root dev dependencies
         run: make install-dev

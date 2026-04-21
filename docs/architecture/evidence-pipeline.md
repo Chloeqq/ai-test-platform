@@ -46,7 +46,7 @@
 
 ### Web UI
 
-- [apps/web-ui-service/app/routers/legacy_workbench.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-ui-service/app/routers/legacy_workbench.py)
+- [apps/web-ui-service/app/api/workbench/facade.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-ui-service/app/api/workbench/facade.py)
   - run 详情
   - 历史回显
   - 报告概览

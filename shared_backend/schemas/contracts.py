@@ -636,7 +636,7 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
     warnings: list[str] = []
     raw = payload if isinstance(payload, dict) else {}
     if not isinstance(payload, dict):
-        warnings.append("test_point_plan payload is not an object; fallback defaults applied")
+        warnings.append("test_point_plan payload is not an object; normalized to empty payload")
 
     version = _string(raw.get("version") or raw.get("schema_version"))
     if version and version not in {TEST_POINT_PLAN_VERSION, "test-point-plan.v1"}:
@@ -656,9 +656,7 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                 warnings.append(f"points[{index}] is not an object; dropped")
                 continue
             target = _string(item.get("target"))
-            dependent_elements = _string_list(item.get("dependent_elements"))
-            if target and target not in dependent_elements and not str(target).startswith(("http://", "https://", "/", "#")):
-                dependent_elements.append(target)
+            involved_elements_raw = _string_list(item.get("involved_elements"))
             confidence_raw = item.get("confidence")
             confidence_value = _confidence(confidence_raw) if confidence_raw is not None else None
             point_warnings = _string_list(item.get("warnings"))
@@ -680,8 +678,33 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                             "warnings": _string_list(dep.get("warnings")),
                         }
                     )
+            key_value = _string(item.get("key"), default=f"point-{index:02d}")
+            intent_id_value = _string(item.get("intent_id"))
+            involved_elements = _string_list(item.get("involved_elements"))
+            raw_steps = item.get("steps")
+            normalized_steps: list[dict[str, Any]] | None = None
+            if isinstance(raw_steps, list) and raw_steps:
+                normalized_steps = []
+                for step_item in raw_steps:
+                    if isinstance(step_item, dict):
+                        normalized_steps.append({
+                            "action": _string(step_item.get("action")),
+                            "target": _string(step_item.get("target")),
+                            "value": step_item.get("value"),
+                            "raw_text": _string(
+                                step_item.get("raw_text")
+                                or step_item.get("description")
+                                or step_item.get("summary")
+                                or step_item.get("action")
+                            ),
+                        })
+                    elif step_item is not None:
+                        text = _string(step_item)
+                        if text:
+                            normalized_steps.append({"raw_text": text})
             point = {
-                "key": _string(item.get("key"), default=f"point-{index:02d}"),
+                "key": key_value,
+                "intent_id": intent_id_value,
                 "point_type": _string(item.get("point_type"), default="action"),
                 "action": _string(item.get("action")),
                 "description": _string(item.get("description"), default=""),
@@ -694,7 +717,8 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                 "priority": _string(item.get("priority"), default="P1"),
                 "dependencies": _string_list(item.get("dependencies")),
                 "source_ids": _string_list(item.get("source_ids")),
-                "dependent_elements": _dedup_strings(dependent_elements),
+                "involved_elements": _dedup_strings(involved_elements),
+                "steps": normalized_steps,
                 "step_index": _int(item.get("step_index"), default=index),
                 "confidence": confidence_value,
                 "technique_type": _string(item.get("technique_type"), default="normal"),
@@ -711,7 +735,7 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                 "dependency_review": {
                     "mode": _string(dependency_review_raw.get("mode"), default="none"),
                     "propagated": _bool(dependency_review_raw.get("propagated"), default=False),
-                    "dependent_elements": _dedup_strings(_string_list(dependency_review_raw.get("dependent_elements")) or dependent_elements),
+                    "involved_elements": _dedup_strings(_string_list(dependency_review_raw.get("involved_elements")) or involved_elements_raw),
                     "matched_elements": _dedup_strings(_string_list(dependency_review_raw.get("matched_elements"))),
                     "low_confidence_dependencies": normalized_low_confidence_dependencies,
                     "low_confidence_dependency_count": _int(
@@ -739,9 +763,6 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                 },
                 "metadata": _dict_copy(item.get("metadata")),
             }
-            if not point["action"]:
-                point["action"] = "noop"
-                warnings.append(f"points[{index}] missing action; defaulted to noop")
             points.append(point)
     elif points_raw is not None:
         warnings.append("points is not an array; reset to empty list")
@@ -798,8 +819,8 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
     for item in points:
         technique_type = _string(item.get("technique_type"), default="normal").lower() or "normal"
         technique_distribution[technique_type] = technique_distribution.get(technique_type, 0) + 1
-    dependent_elements = _dedup_strings(
-        [element for item in points for element in _string_list(item.get("dependent_elements"))]
+    involved_elements = _dedup_strings(
+        [element for item in points for element in _string_list(item.get("involved_elements"))]
     )
     top_level_confidence = _confidence(
         raw.get("confidence"),
@@ -823,7 +844,7 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
         "generated_at": _string(raw.get("generated_at"), default=datetime.now(UTC).isoformat()),
         "points": points,
         "point_count": len(points),
-        "dependent_elements": dependent_elements,
+        "involved_elements": involved_elements,
         "coverage": {
             "status": _string(coverage_raw.get("status"), default="unknown"),
             "required_coverage": _string_list(coverage_raw.get("required_coverage")),
@@ -853,7 +874,7 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
             ),
             "dependency_skip_count": _int(review_summary_raw.get("dependency_skip_count"), default=dependency_skip_count),
             "total_points": _int(review_summary_raw.get("total_points"), default=len(points)),
-            "dependent_element_count": _int(review_summary_raw.get("dependent_element_count"), default=len(dependent_elements)),
+            "involved_element_count": _int(review_summary_raw.get("involved_element_count"), default=len(involved_elements)),
             "mainline_point_count": _int(review_summary_raw.get("mainline_point_count"), default=mainline_point_count),
             "design_only_point_count": _int(review_summary_raw.get("design_only_point_count"), default=design_only_point_count),
             "technique_distribution": deepcopy(review_summary_raw.get("technique_distribution"))
@@ -864,7 +885,6 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
         "confidence": top_level_confidence,
         "warnings": _dedup_strings(_string_list(raw.get("warnings")) + point_warnings),
         "requires_review": top_level_requires_review,
-        "fallback_reason": _string(raw.get("fallback_reason")),
     }
     if strict:
         if not normalized["case_id"]:

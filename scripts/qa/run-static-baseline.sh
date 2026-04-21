@@ -31,4 +31,7 @@ PYTHONPATH=apps/ai-orchestrator/src \
   "${PYTHON_BIN}" -m pytest -q \
   apps/ai-orchestrator/tests/integration/test_openapi_contract.py
 
+echo "[static-baseline] Running workbench architecture guard..."
+"${PYTHON_BIN}" scripts/ci/check_workbench_architecture.py
+
 echo "[static-baseline] Completed."

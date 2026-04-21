@@ -6,7 +6,7 @@
 
 如果你要看 URL-first 主链接口，请优先看：
 
-- [legacy_workbench.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-ui-service/app/routers/legacy_workbench.py)
+- [workbench_generation.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-ui-service/app/routers/workbench_generation.py)
 - [current-architecture-and-flows.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/architecture/current-architecture-and-flows.md)
 
 ## 1. 文档目的

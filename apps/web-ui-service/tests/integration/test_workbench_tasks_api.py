@@ -12,7 +12,7 @@ import app.models.test_case  # noqa: F401
 import app.models.test_project  # noqa: F401
 from app.models.test_case import TestCase as TestCaseModel
 from app.models.test_project import TestProject as TestProjectModel
-from app.routers import legacy_workbench
+from app.api.workbench import service as workbench_service
 from app.routers.workbench_tasks import router as workbench_tasks_router
 
 
@@ -87,11 +87,10 @@ def workbench_tasks_client(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient,
         {"task": _task_item(task_id="task-mall", case_id=mall_case_id, project_code="mall", status="failed")},
     ]
 
-    monkeypatch.setattr(legacy_workbench, "_ensure_dirs", lambda: None)
-    monkeypatch.setattr(legacy_workbench, "_collect_execution_records_with_meta", lambda limit=0: (rows, {}))
-    monkeypatch.setattr(legacy_workbench, "_build_execution_task_view", lambda row: dict(row["task"]))
+    monkeypatch.setattr(workbench_service, "_collect_execution_records_with_meta", lambda limit=0: (rows, {}))
+    monkeypatch.setattr(workbench_service, "_build_execution_task_view", lambda row: dict(row["task"]))
     monkeypatch.setattr(
-        legacy_workbench,
+        workbench_service,
         "_build_execution_task_summary",
         lambda *, items, filter_snapshot, execution_meta: {
             "total_tasks": len(items),

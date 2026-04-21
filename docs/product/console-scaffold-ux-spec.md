@@ -1,5 +1,8 @@
 # Console Scaffold UX Spec
 
+> 状态：归档（2026-04）
+> `apps/web-console` 与 `/console` 入口已退役。本文件仅保留历史 UX 设计背景，不再代表当前运行实现。
+
 ## 0. 阅读说明
 
 这份 UX 文档描述的是 `Scaffold Console` 的独立交互，不是 URL-first workbench 的页面规范。
@@ -27,21 +30,19 @@
 - [Console Scaffold PRD](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/product/console-scaffold-prd.md)
 - [orchestrator-openapi.yaml](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/ai-orchestrator/openapi/orchestrator-openapi.yaml)
 
-## 2. 页面入口
+## 2. 页面入口（历史）
 
-- 页面地址：[http://127.0.0.1:8000/console](http://127.0.0.1:8000/console)
-- 托管方式：由 [app.py](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/ai-orchestrator/src/app.py) 直接返回静态资源
+- 历史地址：`/console`（已退役）
+- 历史托管：`apps/ai-orchestrator/src/app.py` 静态托管（已下线）
 
 补充边界：
 
 - 这是 orchestrator 托管的静态控制台入口。
 - 它不是 `apps/web-ui-service` 的 workbench 入口，也不消费 review_state / execution_gate 这套治理状态。
 
-静态资源：
+静态资源（历史）：
 
-- [index.html](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-console/static/index.html)
-- [styles.css](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-console/static/styles.css)
-- [app.js](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/web-console/static/app.js)
+- `apps/web-console/static/*`（已删除）
 
 ## 3. 页面结构
 

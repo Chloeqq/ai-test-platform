@@ -100,7 +100,7 @@ sequenceDiagram
 | 页面分析规则 | `apps/web-ui-service/app/core/page_analysis_rules.py` | 规则优先元素抽取、页面候选、置信度计算 | 已落地，确定性优先 |
 | 页面分析编排 | `apps/web-ui-service/app/core/page_analysis_pipeline.py` | 三模型组装、bundle 消费、兼容归一化 | 已落地 |
 | 共享契约 | `apps/shared_backend/schemas/contracts.py` | 中间模型 V1、归一化、兼容别名 | 已落地，是收口点 |
-| Workbench Router | `apps/web-ui-service/app/routers/legacy_workbench.py` | 运行编排、回显、review、gate、审计、兼容入口 | 已落地，但仍偏重 |
+| Workbench API | `apps/web-ui-service/app/api/workbench/facade.py` | 运行编排、回显、review、gate、审计统一入口 | 已落地，仍需继续按域收敛 |
 | Orchestrator | `apps/ai-orchestrator/src/orchestrator_service.py` | 多源输入、质量门禁、Agent 调用、报告拼装 | 已落地，仍偏大编排器 |
 | Agents | `agents/*` | 解析、设计、脚本、规划、风险、归因、triage、自愈 | 大部分可用，能力成熟度不一 |
 | Runner | `runners/web-playwright-python/` | 执行、断言、证据采集、报告产出 | 已落地，确定性最高 |
@@ -160,7 +160,7 @@ sequenceDiagram
 ### 7.2 仍然明显不稳的部分
 
 - 测试点仍偏 requirement 驱动，页面语义驱动还可继续增强。
-- `legacy_workbench.py` 仍承载过多逻辑，后续需要拆层。
+- `app/api/workbench/facade.py` 仍承载较多编排，后续需要继续按域拆层。
 - `failure-analysis-agent` 的应用 bug / 测试 bug 区分仍有误判空间。
 - `risk-evaluation-agent` 当前更接近规则启发式，不是预测模型。
 - `data-generation-agent` 已补成最小可用确定性服务，当前的主要缺口是企业级数据治理闭环，而不是空壳状态。
