@@ -1,0 +1,554 @@
+.
+├── CONTRIBUTING.md
+├── Dockerfile
+├── Makefile
+├── README.md
+├── actions-runner
+│   ├── _diag
+│   │   ├── blocks
+│   │   └── pages
+│   ├── _work
+│   │   ├── _PipelineMapping
+│   │   ├── _actions
+│   │   ├── _temp
+│   │   ├── _tool
+│   │   └── ai-test-platform
+│   ├── actions-runner-osx-arm64-2.333.1.tar.gz
+│   ├── bin
+│   │   ├── Azure.Core.dll
+│   │   ├── Azure.Storage.Blobs.dll
+│   │   ├── Azure.Storage.Common.dll
+│   │   ├── Microsoft.Bcl.AsyncInterfaces.dll
+│   │   ├── Microsoft.Bcl.Cryptography.dll
+│   │   ├── Microsoft.CSharp.dll
+│   │   ├── Microsoft.Extensions.DependencyInjection.Abstractions.dll
+│   │   ├── Microsoft.Extensions.Logging.Abstractions.dll
+│   │   ├── Microsoft.VisualBasic.Core.dll
+│   │   ├── Microsoft.VisualBasic.dll
+│   │   ├── Microsoft.Win32.Primitives.dll
+│   │   ├── Microsoft.Win32.Registry.dll
+│   │   ├── Minimatch.dll
+│   │   ├── Newtonsoft.Json.Bson.dll
+│   │   ├── Newtonsoft.Json.dll
+│   │   ├── Runner.Common.deps.json
+│   │   ├── Runner.Common.dll
+│   │   ├── Runner.Listener
+│   │   ├── Runner.Listener.deps.json
+│   │   ├── Runner.Listener.dll
+│   │   ├── Runner.Listener.runtimeconfig.json
+│   │   ├── Runner.PluginHost
+│   │   ├── Runner.PluginHost.deps.json
+│   │   ├── Runner.PluginHost.dll
+│   │   ├── Runner.PluginHost.runtimeconfig.json
+│   │   ├── Runner.Plugins.deps.json
+│   │   ├── Runner.Plugins.dll
+│   │   ├── Runner.Sdk.deps.json
+│   │   ├── Runner.Sdk.dll
+│   │   ├── Runner.Worker
+│   │   ├── Runner.Worker.deps.json
+│   │   ├── Runner.Worker.dll
+│   │   ├── Runner.Worker.runtimeconfig.json
+│   │   ├── RunnerService.js
+│   │   ├── Sdk.deps.json
+│   │   ├── Sdk.dll
+│   │   ├── System.AppContext.dll
+│   │   ├── System.Buffers.dll
+│   │   ├── System.ClientModel.dll
+│   │   ├── System.Collections.Concurrent.dll
+│   │   ├── System.Collections.Immutable.dll
+│   │   ├── System.Collections.NonGeneric.dll
+│   │   ├── System.Collections.Specialized.dll
+│   │   ├── System.Collections.dll
+│   │   ├── System.ComponentModel.Annotations.dll
+│   │   ├── System.ComponentModel.DataAnnotations.dll
+│   │   ├── System.ComponentModel.EventBasedAsync.dll
+│   │   ├── System.ComponentModel.Primitives.dll
+│   │   ├── System.ComponentModel.TypeConverter.dll
+│   │   ├── System.ComponentModel.dll
+│   │   ├── System.Configuration.dll
+│   │   ├── System.Console.dll
+│   │   ├── System.Core.dll
+│   │   ├── System.Data.Common.dll
+│   │   ├── System.Data.DataSetExtensions.dll
+│   │   ├── System.Data.dll
+│   │   ├── System.Diagnostics.Contracts.dll
+│   │   ├── System.Diagnostics.Debug.dll
+│   │   ├── System.Diagnostics.DiagnosticSource.dll
+│   │   ├── System.Diagnostics.EventLog.dll
+│   │   ├── System.Diagnostics.FileVersionInfo.dll
+│   │   ├── System.Diagnostics.Process.dll
+│   │   ├── System.Diagnostics.StackTrace.dll
+│   │   ├── System.Diagnostics.TextWriterTraceListener.dll
+│   │   ├── System.Diagnostics.Tools.dll
+│   │   ├── System.Diagnostics.TraceSource.dll
+│   │   ├── System.Diagnostics.Tracing.dll
+│   │   ├── System.Drawing.Primitives.dll
+│   │   ├── System.Drawing.dll
+│   │   ├── System.Dynamic.Runtime.dll
+│   │   ├── System.Formats.Asn1.dll
+│   │   ├── System.Formats.Tar.dll
+│   │   ├── System.Globalization.Calendars.dll
+│   │   ├── System.Globalization.Extensions.dll
+│   │   ├── System.Globalization.dll
+│   │   ├── System.IO.Compression.Brotli.dll
+│   │   ├── System.IO.Compression.FileSystem.dll
+│   │   ├── System.IO.Compression.ZipFile.dll
+│   │   ├── System.IO.Compression.dll
+│   │   ├── System.IO.FileSystem.AccessControl.dll
+│   │   ├── System.IO.FileSystem.DriveInfo.dll
+│   │   ├── System.IO.FileSystem.Primitives.dll
+│   │   ├── System.IO.FileSystem.Watcher.dll
+│   │   ├── System.IO.FileSystem.dll
+│   │   ├── System.IO.Hashing.dll
+│   │   ├── System.IO.IsolatedStorage.dll
+│   │   ├── System.IO.MemoryMappedFiles.dll
+│   │   ├── System.IO.Pipes.AccessControl.dll
+│   │   ├── System.IO.Pipes.dll
+│   │   ├── System.IO.UnmanagedMemoryStream.dll
+│   │   ├── System.IO.dll
+│   │   ├── System.Linq.Expressions.dll
+│   │   ├── System.Linq.Parallel.dll
+│   │   ├── System.Linq.Queryable.dll
+│   │   ├── System.Linq.dll
+│   │   ├── System.Memory.Data.dll
+│   │   ├── System.Memory.dll
+│   │   ├── System.Net.Http.Formatting.dll
+│   │   ├── System.Net.Http.Json.dll
+│   │   ├── System.Net.Http.dll
+│   │   ├── System.Net.HttpListener.dll
+│   │   ├── System.Net.Mail.dll
+│   │   ├── System.Net.NameResolution.dll
+│   │   ├── System.Net.NetworkInformation.dll
+│   │   ├── System.Net.Ping.dll
+│   │   ├── System.Net.Primitives.dll
+│   │   ├── System.Net.Quic.dll
+│   │   ├── System.Net.Requests.dll
+│   │   ├── System.Net.Security.dll
+│   │   ├── System.Net.ServicePoint.dll
+│   │   ├── System.Net.Sockets.dll
+│   │   ├── System.Net.WebClient.dll
+│   │   ├── System.Net.WebHeaderCollection.dll
+│   │   ├── System.Net.WebProxy.dll
+│   │   ├── System.Net.WebSockets.Client.dll
+│   │   ├── System.Net.WebSockets.dll
+│   │   ├── System.Net.dll
+│   │   ├── System.Numerics.Vectors.dll
+│   │   ├── System.Numerics.dll
+│   │   ├── System.ObjectModel.dll
+│   │   ├── System.Private.CoreLib.dll
+│   │   ├── System.Private.DataContractSerialization.dll
+│   │   ├── System.Private.Uri.dll
+│   │   ├── System.Private.Xml.Linq.dll
+│   │   ├── System.Private.Xml.dll
+│   │   ├── System.Reflection.DispatchProxy.dll
+│   │   ├── System.Reflection.Emit.ILGeneration.dll
+│   │   ├── System.Reflection.Emit.Lightweight.dll
+│   │   ├── System.Reflection.Emit.dll
+│   │   ├── System.Reflection.Extensions.dll
+│   │   ├── System.Reflection.Metadata.dll
+│   │   ├── System.Reflection.Primitives.dll
+│   │   ├── System.Reflection.TypeExtensions.dll
+│   │   ├── System.Reflection.dll
+│   │   ├── System.Resources.Reader.dll
+│   │   ├── System.Resources.ResourceManager.dll
+│   │   ├── System.Resources.Writer.dll
+│   │   ├── System.Runtime.CompilerServices.Unsafe.dll
+│   │   ├── System.Runtime.CompilerServices.VisualC.dll
+│   │   ├── System.Runtime.Extensions.dll
+│   │   ├── System.Runtime.Handles.dll
+│   │   ├── System.Runtime.InteropServices.JavaScript.dll
+│   │   ├── System.Runtime.InteropServices.RuntimeInformation.dll
+│   │   ├── System.Runtime.InteropServices.dll
+│   │   ├── System.Runtime.Intrinsics.dll
+│   │   ├── System.Runtime.Loader.dll
+│   │   ├── System.Runtime.Numerics.dll
+│   │   ├── System.Runtime.Serialization.Formatters.dll
+│   │   ├── System.Runtime.Serialization.Json.dll
+│   │   ├── System.Runtime.Serialization.Primitives.dll
+│   │   ├── System.Runtime.Serialization.Xml.dll
+│   │   ├── System.Runtime.Serialization.dll
+│   │   ├── System.Runtime.dll
+│   │   ├── System.Security.AccessControl.dll
+│   │   ├── System.Security.Claims.dll
+│   │   ├── System.Security.Cryptography.Algorithms.dll
+│   │   ├── System.Security.Cryptography.Cng.dll
+│   │   ├── System.Security.Cryptography.Csp.dll
+│   │   ├── System.Security.Cryptography.Encoding.dll
+│   │   ├── System.Security.Cryptography.OpenSsl.dll
+│   │   ├── System.Security.Cryptography.Pkcs.dll
+│   │   ├── System.Security.Cryptography.Primitives.dll
+│   │   ├── System.Security.Cryptography.ProtectedData.dll
+│   │   ├── System.Security.Cryptography.X509Certificates.dll
+│   │   ├── System.Security.Cryptography.dll
+│   │   ├── System.Security.Principal.Windows.dll
+│   │   ├── System.Security.Principal.dll
+│   │   ├── System.Security.SecureString.dll
+│   │   ├── System.Security.dll
+│   │   ├── System.ServiceModel.Web.dll
+│   │   ├── System.ServiceProcess.ServiceController.dll
+│   │   ├── System.ServiceProcess.dll
+│   │   ├── System.Text.Encoding.CodePages.dll
+│   │   ├── System.Text.Encoding.Extensions.dll
+│   │   ├── System.Text.Encoding.dll
+│   │   ├── System.Text.Encodings.Web.dll
+│   │   ├── System.Text.Json.dll
+│   │   ├── System.Text.RegularExpressions.dll
+│   │   ├── System.Threading.Channels.dll
+│   │   ├── System.Threading.Overlapped.dll
+│   │   ├── System.Threading.Tasks.Dataflow.dll
+│   │   ├── System.Threading.Tasks.Extensions.dll
+│   │   ├── System.Threading.Tasks.Parallel.dll
+│   │   ├── System.Threading.Tasks.dll
+│   │   ├── System.Threading.Thread.dll
+│   │   ├── System.Threading.ThreadPool.dll
+│   │   ├── System.Threading.Timer.dll
+│   │   ├── System.Threading.dll
+│   │   ├── System.Transactions.Local.dll
+│   │   ├── System.Transactions.dll
+│   │   ├── System.ValueTuple.dll
+│   │   ├── System.Web.HttpUtility.dll
+│   │   ├── System.Web.dll
+│   │   ├── System.Windows.dll
+│   │   ├── System.Xml.Linq.dll
+│   │   ├── System.Xml.ReaderWriter.dll
+│   │   ├── System.Xml.Serialization.dll
+│   │   ├── System.Xml.XDocument.dll
+│   │   ├── System.Xml.XPath.XDocument.dll
+│   │   ├── System.Xml.XPath.dll
+│   │   ├── System.Xml.XmlDocument.dll
+│   │   ├── System.Xml.XmlSerializer.dll
+│   │   ├── System.Xml.dll
+│   │   ├── System.dll
+│   │   ├── WindowsBase.dll
+│   │   ├── YamlDotNet.dll
+│   │   ├── actions.runner.plist.template
+│   │   ├── actions.runner.service.template
+│   │   ├── checkScripts
+│   │   ├── createdump
+│   │   ├── darwin.svc.sh.template
+│   │   ├── hashFiles
+│   │   ├── installdependencies.sh
+│   │   ├── libSystem.Globalization.Native.dylib
+│   │   ├── libSystem.IO.Compression.Native.dylib
+│   │   ├── libSystem.Native.dylib
+│   │   ├── libSystem.Net.Security.Native.dylib
+│   │   ├── libSystem.Security.Cryptography.Native.Apple.dylib
+│   │   ├── libSystem.Security.Cryptography.Native.OpenSsl.dylib
+│   │   ├── libclrgc.dylib
+│   │   ├── libclrjit.dylib
+│   │   ├── libcoreclr.dylib
+│   │   ├── libhostfxr.dylib
+│   │   ├── libhostpolicy.dylib
+│   │   ├── libmscordaccore.dylib
+│   │   ├── libmscordbi.dylib
+│   │   ├── macos-run-invoker.js
+│   │   ├── mscorlib.dll
+│   │   ├── netstandard.dll
+│   │   ├── runsvc.sh
+│   │   ├── systemd.svc.sh.template
+│   │   ├── update.cmd.template
+│   │   └── update.sh.template
+│   ├── config.sh
+│   ├── env.sh
+│   ├── externals
+│   │   ├── node20
+│   │   └── node24
+│   ├── run-helper.cmd.template
+│   ├── run-helper.sh
+│   ├── run-helper.sh.template
+│   ├── run.sh
+│   ├── safe_sleep.sh
+│   └── svc.sh
+├── agents
+│   ├── data-generation-agent
+│   │   ├── README.md
+│   │   ├── examples
+│   │   ├── src
+│   │   └── tests
+│   ├── execution-planner-agent
+│   │   ├── README.md
+│   │   ├── examples
+│   │   └── src
+│   ├── failure-analysis-agent
+│   │   ├── analyze.py
+│   │   ├── prompt.py
+│   │   └── test_analyze.py
+│   ├── failure-triage-agent
+│   │   ├── README.md
+│   │   ├── examples
+│   │   ├── src
+│   │   └── tests
+│   ├── requirement-parser-agent
+│   │   ├── README.md
+│   │   ├── examples
+│   │   ├── src
+│   │   └── tests
+│   ├── risk-evaluation-agent
+│   │   ├── README.md
+│   │   ├── examples
+│   │   └── src
+│   ├── script-generation-agent
+│   │   ├── README.md
+│   │   ├── examples
+│   │   ├── src
+│   │   └── tests
+│   ├── self-healing-advisor-agent
+│   │   ├── README.md
+│   │   ├── apply_fix.py
+│   │   ├── apply_patch.py
+│   │   ├── examples
+│   │   ├── patch_generator.py
+│   │   ├── prompt.py
+│   │   ├── rerun_runner.py
+│   │   ├── rollback.py
+│   │   ├── self_healing_executor.py
+│   │   ├── self_healing_orchestrator.py
+│   │   ├── src
+│   │   ├── suggest.py
+│   │   ├── test_agent.py
+│   │   ├── test_patch_workflow.py
+│   │   └── test_suggest.py
+│   └── test-design-agent
+│       ├── README.md
+│       ├── examples
+│       ├── generate_yaml.py
+│       ├── requirements.txt
+│       ├── src
+│       └── tests
+├── apps
+│   ├── ai-orchestrator
+│   │   ├── Dockerfile
+│   │   ├── README.md
+│   │   ├── openapi
+│   │   ├── requirements.txt
+│   │   ├── src
+│   │   └── tests
+│   └── web-ui-service
+│       ├── README.md
+│       ├── alembic.ini
+│       ├── app
+│       ├── dev.db
+│       ├── frontend
+│       ├── migrations
+│       ├── requirements.txt
+│       ├── scripts
+│       └── tests
+├── artifacts
+│   └── page-recorder
+│       ├── rec_35623cfaa02a41d1.codegen.py
+│       ├── rec_3b3cfaa9464348c0.codegen.py
+│       ├── rec_3b3cfaa9464348c0.codegen.steps.json
+│       ├── rec_4b802146655b4e7a.codegen.py
+│       ├── rec_4b802146655b4e7a.codegen.steps.json
+│       └── rec_95810156ac0144bb.codegen.py
+├── assets
+│   ├── page-objects
+│   │   └── web
+│   └── test-cases
+│       └── ai-generated
+├── datetime_compat.py
+├── deploy
+│   └── elk
+│       └── logstash
+├── docker-compose.override.yml
+├── docker-compose.yml
+├── docs
+│   ├── GLOBAL_AUDIT_REPORT.md
+│   ├── RECTIFICATION_PLAN.md
+│   ├── api
+│   │   └── console-scaffold-api-spec.md
+│   ├── architecture
+│   │   ├── ai-orchestrator.md
+│   │   ├── current-architecture-and-flows.md
+│   │   ├── enterprise-ai-platform-gap-closure-work-packages-2026-04-06.md
+│   │   ├── enterprise-ai-test-platform-full-architecture-and-gap-closure-2026-04-06.md
+│   │   ├── evidence-pipeline.md
+│   │   ├── overview.md
+│   │   ├── page-object-recorder-implementation-plan-2026-04-06.md
+│   │   ├── project-structure.md
+│   │   ├── release-gate.md
+│   │   ├── runners.md
+│   │   ├── web-ui-enterprise-er-api-design.md
+│   │   └── 企业级AI自动化测试平台架构说明书.md
+│   ├── conventions
+│   │   ├── page-object-module-element-naming.md
+│   │   ├── stage8-self-healing-advisor-checklist.md
+│   │   ├── web-playwright-python-stable-baseline.md
+│   │   └── 需求到可执行用例全链路方案与现状.md
+│   ├── onboarding
+│   │   ├── console-scaffold-guide.md
+│   │   ├── release-runbook.md
+│   │   ├── testing.md
+│   │   └── web-ui-input-sources-guide.md
+│   ├── product
+│   │   ├── console-scaffold-prd.md
+│   │   ├── console-scaffold-ux-spec.md
+│   │   ├── next-phase-roadmap.md
+│   │   ├── platform-gap-analysis.md
+│   │   ├── test-case-case-id-unification-priority-plan-2026-04-05.md
+│   │   ├── test-case-excel-export-implementation-plan-2026-04-05.md
+│   │   ├── test-case-field-persistence-plan-2026-04-05.md
+│   │   ├── test-case-list-enterprise-upgrade-plan-2026-04-05.md
+│   │   ├── test-case-management-core-execution-plan-2026-04-05.md
+│   │   ├── test-case-management-core-execution-plan-spec-aligned-2026-04-05.md
+│   │   ├── test-case-management-core-gap-tracking-2026-04-05.md
+│   │   └── test-case-template-mapping-table-2026-04-05.md
+│   ├── prompt
+│   │   ├── UI规范.md
+│   │   └── 数据一致性检查.md
+│   ├── refactoring
+│   │   └── case-management-codex-guide.md
+│   ├── test-cases-template.xlsx
+│   ├── testing
+│   │   ├── console-scaffold-test-cases.md
+│   │   └── test-cases-template.xlsx
+│   ├── 全景分层图.png
+│   ├── 用例模版示例.xlsx
+│   └── 端到端调用链.png
+├── infra
+│   └── nginx
+│       └── default.conf
+├── package.json
+├── pytest.ini
+├── reports
+│   ├── executions
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3056.report.json
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3056.report.md
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3077.report.json
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3077.report.md
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3114.report.json
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3114.report.md
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3135.report.json
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3135.report.md
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3163.report.json
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3163.report.md
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3318.report.json
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-3318.report.md
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-900001.report.json
+│   │   ├── ATP-WEB-LOGIN-CORE-FN-AI-900001.report.md
+│   │   ├── SMOKE-PRODUCT-000001.report.json
+│   │   ├── SMOKE-PRODUCT-000001.report.md
+│   │   ├── TC-API-GEN-001.report.json
+│   │   ├── TC-API-GEN-001.report.md
+│   │   ├── TC-BILLING-GEN-001.report.json
+│   │   ├── TC-BILLING-GEN-001.report.md
+│   │   ├── atp-web-bill-query-fn-ai-0001.report.json
+│   │   ├── atp-web-bill-query-fn-ai-0001.report.md
+│   │   ├── atp-web-login-auth-boundary-0001.report.json
+│   │   ├── atp-web-login-auth-boundary-0001.report.md
+│   │   ├── atp-web-login-auth-boundary-ai-0001.report.json
+│   │   ├── atp-web-login-auth-boundary-ai-0001.report.md
+│   │   ├── atp-web-login-auth-ex-ai-0003.report.json
+│   │   ├── atp-web-login-auth-ex-ai-0003.report.md
+│   │   ├── atp-web-login-auth-fn-ai-0125.report.json
+│   │   ├── atp-web-login-auth-fn-ai-0125.report.md
+│   │   ├── atp-web-login-auth-fn-ai-0126.report.json
+│   │   ├── atp-web-login-auth-fn-ai-0126.report.md
+│   │   ├── atp-web-login-auth-fn-ai-0127.report.json
+│   │   ├── atp-web-login-auth-fn-ai-0127.report.md
+│   │   ├── atp-web-login-auth-neg-ai-0001.report.json
+│   │   ├── atp-web-login-auth-neg-ai-0001.report.md
+│   │   ├── atp-web-login-auth-normal-ai-0001.report.json
+│   │   ├── atp-web-login-auth-normal-ai-0001.report.md
+│   │   ├── atp-web-login-boundary-ai-0001.report.json
+│   │   ├── atp-web-login-boundary-ai-0001.report.md
+│   │   ├── atp-web-login-format-ai-0001.report.json
+│   │   ├── atp-web-login-format-ai-0001.report.md
+│   │   ├── atp-web-login-functional-ai-0001.report.json
+│   │   ├── atp-web-login-functional-ai-0001.report.md
+│   │   ├── atp-web-login-interaction-ex-ai-0001.report.json
+│   │   ├── atp-web-login-interaction-ex-ai-0001.report.md
+│   │   ├── atp-web-login-security-ai-0001.report.json
+│   │   ├── atp-web-login-security-ai-0001.report.md
+│   │   ├── atp-web-login-security-ai-0003.report.json
+│   │   ├── atp-web-login-security-ai-0003.report.md
+│   │   ├── atp-web-prod-list-ex-ai-0001.report.json
+│   │   ├── atp-web-prod-list-ex-ai-0001.report.md
+│   │   ├── atp-web-prod-list-fn-ai-0001.report.json
+│   │   ├── atp-web-prod-list-fn-ai-0001.report.md
+│   │   ├── generated-scripts
+│   │   ├── tc-product-GEN-001.report.json
+│   │   └── tc-product-GEN-001.report.md
+│   └── telemetry
+│       ├── requirement-parse-events.jsonl
+│       └── requirement-parser-eval.jsonl
+├── requirements-dev.txt
+├── runners
+│   └── web-playwright-python
+│       ├── FEATURES_GUIDE.md
+│       ├── Makefile
+│       ├── PROJECT_DOCS.md
+│       ├── actions
+│       ├── allure-report
+│       ├── allure-report-snapshots
+│       ├── allure-results
+│       ├── artifacts
+│       ├── conftest.py
+│       ├── create_project_structure.py
+│       ├── examples
+│       ├── fixtures
+│       ├── pages
+│       ├── pytest.ini
+│       ├── requirements.txt
+│       ├── runner
+│       ├── schemas
+│       ├── templates
+│       ├── tests
+│       └── tools
+├── scripts
+│   ├── ci
+│   │   ├── check_asset_contracts.sh
+│   │   ├── check_workbench_architecture.py
+│   │   ├── check_workbench_architecture.sh
+│   │   └── run_workbench_docker_regression.sh
+│   ├── deploy
+│   │   ├── deploy_staging.sh
+│   │   └── healthcheck.sh
+│   ├── dev
+│   │   ├── start-all.sh
+│   │   └── stop-all.sh
+│   ├── qa
+│   │   ├── check-web-ui-static.sh
+│   │   ├── check_web_ui_pages.py
+│   │   ├── run-static-baseline-fast.sh
+│   │   └── run-static-baseline.sh
+│   └── tools
+│       └── seed_page_objects.py
+├── shared_backend
+│   ├── __init__.py
+│   ├── case_dictionary.py
+│   ├── case_ids.py
+│   ├── case_rules.py
+│   ├── data
+│   │   └── case_dictionaries.json
+│   ├── datetime_compat.py
+│   ├── execution_compiler.py
+│   ├── execution_trace.py
+│   ├── ir_schema_validator.py
+│   ├── mapping_engine.py
+│   ├── observability
+│   │   ├── __init__.py
+│   │   ├── ai_trace.py
+│   │   └── logging.py
+│   ├── schemas
+│   │   ├── __init__.py
+│   │   ├── contracts.py
+│   │   ├── models.py
+│   │   └── validator.py
+│   ├── self_healing.py
+│   ├── state_machines.py
+│   └── tests
+│       ├── test_case_rules.py
+│       ├── test_contract_validator.py
+│       ├── test_execution_compiler_contract.py
+│       ├── test_new_chain_baseline.py
+│       └── test_pipeline_contract.py
+├── structure.txt
+└── web-ui
+    └── state
+        ├── default
+        ├── reporting
+        ├── runs
+        └── test-points
+
+116 directories, 436 files
