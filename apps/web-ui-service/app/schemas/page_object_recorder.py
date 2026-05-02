@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class RecorderSessionCreate(BaseModel):
-    project_code: str = Field(default="atp", min_length=2, max_length=20)
+    project_code: str = Field(default="mall", min_length=2, max_length=20)
     client: str = Field(default="web", min_length=2, max_length=10)
     page_code: str = Field(..., min_length=2, max_length=40)
     page_name: str = Field(..., min_length=1, max_length=120)
@@ -13,7 +13,6 @@ class RecorderSessionCreate(BaseModel):
 
 
 class RecorderSessionStopPayload(BaseModel):
-    ingest_to_page_object: bool = True
     cascade_elements: bool = False
     verify_locators: bool = False
     verify_timeout_ms: int = Field(default=4000, ge=500, le=20000)
@@ -22,6 +21,10 @@ class RecorderSessionStopPayload(BaseModel):
 
 class RecorderSessionHeartbeatPayload(BaseModel):
     heartbeat_by: str = Field(default="admin", max_length=60)
+
+
+class RecorderSessionReplayPayload(BaseModel):
+    timeout_seconds: int = Field(default=120, ge=5, le=600)
 
 
 class RecorderSessionCreateCasePayload(BaseModel):

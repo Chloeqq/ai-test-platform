@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class GenerateCasePayload(BaseModel):
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     page: str = Field(default="")
     requirement: str = Field(default="")
     title: str = Field(default="")
@@ -28,19 +28,41 @@ class GenerateCasePayload(BaseModel):
 
 
 class SaveCasePayload(BaseModel):
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     yaml_content: str = Field(min_length=1)
 
 
+class UpsertTestPointAssetPayload(BaseModel):
+    project: str = Field(default="mall")
+    asset_id: str = Field(default="")
+    page: str = Field(default="")
+    title: str = Field(default="")
+    priority: str = Field(default="P1")
+    requirement: str = Field(default="")
+    source_type: str = Field(default="manual")
+    selected_candidates: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class BatchTestPointAssetIdsPayload(BaseModel):
+    project: str = Field(default="mall")
+    asset_ids: list[str] = Field(default_factory=list, min_length=1, max_length=200)
+
+
+class BatchGenerateFromTestPointAssetsPayload(BaseModel):
+    project: str = Field(default="mall")
+    asset_ids: list[str] = Field(default_factory=list, min_length=1, max_length=200)
+    source: str = Field(default="manual")
+
+
 class RunCasePayload(BaseModel):
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     case_id: str = Field(min_length=1)
     case_path: str = Field(default="")
     source: str = Field(default="manual")
 
 
 class AutoRunPayload(BaseModel):
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     requirement: str = Field(default="")
     page_urls: list[str] = Field(min_length=1, max_length=20)
     source: str = Field(default="manual")
@@ -66,7 +88,7 @@ class DefectPayload(BaseModel):
 
 
 class WorkbenchReviewPayload(BaseModel):
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     run_id: str = Field(min_length=1)
     case_id: str = Field(default="")
     page: str = Field(min_length=1)
@@ -78,7 +100,7 @@ class WorkbenchReviewPayload(BaseModel):
 
 
 class ExecutionGateDecisionPayload(BaseModel):
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     run_id: str = Field(min_length=1)
     case_id: str = Field(default="")
     page: str = Field(min_length=1)
@@ -87,7 +109,7 @@ class ExecutionGateDecisionPayload(BaseModel):
 
 
 class ExecutionGateDecisionActionPayload(BaseModel):
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     run_id: str = Field(min_length=1)
     page: str = Field(min_length=1)
     note: str = Field(default="")

@@ -1,14 +1,37 @@
-import { getJson, postJson } from "../lib/http";
+import { deleteJson, getJson, postJson, putJson } from "../lib/http";
 
 export interface ProjectItem {
   project_code: string;
   project_name?: string;
   status?: string;
+  source_roots?: string[];
+  source_terms?: Record<string, string>;
 }
 
 export interface ListProjectsResponse {
   items: ProjectItem[];
   codes: string[];
+}
+
+export interface TestProjectPayload {
+  project_code: string;
+  project_name: string;
+  description?: string;
+  source_roots?: string[];
+  source_terms?: Record<string, string>;
+  created_by?: string;
+}
+
+export interface TestProjectUpdatePayload {
+  project_name?: string;
+  description?: string;
+  source_roots?: string[];
+  source_terms?: Record<string, string>;
+  status?: string;
+}
+
+export interface TestProjectResponse {
+  item?: ProjectItem & Record<string, unknown>;
 }
 
 export interface ExecutionTask {
@@ -49,9 +72,18 @@ export interface GenerateCasePayload {
   title?: string;
   priority?: string;
   source?: string;
+  selected_candidates?: Array<Record<string, unknown>>;
+  selected_intent_ids?: string[];
 }
 
 export interface GenerateCaseResponse {
+  message?: string;
+  count?: number;
+  item?: Record<string, unknown>;
+  items?: Array<Record<string, unknown>>;
+}
+
+export interface SaveTestPointAssetsResponse {
   message?: string;
   count?: number;
   item?: Record<string, unknown>;
@@ -72,6 +104,72 @@ export interface FullChainRunResponse {
   summary?: Record<string, unknown>;
   stages?: Record<string, unknown>;
   generated?: Record<string, unknown>;
+}
+
+export interface PreviewTestPointsPayload {
+  project: string;
+  page: string;
+  requirement: string;
+  source?: string;
+}
+
+export interface PreviewTestPointsIntent {
+  intent_id?: string;
+  title?: string;
+  summary?: string;
+  intent_type?: string;
+  priority?: string;
+  precondition?: string;
+  steps?: unknown[];
+  steps_hint?: unknown[];
+  expected_result?: string;
+  expected?: string;
+  involved_elements?: string[];
+}
+
+export interface PreviewTestPointsResponse {
+  item?: {
+    intent_count?: number;
+    requirement_spec?: {
+      page?: string;
+      parse_confidence?: number;
+      test_intents?: PreviewTestPointsIntent[];
+      quality_gate?: {
+        decision?: string;
+        blockers?: Array<Record<string, unknown>>;
+        metrics?: Record<string, unknown>;
+      };
+    };
+  };
+  [key: string]: unknown;
+}
+
+export interface PrecheckSelectedIntentsPayload {
+  project: string;
+  page: string;
+  selected_candidates: Array<Record<string, unknown>>;
+}
+
+export interface PrecheckSelectedIntentsItem {
+  intent_id?: string;
+  title?: string;
+  status?: "ok" | "warn" | "block" | string;
+  reasons?: string[];
+  unknown_elements?: string[];
+  can_generate?: boolean;
+}
+
+export interface PrecheckSelectedIntentsResponse {
+  items?: PrecheckSelectedIntentsItem[];
+  summary?: {
+    total?: number;
+    status_counts?: Record<string, number>;
+    block_count?: number;
+    warn_count?: number;
+    ok_count?: number;
+    project?: string;
+    page?: string;
+  };
 }
 
 export interface WorkbenchHistoryItem {
@@ -135,6 +233,22 @@ export async function listProjects(): Promise<ListProjectsResponse> {
   return getJson<ListProjectsResponse>("/api/workbench/projects");
 }
 
+export async function listTestProjects(): Promise<{ items?: Array<ProjectItem & Record<string, unknown>> }> {
+  return getJson<{ items?: Array<ProjectItem & Record<string, unknown>> }>("/api/test-projects");
+}
+
+export async function createTestProject(payload: TestProjectPayload): Promise<TestProjectResponse> {
+  return postJson<TestProjectResponse>("/api/test-projects", payload);
+}
+
+export async function updateTestProject(projectCode: string, payload: TestProjectUpdatePayload): Promise<TestProjectResponse> {
+  return putJson<TestProjectResponse>(`/api/test-projects/${encodeURIComponent(projectCode)}`, payload);
+}
+
+export async function deleteTestProject(projectCode: string): Promise<Record<string, unknown>> {
+  return deleteJson<Record<string, unknown>>(`/api/test-projects/${encodeURIComponent(projectCode)}`);
+}
+
 export async function listExecutionTasks(params: TaskQuery): Promise<ListExecutionTasksResponse> {
   const query = toQuery(params);
   const path = query ? `/api/workbench/tasks?${query}` : "/api/workbench/tasks";
@@ -143,6 +257,20 @@ export async function listExecutionTasks(params: TaskQuery): Promise<ListExecuti
 
 export async function generateCase(payload: GenerateCasePayload): Promise<GenerateCaseResponse> {
   return postJson<GenerateCaseResponse>("/api/workbench/generate", payload);
+}
+
+export async function saveTestPointAssets(payload: GenerateCasePayload): Promise<SaveTestPointAssetsResponse> {
+  return postJson<SaveTestPointAssetsResponse>("/api/workbench/test-point-assets/save", payload);
+}
+
+export async function previewTestPoints(payload: PreviewTestPointsPayload): Promise<PreviewTestPointsResponse> {
+  return postJson<PreviewTestPointsResponse>("/api/workbench/preview-test-points", payload);
+}
+
+export async function precheckSelectedIntents(
+  payload: PrecheckSelectedIntentsPayload,
+): Promise<PrecheckSelectedIntentsResponse> {
+  return postJson<PrecheckSelectedIntentsResponse>("/api/workbench/precheck-selected-intents", payload);
 }
 
 export async function runFullChain(payload: FullChainRunPayload): Promise<FullChainRunResponse> {

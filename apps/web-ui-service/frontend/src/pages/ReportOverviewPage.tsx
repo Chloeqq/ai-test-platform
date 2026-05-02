@@ -1,7 +1,10 @@
 import { startTransition, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import { getReportOverview, type ReportOverviewFailureItem, type ReportOverviewSummary } from "../api/report";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
 import { ReportTabs } from "./ReportTabs";
 
 function summaryValue(value: number | string | undefined, suffix = ""): string {
@@ -10,18 +13,6 @@ function summaryValue(value: number | string | undefined, suffix = ""): string {
   }
   const text = String(value || "").trim();
   return text ? `${text}${suffix}` : "-";
-}
-
-function formatDate(value: string | undefined): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) {
-    return raw;
-  }
-  return date.toLocaleString("zh-CN", { hour12: false });
 }
 
 export function ReportOverviewPage() {
@@ -64,7 +55,7 @@ export function ReportOverviewPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>执行结果总览（React + TypeScript）</h1>
+          <h1>执行结果总览</h1>
           <p className="muted">执行结果页面族已迁移到 React 主链。</p>
         </div>
       </header>
@@ -93,16 +84,17 @@ export function ReportOverviewPage() {
         </article>
       </section>
 
-      <section className="panel table-panel">
-        <div className="table-head">
-          <strong>近期失败记录</strong>
+      <DataTable
+        title="近期失败记录"
+        loading={loading}
+        loadingText="正在加载执行总览..."
+        errorText={errorText}
+        actions={(
           <Link className="button secondary" to="/execution/results/failures">
             查看失败详情
           </Link>
-        </div>
-        {loading ? <p>正在加载执行总览...</p> : null}
-        {errorText ? <p className="error">{errorText}</p> : null}
-        {!loading && !errorText ? (
+        )}
+      >
           <table>
             <thead>
               <tr>
@@ -125,18 +117,19 @@ export function ReportOverviewPage() {
                     <td>{item.risk_level || "-"}</td>
                     <td>{item.failure_source || "-"}</td>
                     <td>{item.defect_count ?? 0}</td>
-                    <td>{formatDate(item.finished_at)}</td>
+                    <td>{formatDateTime(item.finished_at)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7}>暂无失败记录。</td>
+                  <td colSpan={7}>
+                    <EmptyState title="暂无失败记录" description="当前执行报告里没有失败记录，可以继续查看性能或上下文报告。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
     </main>
   );
 }

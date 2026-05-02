@@ -318,7 +318,7 @@ def test_batch_delete_test_case_also_cleans_page_object_refs(
         project_code="mall",
         client="web",
         payload=page_object_schema.PageElementCreate(
-            element_code="submit-btn",
+            element_code="submit_button",
             element_name="提交按钮",
             locator_type="css",
             locator_value="#submit",
@@ -333,7 +333,7 @@ def test_batch_delete_test_case_also_cleans_page_object_refs(
     page_object_service.create_page_object_ref(
         db_session,
         page_code="home",
-        element_code="submit-btn",
+        element_code="submit_button",
         project_code="mall",
         client="web",
         payload=page_object_schema.PageObjectRefCreate(

@@ -21,12 +21,12 @@ const PROMPTS = [
 export function PromptManagementPage() {
   return (
     <main className="page shell">
-      <header className="header panel">
+      <header className="header panel unified-topbar">
         <div>
-          <h1>Prompt 管理（React + TypeScript）</h1>
+          <h1>提示词管理</h1>
           <p className="muted">高级参数页：管理 prompt 版本、模型配置和发布回滚策略。</p>
         </div>
-        <div className="header-actions">
+        <div className="header-actions unified-topbar-actions">
           <Link className="button secondary" to="/ai-generation">
             返回生成页
           </Link>

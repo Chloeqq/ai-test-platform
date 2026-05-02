@@ -186,7 +186,7 @@ def consume_page_analysis_bundle(
     raw_bundle = {
         "version": "PageAnalysisBundleV1",
         "page": normalized_page,
-        "project": str(project or "default").strip() or "default",
+        "project": str(project or "mall").strip() or "mall",
         "case_id": str(case_id or "").strip(),
         "page_url": str(page_url or "").strip(),
         "page_surface": normalized_surface,
@@ -208,7 +208,7 @@ def consume_page_analysis_bundle(
             "version": "PageAnalysisBundleV1",
             "schema_version": "page-analysis-bundle.v1",
             "page": normalized_page,
-            "project": str(project or "default").strip() or "default",
+            "project": str(project or "mall").strip() or "mall",
             "case_id": str(case_id or "").strip(),
             "page_url": str(page_url or "").strip(),
             "page_surface": normalized_surface,

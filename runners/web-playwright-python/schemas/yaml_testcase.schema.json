@@ -133,7 +133,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": ["login", "click", "fill", "wait_for", "assert_visible", "assert_count", "assert_url", "goto"]
+                "enum": ["login", "click", "fill", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_url", "goto"]
               },
               "target": {
                 "type": ["string", "null"]
@@ -152,6 +152,18 @@
               },
               "count": {
                 "type": ["integer", "number", "string", "null"]
+              },
+              "metric_rule": {
+                "type": ["string", "number", "null"]
+              },
+              "rule": {
+                "type": ["string", "number", "null"]
+              },
+              "extract_regex": {
+                "type": ["string", "null"]
+              },
+              "metric_label": {
+                "type": ["string", "null"]
               },
               "page": {
                 "type": ["string", "null"],
@@ -173,7 +185,7 @@
                 "if": {
                   "properties": {
                     "action": {
-                      "enum": ["click", "fill", "wait_for", "assert_visible", "assert_count"]
+                      "enum": ["click", "fill", "wait_for", "assert_visible", "assert_count", "assert_metric"]
                     }
                   }
                 },
@@ -184,6 +196,28 @@
                     },
                     {
                       "required": ["element_code"]
+                    }
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "enum": ["assert_metric"]
+                    }
+                  }
+                },
+                "then": {
+                  "anyOf": [
+                    {
+                      "required": ["value"]
+                    },
+                    {
+                      "required": ["metric_rule"]
+                    },
+                    {
+                      "required": ["rule"]
                     }
                   ]
                 }

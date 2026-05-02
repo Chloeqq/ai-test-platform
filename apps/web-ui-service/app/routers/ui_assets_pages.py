@@ -74,6 +74,13 @@ def asset_page_objects_page(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/react/assets/page-objects{suffix}", status_code=307)
 
 
+@router.get("/assets/page-objects/{page_code}/elements", response_class=RedirectResponse)
+def asset_page_object_elements_page(request: Request, page_code: str) -> RedirectResponse:
+    query = str(request.url.query or "").strip()
+    suffix = f"?{query}" if query else ""
+    return RedirectResponse(url=f"/react/assets/page-objects/{page_code}/elements{suffix}", status_code=307)
+
+
 @router.get("/assets/page-objects/recorder", response_class=RedirectResponse)
 def asset_page_objects_recorder_page(request: Request) -> RedirectResponse:
     query = str(request.url.query or "").strip()

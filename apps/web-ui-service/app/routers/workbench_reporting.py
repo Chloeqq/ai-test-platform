@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.test_case import TestCase, TestCaseExecution
+from shared_backend.observability import get_request_id, summarize_http_context
 
 _logger = logging.getLogger(__name__)
 router = APIRouter(tags=["workbench-reporting"])
@@ -158,12 +159,29 @@ def download_log(run_id: str, db: Session = Depends(get_db)) -> Response:
 def _proxy_orchestrator(path: str) -> dict[str, Any]:
     settings = get_settings()
     url = f"{settings.orchestrator_url.rstrip('/')}{path}"
+    request_id = get_request_id()
+    request = urllib.request.Request(url=url, method="GET")
+    if request_id:
+        request.add_header("X-Request-Id", request_id)
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
+        with urllib.request.urlopen(request, timeout=10) as resp:
             import json
-            return json.loads(resp.read())
+            payload = json.loads(resp.read())
+            _logger.info(
+                "orchestrator_proxy_end %s",
+                summarize_http_context(
+                    method="GET",
+                    path=url,
+                    request_id=request_id,
+                    status_code=getattr(resp, "status", 200),
+                ),
+            )
+            return payload
     except Exception:
-        _logger.warning("orchestrator proxy failed for %s", path, exc_info=True)
+        _logger.exception(
+            "orchestrator_proxy_failed %s",
+            summarize_http_context(method="GET", path=url, request_id=request_id),
+        )
         return {"clusters": [], "error": "orchestrator unavailable"}
 
 

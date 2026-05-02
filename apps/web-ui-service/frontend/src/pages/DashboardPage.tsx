@@ -1,5 +1,6 @@
 import { startTransition, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import { getDashboardGovernance, getDashboardOverview, type DashboardGovernanceResponse, type DashboardOverviewResponse } from "../api/governance";
 
@@ -66,7 +67,7 @@ export function DashboardPage() {
   const riskLevel = String(risk.level || "低").trim();
   const riskCardClass =
     riskLevel === "高" ? "risk-high" : riskLevel === "中" ? "risk-medium" : "risk-low";
-  const updatedAt = new Date().toLocaleString("zh-CN", { hour12: false });
+  const updatedAt = formatDateTime(new Date().toISOString());
 
   return (
     <main className="shell">

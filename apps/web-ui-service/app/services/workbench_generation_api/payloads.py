@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class FullChainRunPayload(BaseModel):
-    project: str = Field(default="atp")
+    project: str = Field(default="mall")
     page: str = Field(default="")
     requirement: str = Field(default="")
     source: str = Field(default="manual")
@@ -33,10 +33,11 @@ class FullChainRunPayload(BaseModel):
     defect_ticket: str = Field(default="")
     runtime_logs: str = Field(default="")
     selected_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    selected_intent_ids: list[str] = Field(default_factory=list)
 
 
 class GenerateCasePayload(BaseModel):
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     page: str = Field(default="")
     requirement: str = Field(default="")
     title: str = Field(default="")
@@ -55,10 +56,17 @@ class GenerateCasePayload(BaseModel):
     defect_ticket: str = Field(default="")
     runtime_logs: str = Field(default="")
     selected_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    selected_intent_ids: list[str] = Field(default_factory=list)
+
+
+class PrecheckSelectedIntentsPayload(BaseModel):
+    project: str = Field(default="mall")
+    page: str = Field(default="")
+    selected_candidates: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AutoRunPayload(BaseModel):
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     requirement: str = Field(default="")
     page_urls: list[str] = Field(default_factory=list, min_length=1, max_length=20)
     source: str = Field(default="manual")

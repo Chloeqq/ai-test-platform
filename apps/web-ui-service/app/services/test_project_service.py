@@ -17,7 +17,7 @@ from app.models.workbench_state import (
 from app.schemas.test_project import TestProjectCreate, TestProjectUpdate
 from app.services.test_case_bootstrap_service import ensure_project_seed
 
-DEFAULT_PROJECT_CODE = "atp"
+DEFAULT_PROJECT_CODE = "mall"
 PROJECT_STATUS_VALUES = {"active", "inactive"}
 
 
@@ -48,6 +48,25 @@ def _normalize_project_status(value: str) -> str:
             detail=f"status must be one of: {', '.join(sorted(PROJECT_STATUS_VALUES))}",
         )
     return normalized
+
+
+def _normalize_source_roots(value: list[str] | None) -> list[str]:
+    roots: list[str] = []
+    for item in value or []:
+        text = str(item or "").strip()
+        if text and text not in roots:
+            roots.append(text)
+    return roots[:20]
+
+
+def _normalize_source_terms(value: dict[str, str] | None) -> dict[str, str]:
+    terms: dict[str, str] = {}
+    for key, raw_value in dict(value or {}).items():
+        phrase = str(key or "").strip()
+        code = str(raw_value or "").strip()
+        if phrase and code:
+            terms[phrase] = code
+    return terms
 
 
 def _get_project_or_404(db: Session, project_code: str) -> TestProject:
@@ -168,6 +187,8 @@ def create_project(db: Session, payload: TestProjectCreate) -> TestProject:
         project_code=project_code,
         project_name=payload.project_name.strip(),
         description=payload.description.strip(),
+        source_roots_json=_normalize_source_roots(payload.source_roots),
+        source_terms_json=_normalize_source_terms(payload.source_terms),
         created_by=payload.created_by.strip() or "admin",
         status="active",
     )
@@ -193,6 +214,18 @@ def update_project(db: Session, project_code: str, payload: TestProjectUpdate) -
         next_description = str(payload.description or "").strip()
         if project.description != next_description:
             project.description = next_description
+            changed = True
+
+    if payload.source_roots is not None:
+        next_source_roots = _normalize_source_roots(payload.source_roots)
+        if list(project.source_roots_json or []) != next_source_roots:
+            project.source_roots_json = next_source_roots
+            changed = True
+
+    if payload.source_terms is not None:
+        next_source_terms = _normalize_source_terms(payload.source_terms)
+        if dict(project.source_terms_json or {}) != next_source_terms:
+            project.source_terms_json = next_source_terms
             changed = True
 
     if payload.status is not None:

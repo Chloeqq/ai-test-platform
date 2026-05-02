@@ -39,6 +39,22 @@ export interface ReportFailureItem {
   recommended_action?: string;
   confidence?: number | string;
   defect_count?: number;
+  failed_step?: {
+    step_index?: number | string;
+    page_code?: string;
+    action?: string;
+    element_code?: string;
+    locator_type?: string;
+    intent_id?: string;
+  };
+  element_impact?: {
+    project_code?: string;
+    page_code?: string;
+    element_code?: string;
+    locator_type?: string;
+    governance_href?: string;
+  };
+  governance_href?: string;
 }
 
 export interface ReportFailuresResponse {

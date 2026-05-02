@@ -59,6 +59,7 @@ class TestPointV1(BaseModel):
     api_method: str = Field(default="")
     api_path: str = Field(default="")
     priority: str = Field(default="P1")
+    expected_result: str = Field(default="")
     dependencies: list[str] = Field(default_factory=list)
     source_ids: list[str] = Field(default_factory=list)
     involved_elements: list[str] = Field(default_factory=list)
@@ -80,7 +81,7 @@ class TestPointV1(BaseModel):
 class TestPointPlanV1(BaseModel):
     """Top-level container for a set of normalized test points."""
     version: str = Field(default="TestPointPlanV1")
-    project: str = Field(default="default")
+    project: str = Field(default="mall")
     case_id: str = Field(default="")
     page: str = Field(default="")
     points: list[TestPointV1] = Field(default_factory=list)
@@ -115,7 +116,7 @@ ALLOWED_ACTIONS: frozenset[str] = frozenset({
     "hover", "scroll", "wait", "navigate",
     "assert_visible", "assert_text", "assert_value",
     "assert_hidden", "assert_enabled", "assert_disabled",
-    "assert_count", "assert_url", "assert_title",
+    "assert_count", "assert_url", "assert_title", "assert_metric",
     "upload", "download", "drag",
     "press_key", "clear", "focus", "blur",
     "noop",

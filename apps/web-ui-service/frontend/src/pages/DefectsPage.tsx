@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import { addDefect, listDefects } from "../api/governance";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
+import { FilterBar } from "../components/FilterBar";
 
 interface DefectForm {
   case_id: string;
@@ -22,18 +26,6 @@ const DEFAULT_FORM: DefectForm = {
 function text(value: unknown): string {
   const normalized = String(value || "").trim();
   return normalized || "-";
-}
-
-function formatDate(value: unknown): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) {
-    return raw;
-  }
-  return parsed.toLocaleString("zh-CN", { hour12: false });
 }
 
 export function DefectsPage() {
@@ -96,7 +88,7 @@ export function DefectsPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>缺陷管理（React + TypeScript）</h1>
+          <h1>缺陷管理</h1>
           <p className="muted">统一管理缺陷关联与执行结果闭环。</p>
         </div>
         <div className="header-actions">
@@ -109,7 +101,7 @@ export function DefectsPage() {
         </div>
       </header>
 
-      <section className="panel filters">
+      <FilterBar>
         <label>
           按 case_id 查询
           <input value={caseFilter} onChange={(event) => setCaseFilter(event.target.value)} placeholder="例如 atp-web-login-fn-ai-0001" />
@@ -129,7 +121,7 @@ export function DefectsPage() {
             重置
           </button>
         </div>
-      </section>
+      </FilterBar>
 
       <section className="panel form-grid">
         <label>
@@ -161,13 +153,7 @@ export function DefectsPage() {
         {feedback ? <span>{feedback}</span> : null}
       </section>
 
-      <section className="panel table-panel">
-        <div className="table-head">
-          <strong>缺陷记录：{items.length}</strong>
-        </div>
-        {loading ? <p>正在加载缺陷列表...</p> : null}
-        {errorText ? <p className="error">{errorText}</p> : null}
-        {!loading && !errorText ? (
+      <DataTable title={`缺陷记录：${items.length}`} loading={loading} loadingText="正在加载缺陷列表..." errorText={errorText}>
           <table>
             <thead>
               <tr>
@@ -188,18 +174,19 @@ export function DefectsPage() {
                     <td>{text(item.system)}</td>
                     <td>{text(item.defect_url)}</td>
                     <td>{text(item.note)}</td>
-                    <td>{formatDate(item.linked_at)}</td>
+                    <td>{formatDateTime(item.linked_at)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>暂无缺陷记录。</td>
+                  <td colSpan={6}>
+                    <EmptyState title="暂无缺陷记录" description="可以在上方为失败用例新增缺陷关联，便于后续质量追踪。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
     </main>
   );
 }

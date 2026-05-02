@@ -580,7 +580,7 @@ class WorkbenchService:
 
         record = workbench_gate_service.upsert_execution_gate_decision(payload, actor=actor)
         gate_snapshot = workbench_gate_service.resolve_execution_gate_audit_snapshot(
-            project=record.get("project", "default"),
+            project=record.get("project", "mall"),
             run_id=record.get("run_id", ""),
             page=record.get("page", ""),
             find_run_item=self._find_run_item,
@@ -681,7 +681,7 @@ class WorkbenchService:
             note=payload.note,
         )
         gate_snapshot = workbench_gate_service.resolve_execution_gate_audit_snapshot(
-            project=record.get("project", "default"),
+            project=record.get("project", "mall"),
             run_id=record.get("run_id", ""),
             page=record.get("page", ""),
             find_run_item=self._find_run_item,
@@ -781,7 +781,7 @@ class WorkbenchService:
             note=payload.note,
         )
         gate_snapshot = workbench_gate_service.resolve_execution_gate_audit_snapshot(
-            project=record.get("project", "default"),
+            project=record.get("project", "mall"),
             run_id=record.get("run_id", ""),
             page=record.get("page", ""),
             find_run_item=self._find_run_item,
@@ -936,7 +936,7 @@ class WorkbenchService:
         if not case_path.exists():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="case file not found for rerun")
         new_job = _start_run(
-            project=str(run_item.get("project", "default")),
+            project=str(run_item.get("project", "mall")),
             case_id=str(run_item.get("case_id", "")).strip() or "UNKNOWN",
             case_path=case_path,
             source="rerun",

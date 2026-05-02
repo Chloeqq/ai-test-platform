@@ -12,8 +12,7 @@ FROM base AS deps
 COPY apps/ai-orchestrator/requirements.txt /app/apps/ai-orchestrator/requirements.txt
 
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir -r /app/apps/ai-orchestrator/requirements.txt \
-    && playwright install --with-deps chromium
+    && python -m pip install --no-cache-dir -r /app/apps/ai-orchestrator/requirements.txt
 
 FROM deps AS runtime
 

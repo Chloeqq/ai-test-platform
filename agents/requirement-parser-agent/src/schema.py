@@ -27,6 +27,8 @@ class TestIntent:
     priority: str
     precondition: str = ""
     steps: list[str] = field(default_factory=list)
+    target: str = ""
+    value: Any = None
     expected_result: str = ""
     scene_type: str = ""
     test_data_type: str = ""

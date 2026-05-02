@@ -4,10 +4,12 @@ import logging
 import re
 from typing import Any
 
+from .element_binding import build_element_alias_map, resolve_element_code
+
 _LOGGER = logging.getLogger(__name__)
 
 
-_DSL_ACTIONS = {"input", "click", "assert", "navigate", "wait", "login"}
+_DSL_ACTIONS = {"input", "click", "assert", "navigate", "wait", "login", "assert_metric"}
 _ASSERTION_TYPES = {"url", "visible", "text"}
 _DSL_TO_RUNNER_ACTION = {
     "input": "fill",
@@ -15,6 +17,7 @@ _DSL_TO_RUNNER_ACTION = {
     "wait": "wait_for",
     "navigate": "goto",
     "login": "login",
+    "assert_metric": "assert_metric",
 }
 _LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*•·]+\s*|\d+\s*[.)、]\s*)")
 _SPACE_RE = re.compile(r"\s+")
@@ -45,6 +48,11 @@ def _normalized_text(value: Any) -> str:
 
 def _compact(value: Any) -> str:
     return _SPACE_RE.sub("", str(value or "").strip().lower())
+
+
+def _normalized_key(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return "".join(ch for ch in text if ch.isalnum())
 
 
 def _extract_intent_id(point: dict[str, Any], point_index: int) -> str:
@@ -203,6 +211,80 @@ def _parse_input_value(text: str) -> str | None:
     return None
 
 
+def _resolve_metric_rule(step: dict[str, Any], point: dict[str, Any], fallback_value: Any) -> Any:
+    for source in (
+        step.get("metric_rule"),
+        step.get("rule"),
+        step.get("assert_rule"),
+        point.get("metric_rule"),
+        point.get("rule"),
+        point.get("assert_rule"),
+        fallback_value,
+    ):
+        if source is not None and source != "":
+            return source
+    return None
+
+
+def _resolve_extract_regex(step: dict[str, Any], point: dict[str, Any]) -> str | None:
+    for source in (
+        step.get("extract_regex"),
+        step.get("pattern"),
+        step.get("regex"),
+        point.get("extract_regex"),
+        point.get("pattern"),
+        point.get("regex"),
+    ):
+        value = _normalized_text(source)
+        if value:
+            return value
+    return None
+
+
+def _resolve_metric_label(step: dict[str, Any], point: dict[str, Any]) -> str | None:
+    for source in (
+        step.get("metric_label"),
+        step.get("label"),
+        point.get("metric_label"),
+        point.get("label"),
+    ):
+        value = _normalized_text(source)
+        if value:
+            return value
+    return None
+
+
+def _is_business_type_allowed_for_action(action_type: str, assertion: str, business_type: str) -> tuple[bool, str]:
+    normalized_type = _normalized_text(business_type).lower()
+    if not normalized_type:
+        return True, ""
+
+    if action_type == "input":
+        if normalized_type in {"input", "searchbox", "textarea"}:
+            return True, ""
+        return False, f"business_type `{normalized_type}` cannot be used as input target"
+
+    if action_type == "click":
+        if normalized_type in {"button", "link", "menu", "tab", "switch", "checkbox", "radio", "password_toggle"}:
+            return True, ""
+        return False, f"business_type `{normalized_type}` cannot be used as click target"
+
+    if action_type == "assert_metric":
+        if normalized_type == "metric_label":
+            return True, ""
+        return False, f"business_type `{normalized_type}` cannot be used as assert_metric target"
+
+    if action_type == "wait":
+        return True, ""
+
+    if action_type == "assert":
+        if assertion in {"visible", "text"}:
+            return True, ""
+        return False, f"business_type `{normalized_type}` cannot be used for assertion `{assertion}`"
+
+    return True, ""
+
+
 def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[str, Any]]:
     actions: list[dict[str, Any]] = []
     for point in points:
@@ -245,6 +327,9 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
             target = _normalized_text(step.get("target"))
             effective_target = target or _normalized_text(point.get("target"))
             value = step.get("value")
+            metric_rule = _resolve_metric_rule(step, point, value)
+            extract_regex = _resolve_extract_regex(step, point)
+            metric_label = _resolve_metric_label(step, point)
             if not action:
                 raise ExecutionCompilerError(
                     code="execution_compiler_invalid_dsl_action",
@@ -269,9 +354,16 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
                     "assert_text": "text",
                     "assert_url": "url",
                 }[action]
+            elif action in {"assert_metric", "assert_number", "assertmetric", "assertnumber"}:
+                mapped_action = "assert_metric"
+                assertion = None
             elif action == "assert":
-                mapped_action = "assert"
-                if assertion not in {"visible", "text", "url"}:
+                if assertion in {"metric", "number", "numeric"}:
+                    mapped_action = "assert_metric"
+                    assertion = None
+                else:
+                    mapped_action = "assert"
+                if mapped_action == "assert" and assertion not in {"visible", "text", "url"}:
                     assertion = "visible"
             elif action == "login":
                 mapped_action = "login"
@@ -284,7 +376,7 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
                     stage="normalize_test_points_to_actions",
                 )
 
-            requires_target = mapped_action in {"input", "click", "wait", "assert"} and assertion != "url"
+            requires_target = mapped_action in {"input", "click", "wait", "assert", "assert_metric"} and assertion != "url"
             if requires_target and not effective_target:
                 raise ExecutionCompilerError(
                     code="execution_compiler_invalid_dsl_action",
@@ -306,11 +398,22 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
                     reason=f"point `{intent_id}` step {step_index} invalid assertion `{assertion}`",
                     stage="normalize_test_points_to_actions",
                 )
+            if mapped_action == "assert_metric" and (metric_rule is None or metric_rule == ""):
+                raise ExecutionCompilerError(
+                    code="execution_compiler_invalid_dsl_action",
+                    message="assert_metric step requires rule/value",
+                    reason=f"point `{intent_id}` step {step_index} missing metric rule",
+                    stage="normalize_test_points_to_actions",
+                )
             normalized_action = {
                 "type": mapped_action,
                 "target": effective_target or None,
-                "value": value,
+                "value": metric_rule if mapped_action == "assert_metric" else value,
                 "assertion": assertion,
+                "metric_rule": metric_rule if mapped_action == "assert_metric" else None,
+                "rule": metric_rule if mapped_action == "assert_metric" else None,
+                "extract_regex": extract_regex if mapped_action == "assert_metric" else None,
+                "metric_label": metric_label if mapped_action == "assert_metric" else None,
                 "intent_id": intent_id,
                 "meta": {
                     "raw_text": raw_text or action,
@@ -381,7 +484,7 @@ def build_execution_ir(actions: list[dict[str, Any]]) -> dict[str, Any]:
                 reason=f"action {index} is unknown",
                 stage="build_execution_ir",
             )
-        if action_type in {"input", "click", "wait", "assert"} and not target and assertion != "url":
+        if action_type in {"input", "click", "wait", "assert", "assert_metric"} and not target and assertion != "url":
             raise ExecutionCompilerError(
                 code="execution_compiler_invalid_dsl_action",
                 message="action requires target",
@@ -402,12 +505,26 @@ def build_execution_ir(actions: list[dict[str, Any]]) -> dict[str, Any]:
                 reason=f"assert action {index} invalid assertion `{assertion}`",
                 stage="build_execution_ir",
             )
+        metric_rule = _resolve_metric_rule(raw, {}, raw.get("value"))
+        extract_regex = _resolve_extract_regex(raw, {})
+        metric_label = _resolve_metric_label(raw, {})
+        if action_type == "assert_metric" and (metric_rule is None or metric_rule == ""):
+            raise ExecutionCompilerError(
+                code="execution_compiler_invalid_dsl_action",
+                message="assert_metric action requires rule/value",
+                reason=f"assert_metric action {index} missing rule",
+                stage="build_execution_ir",
+            )
         steps.append(
             {
                 "type": action_type,
                 "target": target,
-                "value": raw.get("value"),
+                "value": metric_rule if action_type == "assert_metric" else raw.get("value"),
                 "assertion": assertion or None,
+                "metric_rule": metric_rule if action_type == "assert_metric" else None,
+                "rule": metric_rule if action_type == "assert_metric" else None,
+                "extract_regex": extract_regex if action_type == "assert_metric" else None,
+                "metric_label": metric_label if action_type == "assert_metric" else None,
                 "selector": "",
                 "locator_type": "",
                 "intent_id": intent_id,
@@ -433,6 +550,7 @@ def bind_targets(ir: dict[str, Any], page_object: dict[str, Any]) -> dict[str, A
             stage="bind_targets",
         )
     normalized_elements: dict[str, dict[str, str]] = {}
+
     elements = page_object.get("elements") if isinstance(page_object, dict) else None
     if isinstance(elements, dict):
         for raw_code, raw_meta in elements.items():
@@ -441,18 +559,25 @@ def bind_targets(ir: dict[str, Any], page_object: dict[str, Any]) -> dict[str, A
             selector = _normalized_text(meta.get("selector"))
             locator_type = _normalized_text(meta.get("type"))
             role = _normalized_text(meta.get("role"))
+            name = _normalized_text(meta.get("name") or meta.get("element_name"))
             if code and selector:
                 normalized_elements[code] = {
                     "selector": selector,
                     "locator_type": locator_type or "css",
                     "role": role,
+                    "name": name,
+                    "business_type": _normalized_text(meta.get("business_type")),
                 }
+
+    alias_to_code = build_element_alias_map(page_object if isinstance(page_object, dict) else {})
 
     bound_steps: list[dict[str, Any]] = []
     for index, raw_step in enumerate(ir["steps"]):
         step = dict(raw_step) if isinstance(raw_step, dict) else {}
         action_type = _normalized_text(step.get("type")).lower()
         target = _normalized_text(step.get("target"))
+        if target.startswith("element:"):
+            target = _normalized_text(target.removeprefix("element:"))
         meta = step.get("meta") if isinstance(step.get("meta"), dict) else {}
         meta_status = _normalized_text(meta.get("compiler_status")) or "resolved"
         meta_reason = _normalized_text(meta.get("compiler_reason"))
@@ -498,15 +623,34 @@ def bind_targets(ir: dict[str, Any], page_object: dict[str, Any]) -> dict[str, A
             bound_steps.append(step)
             continue
 
+        resolved_target = target
         element = normalized_elements.get(target) if target else None
+        if element is None and target:
+            resolved_target = resolve_element_code(target, alias_to_code)
+            if resolved_target:
+                element = normalized_elements.get(resolved_target)
         if element is None:
             raise ExecutionCompilerError(
-                code="page_object_not_found",
+                code="target_binding_failed",
                 message="target not found in page object",
                 reason=meta_reason or (f"target `{target}` not found in page object" if target else "missing explicit target"),
                 stage="bind_targets",
             )
 
+        allowed, reason = _is_business_type_allowed_for_action(
+            action_type,
+            assertion,
+            element.get("business_type", ""),
+        )
+        if not allowed:
+            raise ExecutionCompilerError(
+                code="target_binding_failed",
+                message="target business type is not compatible with action",
+                reason=reason,
+                stage="bind_targets",
+            )
+
+        step["target"] = resolved_target
         step["selector"] = element["selector"]
         step["locator_type"] = element["locator_type"]
         step["role"] = element.get("role") or None
@@ -567,7 +711,7 @@ def render_execution_steps(ir: dict[str, Any]) -> list[dict[str, Any]]:
                 runner_action = "assert_text"
             else:
                 runner_action = "assert_visible"
-        if action_type in {"input", "click", "wait"} and (not target or not selector or not locator_type):
+        if action_type in {"input", "click", "wait", "assert_metric"} and (not target or not selector or not locator_type):
             raise ExecutionCompilerError(
                 code="execution_render_failed",
                 message="compiled step missing selector binding",
@@ -640,6 +784,24 @@ def render_execution_steps(ir: dict[str, Any]) -> list[dict[str, Any]]:
             output["value"] = step.get("value") if step.get("value") is not None else ""
         elif runner_action == "assert_visible":
             output["value"] = step.get("value") if step.get("value") not in {"", None} else None
+        elif runner_action == "assert_metric":
+            metric_rule = _resolve_metric_rule(step, {}, step.get("value"))
+            if metric_rule is None or metric_rule == "":
+                raise ExecutionCompilerError(
+                    code="execution_render_failed",
+                    message="assert_metric step missing rule",
+                    reason=f"step {index} missing assert_metric rule",
+                    stage="render_execution_steps",
+                )
+            output["value"] = metric_rule
+            output["metric_rule"] = metric_rule
+            output["rule"] = metric_rule
+            extract_regex = _resolve_extract_regex(step, {})
+            if extract_regex:
+                output["extract_regex"] = extract_regex
+            metric_label = _resolve_metric_label(step, {})
+            if metric_label:
+                output["metric_label"] = metric_label
         elif runner_action == "login":
             output["target"] = ""
             output["selector"] = ""

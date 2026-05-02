@@ -258,7 +258,7 @@ def runtime_view_from_entry(
         execution_record = build_runtime_execution_record(
             run_id=run_id,
             case_id=str(source.get("case_id", "")).strip(),
-            project=str(source.get("project", "default")).strip() or "default",
+            project=str(source.get("project", "mall")).strip() or "mall",
             source=str(source.get("source", "manual")).strip() or "manual",
             mode=str(source.get("mode", "generate_and_run")).strip() or "generate_and_run",
             status=str(source.get("status", "queued")).strip() or "queued",
@@ -273,7 +273,7 @@ def runtime_view_from_entry(
     started_at = str(source.get("started_at", "")).strip() or str(execution_record.get("started_at", "")).strip()
     finished_at = str(source.get("finished_at", "")).strip() or str(execution_record.get("finished_at", "")).strip()
     mode_value = str(source.get("mode", "")).strip() or str(execution_record.get("mode", "generate_and_run")).strip() or "generate_and_run"
-    project_value = str(source.get("project", execution_record.get("project", "default"))).strip() or "default"
+    project_value = str(source.get("project", execution_record.get("project", "mall"))).strip() or "mall"
     case_id_value = normalize_case_id(str(source.get("case_id", execution_record.get("case_id", ""))).strip()) if str(source.get("case_id", execution_record.get("case_id", ""))).strip() else ""
     inferred_page = [
         str(source.get("page", "")).strip(),
@@ -509,7 +509,7 @@ def runtime_view_with_execution_record_preferred(
             **artifact_execution_record,
             "run_id": str(artifact_execution_record.get("run_id", "")).strip() or str(view.get("run_id", "")).strip(),
             "case_id": str(artifact_execution_record.get("case_id", "")).strip() or str(view.get("case_id", "")).strip(),
-            "project": str(artifact_execution_record.get("project", "")).strip() or str(view.get("project", "default")).strip(),
+            "project": str(artifact_execution_record.get("project", "")).strip() or str(view.get("project", "mall")).strip(),
             "source": str(artifact_execution_record.get("source", "")).strip() or str(view.get("source", "manual")).strip(),
             "mode": str(artifact_execution_record.get("mode", "")).strip() or str(view.get("mode", "generate_and_run")).strip(),
             "metadata": {

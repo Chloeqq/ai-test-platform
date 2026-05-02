@@ -1,24 +1,14 @@
 import { startTransition, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import { getExecutionReportDetail, type ExecutionReportItem } from "../api/report";
+import { DataTable } from "../components/DataTable";
 import { ReportTabs } from "./ReportTabs";
 
 function text(value: unknown): string {
   const normalized = String(value || "").trim();
   return normalized || "-";
-}
-
-function formatDate(value: string | undefined): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) {
-    return raw;
-  }
-  return date.toLocaleString("zh-CN", { hour12: false });
 }
 
 export function ExecutionResultDetailPage() {
@@ -76,10 +66,7 @@ export function ExecutionResultDetailPage() {
 
       {!loading && !errorText ? (
         <>
-          <section className="panel table-panel">
-            <div className="table-head">
-              <strong>执行摘要</strong>
-            </div>
+          <DataTable title="执行摘要">
             <table>
               <tbody>
                 <tr>
@@ -100,11 +87,11 @@ export function ExecutionResultDetailPage() {
                 </tr>
                 <tr>
                   <th>执行时间</th>
-                  <td>{formatDate(detail.executed_at)}</td>
+                  <td>{formatDateTime(detail.executed_at)}</td>
                 </tr>
               </tbody>
             </table>
-          </section>
+          </DataTable>
 
           <section className="panel">
             <h2>留痕信息</h2>

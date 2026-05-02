@@ -45,8 +45,8 @@ ReadJsonList = Callable[[Path], list[dict[str, Any]]]
 
 
 def _normalize_project(project: str) -> str:
-    normalized = str(project or "default").strip()
-    return normalized or "default"
+    normalized = str(project or "mall").strip()
+    return normalized or "mall"
 
 
 def _safe_case_id(raw: str) -> str:
@@ -639,7 +639,7 @@ def save_test_point_plan(
             "case_id": case_id,
             "page": page,
             "page_url": page_url,
-            "source_type": str(plan.get("source_type", "execution_steps")).strip() if isinstance(plan, dict) else "execution_steps",
+            "source_type": str(plan.get("source_type", "generate_chain")).strip() if isinstance(plan, dict) else "generate_chain",
             "requirement": [requirement],
             "generated_at": now_iso_fn(),
             "points": (plan or {}).get("points", []) if isinstance(plan, dict) else [],
@@ -753,7 +753,7 @@ def upsert_test_point_asset_snapshot(
         "page": str(page).strip() or str(existing.get("page", "")).strip() or "unknown",
         "requirement": [str(item).strip() for item in requirement_list if str(item).strip()],
         "priority": str(normalized_plan.get("priority", existing.get("priority", "P1"))).strip() or "P1",
-        "source_type": str(normalized_plan.get("source_type", existing.get("source_type", "execution_steps"))).strip() or "execution_steps",
+        "source_type": str(normalized_plan.get("source_type", existing.get("source_type", "generate_chain"))).strip() or "generate_chain",
         "source_name": str(normalized_plan.get("source_name", existing.get("source_name", case_id))).strip() or case_id,
         "source_ref": str(normalized_plan.get("source_ref", existing.get("source_ref", str(plan_path.resolve())))).strip() or str(plan_path.resolve()),
         "plan_path": str(plan_path.resolve()),
@@ -802,7 +802,7 @@ def load_test_point_asset_with_root(project: str, case_id: str, *, state_root: P
                     "asset_id": normalized_case_id,
                     "page": str(plan_payload.get("page", "")).strip(),
                     "priority": str(plan_payload.get("priority", "P1")).strip() or "P1",
-                    "source_type": str(plan_payload.get("source_type", "execution_steps")).strip() or "execution_steps",
+                    "source_type": str(plan_payload.get("source_type", "generate_chain")).strip() or "generate_chain",
                 }
             if not isinstance(asset.get("plan"), dict):
                 asset["plan"] = plan_payload
@@ -1547,7 +1547,7 @@ def latest_run_snapshot_for_case(
     build_execution_gate_audit_snapshot_fn: BuildExecutionGateAuditSnapshot,
     build_risk_report_summary_fn: BuildRiskReportSummary,
 ) -> dict[str, Any]:
-    normalized_project = str(project or "default").strip() or "default"
+    normalized_project = str(project or "mall").strip() or "mall"
     normalized_case_id = safe_case_id_fn(case_id)
     normalized_page = normalize_page_slug_fn(page) if str(page).strip() else ""
     candidates: list[dict[str, Any]] = []
@@ -1555,7 +1555,7 @@ def latest_run_snapshot_for_case(
     candidates.extend(runtime_view_with_execution_record_preferred_fn(item) for item in read_json_list_fn(runtime_runs_file))
     matched: list[dict[str, Any]] = []
     for item in candidates:
-        if str(item.get("project", "default")).strip() != normalized_project:
+        if str(item.get("project", "mall")).strip() != normalized_project:
             continue
         if safe_case_id_fn(str(item.get("case_id", "")).strip()) != normalized_case_id:
             continue

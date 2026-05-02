@@ -50,6 +50,22 @@ def scheduler_page(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/react/settings/scheduler{suffix}", status_code=307)
 
 
+@router.get("/system/projects", response_class=RedirectResponse)
+@router.get("/settings/projects", include_in_schema=False, response_class=RedirectResponse)
+def settings_projects_page(request: Request) -> RedirectResponse:
+    query = str(request.url.query or "").strip()
+    suffix = f"?{query}" if query else ""
+    return RedirectResponse(url=f"/react/system/projects{suffix}", status_code=307)
+
+
+@router.get("/system/source-config", response_class=RedirectResponse)
+@router.get("/settings/source-config", include_in_schema=False, response_class=RedirectResponse)
+def settings_source_config_page(request: Request) -> RedirectResponse:
+    query = str(request.url.query or "").strip()
+    suffix = f"?{query}" if query else ""
+    return RedirectResponse(url=f"/react/system/source-config{suffix}", status_code=307)
+
+
 @router.get("/system/environments", response_class=RedirectResponse)
 @router.get("/settings/environments", include_in_schema=False, response_class=RedirectResponse)
 def settings_environments_page(request: Request) -> RedirectResponse:

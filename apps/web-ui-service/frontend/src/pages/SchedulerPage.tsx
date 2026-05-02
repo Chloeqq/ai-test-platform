@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getSchedulerDispatchPlan, getSchedulerSummary, type SchedulerDispatchPlanResponse, type SchedulerSummaryResponse } from "../api/governance";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
 
 function text(value: unknown): string {
   const normalized = String(value || "").trim();
@@ -59,7 +61,7 @@ export function SchedulerPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>调度中心（React + TypeScript）</h1>
+          <h1>调度中心</h1>
           <p className="muted">观察队列压力、资源画像与分发建议。</p>
         </div>
         <div className="header-actions">
@@ -91,13 +93,7 @@ export function SchedulerPage() {
         </article>
       </section>
 
-      <section className="panel table-panel">
-        <div className="table-head">
-          <strong>队列分布</strong>
-        </div>
-        {loading ? <p>正在加载调度数据...</p> : null}
-        {errorText ? <p className="error">{errorText}</p> : null}
-        {!loading && !errorText ? (
+      <DataTable title="队列分布" loading={loading} loadingText="正在加载调度数据..." errorText={errorText}>
           <table>
             <thead>
               <tr>
@@ -123,13 +119,14 @@ export function SchedulerPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>暂无队列数据。</td>
+                  <td colSpan={6}>
+                    <EmptyState title="暂无队列数据" description="调度服务同步执行队列后，会在这里展示队列压力和资源画像。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
 
       <section className="panel">
         <h2>调度建议</h2>

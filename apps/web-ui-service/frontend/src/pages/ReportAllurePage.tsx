@@ -45,7 +45,7 @@ export function ReportAllurePage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>Allure 报告（React + TypeScript）</h1>
+          <h1>Allure 报告</h1>
           <p className="muted">统一入口到 Allure 报告快照。</p>
         </div>
       </header>

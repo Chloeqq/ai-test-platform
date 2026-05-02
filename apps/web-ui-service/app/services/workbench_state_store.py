@@ -113,12 +113,12 @@ def _upsert_db_item(path: Path, item: dict[str, Any]) -> None:
             if existing_run is None:
                 existing_run = WorkbenchRuntimeRun(run_id=run_id)
                 db.add(existing_run)
-            existing_run.project = str(payload.get("project", "default")).strip() or "default"
+            existing_run.project = str(payload.get("project", "mall")).strip() or "mall"
             existing_run.page = str(payload.get("page", "")).strip()
             existing_run.status = str(payload.get("status", "")).strip()
             existing_run.payload = payload
         elif model is WorkbenchReviewDecision:
-            project = str(payload.get("project", "default")).strip() or "default"
+            project = str(payload.get("project", "mall")).strip() or "mall"
             run_id = str(payload.get("run_id", "")).strip()
             page = str(payload.get("page", "")).strip()
             review_type = str(payload.get("review_type", "")).strip()
@@ -143,7 +143,7 @@ def _upsert_db_item(path: Path, item: dict[str, Any]) -> None:
             existing_review.status = str(payload.get("status", "")).strip()
             existing_review.payload = payload
         elif model is WorkbenchExecutionGateDecision:
-            project = str(payload.get("project", "default")).strip() or "default"
+            project = str(payload.get("project", "mall")).strip() or "mall"
             run_id = str(payload.get("run_id", "")).strip()
             page = str(payload.get("page", "")).strip()
             existing_gate = db.execute(
@@ -224,7 +224,7 @@ def _replace_db_items(path: Path, items: list[dict[str, Any]]) -> None:
                 db.add(
                     WorkbenchRuntimeRun(
                         run_id=str(payload.get("run_id", "")).strip(),
-                        project=str(payload.get("project", "default")).strip() or "default",
+                        project=str(payload.get("project", "mall")).strip() or "mall",
                         page=str(payload.get("page", "")).strip(),
                         status=str(payload.get("status", "")).strip(),
                         payload=payload,
@@ -233,7 +233,7 @@ def _replace_db_items(path: Path, items: list[dict[str, Any]]) -> None:
             elif model is WorkbenchReviewDecision:
                 db.add(
                     WorkbenchReviewDecision(
-                        project=str(payload.get("project", "default")).strip() or "default",
+                        project=str(payload.get("project", "mall")).strip() or "mall",
                         run_id=str(payload.get("run_id", "")).strip(),
                         page=str(payload.get("page", "")).strip(),
                         review_type=str(payload.get("review_type", "")).strip(),
@@ -244,7 +244,7 @@ def _replace_db_items(path: Path, items: list[dict[str, Any]]) -> None:
             elif model is WorkbenchExecutionGateDecision:
                 db.add(
                     WorkbenchExecutionGateDecision(
-                        project=str(payload.get("project", "default")).strip() or "default",
+                        project=str(payload.get("project", "mall")).strip() or "mall",
                         run_id=str(payload.get("run_id", "")).strip(),
                         page=str(payload.get("page", "")).strip(),
                         decision=str(payload.get("decision", "")).strip(),

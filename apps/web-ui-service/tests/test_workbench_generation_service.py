@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException
 import pytest
 
 from app.services import workbench_generation_service
+from app.services.workbench_generation_api.candidate_normalizer import CandidateNormalizer
+from app.services.workbench_generation_compiler.runtime import generate_pipeline as generate_pipeline_module
 
 
 def test_allocate_case_id_skips_existing_requested_case_id(tmp_path: Path) -> None:
@@ -77,6 +80,233 @@ def test_normalize_generated_case_title_strips_heading_and_bullet_text() -> None
         workbench_generation_service._normalize_generated_case_title("- 正确账号密码可登录成功")
         == "正确账号密码可登录成功"
     )
+
+
+def test_build_candidate_requirement_focuses_on_single_candidate() -> None:
+    normalizer = CandidateNormalizer(SimpleNamespace(testpoint_filter_enabled=lambda: False))
+    text = normalizer.build_candidate_requirement(
+        "完整登录需求",
+        {
+            "intent_id": "intent-01",
+            "title": "首次登录成功",
+            "summary": "首次登录成功",
+            "intent_type": "functional",
+            "precondition": "用户未登录",
+            "steps": ["输入账号", "输入密码", "点击登录"],
+            "steps_hint": ["input:username_input", "input:password_input", "click:login_button"],
+            "expected": "进入首页",
+            "involved_elements": ["username_input", "password_input", "login_button"],
+            "involved_element_codes": ["login-role---1", "login-role---2", "login-role---4"],
+        },
+    )
+
+    assert text.startswith("测试点ID：intent-01")
+    assert "steps_hint:" in text
+    assert "1. input:username_input" in text
+    assert "涉及元素Code：login-role---1、login-role---2、login-role---4" in text
+    assert "完整登录需求" not in text
+    assert "仅围绕上述单个测试意图生成" in text
+
+
+def test_normalize_candidates_preserves_steps_hint() -> None:
+    normalizer = CandidateNormalizer(SimpleNamespace(testpoint_filter_enabled=lambda: False))
+    candidates = normalizer.normalize_candidates(
+        [
+            {
+                "intent_id": "intent-01",
+                "title": "首次登录成功",
+                "summary": "首次登录成功",
+                "intent_type": "functional",
+                "priority": "P1",
+                "precondition": "用户未登录",
+                "steps": ["输入账号", "输入密码", "点击登录"],
+                "steps_hint": ["input:username_input", "input:password_input", "click:login_button"],
+                "expected": "进入首页",
+                "involved_elements": ["username_input", "password_input", "login_button"],
+            }
+        ]
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["steps_hint"] == ["input:username_input", "input:password_input", "click:login_button"]
+
+
+def test_resolve_page_object_falls_back_to_yaml_assets(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(generate_pipeline_module, "_resolve_page_object_from_db", lambda _project, _page: None)
+    page_object = generate_pipeline_module.resolve_page_object("atp", "login", strict_governance=False)
+
+    assert page_object["page"] == "login"
+    assert {"username_input", "password_input", "login_button", "home_menu"}.issubset(set(page_object["elements"]))
+
+
+def test_resolve_page_object_blocks_yaml_fallback_in_strict_governance(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(generate_pipeline_module, "_resolve_page_object_from_db", lambda _project, _page: None)
+
+    with pytest.raises(generate_pipeline_module.ExecutionCompilerError) as exc:
+        generate_pipeline_module.resolve_page_object("atp", "login")
+
+    assert exc.value.code == "page_object_not_governed"
+    assert "YAML fallback is disabled" in exc.value.reason
+
+
+def test_resolve_page_object_db_error_does_not_fallback_to_yaml(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(_project: str, _page: str) -> dict[str, Any] | None:
+        raise generate_pipeline_module.ExecutionCompilerError(
+            code="page_object_db_lookup_failed",
+            message="page object DB lookup failed",
+            reason="db unavailable",
+            stage="resolve_page_object",
+        )
+
+    monkeypatch.setattr(generate_pipeline_module, "_resolve_page_object_from_db", _boom)
+
+    with pytest.raises(generate_pipeline_module.ExecutionCompilerError) as exc:
+        generate_pipeline_module.resolve_page_object("atp", "login", strict_governance=False)
+
+    assert exc.value.code == "page_object_db_lookup_failed"
+
+
+def test_resolve_page_object_from_db_only_exposes_qualified_formal_elements(monkeypatch: pytest.MonkeyPatch) -> None:
+    page_object = SimpleNamespace(id=1)
+    elements = [
+        SimpleNamespace(
+            id=1,
+            element_code="username_input",
+            element_name="用户名输入框",
+            locator_type="role",
+            locator_value="用户名",
+            role="textbox",
+            status="active",
+            review_status="approved",
+            stability_level="high",
+            business_type="input",
+            business_domain="auth",
+            aliases_json=["账号输入框"],
+            semantic_tags_json=[],
+        ),
+        SimpleNamespace(
+            id=2,
+            element_code="dirty_button",
+            element_name="脏按钮",
+            locator_type="css",
+            locator_value=".dirty",
+            role="",
+            status="active",
+            review_status="pending",
+            stability_level="low",
+            business_type="button",
+            business_domain="auth",
+            aliases_json=["脏按钮"],
+            semantic_tags_json=[],
+        ),
+    ]
+
+    class _ScalarResult:
+        def __init__(self, rows: list[object]) -> None:
+            self._rows = rows
+
+        def all(self) -> list[object]:
+            return self._rows
+
+    class _ExecuteResult:
+        def __init__(self, value: object) -> None:
+            self._value = value
+
+        def scalar_one_or_none(self) -> object:
+            return self._value
+
+        def scalars(self) -> _ScalarResult:
+            return _ScalarResult(self._value)  # type: ignore[arg-type]
+
+    class _Session:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def __enter__(self) -> "_Session":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def execute(self, _statement: object) -> _ExecuteResult:
+            self.calls += 1
+            return _ExecuteResult(page_object if self.calls == 1 else elements)
+
+    monkeypatch.setattr(generate_pipeline_module, "SessionLocal", _Session)
+
+    resolved = generate_pipeline_module._resolve_page_object_from_db("mall", "login")
+
+    assert resolved is not None
+    assert set(resolved["elements"]) == {"username_input"}
+    assert resolved["elements"]["username_input"]["business_type"] == "input"
+    assert "dirty_button" not in resolved["elements"]
+
+
+def test_resolve_page_object_from_db_blocks_existing_page_without_qualified_elements(monkeypatch: pytest.MonkeyPatch) -> None:
+    page_object = SimpleNamespace(id=1)
+    elements = [
+        SimpleNamespace(
+            id=1,
+            element_code="dirty_button",
+            locator_value=".dirty",
+            status="active",
+            review_status="pending",
+            stability_level="low",
+        )
+    ]
+
+    class _ScalarResult:
+        def all(self) -> list[object]:
+            return elements
+
+    class _ExecuteResult:
+        def __init__(self, value: object = None) -> None:
+            self._value = value
+
+        def scalar_one_or_none(self) -> object:
+            return page_object
+
+        def scalars(self) -> _ScalarResult:
+            return _ScalarResult()
+
+    class _Session:
+        def __enter__(self) -> "_Session":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def execute(self, _statement: object) -> _ExecuteResult:
+            return _ExecuteResult()
+
+    monkeypatch.setattr(generate_pipeline_module, "SessionLocal", _Session)
+
+    with pytest.raises(generate_pipeline_module.ExecutionCompilerError) as exc:
+        generate_pipeline_module._resolve_page_object_from_db("mall", "login")
+
+    assert exc.value.code == "page_object_empty_elements"
+    assert "active + review_status=approved" in exc.value.reason
+
+
+def test_infer_password_toggle_alias_for_login_icon_element() -> None:
+    aliases = generate_pipeline_module._infer_element_aliases(
+        page="login",
+        element_code="login-css-i-path-3",
+        element_name="录制元素3",
+        locator_value="i path:nth-child(3)",
+        role="",
+        aliases=[],
+    )
+    display_name = generate_pipeline_module._element_display_name(
+        page="login",
+        element_code="login-css-i-path-3",
+        element_name="录制元素3",
+        locator_value="i path:nth-child(3)",
+        role="",
+    )
+
+    assert "password_visibility_toggle" in aliases
+    assert display_name == "密码显隐开关"
 
 
 def test_ensure_execution_steps_keeps_ai_steps_raw_when_present() -> None:
@@ -184,3 +414,136 @@ def test_build_generated_case_payload_passes_through_orchestrator_validation_err
     assert exc_info.value.status_code == 422
     assert isinstance(exc_info.value.detail, dict)
     assert exc_info.value.detail.get("reason_code") == "test_design_invalid_output"
+
+
+def test_build_generated_case_payload_saves_test_point_plan_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = SimpleNamespace(
+        project="atp",
+        page="login",
+        requirement="登录功能",
+        title="登录功能",
+        source="manual",
+        case_id="",
+        priority="P1",
+        tags=["ai-generated"],
+        input_sources=[],
+        openapi_spec={},
+        prd_text="",
+        prd_url="",
+        user_story="",
+        git_diff="",
+        git_diff_path="",
+        openapi_url="",
+        defect_ticket="",
+        runtime_logs="",
+        selected_candidates=[{"intent_id": "intent-01"}],
+        selected_intent_ids=["intent-01"],
+        page_url="",
+    )
+    ai_cases_root = tmp_path / "ai-generated"
+    ai_cases_root.mkdir(parents=True, exist_ok=True)
+    written_paths: list[Path] = []
+    saved_plan_calls: list[dict[str, Any]] = []
+
+    def _run_orchestrator_generate(**_kwargs: Any) -> dict[str, Any]:
+        return {
+            "requirement_spec": {
+                "page": "login",
+                "priority": "P1",
+                "test_intents": [
+                    {
+                        "intent_id": "intent-01",
+                        "title": "登录成功",
+                        "intent_type": "functional",
+                        "priority": "P1",
+                        "expected_result": "登录成功",
+                        "involved_elements": ["login_button"],
+                        "steps": [{"action": "click", "target": "login_button", "raw_text": "点击登录按钮"}],
+                        "quality_gate": {"decision": "allow", "blockers": []},
+                    }
+                ],
+                "quality_gate": {"decision": "allow", "blockers": []},
+            },
+            "case": {
+                "id": "",
+                "project": "atp",
+                "module": "login",
+                "execution": {"page": "login"},
+                "title": "登录功能",
+                "priority": "P1",
+                "tags": ["ai-generated"],
+            },
+            "test_points": {
+                "version": "TestPointPlanV1",
+                "project": "atp",
+                "case_id": "",
+                "page": "login",
+                "points": [
+                    {
+                        "intent_id": "intent-01",
+                        "point_type": "action",
+                        "action": "click",
+                        "target": "login_button",
+                        "expected_result": "登录成功",
+                        "involved_elements": ["login_button"],
+                        "steps": [{"action": "click", "target": "login_button", "raw_text": "点击登录按钮"}],
+                    }
+                ],
+            },
+        }
+
+    def _write_case_yaml(path: Path, data: dict[str, Any], **_kwargs: Any) -> str:
+        written_paths.append(path)
+        path.write_text("id: atp-web-login-fn-ai-0001\n", encoding="utf-8")
+        return path.read_text(encoding="utf-8")
+
+    def _save_case_state(_project: str, _case_yaml: dict[str, Any], _case_path: Any) -> dict[str, Any]:
+        return {"version": 1}
+
+    def _save_test_point_plan(**kwargs: Any) -> Path:
+        saved_plan_calls.append(kwargs)
+        plan_path = tmp_path / "test-points" / "atp" / "plans" / "atp-web-login-fn-ai-0001.json"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        plan_path.write_text("{}", encoding="utf-8")
+        return plan_path
+
+    monkeypatch.setattr(
+        generate_pipeline_module,
+        "resolve_page_object",
+        lambda _project, _page: {"elements": {"login_button": {"selector": "#login", "type": "css"}}},
+    )
+
+    result = workbench_generation_service.build_generated_case_payload(
+        payload=payload,
+        normalized_page="login",
+        effective_requirement="登录功能",
+        multisource_enabled=False,
+        input_sources=[],
+        openapi_spec={},
+        run_orchestrator_generate=_run_orchestrator_generate,
+        extract_quality_gate=lambda _payload: {"decision": "allow", "blockers": []},
+        safe_case_id=lambda value: str(value or ""),
+        infer_targets=lambda _page: ("", ""),
+        write_case_yaml=_write_case_yaml,
+        save_case_state=_save_case_state,
+        save_test_point_plan=_save_test_point_plan,
+        append_history=lambda _entry: None,
+        now_iso=lambda: "2026-04-23T00:00:00+00:00",
+        is_quality_gate_blocked=lambda _payload: (False, None),
+        ai_cases_root=ai_cases_root,
+        utc=None,
+        datetime_module=None,
+        http_exception_cls=HTTPException,
+        bad_gateway_status=502,
+        unprocessable_entity_status=422,
+        allocate_case_id=lambda **_kwargs: "atp-web-login-fn-ai-0001",
+        existing_case_ids=[],
+        selected_candidate={"intent_id": "intent-01"},
+    )
+
+    assert written_paths
+    assert saved_plan_calls
+    assert saved_plan_calls[0]["project"] == "atp"
+    assert saved_plan_calls[0]["case_id"] == "atp-web-login-fn-ai-0001"
+    assert saved_plan_calls[0]["plan"]["points"][0]["intent_id"] == "intent-01"
+    assert result["item"]["test_points_path"]

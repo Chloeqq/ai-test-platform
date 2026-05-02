@@ -9,9 +9,23 @@ from datetime_compat import UTC
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Any
 
 _REQUEST_ID_CTX: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="")
 _CONFIGURED_SERVICES: set[str] = set()
+_SENSITIVE_KEYS = {
+    "password",
+    "passwd",
+    "secret",
+    "token",
+    "access_token",
+    "refresh_token",
+    "api_key",
+    "apikey",
+    "authorization",
+    "jwt",
+    "bearer",
+}
 
 
 def set_request_id(request_id: str) -> None:
@@ -20,6 +34,88 @@ def set_request_id(request_id: str) -> None:
 
 def get_request_id() -> str:
     return str(_REQUEST_ID_CTX.get("") or "").strip()
+
+
+def _is_sensitive_key(key: str) -> bool:
+    lowered = str(key or "").strip().lower()
+    return any(marker in lowered for marker in _SENSITIVE_KEYS)
+
+
+def redact_sensitive_payload(value: Any, *, max_depth: int = 4) -> Any:
+    if max_depth <= 0:
+        return "…"
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            if _is_sensitive_key(str(key)):
+                redacted[str(key)] = "***"
+            else:
+                redacted[str(key)] = redact_sensitive_payload(item, max_depth=max_depth - 1)
+        return redacted
+    if isinstance(value, list):
+        return [redact_sensitive_payload(item, max_depth=max_depth - 1) for item in value]
+    if isinstance(value, tuple):
+        return [redact_sensitive_payload(item, max_depth=max_depth - 1) for item in value]
+    if isinstance(value, set):
+        return [redact_sensitive_payload(item, max_depth=max_depth - 1) for item in sorted(value, key=str)]
+    return value
+
+
+def summarize_log_value(value: Any, *, max_length: int = 4000) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        try:
+            value = value.decode("utf-8", errors="replace")
+        except Exception:
+            value = repr(value)
+    if isinstance(value, str):
+        text = value.strip()
+    else:
+        try:
+            redacted = redact_sensitive_payload(value)
+            text = json.dumps(redacted, ensure_ascii=False, default=str)
+        except Exception:
+            text = str(value)
+    if len(text) > max_length:
+        return text[: max_length - 1] + "…"
+    return text
+
+
+def summarize_http_context(
+    *,
+    method: str,
+    path: str,
+    query: str = "",
+    client: str = "",
+    request_id: str = "",
+    status_code: int | None = None,
+    duration_ms: float | None = None,
+    payload: Any = None,
+    error: Any = None,
+) -> str:
+    parts: list[str] = [
+        f"method={str(method or '-').strip() or '-'}",
+        f"path={str(path or '-').strip() or '-'}",
+    ]
+    query_text = str(query or "").strip()
+    if query_text:
+        parts.append(f"query={query_text}")
+    client_text = str(client or "").strip()
+    if client_text:
+        parts.append(f"client={client_text}")
+    request_id_text = str(request_id or "").strip()
+    if request_id_text:
+        parts.append(f"request_id={request_id_text}")
+    if status_code is not None:
+        parts.append(f"status={status_code}")
+    if duration_ms is not None and duration_ms >= 0:
+        parts.append(f"duration_ms={duration_ms:.2f}")
+    if payload is not None:
+        parts.append(f"payload={summarize_log_value(payload)}")
+    if error is not None:
+        parts.append(f"error={summarize_log_value(error)}")
+    return " ".join(parts)
 
 
 def _env_bool(name: str, default: bool) -> bool:

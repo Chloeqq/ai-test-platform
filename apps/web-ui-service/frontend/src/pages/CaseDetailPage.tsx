@@ -1,23 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import { getWorkbenchCase } from "../api/assets";
+import { DEFAULT_PROJECT_CODE } from "../config/projects";
 
 function text(value: unknown): string {
   const normalized = String(value || "").trim();
   return normalized || "-";
-}
-
-function formatDate(value: unknown): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) {
-    return raw;
-  }
-  return parsed.toLocaleString("zh-CN", { hour12: false });
 }
 
 export function CaseDetailPage() {
@@ -38,7 +28,7 @@ export function CaseDetailPage() {
       setLoading(true);
       setErrorText("");
       try {
-        const payload = await getWorkbenchCase(caseId, "default");
+        const payload = await getWorkbenchCase(caseId, DEFAULT_PROJECT_CODE);
         if (!cancelled) {
           setItem((payload.item || {}) as Record<string, unknown>);
         }
@@ -63,7 +53,7 @@ export function CaseDetailPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>用例详情（React + TypeScript）</h1>
+          <h1>用例详情</h1>
           <p className="muted">查看 YAML 与核心元信息。</p>
         </div>
         <div className="header-actions">
@@ -91,7 +81,7 @@ export function CaseDetailPage() {
               <strong>优先级:</strong> {text(item.priority)}
             </p>
             <p>
-              <strong>更新时间:</strong> {formatDate(item.updated_at)}
+              <strong>更新时间:</strong> {formatDateTime(item.updated_at)}
             </p>
             <p>
               <strong>路径:</strong> <span className="mono">{text(item.path)}</span>

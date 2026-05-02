@@ -37,6 +37,10 @@ def react_console_page(request: Request, subpath: str = "") -> HTMLResponse:
         current_key = "api_contracts"
     elif normalized_subpath.startswith("assets/data-templates"):
         current_key = "data_templates"
+    elif normalized_subpath.startswith("system/source-config"):
+        current_key = "source_config"
+    elif normalized_subpath.startswith("system/projects"):
+        current_key = "project_management"
     elif normalized_subpath.startswith("system/environments"):
         current_key = "env_management"
     elif normalized_subpath.startswith("system/nodes"):

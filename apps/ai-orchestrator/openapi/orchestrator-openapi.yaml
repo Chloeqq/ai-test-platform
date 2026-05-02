@@ -1231,6 +1231,8 @@ components:
           type: string
         priority:
           type: string
+        expected_result:
+          type: string
         dependencies:
           type: array
           items:

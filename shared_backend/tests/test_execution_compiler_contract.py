@@ -264,6 +264,42 @@ class TestBindTargets:
         with pytest.raises(ExecutionCompilerError):
             bind_targets(ir, _SAMPLE_PAGE_OBJECT)
 
+    def test_human_readable_target_binds_to_canonical_code(self) -> None:
+        page_object = {
+            "elements": {
+                "login_button": {
+                    "selector": "登录",
+                    "type": "role",
+                    "role": "button",
+                    "name": "登录按钮",
+                }
+            }
+        }
+        ir = {
+            "version": "execution-ir/v1",
+            "steps": [
+                {
+                    "type": "click",
+                    "target": "登录按钮",
+                    "value": None,
+                    "assertion": None,
+                    "intent_id": "intent-01",
+                    "meta": {
+                        "raw_text": "点击登录按钮",
+                        "source_point_index": 0,
+                        "source_step_index": 0,
+                        "compiler_status": "resolved",
+                        "compiler_reason": "",
+                        "confidence": 1.0,
+                    },
+                }
+            ],
+        }
+        bound = bind_targets(ir, page_object)
+        step = bound["steps"][0]
+        assert step["target"] == "login_button"
+        assert step["selector"] == "登录"
+
 
 class TestEndToEndCompile:
     """Full pipeline: orchestrator-like points → compiled executable steps."""
@@ -321,6 +357,159 @@ class TestEndToEndCompile:
         for step in resolved_steps:
             assert step.get("selector"), f"resolved step missing selector: {step}"
             assert step.get("intent_id"), f"resolved step missing intent_id: {step}"
+
+    def test_assert_metric_compiles_to_runner_action(self) -> None:
+        points = [
+            {
+                "intent_id": "intent-metric-01",
+                "steps": [
+                    {
+                        "action": "assert_metric",
+                        "target": "product_list_title",
+                        "value": ">=1000",
+                        "metric_label": "本周销售总额",
+                        "extract_regex": r"(\d+(?:\.\d+)?)",
+                        "raw_text": "验证本周销售总额大于等于1000",
+                    }
+                ],
+            }
+        ]
+        steps = compile_execution_steps(points, _SAMPLE_PAGE_OBJECT)
+        assert len(steps) == 1
+        step = steps[0]
+        assert step["action"] == "assert_metric"
+        assert step["target"] == "product_list_title"
+        assert step["value"] == ">=1000"
+        assert step["metric_label"] == "本周销售总额"
+        assert step["extract_regex"] == r"(\d+(?:\.\d+)?)"
+
+    def test_assert_number_alias_is_normalized_to_assert_metric(self) -> None:
+        points = [
+            {
+                "intent_id": "intent-metric-02",
+                "steps": [
+                    {
+                        "action": "assert_number",
+                        "target": "product_list_title",
+                        "value": "positive",
+                        "raw_text": "验证统计值为正数",
+                    }
+                ],
+            }
+        ]
+        steps = compile_execution_steps(points, _SAMPLE_PAGE_OBJECT)
+        assert len(steps) == 1
+        assert steps[0]["action"] == "assert_metric"
+        assert steps[0]["value"] == "positive"
+
+    def test_password_toggle_business_type_can_be_clicked(self) -> None:
+        page_object = {
+            "elements": {
+                "password_toggle": {
+                    "selector": ".eye-toggle",
+                    "type": "css",
+                    "business_type": "password_toggle",
+                }
+            }
+        }
+        points = [
+            {
+                "intent_id": "intent-password-toggle",
+                "steps": [{"action": "click", "target": "密码显隐", "raw_text": "点击密码显隐"}],
+                "involved_elements": ["密码显隐"],
+            }
+        ]
+
+        steps = compile_execution_steps(points, page_object)
+
+        assert steps[0]["action"] == "click"
+        assert steps[0]["target"] == "password_toggle"
+
+    def test_metric_label_business_type_can_be_assert_metric_target(self) -> None:
+        page_object = {
+            "elements": {
+                "sales_total_metric_label": {
+                    "selector": ".sales-total",
+                    "type": "css",
+                    "business_type": "metric_label",
+                    "aliases": ["销售总额"],
+                }
+            }
+        }
+        points = [
+            {
+                "intent_id": "intent-metric-label",
+                "steps": [
+                    {
+                        "action": "assert_metric",
+                        "target": "销售总额",
+                        "value": ">=1000",
+                        "raw_text": "验证销售总额大于等于1000",
+                    }
+                ],
+                "involved_elements": ["销售总额"],
+            }
+        ]
+
+        steps = compile_execution_steps(points, page_object)
+
+        assert steps[0]["action"] == "assert_metric"
+        assert steps[0]["target"] == "sales_total_metric_label"
+
+    def test_metric_value_business_type_cannot_be_clicked(self) -> None:
+        page_object = {
+            "elements": {
+                "sales_total_metric_value": {
+                    "selector": ".sales-total-value",
+                    "type": "css",
+                    "business_type": "metric_value",
+                }
+            }
+        }
+        points = [
+            {
+                "intent_id": "intent-metric-value-click",
+                "steps": [{"action": "click", "target": "sales_total_metric_value", "raw_text": "点击指标值"}],
+                "involved_elements": ["sales_total_metric_value"],
+            }
+        ]
+
+        with pytest.raises(ExecutionCompilerError) as exc:
+            compile_execution_steps(points, page_object)
+
+        assert exc.value.code == "target_binding_failed"
+        assert "metric_value" in exc.value.reason
+
+    def test_metric_value_business_type_cannot_be_assert_metric_target(self) -> None:
+        page_object = {
+            "elements": {
+                "sales_total_metric_value": {
+                    "selector": ".sales-total-value",
+                    "type": "css",
+                    "business_type": "metric_value",
+                }
+            }
+        }
+        points = [
+            {
+                "intent_id": "intent-metric-value-assert",
+                "steps": [
+                    {
+                        "action": "assert_metric",
+                        "target": "sales_total_metric_value",
+                        "value": ">=1000",
+                        "raw_text": "验证指标值",
+                    }
+                ],
+                "involved_elements": ["sales_total_metric_value"],
+            }
+        ]
+
+        with pytest.raises(ExecutionCompilerError) as exc:
+            compile_execution_steps(points, page_object)
+
+        assert exc.value.code == "target_binding_failed"
+        assert "metric_value" in exc.value.reason
 
 
 class TestStrictCompilerFailures:

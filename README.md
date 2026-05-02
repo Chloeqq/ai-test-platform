@@ -281,4 +281,14 @@ Staging 发布所需 Secrets/Variables、回滚方式、故障排查见：
 - [platform-gap-analysis.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/product/platform-gap-analysis.md)
 - [next-phase-roadmap.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/product/next-phase-roadmap.md)
 - [project-structure.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/architecture/project-structure.md)
+- [platform_rules.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/core/platform_rules.md)
+- [dify_workflow_prompt_specs.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/core/dify_workflow_prompt_specs.md)
 
+## 13. Dify 与规则规范
+
+- [knowledge_base_rules.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/core/knowledge_base_rules.md)
+- [page_object_rules.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/core/page_object_rules.md)
+- [quality_gate_rules.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/core/quality_gate_rules.md)
+- [test_asset_rules.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/core/test_asset_rules.md)
+- [error_response_rules.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/core/error_response_rules.md)
+- [prompt_versioning_rules.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/docs/core/prompt_versioning_rules.md)

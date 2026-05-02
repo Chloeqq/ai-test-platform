@@ -5,9 +5,11 @@ elements:
     locator_type: role
     role: menuitem
     locator_value: 支付
-    description: 支付菜单
+    element_name: 支付菜单
+    aliases:
+      - 支付
 
   payment_list_title:
     locator_type: text
     locator_value: 支付列表
-    description: 支付列表标题
+    element_name: 支付列表标题

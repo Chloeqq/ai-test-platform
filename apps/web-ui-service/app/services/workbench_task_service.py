@@ -627,8 +627,8 @@ def build_execution_task_view(
         "case_id": normalize_case_id(str(source.get("case_id", "")).strip() or str(execution_record.get("case_id", "")).strip())
         if str(source.get("case_id", "")).strip() or str(execution_record.get("case_id", "")).strip()
         else "",
-        "project": str(execution_record.get("project", "default")).strip() or "default",
-        "project_code": str(execution_record.get("project", "default")).strip() or "default",
+        "project": str(execution_record.get("project", "mall")).strip() or "mall",
+        "project_code": str(execution_record.get("project", "mall")).strip() or "mall",
         "page": str(step_summary.get("page", "")).strip(),
         "runner": runner,
         "status": status_value,

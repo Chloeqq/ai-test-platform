@@ -1,5 +1,7 @@
 # mypy: ignore-errors
 
+from copy import deepcopy
+
 from playwright.sync_api import Page
 
 from runner.action_registry import ACTION_DEFINITIONS
@@ -79,38 +81,29 @@ class YamlExecutor:
         action = step.get("action")
         action_definition = ACTION_DEFINITIONS.get(action)
         page_name = self._resolve_step_page_name(default_page_name, step, step_index)
+        step_context = self._build_step_context(step, step_index=step_index, page_name=page_name)
+        self._set_page_execution_context("_ai_current_step_context", step_context)
 
         if not action_definition:
+            self._set_page_execution_context("_ai_failed_step_context", step_context)
             raise ValueError(f"Unsupported action at step {step_index}: {action}")
 
         target = step.get("target")
         locator = None
 
-        if action_definition["requires_target"]:
-            if not target:
-                raise ValueError(
-                    f"Step {step_index} requires target for action '{action}' on page '{page_name}'"
-                )
-            selector = str(step.get("selector") or "").strip()
-            locator_type = str(step.get("locator_type") or "").strip()
-            role = str(step.get("role") or "").strip()
-            if not selector or not locator_type:
-                raise ValueError(
-                    f"Step {step_index} requires compiled selector binding for action '{action}' on page '{page_name}'"
-                )
-            locator = resolve_locator(
-                self.page,
-                {
-                    "locator_type": locator_type,
-                    "locator_value": selector,
-                    "role": role,
-                },
-            )
-        elif target:
-            selector = str(step.get("selector") or "").strip()
-            locator_type = str(step.get("locator_type") or "").strip()
-            role = str(step.get("role") or "").strip()
-            if selector and locator_type:
+        try:
+            if action_definition["requires_target"]:
+                if not target:
+                    raise ValueError(
+                        f"Step {step_index} requires target for action '{action}' on page '{page_name}'"
+                    )
+                selector = str(step.get("selector") or "").strip()
+                locator_type = str(step.get("locator_type") or "").strip()
+                role = str(step.get("role") or "").strip()
+                if not selector or not locator_type:
+                    raise ValueError(
+                        f"Step {step_index} requires compiled selector binding for action '{action}' on page '{page_name}'"
+                    )
                 locator = resolve_locator(
                     self.page,
                     {
@@ -119,17 +112,55 @@ class YamlExecutor:
                         "role": role,
                     },
                 )
-            else:
-                raise ValueError(
-                    f"Step {step_index} references target '{target}' without compiled selector binding"
-                )
+            elif target:
+                selector = str(step.get("selector") or "").strip()
+                locator_type = str(step.get("locator_type") or "").strip()
+                role = str(step.get("role") or "").strip()
+                if selector and locator_type:
+                    locator = resolve_locator(
+                        self.page,
+                        {
+                            "locator_type": locator_type,
+                            "locator_value": selector,
+                            "role": role,
+                        },
+                    )
+                else:
+                    raise ValueError(
+                        f"Step {step_index} references target '{target}' without compiled selector binding"
+                    )
 
-        action_definition["handler"](
-            page=self.page,
-            locator=locator,
-            step=step,
-            context=context,
-            username=self.username,
-            password=self.password,
-            base_url=self.base_url,
-        )
+            action_definition["handler"](
+                page=self.page,
+                locator=locator,
+                step=step,
+                context=context,
+                username=self.username,
+                password=self.password,
+                base_url=self.base_url,
+            )
+        except Exception:
+            self._set_page_execution_context("_ai_failed_step_context", step_context)
+            raise
+
+    def _build_step_context(self, step: dict, *, step_index: int, page_name: str) -> dict:
+        traceability = step.get("traceability")
+        return {
+            "step_index": step_index,
+            "page_code": page_name,
+            "action": str(step.get("action") or "").strip(),
+            "element_code": str(step.get("target") or "").strip(),
+            "target": str(step.get("target") or "").strip(),
+            "selector": str(step.get("selector") or "").strip(),
+            "locator_type": str(step.get("locator_type") or "").strip(),
+            "role": str(step.get("role") or "").strip(),
+            "intent_id": str(step.get("intent_id") or "").strip(),
+            "traceability": deepcopy(traceability) if isinstance(traceability, dict) else {},
+        }
+
+    def _set_page_execution_context(self, key: str, value: dict) -> None:
+        try:
+            setattr(self.page, key, value)
+        except Exception:
+            # Failure traceback is best-effort and must never change test behavior.
+            pass

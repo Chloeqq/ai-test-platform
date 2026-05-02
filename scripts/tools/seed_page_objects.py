@@ -76,15 +76,9 @@ def _seed_one(
         return f"  DRY-RUN {action} {page_code}: {len(elements)} elements"
 
     if existing:
-        db.execute(
-            select(PageElement).where(PageElement.page_object_id == existing.id)
-        )
-        for old_elem in db.query(PageElement).filter(PageElement.page_object_id == existing.id).all():
-            db.delete(old_elem)
-        db.flush()
         page_obj = existing
         page_obj.page_name = str(page_name)
-        page_obj.element_count = len(elements)
+        page_obj.description = str(yaml_data.get("description", "")).strip()
         page_obj.status = "published"
         action = "UPDATED"
     else:
@@ -101,25 +95,45 @@ def _seed_one(
         db.flush()
         action = "CREATED"
 
+    existing_elements = {
+        str(item.element_code).strip(): item
+        for item in db.execute(
+            select(PageElement).where(PageElement.page_object_id == page_obj.id)
+        ).scalars().all()
+        if str(item.element_code).strip()
+    }
     for element_code, element_meta in elements.items():
         if not isinstance(element_meta, dict):
             continue
         locator_type = str(element_meta.get("locator_type", "css")).strip()
         locator_value = str(element_meta.get("locator_value", "")).strip()
         role = str(element_meta.get("role", "")).strip()
-        elem = PageElement(
-            page_object_id=page_obj.id,
-            element_code=str(element_code).strip(),
-            element_name=str(element_code).strip(),
-            locator_type=locator_type,
-            locator_value=locator_value,
-            role=role,
-            status="active",
-        )
-        db.add(elem)
+        element_name = str(element_meta.get("element_name") or element_meta.get("name") or element_code).strip()
+        elem = existing_elements.get(str(element_code).strip())
+        if elem is None:
+            db.add(
+                PageElement(
+                    page_object_id=page_obj.id,
+                    element_code=str(element_code).strip(),
+                    element_name=element_name,
+                    locator_type=locator_type,
+                    locator_value=locator_value,
+                    role=role,
+                    status="active",
+                )
+            )
+            continue
+        elem.element_name = element_name
+        elem.locator_type = locator_type
+        elem.locator_value = locator_value
+        elem.role = role
+        elem.status = "active"
 
+    page_obj.element_count = int(
+        db.query(PageElement).filter(PageElement.page_object_id == page_obj.id).count() or 0
+    )
     db.flush()
-    return f"  {action} {page_code}: {len(elements)} elements (id={page_obj.id})"
+    return f"  {action} {page_code}: {page_obj.element_count} elements (id={page_obj.id})"
 
 
 def main() -> None:

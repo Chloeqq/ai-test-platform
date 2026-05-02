@@ -33,5 +33,9 @@ def test_page_object_recorder_ui_page_and_entry_link() -> None:
         list_react_html = list_react_resp.text
         assert "/static/react/assets/main.css" in list_react_html
         assert "/static/react/assets/main.js" in list_react_html
+
+        elements_resp = client.get("/assets/page-objects/login/elements?project=atp", follow_redirects=False)
+        assert elements_resp.status_code == 307
+        assert elements_resp.headers.get("location", "").startswith("/react/assets/page-objects/login/elements?project=atp")
     finally:
         client.close()

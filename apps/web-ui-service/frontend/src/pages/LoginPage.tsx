@@ -19,12 +19,18 @@ export function LoginPage() {
   const [remember, setRemember] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
   const [statusText, setStatusText] = useState<string>("请输入账号密码。");
+  const forceLogin = String(searchParams.get("force") || "").trim() === "1";
 
   const nextPath = safeNextPath(searchParams.get("next") || "/ai-generation");
 
   useEffect(() => {
     let cancelled = false;
     async function bootstrap() {
+      if (forceLogin) {
+        clearStoredToken();
+        setStatusText("已进入重新登录模式，请输入账号密码。");
+        return;
+      }
       const token = getStoredToken();
       if (!token) {
         return;
@@ -46,7 +52,7 @@ export function LoginPage() {
     return () => {
       cancelled = true;
     };
-  }, [nextPath]);
+  }, [forceLogin, nextPath]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

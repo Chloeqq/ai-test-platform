@@ -7,6 +7,7 @@ ENV_FILE="${ROOT_DIR}/.env"
 
 ORCH_LOG="/tmp/ai-orchestrator.log"
 WEB_LOG="/tmp/web-ui-service.log"
+WEB_PORT="${WEB_PORT:-8014}"
 
 if [[ -f "${ENV_FILE}" ]]; then
   set -a
@@ -31,16 +32,16 @@ else
   echo "[start-all] orchestrator started (pid=$!)."
 fi
 
-if lsof -iTCP:8013 -sTCP:LISTEN -n -P >/dev/null 2>&1; then
-  echo "[start-all] port 8013 is already in use, skip web-ui-service start."
+if lsof -iTCP:${WEB_PORT} -sTCP:LISTEN -n -P >/dev/null 2>&1; then
+  echo "[start-all] port ${WEB_PORT} is already in use, skip web-ui-service start."
 else
   nohup "${PYTHON_BIN}" -m uvicorn app.main:app \
     --app-dir "${ROOT_DIR}/apps/web-ui-service" \
     --host 127.0.0.1 \
-    --port 8013 >"${WEB_LOG}" 2>&1 &
+    --port "${WEB_PORT}" >"${WEB_LOG}" 2>&1 &
   echo "[start-all] web-ui-service started (pid=$!)."
 fi
 
 echo "[start-all] API docs:"
 echo "  - http://127.0.0.1:8000/docs"
-echo "  - http://127.0.0.1:8013/docs"
+echo "  - http://127.0.0.1:${WEB_PORT}/docs"

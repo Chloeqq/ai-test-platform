@@ -6,12 +6,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.services.workbench_generation_api.payloads import AutoRunPayload, FullChainRunPayload, GenerateCasePayload
+from app.services.workbench_generation_api.payloads import (
+    AutoRunPayload,
+    FullChainRunPayload,
+    GenerateCasePayload,
+    PrecheckSelectedIntentsPayload,
+)
 from app.services.workbench_generation_api.preview_test_points_usecase import build_preview_usecase
 from app.services.workbench_generation_api.usecase_factory import (
     build_auto_run_usecase,
     build_full_chain_usecase,
     build_generate_case_usecase,
+    build_precheck_selected_intents_usecase,
+    build_save_test_point_assets_usecase,
 )
 from shared_backend import ExecutionCompilerError
 
@@ -45,3 +52,22 @@ def preview_test_points(
 @router.post("/api/workbench/auto-run")
 def auto_run(payload: AutoRunPayload, db: Session = Depends(get_db)) -> dict[str, Any]:
     return build_auto_run_usecase(db).execute(payload)
+
+
+@router.post("/api/workbench/precheck-selected-intents")
+def precheck_selected_intents(
+    payload: PrecheckSelectedIntentsPayload,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        return build_precheck_selected_intents_usecase(db).execute(payload)
+    except ExecutionCompilerError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.to_detail()) from exc
+
+
+@router.post("/api/workbench/test-point-assets/save", status_code=status.HTTP_201_CREATED)
+def save_test_point_assets(
+    payload: GenerateCasePayload,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return build_save_test_point_assets_usecase(db).execute(payload)

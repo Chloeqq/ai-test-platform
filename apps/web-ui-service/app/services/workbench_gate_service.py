@@ -85,7 +85,7 @@ def normalize_execution_gate_decision(value: str) -> str:
 
 def execution_gate_decision_identity(item: dict[str, Any]) -> tuple[str, str, str]:
     return (
-        str(item.get("project", "default")).strip() or "default",
+        str(item.get("project", "mall")).strip() or "mall",
         str(item.get("run_id", "")).strip(),
         _normalize_page_slug(str(item.get("page", "")).strip()) if str(item.get("page", "")).strip() else "",
     )
@@ -157,7 +157,7 @@ def upsert_execution_gate_decision(payload: Any, *, actor: dict[str, str] | None
     if normalized_decision == "block" and dual_approval_enabled and not can_bypass_dual_approval(actor_role):
         approval_status = "pending_second_approval"
     entry = {
-        "project": str(_payload_value(payload, "project", "default") or "default").strip() or "default",
+        "project": str(_payload_value(payload, "project", "mall") or "mall").strip() or "mall",
         "run_id": str(_payload_value(payload, "run_id", "")).strip(),
         "case_id": _safe_case_id(str(_payload_value(payload, "case_id", "")).strip()) if str(_payload_value(payload, "case_id", "")).strip() else "",
         "page": normalized_page,
@@ -225,7 +225,7 @@ def execution_gate_decision_for_run(
         if decision not in {"allow", "block", "manual_review"}:
             continue
         return {
-            "project": str(item.get("project", "default")).strip() or "default",
+            "project": str(item.get("project", "mall")).strip() or "mall",
             "run_id": normalized_run_id,
             "case_id": str(item.get("case_id", "")).strip(),
             "page": item_page,
@@ -257,7 +257,7 @@ def approve_execution_gate_decision(
     note: str = "",
 ) -> dict[str, Any]:
     normalized_page = _normalize_page_slug(page)
-    normalized_project = str(project or "default").strip() or "default"
+    normalized_project = str(project or "mall").strip() or "mall"
     normalized_run_id = str(run_id or "").strip()
     if not normalized_run_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="run_id is required")
@@ -304,7 +304,7 @@ def revoke_execution_gate_decision(
     note: str = "",
 ) -> dict[str, Any]:
     normalized_page = _normalize_page_slug(page)
-    normalized_project = str(project or "default").strip() or "default"
+    normalized_project = str(project or "mall").strip() or "mall"
     normalized_run_id = str(run_id or "").strip()
     if not normalized_run_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="run_id is required")
@@ -383,9 +383,9 @@ def resolve_execution_gate_audit_snapshot(
     run_item = find_run_item(normalized_run_id) if callable(find_run_item) else None
     if not isinstance(run_item, dict):
         return {}
-    run_project = str(run_item.get("project", "default")).strip() or "default"
+    run_project = str(run_item.get("project", "mall")).strip() or "mall"
     run_page = normalize_page_slug(str(run_item.get("page", "")).strip()) if str(run_item.get("page", "")).strip() else ""
-    if str(project or "default").strip() and run_project != (str(project or "default").strip() or "default"):
+    if str(project or "mall").strip() and run_project != (str(project or "mall").strip() or "mall"):
         return {}
     if normalized_page and run_page and normalized_page != run_page:
         return {}

@@ -119,10 +119,15 @@ def _default_database_auto_create_tables() -> bool:
     return _env_bool("DATABASE_AUTO_CREATE_TABLES", False)
 
 
+def _default_orchestrator_api_key() -> str:
+    return str(os.getenv("ORCHESTRATOR_API_KEY", "")).strip()
+
+
 class Settings(BaseModel):
     app_name: str = "AI Test Platform FastAPI"
     app_env: str = Field(default_factory=lambda: os.getenv("APP_ENV", "dev"))
     orchestrator_url: str = Field(default_factory=lambda: os.getenv("ORCHESTRATOR_URL", "http://127.0.0.1:8000"))
+    orchestrator_api_key: str = Field(default_factory=_default_orchestrator_api_key)
     database_url: str = Field(
         default_factory=lambda: os.getenv(
             "DATABASE_URL",

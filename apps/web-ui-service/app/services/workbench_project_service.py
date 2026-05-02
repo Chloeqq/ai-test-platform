@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import app.schemas.test_project as test_project_schema
 from app.services import test_project_service
 
-DEFAULT_PROJECT_CODE = "atp"
+DEFAULT_PROJECT_CODE = "mall"
 
 
 def _normalize_project_code(value: str) -> str:
@@ -39,7 +39,7 @@ def list_project_items(db: Session, *, state_root: Path | None = None) -> list[d
             }
         )
 
-    add(DEFAULT_PROJECT_CODE, project_name="ATP", status="active", source="default")
+    add(DEFAULT_PROJECT_CODE, project_name="Mall", status="active", source="default")
     for project in test_project_service.list_projects(db):
         add(
             project.project_code,
@@ -54,7 +54,7 @@ def list_project_items(db: Session, *, state_root: Path | None = None) -> list[d
                 add(entry.name, project_name=entry.name.upper(), status="active", source="legacy_state")
 
     if not items:
-        add(DEFAULT_PROJECT_CODE, project_name="ATP", status="active", source="default")
+        add(DEFAULT_PROJECT_CODE, project_name="Mall", status="active", source="default")
     return items
 
 

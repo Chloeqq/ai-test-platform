@@ -12,7 +12,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.workbench.facade import build_workbench_facade
-from app.api.workbench.schemas import SaveCasePayload
+from app.api.workbench.schemas import (
+    BatchGenerateFromTestPointAssetsPayload,
+    BatchTestPointAssetIdsPayload,
+    SaveCasePayload,
+    UpsertTestPointAssetPayload,
+)
 from app.core.database import get_db
 
 
@@ -100,6 +105,54 @@ def get_test_point_asset_coverage_summary(
         review_status=review_status,
         gate_decision=gate_decision,
         selection_state=selection_state,
+        db=db,
+    )
+
+
+@router.post("/api/workbench/test-point-assets")
+def upsert_test_point_asset(
+    payload: UpsertTestPointAssetPayload,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return facade.upsert_test_point_asset(payload=payload, db=db)
+
+
+@router.put("/api/workbench/test-point-assets/{asset_id}")
+def update_test_point_asset(
+    asset_id: str,
+    payload: UpsertTestPointAssetPayload,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    payload.asset_id = asset_id
+    return facade.upsert_test_point_asset(payload=payload, db=db)
+
+
+@router.delete("/api/workbench/test-point-assets/{asset_id}")
+def delete_test_point_asset(
+    asset_id: str,
+    project: str = Query(default="default"),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return facade.delete_test_point_asset(asset_id=asset_id, project=project, db=db)
+
+
+@router.post("/api/workbench/test-point-assets/batch/delete")
+def batch_delete_test_point_assets(
+    payload: BatchTestPointAssetIdsPayload,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return facade.batch_delete_test_point_assets(project=payload.project, asset_ids=payload.asset_ids, db=db)
+
+
+@router.post("/api/workbench/test-point-assets/batch/generate-cases")
+def batch_generate_cases_from_test_point_assets(
+    payload: BatchGenerateFromTestPointAssetsPayload,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return facade.generate_cases_from_test_point_assets(
+        project=payload.project,
+        asset_ids=payload.asset_ids,
+        source=payload.source,
         db=db,
     )
 

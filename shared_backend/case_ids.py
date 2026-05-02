@@ -7,11 +7,11 @@ from typing import Any, Iterable
 from .case_dictionary import get_alias_code_map, get_code_name_map, get_enabled_codes, resolve_dictionary_code
 
 
-DEFAULT_PROJECT = "atp"
+DEFAULT_PROJECT = "mall"
 DEFAULT_CLIENT = "web"
 DEFAULT_CASE_TYPE = "fn"
 DEFAULT_SOURCE = "ai"
-DEFAULT_CASE_ID = "atp-web-common-core-fn-ai-0001"
+DEFAULT_CASE_ID = "mall-web-common-core-fn-ai-0001"
 
 CLIENT_CODES = get_enabled_codes("client")
 CASE_TYPE_CODES = get_enabled_codes("case_type")

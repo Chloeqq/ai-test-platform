@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import json
 import logging
 import time
 import uuid
@@ -6,7 +7,9 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
-from fastapi import Depends as _Depends, FastAPI, Request, Response
+from fastapi import Depends as _Depends, FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.config import get_settings
@@ -29,13 +32,27 @@ from app.routers.workbench_runs import router as workbench_runs_router
 from app.routers.workbench_scheduler import router as workbench_scheduler_router
 from app.routers.workbench_tasks import router as workbench_tasks_router
 from app.routers.ui import router as ui_router
-from shared_backend.observability import configure_logging, set_request_id
+from shared_backend.observability import configure_logging, set_request_id, summarize_http_context, summarize_log_value
 
 settings = get_settings()
 configure_logging(service_name="web-ui-service")
 access_logger = logging.getLogger("web.access")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEVLIKE_APP_ENVS = {"dev", "development", "local", "test", "testing"}
+
+
+def _preview_request_payload(body: bytes, content_type: str) -> str:
+    if not body:
+        return ""
+    text = body.decode("utf-8", errors="ignore").strip()
+    if not text:
+        return ""
+    if "application/json" in str(content_type or "").lower():
+        try:
+            return summarize_log_value(json.loads(text))
+        except Exception:
+            return text[:2000]
+    return text[:2000]
 
 
 @asynccontextmanager
@@ -86,22 +103,116 @@ async def _disable_allure_cache(request: Request, call_next):  # type: ignore[no
     request_id = str(request.headers.get("x-request-id", "")).strip() or str(uuid.uuid4())
     start = time.perf_counter()
     set_request_id(request_id)
-    response: Response = await call_next(request)
+    body = await request.body()
+    payload_preview = _preview_request_payload(body, request.headers.get("content-type", ""))
+
+    async def _receive() -> dict[str, object]:
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    request._receive = _receive  # type: ignore[attr-defined]
+    access_logger.info(
+        "http_request_start %s",
+        summarize_http_context(
+            method=request.method,
+            path=request.url.path,
+            query=request.url.query,
+            client=request.client.host if request.client else "-",
+            request_id=request_id,
+            payload=payload_preview,
+        ),
+    )
+    try:
+        response: Response = await call_next(request)
+    except Exception:
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        access_logger.exception(
+            "http_request_error %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.url.path,
+                query=request.url.query,
+                client=request.client.host if request.client else "-",
+                request_id=request_id,
+                duration_ms=duration_ms,
+            ),
+        )
+        raise
     duration_ms = round((time.perf_counter() - start) * 1000, 2)
     response.headers["X-Request-Id"] = request_id
     access_logger.info(
-        "http_request method=%s path=%s status=%s duration_ms=%.2f client=%s",
-        request.method,
-        request.url.path,
-        response.status_code,
-        duration_ms,
-        request.client.host if request.client else "-",
+        "http_request_end %s",
+        summarize_http_context(
+            method=request.method,
+            path=request.url.path,
+            query=request.url.query,
+            client=request.client.host if request.client else "-",
+            request_id=request_id,
+            status_code=response.status_code,
+            duration_ms=duration_ms,
+        ),
     )
     if request.url.path.startswith("/allure"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
     return response
+
+
+@app.exception_handler(RequestValidationError)
+async def _handle_request_validation_error(request: Request, exc: RequestValidationError):
+    access_logger.warning(
+        "http_request_validation_error %s",
+        summarize_http_context(
+            method=request.method,
+            path=request.url.path,
+            query=request.url.query,
+            client=request.client.host if request.client else "-",
+            request_id=str(request.headers.get("x-request-id", "")).strip() or "-",
+            status_code=422,
+            error=exc.errors(),
+        ),
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
+@app.exception_handler(HTTPException)
+async def _handle_http_exception(request: Request, exc: HTTPException):
+    level = logging.WARNING if exc.status_code < 500 else logging.ERROR
+    access_logger.log(
+        level,
+        "http_request_http_exception %s",
+        summarize_http_context(
+            method=request.method,
+            path=request.url.path,
+            query=request.url.query,
+            client=request.client.host if request.client else "-",
+            request_id=str(request.headers.get("x-request-id", "")).strip() or "-",
+            status_code=exc.status_code,
+            error=exc.detail,
+        ),
+    )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(Exception)
+async def _handle_unexpected_exception(request: Request, exc: Exception):
+    request_id = str(request.headers.get("x-request-id", "")).strip() or "-"
+    access_logger.exception(
+        "http_request_unhandled_exception %s",
+        summarize_http_context(
+            method=request.method,
+            path=request.url.path,
+            query=request.url.query,
+            client=request.client.host if request.client else "-",
+            request_id=request_id,
+            status_code=500,
+            error=exc,
+        ),
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "request_id": request_id},
+    )
 def _is_dev_like_env() -> bool:
     return str(settings.app_env).strip().lower() in DEVLIKE_APP_ENVS
 
@@ -124,4 +235,3 @@ def _assert_safe_startup_config() -> None:
             "unsafe bootstrap configuration for non-development environment: "
             + ", ".join(problems)
         )
-

@@ -2,41 +2,74 @@
 
 from __future__ import annotations
 
+import os
+import sqlite3
 import logging
 from pathlib import Path
 from typing import Any
 
+from shared_backend.element_binding import build_element_alias_map, resolve_element_code
+from shared_backend.intent_mapping import resolve_explicit_step
+from shared_backend.page_object_assets import merge_page_object_with_yaml
+
 _logger = logging.getLogger(__name__)
 
 
-def _fetch_page_element_codes(page: str, project: str = "atp", client: str = "web") -> list[str] | None:
-    """Fetch element codes from DB for PO Store validation. Returns None on failure."""
+def _fetch_page_object_elements(page: str, project: str = "atp", client: str = "web") -> dict[str, dict[str, str]] | None:
+    """Fetch page object elements from DB or YAML for PO Store validation."""
     try:
-        from sqlalchemy import select
-
-        from app.core.database import SessionLocal
-        from app.models.page_object import PageElement, PageObject
-
-        db = SessionLocal()
-        try:
-            page_obj = db.execute(
-                select(PageObject).where(
-                    PageObject.project_code == project,
-                    PageObject.client == client,
-                    PageObject.page_code == page,
-                )
-            ).scalar_one_or_none()
-            if page_obj is None:
-                return None
-            elements = db.execute(
-                select(PageElement.element_code).where(PageElement.page_object_id == page_obj.id)
-            ).scalars().all()
-            return list(elements)
-        finally:
-            db.close()
+        db_url = str(os.getenv("DATABASE_URL", "")).strip()
+        if db_url.startswith("sqlite:///"):
+            db_path = db_url.removeprefix("sqlite:///")
+        else:
+            db_path = str(Path(__file__).resolve().parents[4] / "apps" / "web-ui-service" / "dev.db")
+        with sqlite3.connect(db_path) as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                select id
+                from page_objects
+                where project_code = ? and client = ? and page_code = ?
+                """,
+                (project, client, page),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise LookupError("page object not found in DB")
+            cur.execute(
+                """
+                select element_code, locator_type, locator_value, role, coalesce(element_name, '')
+                from page_elements
+                where page_object_id = ?
+                order by id asc
+                """,
+                (int(row[0]),),
+            )
+            elements: dict[str, dict[str, str]] = {}
+            for item in cur.fetchall():
+                code = str(item[0]).strip()
+                if not code:
+                    continue
+                elements[code] = {
+                    "selector": str(item[2]).strip(),
+                    "type": str(item[1]).strip() or "css",
+                    "role": str(item[3]).strip(),
+                    "name": str(item[4]).strip(),
+                    "aliases": [],
+                }
+            if elements:
+                merged = merge_page_object_with_yaml(page, {"page": page, "elements": elements})
+                return merged.get("elements") if isinstance(merged.get("elements"), dict) else elements
     except Exception:
         _logger.debug("PO Store lookup failed for %s", page, exc_info=True)
-        return None
+    merged = merge_page_object_with_yaml(page, {})
+    elements = merged.get("elements") if isinstance(merged, dict) else None
+    return elements if isinstance(elements, dict) and elements else None
+
+
+def _fetch_page_element_codes(page: str, project: str = "atp", client: str = "web") -> dict[str, dict[str, str]] | None:
+    """Fetch element metadata for PO Store validation. Returns None on failure."""
+    return _fetch_page_object_elements(page, project=project, client=client)
 
 
 def _validate_raw_points_against_contract(points: list[dict[str, Any]]) -> None:
@@ -345,6 +378,7 @@ class RequirementTestPointSupport:
                 "action": "login",
                 "description": "Use shared login precondition.",
                 "priority": "P0",
+                "expected_result": "",
                 "dependencies": [],
                 "source_ids": [],
                 "steps": [{"action": "login", "raw_text": "Use shared login precondition."}],
@@ -361,25 +395,40 @@ class RequirementTestPointSupport:
         page_elements = _fetch_page_element_codes(page)
         if not page_elements:
             raise ValueError(f"page object element_codes not found for page '{page}'")
+        if isinstance(page_elements, dict):
+            page_element_alias_map = build_element_alias_map({"elements": page_elements})
+        else:
+            page_element_alias_map = build_element_alias_map(
+                {"elements": {code: {"selector": code, "type": "css", "role": ""} for code in page_elements}}
+            )
         for index, intent in enumerate(intents[:80], start=1):
             if not isinstance(intent, dict):
                 continue
             title = str(intent.get("title", "")).strip() or f"intent-{index:02d}"
             intent_type = str(intent.get("intent_type", "functional")).strip().lower() or "functional"
             priority = str(intent.get("priority", "P1")).strip() or "P1"
+            expected_result = str(intent.get("expected_result") or intent.get("expected") or "").strip()
             dependencies = intent.get("dependencies") if isinstance(intent.get("dependencies"), list) else []
             source_ids = intent.get("source_ids") if isinstance(intent.get("source_ids"), list) else []
-            action, target, value = self.map_intent_to_step(
-                page=page,
-                intent_type=intent_type,
-                title=title,
-                steps_hint=intent.get("steps_hint"),
-                page_elements=page_elements,
-            )
+            try:
+                action, target, value = self.map_intent_to_step(
+                    page=page,
+                    intent_type=intent_type,
+                    title=title,
+                    steps_hint=intent.get("steps_hint"),
+                    target=intent.get("target"),
+                    value=intent.get("value"),
+                    page_element_alias_map=page_element_alias_map,
+                )
+            except ValueError as exc:
+                raise ValueError(
+                    f"requirement_spec.test_intents[{index - 1}] explicit step mapping failed: {exc}"
+                ) from exc
             intent_id_value = str(intent.get("intent_id", "")).strip()
             if not intent_id_value:
                 raise ValueError(f"requirement_spec.test_intents[{index - 1}] missing intent_id")
-            if action != "login" and (target is None or not str(target).strip()):
+            requires_target = action in {"input", "click", "wait_for", "assert_visible", "assert_text", "assert_metric"}
+            if requires_target and (target is None or not str(target).strip()):
                 raise ValueError(
                     f"requirement_spec.test_intents[{index - 1}] unresolved target for action '{action}' on page '{page}'"
                 )
@@ -396,6 +445,7 @@ class RequirementTestPointSupport:
                 "action": action,
                 "description": title[:200],
                 "priority": priority,
+                "expected_result": expected_result[:240],
                 "dependencies": [str(item).strip() for item in dependencies if str(item).strip()],
                 "source_ids": [str(item).strip() for item in source_ids if str(item).strip()],
                 "steps": [step_entry],
@@ -590,13 +640,14 @@ class RequirementTestPointSupport:
     @staticmethod
     def _validate_target_against_po(
         target: str | None,
-        page_elements: list[str] | None,
+        page_element_alias_map: dict[str, str] | None,
     ) -> str | None:
         """Validate a target against the current PO element list."""
-        if target is None or page_elements is None or not page_elements:
+        if target is None or page_element_alias_map is None or not page_element_alias_map:
             return target
-        if target in page_elements:
-            return target
+        resolved = resolve_element_code(target, page_element_alias_map)
+        if resolved:
+            return resolved
         raise ValueError(f"target '{target}' not found in PO Store element_codes")
 
     @staticmethod
@@ -606,35 +657,18 @@ class RequirementTestPointSupport:
         intent_type: str,
         title: str,
         steps_hint: Any,
-        page_elements: list[str] | None = None,
+        target: Any = None,
+        value: Any = None,
+        page_element_alias_map: dict[str, str] | None = None,
     ) -> tuple[str, str | None, Any]:
-        hints = [str(item).strip().lower() for item in (steps_hint if isinstance(steps_hint, list) else []) if str(item).strip()]
-        lowered_title = title.lower()
-        if any(item == "login" or item == "auth_check" for item in hints) or any(token in lowered_title for token in ["登录", "鉴权", "auth"]):
-            return "login", None, None
-        if any(item.startswith("open:") for item in hints):
-            target = f"{page}_menu"
-            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
-            return "click", target, None
-        if any(item.startswith("api:") or item == "api" for item in hints) or intent_type == "api":
-            target = f"{page}_list_title"
-            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
-            return "assert_visible", target, None
-        if any(item in {"search", "query"} for item in hints) or any(token in lowered_title for token in ["搜索", "查询", "筛选"]):
-            target = "search_input"
-            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
-            return "fill", target, "3"
-        if any(item in {"create", "update", "delete", "submit", "approve"} for item in hints):
-            target = f"{page}_menu"
-            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
-            return "click", target, None
-        if any(item in {"assert", "negative", "regression", "smoke"} for item in hints):
-            target = f"{page}_list_title"
-            target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
-            return "assert_visible", target, None
-        target = f"{page}_list_title"
-        target = RequirementTestPointSupport._validate_target_against_po(target, page_elements)
-        return "wait_for", target, None
+        _ = intent_type, title
+        return resolve_explicit_step(
+            steps_hint=steps_hint,
+            page=page,
+            target=target,
+            value=value,
+            page_element_alias_map=page_element_alias_map,
+        )
 
     @staticmethod
     def render_requirement_spec_markdown(requirement_spec: dict[str, Any]) -> str:

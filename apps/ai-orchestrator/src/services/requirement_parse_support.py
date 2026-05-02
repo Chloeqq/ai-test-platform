@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -10,6 +11,11 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import Any, Callable
+
+from shared_backend.observability import get_request_id, run_logged_subprocess, summarize_log_value
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class RequirementParseSupport:
@@ -95,36 +101,72 @@ class RequirementParseSupport:
             env = dict(os.environ)
             env["PYTHONPATH"] = os.pathsep.join(entry for entry in pythonpath_entries if entry)
             env["REQUIREMENT_PARSER_MODE"] = "llm"
-            parser_timeout_seconds_raw = str(
-                os.getenv("REQUIREMENT_PARSER_SUBPROCESS_TIMEOUT_SECONDS", "180")
-            ).strip()
+            env["PYTHONUNBUFFERED"] = "1"
+            llm_timeout_seconds = self._read_int_env("REQUIREMENT_PARSER_LLM_TIMEOUT_SECONDS", default=90, min_value=10, max_value=180)
+            llm_max_retries = self._read_int_env("REQUIREMENT_PARSER_LLM_MAX_RETRIES", default=2, min_value=0, max_value=5)
+            default_parser_timeout = max(180, (llm_timeout_seconds * (llm_max_retries + 1)) + 45)
+            parser_timeout_seconds = self._read_int_env(
+                "REQUIREMENT_PARSER_SUBPROCESS_TIMEOUT_SECONDS",
+                default=default_parser_timeout,
+                min_value=30,
+                max_value=600,
+            )
+            _LOGGER.info(
+                "requirement parser subprocess start: cwd=%s timeout=%ss input_sources=%d requirement_chars=%d page=%s request_id=%s",
+                self._requirement_parser_root,
+                parser_timeout_seconds,
+                len(input_sources or []),
+                len(requirement or ""),
+                page or "",
+                get_request_id() or "-",
+            )
             try:
-                parser_timeout_seconds = int(parser_timeout_seconds_raw)
-            except Exception:
-                parser_timeout_seconds = 180
-            if parser_timeout_seconds < 20:
-                parser_timeout_seconds = 20
-            if parser_timeout_seconds > 300:
-                parser_timeout_seconds = 300
-            try:
-                completed = subprocess.run(
+                completed = run_logged_subprocess(
                     [sys.executable, "-m", "src.index", "--input", str(temp_path)],
                     cwd=str(self._requirement_parser_root),
                     env=env,
-                    text=True,
-                    capture_output=True,
-                    check=False,
                     timeout=parser_timeout_seconds,
+                    logger=_LOGGER,
+                    log_prefix="requirement-parser",
                 )
             except subprocess.TimeoutExpired as exc:
-                raise RuntimeError(f"requirement parser subprocess timed out after {parser_timeout_seconds}s") from exc
+                timeout_detail = self._compact_subprocess_error(
+                    stdout=str(getattr(exc, "output", "") or ""),
+                    stderr=str(getattr(exc, "stderr", "") or ""),
+                    default_message="requirement parser subprocess timed out",
+                )
+                error_message = (
+                    f"{timeout_detail} "
+                    f"(subprocess_timeout={parser_timeout_seconds}s, "
+                    f"llm_timeout={llm_timeout_seconds}s, "
+                    f"llm_max_retries={llm_max_retries}, "
+                    f"input_sources={len(input_sources or [])}, "
+                    f"requirement_chars={len(requirement or '')}, "
+                    f"page={page or ''})"
+                )
+                _LOGGER.error("requirement parser timeout: %s", error_message)
+                raise RuntimeError(error_message) from exc
             if completed.returncode != 0:
                 compact_reason = self._compact_subprocess_error(
                     stdout=completed.stdout,
                     stderr=completed.stderr,
                     default_message="requirement parser failed",
                 )
+                _LOGGER.error(
+                    "requirement parser failed: returncode=%s reason=%s stderr_excerpt=%s stdout_excerpt=%s",
+                    completed.returncode,
+                    compact_reason,
+                    summarize_log_value(completed.stderr, max_length=1200),
+                    summarize_log_value(completed.stdout, max_length=1200),
+                )
                 raise RuntimeError(compact_reason)
+            _LOGGER.info(
+                "requirement parser subprocess end: returncode=%s stdout_chars=%d stderr_chars=%d request_id=%s",
+                completed.returncode,
+                len(completed.stdout or ""),
+                len(completed.stderr or ""),
+                get_request_id() or "-",
+            )
             parsed = json.loads(completed.stdout.strip() or "{}")
             if not isinstance(parsed, dict):
                 raise RuntimeError("requirement parser returned non-object payload")
@@ -235,6 +277,7 @@ class RequirementParseSupport:
                 "summary": "验证核心主流程可达且关键信息可见。",
                 "intent_type": "functional",
                 "priority": "P1",
+                "expected_result": "主流程执行成功，页面关键区域可见且状态正确。",
                 "steps_hint": [f"open:{resolved_page}", "assert"],
                 "source_ids": source_ids[:1] or source_ids,
             },
@@ -244,6 +287,7 @@ class RequirementParseSupport:
                 "summary": "验证输入异常或状态异常时系统反馈。",
                 "intent_type": "negative",
                 "priority": "P1",
+                "expected_result": "异常输入或异常状态下应返回明确错误提示。",
                 "steps_hint": [f"open:{resolved_page}", "input:invalid", "assert:error_hint"],
                 "source_ids": source_ids[:1] or source_ids,
             },
@@ -253,6 +297,7 @@ class RequirementParseSupport:
                 "summary": "验证边界值处理和稳定性。",
                 "intent_type": "boundary",
                 "priority": "P2",
+                "expected_result": "边界值处理符合预期，页面行为稳定且无异常。",
                 "steps_hint": [f"open:{resolved_page}", "input:boundary", "assert:boundary_behavior"],
                 "source_ids": source_ids[:1] or source_ids,
             },
@@ -359,6 +404,19 @@ class RequirementParseSupport:
         if lines:
             return lines[-1][:500]
         return text[:500]
+
+    @staticmethod
+    def _read_int_env(name: str, *, default: int, min_value: int | None = None, max_value: int | None = None) -> int:
+        raw = str(os.getenv(name, "")).strip()
+        try:
+            value = int(raw) if raw else int(default)
+        except Exception:
+            value = int(default)
+        if min_value is not None and value < min_value:
+            value = int(min_value)
+        if max_value is not None and value > max_value:
+            value = int(max_value)
+        return value
 
     @staticmethod
     def is_llm_force_mode_enabled() -> bool:

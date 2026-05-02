@@ -104,6 +104,13 @@ def collect_failure_entries_with_meta(
                 video_candidates = list(case_dir.glob("*.webm"))
                 video_path = max(video_candidates, key=lambda p: p.stat().st_mtime) if video_candidates else None
                 analysis = parse_analysis_file(analysis_path)
+                record_metadata = _dict_value(execution_record.get("metadata"))
+                record_failed_step = _dict_value(record_metadata.get("failed_step"))
+                record_element_impact = _dict_value(record_metadata.get("element_impact"))
+                if record_failed_step and not _dict_value(analysis.get("failed_step")):
+                    analysis["failed_step"] = record_failed_step
+                if record_element_impact and not _dict_value(analysis.get("element_impact")):
+                    analysis["element_impact"] = record_element_impact
                 suggestion_payload: dict[str, Any] = {}
                 if suggestion_path.exists():
                     try:
@@ -126,6 +133,8 @@ def collect_failure_entries_with_meta(
                         "video_path": str(video_path.resolve()) if video_path else "",
                         "evidence_source": "manifest",
                         "manifest_path": str(manifest_path.resolve()),
+                        "failed_step": _dict_value(analysis.get("failed_step")),
+                        "element_impact": _dict_value(analysis.get("element_impact")),
                     }
                 )
         for analysis_path in sorted(artifact_root.rglob("analysis.txt"), key=lambda p: p.stat().st_mtime, reverse=True):
@@ -409,7 +418,7 @@ def record_failure_source_calibration_sample(
     sample = {
         "version": "FailureSourceCalibrationV1",
         "sample_id": str(uuid.uuid4()),
-        "project": str(review_record.get("project", "default")).strip() or "default",
+        "project": str(review_record.get("project", "mall")).strip() or "mall",
         "run_id": run_id,
         "case_id": str(review_record.get("case_id", "")).strip(),
         "page": str(review_record.get("page", "")).strip(),
@@ -570,6 +579,8 @@ def build_report_failures(
     for item in entries:
         normalized_case_id = normalize_case_id(str(item.get("case_id", "")).strip()) if str(item.get("case_id", "")).strip() else ""
         links = defect_map.get(normalized_case_id, [])
+        failed_step = _dict_value(item.get("failed_step")) or _dict_value(item["analysis"].get("failed_step"))
+        element_impact = _dict_value(item.get("element_impact")) or _dict_value(item["analysis"].get("element_impact"))
         rows.append(
             {
                 "case_id": normalized_case_id,
@@ -585,6 +596,9 @@ def build_report_failures(
                 "recommended_action": item["analysis"].get("recommended_action", ""),
                 "confidence": item["analysis"].get("confidence", ""),
                 "requires_manual_review": bool(item["analysis"].get("requires_manual_review", False)),
+                "failed_step": failed_step,
+                "element_impact": element_impact,
+                "governance_href": str(element_impact.get("governance_href", "")).strip(),
                 "suggestion": item.get("suggestion", {}),
                 "artifact_dir": item.get("artifact_dir", ""),
                 "analysis_path": item.get("analysis_path", ""),
@@ -634,6 +648,9 @@ def parse_analysis_file(path: Path) -> dict[str, Any]:
         "recommended_action": "",
         "requires_manual_review": False,
         "confidence": "",
+        "evidence_used": [],
+        "failed_step": {},
+        "element_impact": {},
         "source_evidence": [],
         "source_file": str(path),
     }
@@ -648,6 +665,9 @@ def parse_analysis_file(path: Path) -> dict[str, Any]:
         "Recommended Action": "recommended_action",
         "Requires Manual Review": "requires_manual_review",
         "Confidence": "confidence",
+        "Evidence Used": "evidence_used",
+        "Failed Step": "failed_step",
+        "Element Impact": "element_impact",
         "Source Evidence": "source_evidence",
     }
     try:
@@ -662,44 +682,68 @@ def parse_analysis_file(path: Path) -> dict[str, Any]:
         if target:
             if target == "requires_manual_review":
                 parsed[target] = value.strip().lower() in {"1", "true", "yes", "on", "y", "是"}
+            elif target == "evidence_used":
+                parsed[target] = [item.strip() for item in value.split(",") if item.strip()]
             elif target == "source_evidence":
                 try:
                     loaded = json.loads(value.strip())
                 except Exception:
                     loaded = []
                 parsed[target] = loaded if isinstance(loaded, list) else []
+            elif target in {"failed_step", "element_impact"}:
+                try:
+                    loaded = json.loads(value.strip())
+                except Exception:
+                    loaded = {}
+                parsed[target] = loaded if isinstance(loaded, dict) else {}
             else:
                 parsed[target] = value.strip()
 
-    json_start = text.find("{")
-    json_end = text.rfind("}")
-    if json_start >= 0 and json_end > json_start:
-        candidate = text[json_start : json_end + 1]
+    payload = _parse_last_json_object(text)
+    if payload:
+        for field in (
+            "summary",
+            "failure_category",
+            "failure_source",
+            "failure_source_reason",
+            "failure_source_confidence",
+            "likely_cause",
+            "risk_level",
+            "recommended_action",
+            "confidence",
+        ):
+            if not str(parsed.get(field, "")).strip():
+                parsed[field] = payload.get(field, parsed.get(field, ""))
+        if not parsed.get("requires_manual_review", False):
+            parsed["requires_manual_review"] = bool(payload.get("requires_manual_review", False))
+        if not isinstance(parsed.get("source_evidence"), list) or not parsed.get("source_evidence"):
+            source_evidence = payload.get("source_evidence")
+            if isinstance(source_evidence, list):
+                parsed["source_evidence"] = source_evidence
+        if not isinstance(parsed.get("evidence_used"), list) or not parsed.get("evidence_used"):
+            evidence_used = payload.get("evidence_used")
+            if isinstance(evidence_used, list):
+                parsed["evidence_used"] = evidence_used
+        if not _dict_value(parsed.get("failed_step")) and isinstance(payload.get("failed_step"), dict):
+            parsed["failed_step"] = payload.get("failed_step")
+        if not _dict_value(parsed.get("element_impact")) and isinstance(payload.get("element_impact"), dict):
+            parsed["element_impact"] = payload.get("element_impact")
+    return parsed
+
+
+def _parse_last_json_object(text: str) -> dict[str, Any]:
+    lines = text.splitlines()
+    for index in range(len(lines) - 1, -1, -1):
+        if lines[index].strip() != "{":
+            continue
+        candidate = "\n".join(lines[index:]).strip()
         try:
             payload = json.loads(candidate)
         except Exception:
-            payload = {}
+            continue
         if isinstance(payload, dict):
-            for field in (
-                "summary",
-                "failure_category",
-                "failure_source",
-                "failure_source_reason",
-                "failure_source_confidence",
-                "likely_cause",
-                "risk_level",
-                "recommended_action",
-                "confidence",
-            ):
-                if not str(parsed.get(field, "")).strip():
-                    parsed[field] = payload.get(field, parsed.get(field, ""))
-            if not parsed.get("requires_manual_review", False):
-                parsed["requires_manual_review"] = bool(payload.get("requires_manual_review", False))
-            if not isinstance(parsed.get("source_evidence"), list) or not parsed.get("source_evidence"):
-                source_evidence = payload.get("source_evidence")
-                if isinstance(source_evidence, list):
-                    parsed["source_evidence"] = source_evidence
-    return parsed
+            return payload
+    return {}
 
 
 def normalize_failure_analysis_view(analysis: dict[str, Any] | None) -> dict[str, Any]:
@@ -737,6 +781,8 @@ def normalize_failure_analysis_view(analysis: dict[str, Any] | None) -> dict[str
         "requires_manual_review": requires_manual_review,
         "evidence_used": source.get("evidence_used", []) if isinstance(source.get("evidence_used"), list) else [],
         "source_evidence": source.get("source_evidence", []) if isinstance(source.get("source_evidence"), list) else [],
+        "failed_step": _dict_value(source.get("failed_step")),
+        "element_impact": _dict_value(source.get("element_impact")),
         "source_file": str(source.get("source_file", "")).strip(),
     }
 

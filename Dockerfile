@@ -6,7 +6,15 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openjdk-17-jre-headless curl unzip \
+    && apt-get install -y --no-install-recommends \
+      openjdk-17-jre-headless \
+      curl \
+      unzip \
+      xvfb \
+      fluxbox \
+      x11vnc \
+      novnc \
+      websockify \
     && rm -rf /var/lib/apt/lists/*
 
 ARG ALLURE_VERSION=2.29.0

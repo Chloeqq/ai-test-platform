@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import shutil
 import subprocess
 import socket
+import time
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,6 +15,7 @@ from typing import Any, Sequence
 from fastapi import HTTPException, Response, status
 from shared_backend import get_dictionary_items
 from shared_backend.case_ids import match_case_id, normalize_case_id
+from shared_backend.schemas.contracts import normalize_test_point_plan_v1
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from urllib import error as url_error
@@ -36,6 +40,9 @@ from app.services import (
     workbench_scheduler_service,
     workbench_task_service,
 )
+from app.services.workbench_generation_api.payloads import GenerateCasePayload as GenerationGenerateCasePayload
+from app.services.workbench_generation_api.usecase_factory import build_generate_case_usecase
+from shared_backend.observability import get_request_id, summarize_http_context
 
 from .service import WorkbenchService
 from .service import (
@@ -68,10 +75,24 @@ def _settings() -> Any:
 
 
 def _get_json(url: str, *, timeout_seconds: int = 300) -> dict[str, Any]:
+    request_id = get_request_id()
+    start = time.perf_counter()
     request = url_request.Request(url=url, method="GET")
+    if request_id:
+        request.add_header("X-Request-Id", request_id)
     try:
         with url_request.urlopen(request, timeout=timeout_seconds) as response:
             text = response.read().decode("utf-8")
+            logging.getLogger(__name__).info(
+                "orchestrator_get_end %s",
+                summarize_http_context(
+                    method="GET",
+                    path=url,
+                    request_id=request_id,
+                    status_code=getattr(response, "status", 200),
+                    duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                ),
+            )
     except url_error.HTTPError as exc:
         raw_body = exc.read().decode("utf-8", errors="ignore")
         detail: Any = raw_body.strip() or str(exc)
@@ -81,19 +102,80 @@ def _get_json(url: str, *, timeout_seconds: int = 300) -> dict[str, Any]:
                 detail = parsed.get("error", parsed)
         except Exception:
             pass
+        logging.getLogger(__name__).warning(
+            "orchestrator_get_http_error %s",
+            summarize_http_context(
+                method="GET",
+                path=url,
+                request_id=request_id,
+                status_code=exc.code,
+                duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                error=detail,
+            ),
+        )
         raise HTTPException(status_code=exc.code, detail=detail) from exc
     except url_error.URLError as exc:
+        logging.getLogger(__name__).warning(
+            "orchestrator_get_unavailable %s",
+            summarize_http_context(
+                method="GET",
+                path=url,
+                request_id=request_id,
+                duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                error=exc.reason,
+            ),
+        )
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"orchestrator unavailable: {exc.reason}") from exc
     except TimeoutError as exc:
+        logging.getLogger(__name__).warning(
+            "orchestrator_get_timeout %s",
+            summarize_http_context(
+                method="GET",
+                path=url,
+                request_id=request_id,
+                duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                error="timeout",
+            ),
+        )
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="orchestrator request timed out") from exc
     except socket.timeout as exc:
+        logging.getLogger(__name__).warning(
+            "orchestrator_get_timeout %s",
+            summarize_http_context(
+                method="GET",
+                path=url,
+                request_id=request_id,
+                duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                error="socket_timeout",
+            ),
+        )
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="orchestrator request timed out") from exc
 
     try:
         data = json.loads(text or "{}")
     except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "orchestrator_get_invalid_json %s",
+            summarize_http_context(
+                method="GET",
+                path=url,
+                request_id=request_id,
+                duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                error="invalid_json",
+            ),
+        )
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="orchestrator returned non-json payload") from exc
     if not isinstance(data, dict):
+        logging.getLogger(__name__).warning(
+            "orchestrator_get_invalid_response %s",
+            summarize_http_context(
+                method="GET",
+                path=url,
+                request_id=request_id,
+                duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                error="invalid_response_object",
+            ),
+        )
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="orchestrator returned invalid response object")
     return data
 
@@ -137,6 +219,96 @@ def _parse_iso_datetime(value: str) -> datetime | None:
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    items: list[str] = []
+    for raw in value:
+        text = _text(raw)
+        if text and text not in items:
+            items.append(text)
+    return items
+
+
+def _steps_from_candidate(candidate: dict[str, Any]) -> list[dict[str, Any]]:
+    steps = _text_list(candidate.get("steps"))
+    if not steps:
+        summary = _text(candidate.get("summary")) or _text(candidate.get("title")) or _text(candidate.get("intent_id"))
+        steps = [summary] if summary else []
+    if not steps:
+        steps = ["手工维护测试点"]
+    return [
+        {
+            "action": "candidate_step",
+            "target": "",
+            "value": step,
+            "raw_text": step,
+        }
+        for step in steps
+    ]
+
+
+def _manual_point_from_candidate(candidate: dict[str, Any], *, index: int) -> dict[str, Any]:
+    intent_id = _text(candidate.get("intent_id")) or f"manual-intent-{index:02d}"
+    title = _text(candidate.get("title")) or intent_id
+    summary = _text(candidate.get("summary")) or title
+    point_type = _text(candidate.get("intent_type")) or "functional"
+    expected = _text(candidate.get("expected") or candidate.get("expected_result"))
+    precondition = _text(candidate.get("precondition"))
+    involved_elements = _text_list(candidate.get("involved_elements"))
+    return {
+        "key": intent_id,
+        "intent_id": intent_id,
+        "point_type": point_type,
+        "action": "candidate",
+        "description": summary,
+        "step_index": index,
+        "dependencies": [],
+        "source_ids": [intent_id],
+        "steps": _steps_from_candidate(candidate),
+        "warnings": [],
+        "requires_review": False,
+        "involved_elements": involved_elements,
+        "expected_result": expected,
+        "precondition": precondition,
+        "confidence": 0.8,
+    }
+
+
+def _candidate_from_asset_point(point: dict[str, Any], *, fallback_title: str, fallback_priority: str) -> dict[str, Any]:
+    intent_id = _text(point.get("intent_id")) or _text(point.get("key"))
+    title = _text(point.get("description")) or fallback_title or intent_id or "测试点"
+    expected = _text(point.get("expected_result"))
+    precondition = _text(point.get("precondition"))
+    point_steps = point.get("steps") if isinstance(point.get("steps"), list) else []
+    steps: list[str] = []
+    for row in point_steps:
+        if isinstance(row, str):
+            text = _text(row)
+        elif isinstance(row, dict):
+            text = _text(row.get("raw_text") or row.get("value") or row.get("description") or row.get("action"))
+        else:
+            text = ""
+        if text:
+            steps.append(text)
+    return {
+        "intent_id": intent_id or "manual-intent",
+        "title": title,
+        "summary": title,
+        "intent_type": _text(point.get("point_type")) or "functional",
+        "priority": _text(point.get("priority")) or fallback_priority or "P1",
+        "precondition": precondition,
+        "steps": steps,
+        "steps_hint": _text_list(point.get("steps_hint")),
+        "expected": expected,
+        "involved_elements": _text_list(point.get("involved_elements")),
+    }
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -366,10 +538,10 @@ class WorkbenchFacade:
                 case_id_value,
                 state_root=constants.TEST_POINTS_ROOT,
             ),
-            latest_run_snapshot_for_case=lambda project_value, case_id_value, page_value="": workbench_asset_service.latest_run_snapshot_for_case(
-                project=project_value,
-                case_id=case_id_value,
-                page=page_value,
+            latest_run_snapshot_for_case=lambda project, case_id, page="": workbench_asset_service.latest_run_snapshot_for_case(
+                project=project,
+                case_id=case_id,
+                page=page,
                 safe_case_id_fn=workbench_gate_service.safe_case_id,
                 normalize_page_slug_fn=workbench_gate_service.normalize_page_slug,
                 runtime_jobs=store.list_run_jobs(),
@@ -401,30 +573,8 @@ class WorkbenchFacade:
             ),
             clamp_confidence=page_analysis_rules.clamp_confidence,
         )
-        case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
-        filtered_items, _filter_meta = workbench_case_consistency_service.filter_records_by_case_center(
-            payload.get("items", []),
-            case_center_case_ids=case_center_case_ids,
-            case_id_key="asset_id",
-            case_id_resolver=lambda row: row.get("asset_id"),
-        )
-        payload["items"] = filtered_items
-        payload["selection_summary"]["total_assets"] = len(filtered_items)
-        payload["selection_summary"]["ready_count"] = sum(
-            1 for item in filtered_items if str((item.get("selection_summary") or {}).get("selection_state", "")).strip() == "ready"
-        )
-        payload["selection_summary"]["needs_review_count"] = sum(
-            1
-            for item in filtered_items
-            if str((item.get("selection_summary") or {}).get("selection_state", "")).strip() == "needs_review"
-        )
-        payload["selection_summary"]["blocked_count"] = sum(
-            1
-            for item in filtered_items
-            if str((item.get("selection_summary") or {}).get("selection_state", "")).strip() == "blocked"
-        )
         payload["coverage_summary"] = workbench_asset_service.build_test_point_asset_coverage_summary(
-            items=filtered_items,
+            items=payload.get("items", []),
             filter_snapshot=payload["selection_summary"].get("filter_snapshot", {}),
         )
         return payload
@@ -445,12 +595,6 @@ class WorkbenchFacade:
 
     def get_test_point_asset(self, *, asset_id: str, project: str, db: Session) -> dict[str, Any]:
         store.ensure_dirs()
-        case_center_case_ids = workbench_case_consistency_service.load_case_center_case_ids(db)
-        if not workbench_case_consistency_service.is_case_tracked(
-            asset_id,
-            case_center_case_ids=case_center_case_ids,
-        ):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="test point asset not found")
         payload = workbench_asset_service.build_test_point_asset_detail(
             project=project,
             asset_id=asset_id,
@@ -459,10 +603,10 @@ class WorkbenchFacade:
                 case_id_value,
                 state_root=constants.TEST_POINTS_ROOT,
             ),
-            latest_run_snapshot_for_case=lambda project_value, case_id_value, page_value="": workbench_asset_service.latest_run_snapshot_for_case(
-                project=project_value,
-                case_id=case_id_value,
-                page=page_value,
+            latest_run_snapshot_for_case=lambda project, case_id, page="": workbench_asset_service.latest_run_snapshot_for_case(
+                project=project,
+                case_id=case_id,
+                page=page,
                 safe_case_id_fn=workbench_gate_service.safe_case_id,
                 normalize_page_slug_fn=workbench_gate_service.normalize_page_slug,
                 runtime_jobs=store.list_run_jobs(),
@@ -499,6 +643,344 @@ class WorkbenchFacade:
         item = payload.get("item", {}) if isinstance(payload.get("item"), dict) else {}
         return {"item": item.get("coverage_matrix", {}) if isinstance(item.get("coverage_matrix"), dict) else {}}
 
+    def upsert_test_point_asset(self, *, payload: Any, db: Session) -> dict[str, Any]:
+        store.ensure_dirs()
+        project = _text(getattr(payload, "project", "")) or "mall"
+        test_project_service.ensure_project_active_for_write(db, project)
+        raw_asset_id = _text(getattr(payload, "asset_id", ""))
+        if not raw_asset_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="asset_id must not be empty")
+        asset_id = _safe_case_id(raw_asset_id)
+        page = workbench_gate_service.normalize_page_slug(_text(getattr(payload, "page", "")))
+        if not page:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="page must not be empty")
+        title = _text(getattr(payload, "title", "")) or asset_id
+        priority = _text(getattr(payload, "priority", "")) or "P1"
+        source_type = _text(getattr(payload, "source_type", "")) or "manual"
+        requirement = _text(getattr(payload, "requirement", "")) or title
+        selected_candidates_raw = getattr(payload, "selected_candidates", [])
+        selected_candidates = [item for item in selected_candidates_raw if isinstance(item, dict)]
+        if not selected_candidates:
+            selected_candidates = [
+                {
+                    "intent_id": asset_id,
+                    "title": title,
+                    "summary": title,
+                    "priority": priority,
+                    "steps": [requirement],
+                    "expected": "手工维护测试点",
+                }
+            ]
+        if len(selected_candidates) > 200:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="selected_candidates exceeds max size 200")
+
+        points = [_manual_point_from_candidate(candidate, index=index) for index, candidate in enumerate(selected_candidates, start=1)]
+        selected_intent_ids = [intent_id for intent_id in [_text(item.get("intent_id")) for item in selected_candidates] if intent_id]
+        plan = {
+            "version": "TestPointPlanV1",
+            "project": project,
+            "case_id": asset_id,
+            "page": page,
+            "title": title,
+            "priority": priority,
+            "source_type": source_type,
+            "requirement": [requirement],
+            "generated_at": store.now_iso(),
+            "points": points,
+            "coverage": {
+                "status": "preview",
+                "coverage_ratio": 1.0 if points else 0.0,
+                "generated_case_count": len(points),
+                "expected_case_count": len(points),
+                "missing_scenarios": [],
+                "covered_scenarios": selected_intent_ids,
+            },
+            "review_summary": {
+                "total_points": len(points),
+                "mainline_point_count": len(points),
+                "design_only_point_count": 0,
+                "technique_distribution": {"manual": len(points)},
+            },
+            "metadata": {
+                "saved_by": "web-ui-service",
+                "origin": "manual",
+                "selected_intent_ids": selected_intent_ids,
+            },
+            "involved_elements": _text_list(
+                [
+                    element
+                    for candidate in selected_candidates
+                    for element in _text_list(candidate.get("involved_elements"))
+                ]
+            ),
+            "confidence": 0.85,
+            "warnings": [],
+            "requires_review": False,
+        }
+
+        def _normalize_test_point_plan_payload(plan_payload: dict[str, Any], _strict: bool = False) -> dict[str, Any]:
+            normalized_plan, _warnings = normalize_test_point_plan_v1(plan_payload)
+            return normalized_plan
+
+        def _upsert_test_point_asset_snapshot(**kwargs: Any) -> dict[str, Any]:
+            return workbench_asset_service.upsert_test_point_asset_snapshot(
+                **kwargs,
+                now_iso_fn=store.now_iso,
+                count_test_point_types_fn=workbench_asset_service.count_test_point_types,
+                build_test_point_asset_semantic_summary_fn=lambda resolved_page, normalized_plan: workbench_asset_service.build_test_point_asset_semantic_summary(
+                    page=resolved_page,
+                    normalized_plan=normalized_plan,
+                    normalize_page_slug_fn=workbench_gate_service.normalize_page_slug,
+                    clamp_confidence=page_analysis_rules.clamp_confidence,
+                ),
+                build_test_point_asset_technique_summary_fn=lambda normalized_plan: workbench_asset_service.build_test_point_asset_technique_summary(
+                    normalized_plan=normalized_plan
+                ),
+                merge_reference_items_fn=workbench_asset_service.merge_reference_items,
+            )
+
+        plan_path = workbench_asset_service.save_test_point_plan(
+            project=project,
+            case_id=asset_id,
+            page=page,
+            page_url="",
+            requirement=requirement,
+            plan=plan,
+            now_iso_fn=store.now_iso,
+            normalize_test_point_plan_payload=_normalize_test_point_plan_payload,
+            upsert_test_point_asset_snapshot=_upsert_test_point_asset_snapshot,
+            state_root=constants.TEST_POINTS_ROOT,
+        )
+        store.append_history(
+            {
+                "timestamp": store.now_iso(),
+                "action": "upsert_test_point_asset",
+                "project": project,
+                "case_id": asset_id,
+                "page": page,
+                "path": str(plan_path.resolve()),
+            }
+        )
+        detail = self.get_test_point_asset(asset_id=asset_id, project=project, db=db)
+        item = detail.get("item", {}) if isinstance(detail.get("item"), dict) else {}
+        return {
+            "message": "test point asset saved",
+            "count": 1 if item else 0,
+            "item": item,
+            "items": [item] if item else [],
+        }
+
+    def delete_test_point_asset(self, *, asset_id: str, project: str, db: Session) -> dict[str, Any]:
+        store.ensure_dirs()
+        normalized_project = _text(project) or "mall"
+        project_record = test_project_service.ensure_project_active_for_write(db, normalized_project)
+        normalized_project = _text(getattr(project_record, "project_code", normalized_project)) or normalized_project
+        raw_asset_id = _text(asset_id)
+        normalized_asset_id = _safe_case_id(raw_asset_id)
+        candidate_asset_ids: list[str] = []
+        for candidate in (normalized_asset_id, raw_asset_id):
+            normalized_candidate = _text(candidate)
+            if normalized_candidate and normalized_candidate not in candidate_asset_ids:
+                candidate_asset_ids.append(normalized_candidate)
+        removed_paths: list[str] = []
+        removed_path_set: set[str] = set()
+
+        def _remove_if_exists(path: Path) -> None:
+            if not path.exists():
+                return
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+            resolved_path = str(path.resolve())
+            if resolved_path in removed_path_set:
+                return
+            removed_path_set.add(resolved_path)
+            removed_paths.append(resolved_path)
+
+        def _remove_asset_files_in_project(project_dir: Path) -> None:
+            for candidate_asset_id in candidate_asset_ids:
+                _remove_if_exists(project_dir / f"{candidate_asset_id}.json")
+                _remove_if_exists(project_dir / "plans" / f"{candidate_asset_id}.json")
+                _remove_if_exists(project_dir / "versions" / candidate_asset_id)
+
+        # 1) Hard delete in current project.
+        project_dir = workbench_asset_service.state_project_dir(normalized_project, state_root=constants.TEST_POINTS_ROOT)
+        _remove_asset_files_in_project(project_dir)
+
+        # 2) Cross-project hard delete (avoid mismatched project causing resurrection on refresh).
+        state_root = Path(constants.TEST_POINTS_ROOT)
+        if state_root.exists():
+            for candidate_project_dir in state_root.iterdir():
+                if not candidate_project_dir.is_dir():
+                    continue
+                _remove_asset_files_in_project(candidate_project_dir)
+
+        # 3) Delete linked case YAML assets to avoid being re-snapshotted.
+        if Path(constants.ASSETS_CASES_ROOT).exists():
+            for candidate_asset_id in candidate_asset_ids:
+                for yaml_path in Path(constants.ASSETS_CASES_ROOT).rglob(f"{candidate_asset_id}.yaml"):
+                    _remove_if_exists(yaml_path)
+
+        # 4) Delete linked DB case row if exists.
+        deleted_case_count = 0
+        try:
+            deleted_case_count = int(test_case_service.batch_delete_test_cases(db, case_ids=candidate_asset_ids) or 0)
+        except HTTPException as exc:
+            if int(exc.status_code or 0) not in {status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST}:
+                raise
+
+        if not removed_paths and deleted_case_count <= 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="test point asset not found")
+        store.append_history(
+            {
+                "timestamp": store.now_iso(),
+                "action": "delete_test_point_asset",
+                "project": normalized_project,
+                "case_id": normalized_asset_id,
+                "removed_paths": removed_paths,
+            }
+        )
+        return {
+            "item": {
+                "asset_id": normalized_asset_id,
+                "project": normalized_project,
+                "deleted": True,
+                "deleted_count": len(removed_paths),
+                "deleted_paths": removed_paths,
+                "deleted_case_count": deleted_case_count,
+                "asset_id_aliases": candidate_asset_ids,
+            }
+        }
+
+    def batch_delete_test_point_assets(self, *, project: str, asset_ids: list[str], db: Session) -> dict[str, Any]:
+        normalized_project = _text(project) or "mall"
+        deleted: list[str] = []
+        missing: list[str] = []
+        for raw_asset_id in asset_ids:
+            candidate_asset_id = _text(raw_asset_id)
+            if not candidate_asset_id:
+                continue
+            try:
+                self.delete_test_point_asset(asset_id=candidate_asset_id, project=normalized_project, db=db)
+                deleted.append(_safe_case_id(candidate_asset_id))
+            except HTTPException as exc:
+                if int(exc.status_code or 0) == status.HTTP_404_NOT_FOUND:
+                    missing.append(_safe_case_id(candidate_asset_id))
+                    continue
+                raise
+        return {
+            "deleted_count": len(deleted),
+            "deleted_asset_ids": deleted,
+            "missing_count": len(missing),
+            "missing_asset_ids": missing,
+        }
+
+    def generate_cases_from_test_point_assets(
+        self,
+        *,
+        project: str,
+        asset_ids: list[str],
+        source: str,
+        db: Session,
+    ) -> dict[str, Any]:
+        store.ensure_dirs()
+        normalized_project = _text(project) or "mall"
+        selected_asset_ids = [_safe_case_id(item) for item in asset_ids if _text(item)]
+        if not selected_asset_ids:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="asset_ids must not be empty")
+        usecase = build_generate_case_usecase(db)
+        generated_items: list[dict[str, Any]] = []
+        skipped_assets: list[dict[str, str]] = []
+        processed_assets = 0
+
+        for asset_id in selected_asset_ids:
+            asset = workbench_asset_service.load_test_point_asset_with_root(
+                normalized_project,
+                asset_id,
+                state_root=constants.TEST_POINTS_ROOT,
+            )
+            if not asset:
+                skipped_assets.append({"asset_id": asset_id, "reason": "asset_not_found"})
+                continue
+            page = workbench_gate_service.normalize_page_slug(_text(asset.get("page")))
+            if not page:
+                skipped_assets.append({"asset_id": asset_id, "reason": "asset_page_empty"})
+                continue
+            requirement_list = asset.get("requirement") if isinstance(asset.get("requirement"), list) else []
+            requirement = _text(" ".join(_text(item) for item in requirement_list if _text(item))) or _text(asset.get("title")) or asset_id
+            title = _text(asset.get("title")) or asset_id
+            priority = _text(asset.get("priority")) or "P1"
+            plan = asset.get("plan") if isinstance(asset.get("plan"), dict) else {}
+            points = plan.get("points") if isinstance(plan.get("points"), list) else []
+            candidates = [
+                _candidate_from_asset_point(point, fallback_title=title, fallback_priority=priority)
+                for point in points
+                if isinstance(point, dict)
+            ]
+            if not candidates:
+                candidates = [
+                    {
+                        "intent_id": asset_id,
+                        "title": title,
+                        "summary": title,
+                        "intent_type": "functional",
+                        "priority": priority,
+                        "steps": [_text(requirement)],
+                        "expected": "可成功完成页面主流程",
+                        "involved_elements": [],
+                    }
+                ]
+            chunks = [candidates[index:index + 20] for index in range(0, len(candidates), 20)]
+            if not chunks:
+                chunks = [candidates]
+            processed_assets += 1
+            for chunk in chunks:
+                selected_intent_ids = [
+                    intent_id
+                    for intent_id in [_text(item.get("intent_id")) for item in chunk]
+                    if intent_id
+                ]
+                generation_payload = GenerationGenerateCasePayload(
+                    project=normalized_project,
+                    page=page,
+                    requirement=requirement,
+                    title=title,
+                    priority=priority,
+                    source=_text(source) or "manual",
+                    selected_candidates=chunk,
+                    selected_intent_ids=selected_intent_ids,
+                )
+                try:
+                    response = usecase.execute(generation_payload)
+                except HTTPException as exc:
+                    skipped_assets.append(
+                        {
+                            "asset_id": asset_id,
+                            "reason": f"generate_failed:{_text(exc.detail) or exc.status_code}",
+                        }
+                    )
+                    break
+                response_items = response.get("items") if isinstance(response.get("items"), list) else []
+                if response_items:
+                    generated_items.extend([item for item in response_items if isinstance(item, dict)])
+                    continue
+                response_item = response.get("item")
+                if isinstance(response_item, dict) and response_item:
+                    generated_items.append(response_item)
+
+        return {
+            "message": f"generated {len(generated_items)} cases",
+            "count": len(generated_items),
+            "items": generated_items,
+            "summary": {
+                "total_assets": len(selected_asset_ids),
+                "processed_assets": processed_assets,
+                "skipped_assets": len(skipped_assets),
+                "skipped": skipped_assets,
+            },
+        }
+
     def run_case(self, *, payload: Any, db: Session) -> dict[str, Any]:
         store.ensure_dirs()
         normalized_case_id = _safe_case_id(getattr(payload, "case_id", ""))
@@ -514,7 +996,7 @@ class WorkbenchFacade:
             case_path = case_path.resolve()
         else:
             case_path = workbench_asset_service.resolve_case_yaml_path(
-                getattr(payload, "project", "default"),
+                getattr(payload, "project", "mall"),
                 normalized_case_id,
                 state_case_file_fn=lambda project_value, case_value: workbench_asset_service.state_case_file(
                     project_value,
@@ -612,7 +1094,7 @@ class WorkbenchFacade:
             )
 
         job = workbench_runtime_service.start_run(
-            project=getattr(payload, "project", "default"),
+            project=getattr(payload, "project", "mall"),
             case_id=normalized_case_id,
             case_path=case_path,
             source=getattr(payload, "source", "manual"),
@@ -687,7 +1169,7 @@ class WorkbenchFacade:
         if not case_path.exists():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="case file not found for rerun")
         new_job = workbench_runtime_service.start_run(
-            project=str(run_item.get("project", "default")),
+            project=str(run_item.get("project", "mall")),
             case_id=str(run_item.get("case_id", "")).strip() or "UNKNOWN",
             case_path=case_path,
             source="rerun",

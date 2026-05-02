@@ -279,7 +279,7 @@ class OrchestrationFlowSupport:
                 "test points are empty",
                 details={"reason_code": "execution_compiler_missing_test_points"},
             )
-        project = str(case.get("project", "")).strip() or str(requirement_spec.get("project", "")).strip() or "atp"
+        project = str(case.get("project", "")).strip() or str(requirement_spec.get("project", "")).strip() or "mall"
         try:
             page_object = self._resolve_page_object(project, resolved_page)
         except Exception as exc:

@@ -4,17 +4,30 @@ elements:
   username_input:
     locator_type: placeholder
     locator_value: 请输入用户名
+    element_name: 用户名输入框
+    aliases:
+      - 账号输入框
+      - 用户名
 
   password_input:
     locator_type: placeholder
     locator_value: 请输入密码
+    element_name: 密码输入框
+    aliases:
+      - 密码
 
   login_button:
     locator_type: role
     role: button
     locator_value: 登录
+    element_name: 登录按钮
+    aliases:
+      - 登录
 
   home_menu:
     locator_type: role
     role: menuitem
     locator_value: 首页
+    element_name: 首页菜单
+    aliases:
+      - 首页

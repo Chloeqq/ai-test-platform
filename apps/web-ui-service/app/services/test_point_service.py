@@ -45,7 +45,7 @@ def sync_requirement_test_points(
     source: str = "full-chain",
 ) -> dict[str, Any]:
     TestPoint.__table__.create(bind=db.get_bind(), checkfirst=True)
-    project = _normalize_text(project_code).lower() or "atp"
+    project = _normalize_text(project_code).lower() or "mall"
     page = _normalize_text(page_code) or _normalize_text(requirement_spec.get("page")) or "common"
     intents = requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
 

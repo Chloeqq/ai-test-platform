@@ -18,7 +18,7 @@ apps/web-ui-service/
 ```bash
 cd /Users/bettyhuang/PycharmProjects/ai-test-platform
 ./.venv/bin/pip install -r apps/web-ui-service/requirements.txt
-./.venv/bin/python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 127.0.0.1 --port 8013 --reload
+./.venv/bin/python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 127.0.0.1 --port 8014 --reload
 ```
 
 ## 前端（TypeScript + React）

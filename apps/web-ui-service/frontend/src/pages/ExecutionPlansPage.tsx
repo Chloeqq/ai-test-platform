@@ -23,7 +23,7 @@ export function ExecutionPlansPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>测试计划（React + TypeScript）</h1>
+          <h1>测试计划</h1>
           <p className="muted">计划页仅负责计划范围、依赖和执行策略，不承载执行结果明细。</p>
         </div>
         <div className="header-actions">

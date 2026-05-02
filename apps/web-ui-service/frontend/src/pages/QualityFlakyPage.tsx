@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getDashboardGovernance, type DashboardGovernanceResponse } from "../api/governance";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
+import { FilterBar } from "../components/FilterBar";
 
 function text(value: unknown): string {
   const normalized = String(value || "").trim();
@@ -70,7 +73,7 @@ export function QualityFlakyPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>Flaky 分析（React + TypeScript）</h1>
+          <h1>Flaky 分析</h1>
           <p className="muted">识别不稳定任务和风险重叠，优先处理高波动项。</p>
         </div>
         <div className="header-actions">
@@ -83,20 +86,14 @@ export function QualityFlakyPage() {
         </div>
       </header>
 
-      <section className="panel filters">
+      <FilterBar>
         <label className="grow">
           关键词
           <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="case_id / 名称 / 模块 / 原因" />
         </label>
-      </section>
+      </FilterBar>
 
-      <section className="panel table-panel">
-        <div className="table-head">
-          <strong>命中 {filtered.length} 项</strong>
-        </div>
-        {loading ? <p>正在加载 flaky 分析...</p> : null}
-        {errorText ? <p className="error">{errorText}</p> : null}
-        {!loading && !errorText ? (
+      <DataTable title={`命中 ${filtered.length} 项`} loading={loading} loadingText="正在加载 flaky 分析..." errorText={errorText}>
           <table>
             <thead>
               <tr>
@@ -122,13 +119,14 @@ export function QualityFlakyPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>当前筛选条件下没有数据。</td>
+                  <td colSpan={6}>
+                    <EmptyState title="没有 Flaky 数据" description="当前筛选条件下没有波动用例，可以调整关键词或查看失败聚类。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
     </main>
   );
 }

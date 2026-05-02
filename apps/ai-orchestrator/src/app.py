@@ -10,7 +10,7 @@ from flask import Flask, Response, g, jsonify, request
 from werkzeug.serving import make_server
 
 from asset_service import AssetService  # type: ignore[import-not-found]
-from shared_backend.observability import configure_logging, set_request_id
+from shared_backend.observability import configure_logging, set_request_id, summarize_http_context, summarize_log_value
 from orchestrator_service import OrchestratorError, OrchestratorService, OrchestratorValidationError  # type: ignore[import-not-found]
 from wsgi_asgi import WSGIToASGIAdapter  # type: ignore[import-not-found]
 
@@ -77,6 +77,15 @@ configure_logging(service_name="ai-orchestrator")
 access_logger = logging.getLogger("orchestrator.access")
 
 
+def _preview_request_payload() -> str:
+    if request.method not in {"POST", "PUT", "PATCH"}:
+        return ""
+    if not request.is_json:
+        return ""
+    payload = request.get_json(silent=True)
+    return summarize_log_value(payload) if payload is not None else ""
+
+
 def _render_requirement_analysis_markdown(
     service: OrchestratorService,
     requirement_spec: dict[str, object],
@@ -110,6 +119,17 @@ def create_app(
         g.request_id = request_id
         g.request_started_at = time.perf_counter()
         set_request_id(request_id)
+        access_logger.info(
+            "http_request_start %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.path,
+                query=request.query_string.decode("utf-8", errors="ignore"),
+                client=request.remote_addr or "-",
+                request_id=request_id,
+                payload=_preview_request_payload(),
+            ),
+        )
 
     @app.before_request
     def _check_api_key():
@@ -134,28 +154,66 @@ def create_app(
         started_at = float(getattr(g, "request_started_at", 0.0) or 0.0)
         duration_ms = round((time.perf_counter() - started_at) * 1000, 2) if started_at > 0 else -1.0
         access_logger.info(
-            "http_request method=%s path=%s status=%s duration_ms=%.2f client=%s",
-            request.method,
-            request.path,
-            response.status_code,
-            duration_ms,
-            request.remote_addr or "-",
+            "http_request_end %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.path,
+                query=request.query_string.decode("utf-8", errors="ignore"),
+                client=request.remote_addr or "-",
+                request_id=request_id,
+                status_code=response.status_code,
+                duration_ms=duration_ms,
+            ),
         )
         return response
 
     @app.errorhandler(OrchestratorError)
     def handle_orchestrator_error(exc: OrchestratorError):
+        access_logger.warning(
+            "http_request_orchestrator_error %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.path,
+                query=request.query_string.decode("utf-8", errors="ignore"),
+                client=request.remote_addr or "-",
+                request_id=str(getattr(g, "request_id", "")).strip() or "-",
+                status_code=exc.status_code,
+                error=exc.to_response(),
+            ),
+        )
         return jsonify(exc.to_response()), exc.status_code
 
     @app.errorhandler(404)
     def handle_not_found(_exc):
+        access_logger.warning(
+            "http_request_not_found %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.path,
+                query=request.query_string.decode("utf-8", errors="ignore"),
+                client=request.remote_addr or "-",
+                request_id=str(getattr(g, "request_id", "")).strip() or "-",
+                status_code=404,
+            ),
+        )
         return jsonify({"error": {"code": "not_found", "message": "Route not found"}}), 404
 
-    @app.errorhandler(500)
+    @app.errorhandler(Exception)
     def handle_internal_error(exc):
         if isinstance(exc, OrchestratorError):
             return jsonify(exc.to_response()), exc.status_code
-        logging.getLogger(__name__).exception("unhandled internal error")
+        access_logger.exception(
+            "http_request_unhandled_exception %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.path,
+                query=request.query_string.decode("utf-8", errors="ignore"),
+                client=request.remote_addr or "-",
+                request_id=str(getattr(g, "request_id", "")).strip() or "-",
+                status_code=500,
+                error=exc,
+            ),
+        )
         return jsonify({"error": {"code": "internal_error", "message": "an unexpected error occurred"}}), 500
 
     @app.get("/health")

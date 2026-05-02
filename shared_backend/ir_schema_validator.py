@@ -18,7 +18,7 @@ class IRSchemaValidationError(ValueError):
 
 class IRSchemaValidator:
     def __init__(self, *, allowed_actions: set[str] | None = None) -> None:
-        default_actions = {"fill", "click", "wait_for", "assert_visible", "assert_text"}
+        default_actions = {"fill", "click", "wait_for", "assert_visible", "assert_text", "assert_metric"}
         self.allowed_actions = set(allowed_actions) if isinstance(allowed_actions, set) and allowed_actions else default_actions
 
     def validate_ir(self, ir: Mapping[str, Any]) -> dict[str, Any]:
@@ -58,4 +58,3 @@ class IRSchemaValidator:
         normalized["action"] = action
         normalized["target"] = target
         return normalized
-

@@ -5,9 +5,11 @@ elements:
     locator_type: role
     role: menuitem
     locator_value: 个人中心
-    description: 个人中心菜单
+    element_name: 个人中心菜单
+    aliases:
+      - 个人中心
 
   profile_title:
     locator_type: text
     locator_value: 个人资料
-    description: 个人资料标题
+    element_name: 个人资料标题

@@ -1,5 +1,6 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import {
   type ExecutionTask,
@@ -7,6 +8,10 @@ import {
   listProjects,
   type ProjectItem,
 } from "../api/workbench";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
+import { FilterBar } from "../components/FilterBar";
+import { projectOptions } from "../config/projects";
 
 interface TaskFilters {
   project_code: string;
@@ -41,18 +46,6 @@ function matchesKeyword(task: ExecutionTask, keyword: string): boolean {
   return fields.includes(normalized);
 }
 
-function formatDate(value: string | undefined): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) {
-    return raw;
-  }
-  return date.toLocaleString("zh-CN", { hour12: false });
-}
-
 export function ExecutionRunsPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [tasks, setTasks] = useState<ExecutionTask[]>([]);
@@ -75,9 +68,12 @@ export function ExecutionRunsPage() {
           return;
         }
         startTransition(() => {
-          setProjects(Array.isArray(projectData.items) ? projectData.items : []);
+          const sourceItems = Array.isArray(projectData.items) ? projectData.items : [];
+          const payloadCodes = Array.isArray(projectData.codes) ? projectData.codes : [];
+          const codes = projectOptions(payloadCodes.length ? payloadCodes : sourceItems.map((item) => item.project_code));
+          setProjects(codes.map((code) => sourceItems.find((item) => String(item.project_code || "").trim() === code) || { project_code: code }));
           setTasks(Array.isArray(taskData.items) ? taskData.items : []);
-          setLastUpdated(new Date().toLocaleString("zh-CN", { hour12: false }));
+          setLastUpdated(formatDateTime(new Date().toISOString()));
         });
       } catch (error) {
         if (!cancelled) {
@@ -116,7 +112,7 @@ export function ExecutionRunsPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>执行任务（React + TypeScript）</h1>
+          <h1>执行任务</h1>
           <p className="muted">执行中心页面已切换到 TypeScript + React 主链。</p>
         </div>
         <div className="header-actions">
@@ -127,7 +123,7 @@ export function ExecutionRunsPage() {
         </div>
       </header>
 
-      <section className="panel filters">
+      <FilterBar>
         <label>
           项目
           <select
@@ -185,15 +181,9 @@ export function ExecutionRunsPage() {
             onChange={(event) => setFilters((prev) => ({ ...prev, keyword: event.target.value }))}
           />
         </label>
-      </section>
+      </FilterBar>
 
-      <section className="panel table-panel">
-        <div className="table-head">
-          <strong>命中任务：{total}</strong>
-        </div>
-        {loading ? <p>正在加载执行任务...</p> : null}
-        {errorText ? <p className="error">{errorText}</p> : null}
-        {!loading && !errorText ? (
+      <DataTable title={`命中任务：${total}`} loading={loading} loadingText="正在加载执行任务..." errorText={errorText}>
           <table>
             <thead>
               <tr>
@@ -218,18 +208,19 @@ export function ExecutionRunsPage() {
                     <td>{task.status || "-"}</td>
                     <td>{task.queue_status || "-"}</td>
                     <td>{task.source || "-"}</td>
-                    <td>{formatDate(task.updated_at || task.created_at)}</td>
+                    <td>{formatDateTime(task.updated_at || task.created_at)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8}>当前筛选条件下没有执行任务。</td>
+                  <td colSpan={8}>
+                    <EmptyState title="没有执行任务" description="可以调整筛选条件，或先从执行计划/AI 生成链路发起一次执行。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
     </main>
   );
 }

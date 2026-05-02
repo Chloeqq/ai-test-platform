@@ -55,7 +55,7 @@ def _create_page_objects_table() -> None:
     op.create_table(
         "page_objects",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("project_code", sa.String(length=20), nullable=False, server_default="atp"),
+        sa.Column("project_code", sa.String(length=20), nullable=False, server_default="mall"),
         sa.Column("client", sa.String(length=10), nullable=False, server_default="web"),
         sa.Column("page_code", sa.String(length=40), nullable=False),
         sa.Column("page_name", sa.String(length=120), nullable=False, server_default=""),
@@ -173,7 +173,7 @@ def _create_page_object_recorder_sessions_table() -> None:
         "page_object_recorder_sessions",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("session_id", sa.String(length=64), nullable=False, unique=True),
-        sa.Column("project_code", sa.String(length=20), nullable=False, server_default="atp"),
+        sa.Column("project_code", sa.String(length=20), nullable=False, server_default="mall"),
         sa.Column("client", sa.String(length=10), nullable=False, server_default="web"),
         sa.Column("page_code", sa.String(length=40), nullable=False),
         sa.Column("page_name", sa.String(length=120), nullable=False, server_default=""),

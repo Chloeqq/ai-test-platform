@@ -177,7 +177,7 @@ def review_decisions_for_run(
         except HTTPException:
             continue
         results[(item_page, review_type)] = {
-            "project": str(item.get("project", "default")).strip() or "default",
+            "project": str(item.get("project", "mall")).strip() or "mall",
             "run_id": normalized_run_id,
             "case_id": _safe_case_id(str(item.get("case_id", "")).strip()) if str(item.get("case_id", "")).strip() else "",
             "page": item_page,
@@ -371,7 +371,7 @@ def require_authenticated_review_actor(actor: dict[str, str]) -> dict[str, str]:
 
 def _review_entry_identity(item: dict[str, Any]) -> tuple[str, str, str, str]:
     return (
-        str(item.get("project", "default")).strip() or "default",
+        str(item.get("project", "mall")).strip() or "mall",
         str(item.get("run_id", "")).strip(),
         _normalize_page_slug(str(item.get("page", "")).strip()) if str(item.get("page", "")).strip() else "",
         normalize_review_type(str(item.get("review_type", "")).strip()),
@@ -384,7 +384,7 @@ def upsert_review_decision(payload: Any, *, actor: dict[str, str] | None = None)
     normalized_page = _normalize_page_slug(_payload_value(payload, "page", ""))
     actor_info = actor if isinstance(actor, dict) else {}
     entry = {
-        "project": str(_payload_value(payload, "project", "default") or "default").strip() or "default",
+        "project": str(_payload_value(payload, "project", "mall") or "mall").strip() or "mall",
         "run_id": str(_payload_value(payload, "run_id", "")).strip(),
         "case_id": _safe_case_id(str(_payload_value(payload, "case_id", "")).strip()) if str(_payload_value(payload, "case_id", "")).strip() else "",
         "page": normalized_page,

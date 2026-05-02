@@ -426,6 +426,7 @@ def test_orchestrator_service_surfaces_constraint_technique_summary_in_test_poin
                 "title": "进入账单查询页",
                 "intent_type": "functional",
                 "priority": "P0",
+                "expected_result": "账单查询页成功打开并显示关键检索区域。",
                 "steps_hint": ["open:billing"],
                 "source_ids": ["prd.billing.list"],
             }

@@ -53,34 +53,43 @@ def test_test_projects_api_supports_update_and_delete(
     create_resp = client.post(
         "/api/test-projects",
         json={
-            "project_code": "mall",
+            "project_code": "shop",
             "project_name": "Mall Platform",
             "description": "",
+            "source_roots": ["/workspace/mall-admin-web"],
+            "source_terms": {"商品名称": "product_name"},
             "created_by": "admin",
         },
     )
     assert create_resp.status_code == 201
+    created_item = create_resp.json()["item"]
+    assert created_item["source_roots"] == ["/workspace/mall-admin-web"]
+    assert created_item["source_terms"] == {"商品名称": "product_name"}
 
     update_resp = client.put(
-        "/api/test-projects/mall",
+        "/api/test-projects/shop",
         json={
             "project_name": "Mall Commerce",
             "description": "商城主项目",
+            "source_roots": ["/workspace/mall-admin-web", "/workspace/mall-admin-web"],
+            "source_terms": {"订单编号": "order_sn"},
             "status": "inactive",
         },
     )
     assert update_resp.status_code == 200
     assert update_resp.json()["item"]["project_name"] == "Mall Commerce"
     assert update_resp.json()["item"]["status"] == "inactive"
+    assert update_resp.json()["item"]["source_roots"] == ["/workspace/mall-admin-web"]
+    assert update_resp.json()["item"]["source_terms"] == {"订单编号": "order_sn"}
 
-    delete_resp = client.delete("/api/test-projects/mall")
+    delete_resp = client.delete("/api/test-projects/shop")
     assert delete_resp.status_code == 200
-    assert delete_resp.json() == {"deleted": True, "project_code": "mall"}
+    assert delete_resp.json() == {"deleted": True, "project_code": "shop"}
 
     list_resp = client.get("/api/test-projects")
     codes = [item["project_code"] for item in list_resp.json()["items"]]
-    assert "mall" not in codes
-    assert "atp" in codes
+    assert "shop" not in codes
+    assert "mall" in codes
 
 
 def test_test_projects_api_blocks_delete_when_cases_exist(
@@ -90,7 +99,7 @@ def test_test_projects_api_blocks_delete_when_cases_exist(
     create_resp = client.post(
         "/api/test-projects",
         json={
-            "project_code": "mall",
+            "project_code": "shop",
             "project_name": "Mall Platform",
             "description": "",
             "created_by": "admin",
@@ -101,7 +110,7 @@ def test_test_projects_api_blocks_delete_when_cases_exist(
     test_case_service.create_test_case(
         db_session,
         test_case_schema.TestCaseCreate(
-            project_code="mall",
+            project_code="shop",
             name="商城项目查询用例",
             product_line="商城",
             module="查询",
@@ -109,7 +118,7 @@ def test_test_projects_api_blocks_delete_when_cases_exist(
         ),
     )
 
-    delete_resp = client.delete("/api/test-projects/mall")
+    delete_resp = client.delete("/api/test-projects/shop")
     assert delete_resp.status_code == 409
     assert "test case" in str(delete_resp.json().get("detail", "")).lower()
 
@@ -118,7 +127,7 @@ def test_test_projects_api_blocks_delete_default_project(
     test_projects_client: tuple[TestClient, Session],
 ) -> None:
     client, _db_session = test_projects_client
-    delete_resp = client.delete("/api/test-projects/atp")
+    delete_resp = client.delete("/api/test-projects/mall")
     assert delete_resp.status_code == 400
 
 
@@ -129,7 +138,7 @@ def test_test_projects_api_allows_delete_for_inactive_project_without_refs(
     create_resp = client.post(
         "/api/test-projects",
         json={
-            "project_code": "mall",
+            "project_code": "shop",
             "project_name": "Mall Platform",
             "description": "",
             "created_by": "admin",
@@ -138,7 +147,7 @@ def test_test_projects_api_allows_delete_for_inactive_project_without_refs(
     assert create_resp.status_code == 201
 
     update_resp = client.put(
-        "/api/test-projects/mall",
+        "/api/test-projects/shop",
         json={
             "project_name": "Mall Platform",
             "description": "",
@@ -148,9 +157,9 @@ def test_test_projects_api_allows_delete_for_inactive_project_without_refs(
     assert update_resp.status_code == 200
     assert update_resp.json()["item"]["status"] == "inactive"
 
-    delete_resp = client.delete("/api/test-projects/mall")
+    delete_resp = client.delete("/api/test-projects/shop")
     assert delete_resp.status_code == 200
-    assert delete_resp.json() == {"deleted": True, "project_code": "mall"}
+    assert delete_resp.json() == {"deleted": True, "project_code": "shop"}
 
 
 def test_test_projects_api_update_with_empty_payload_is_idempotent(
@@ -160,7 +169,7 @@ def test_test_projects_api_update_with_empty_payload_is_idempotent(
     create_resp = client.post(
         "/api/test-projects",
         json={
-            "project_code": "mall",
+            "project_code": "shop",
             "project_name": "Mall Platform",
             "description": "商城项目",
             "created_by": "admin",
@@ -168,10 +177,10 @@ def test_test_projects_api_update_with_empty_payload_is_idempotent(
     )
     assert create_resp.status_code == 201
 
-    update_resp = client.put("/api/test-projects/mall", json={})
+    update_resp = client.put("/api/test-projects/shop", json={})
     assert update_resp.status_code == 200
     item = update_resp.json()["item"]
-    assert item["project_code"] == "mall"
+    assert item["project_code"] == "shop"
     assert item["project_name"] == "Mall Platform"
     assert item["description"] == "商城项目"
     assert item["status"] == "active"
@@ -184,7 +193,7 @@ def test_test_projects_api_rejects_invalid_status_value(
     create_resp = client.post(
         "/api/test-projects",
         json={
-            "project_code": "mall",
+            "project_code": "shop",
             "project_name": "Mall Platform",
             "description": "",
             "created_by": "admin",
@@ -193,7 +202,7 @@ def test_test_projects_api_rejects_invalid_status_value(
     assert create_resp.status_code == 201
 
     update_resp = client.put(
-        "/api/test-projects/mall",
+        "/api/test-projects/shop",
         json={
             "project_name": "Mall Platform",
             "description": "",

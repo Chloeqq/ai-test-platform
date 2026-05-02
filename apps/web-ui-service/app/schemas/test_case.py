@@ -58,7 +58,7 @@ class TestCaseListItem(BaseModel):
 class TestCaseCreate(BaseModel):
     mode: str = Field(default="manual", pattern="^(manual|ai)$")
     case_id: str = Field(default="", max_length=64)
-    project_code: str = Field(default="atp", max_length=20)
+    project_code: str = Field(default="mall", max_length=20)
     client: str = Field(default="web", max_length=10)
     page_code: str = Field(default="", max_length=20)
     module_code: str = Field(default="", max_length=20)
@@ -183,13 +183,13 @@ class BatchExportPayload(BaseModel):
 
 
 class TreeNodeCreatePayload(BaseModel):
-    project_code: str = Field(default="atp", max_length=20)
+    project_code: str = Field(default="mall", max_length=20)
     product_line: str = Field(..., min_length=1, max_length=120)
     module: str = Field(default="", max_length=120)
 
 
 class TreeNodeUpdatePayload(BaseModel):
-    project_code: str = Field(default="atp", max_length=20)
+    project_code: str = Field(default="mall", max_length=20)
     product_line: str = Field(..., min_length=1, max_length=120)
     module: str = Field(default="", max_length=120)
     new_product_line: str = Field(..., min_length=1, max_length=120)
@@ -197,7 +197,7 @@ class TreeNodeUpdatePayload(BaseModel):
 
 
 class TreeNodeDeletePayload(BaseModel):
-    project_code: str = Field(default="atp", max_length=20)
+    project_code: str = Field(default="mall", max_length=20)
     product_line: str = Field(..., min_length=1, max_length=120)
     module: str = Field(default="", max_length=120)
     cascade_cases: bool = Field(default=False)

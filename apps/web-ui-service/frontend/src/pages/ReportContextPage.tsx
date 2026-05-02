@@ -43,7 +43,7 @@ export function ReportContextPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>资产与集成（React + TypeScript）</h1>
+          <h1>资产与集成</h1>
           <p className="muted">展示当前执行环境、构建与代码版本信息。</p>
         </div>
       </header>

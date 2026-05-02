@@ -524,12 +524,13 @@ def test_full_chain_run_generates_case_steps_binds_page_objects_and_executes(
     assert int(summary["linked_ref_count"]) >= 2
     assert int(summary["executed_count"]) == 2
     assert int(summary["run_status_counts"].get("passed", 0)) == 2
-    assert int(summary.get("persisted_test_point_count", 0)) >= 2
+    assert "test_point_store" not in payload["stages"]
+    assert "persisted_test_point_count" not in summary
 
     step_rows = db_session.execute(select(func.count(test_case_model.TestCaseStep.id))).scalar_one()
     assert int(step_rows or 0) >= 4
     point_rows = db_session.execute(select(func.count(test_point_model.TestPoint.id))).scalar_one()
-    assert int(point_rows or 0) >= 2
+    assert int(point_rows or 0) == 0
     bound_refs = db_session.execute(
         select(func.count(page_object_model.PageObjectRef.id)).where(page_object_model.PageObjectRef.reference_type == "test_case")
     ).scalar_one()

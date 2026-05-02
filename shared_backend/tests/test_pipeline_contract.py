@@ -33,6 +33,7 @@ def _make_orchestrator_points() -> list[dict]:
             "value": "testuser",
             "description": "填写用户名",
             "priority": "P1",
+            "expected_result": "用户名字段可输入且值回显正确。",
             "dependencies": [],
             "source_ids": [],
             "steps": [{"action": "fill", "target": "username_input", "value": "testuser", "raw_text": "填写用户名"}],
@@ -54,6 +55,7 @@ def _make_orchestrator_points() -> list[dict]:
             "value": "password123",
             "description": "填写密码",
             "priority": "P1",
+            "expected_result": "密码字段可输入且不明文显示。",
             "dependencies": ["intent-01"],
             "source_ids": [],
             "steps": [{"action": "fill", "target": "password_input", "value": "password123", "raw_text": "填写密码"}],
@@ -74,6 +76,7 @@ def _make_orchestrator_points() -> list[dict]:
             "target": "login_button",
             "description": "点击登录按钮",
             "priority": "P1",
+            "expected_result": "点击后进入已登录状态页面。",
             "dependencies": ["intent-02"],
             "source_ids": [],
             "steps": [{"action": "click", "target": "login_button", "raw_text": "点击登录按钮"}],
@@ -127,6 +130,21 @@ class TestNormalizerPreservesFields:
             step = point["steps"][0]
             assert "action" in step
             assert "raw_text" in step
+
+    def test_expected_result_preserved(self) -> None:
+        plan = _make_test_point_plan(_make_orchestrator_points())
+        result, _ = normalize_test_point_plan_v1(plan)
+        for point in result["points"]:
+            assert "expected_result" in point
+            assert str(point["expected_result"]).strip()
+
+    def test_expected_alias_normalized_to_expected_result(self) -> None:
+        points = _make_orchestrator_points()
+        points[0].pop("expected_result", None)
+        points[0]["expected"] = "别名字段也应归一到 expected_result。"
+        plan = _make_test_point_plan(points)
+        result, _ = normalize_test_point_plan_v1(plan)
+        assert result["points"][0]["expected_result"] == "别名字段也应归一到 expected_result。"
 
     def test_key_and_intent_id_consistent(self) -> None:
         points = _make_orchestrator_points()
@@ -303,6 +321,7 @@ def test_build_test_points_from_requirement_spec_requires_page_object(monkeypatc
                 "title": "搜索商品",
                 "intent_type": "functional",
                 "priority": "P1",
+                "expected_result": "搜索请求成功并返回商品结果。",
                 "steps_hint": ["search"],
                 "dependencies": [],
                 "source_ids": [],

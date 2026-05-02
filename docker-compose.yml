@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: /bin/sh -c "cd /app && python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 0.0.0.0 --port 8013"
+    command: /bin/bash /app/scripts/docker/start-web-with-desktop.sh
     restart: unless-stopped
     environment:
       APP_ENV: docker
@@ -15,6 +15,7 @@ services:
       REDIS_ENABLED: "true"
       REDIS_PREFIX: aitest
       ORCHESTRATOR_URL: http://orchestrator:8000
+      ORCHESTRATOR_API_KEY: ${ORCHESTRATOR_API_KEY:?ORCHESTRATOR_API_KEY must be set}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set}
       JWT_ALGORITHM: HS256
       JWT_EXPIRE_MINUTES: "120"
@@ -27,12 +28,25 @@ services:
       BASE_URL: ${BASE_URL:?BASE_URL must be set}
       TEST_USERNAME: ${TEST_USERNAME:?TEST_USERNAME must be set}
       TEST_PASSWORD: ${TEST_PASSWORD:?TEST_PASSWORD must be set}
+      RECORDER_DESKTOP_ENABLED: ${RECORDER_DESKTOP_ENABLED:-true}
+      RECORDER_DISPLAY: ${RECORDER_DISPLAY:-:99}
+      RECORDER_SCREEN: ${RECORDER_SCREEN:-1280x900x24}
+      RECORDER_NOVNC_PORT: "6080"
+      RECORDER_VNC_PORT: "5900"
+      RECORDER_VNC_PASSWORD: ${RECORDER_VNC_PASSWORD:-}
+      PAGE_OBJECT_SOURCE_ROOTS: ${PAGE_OBJECT_SOURCE_ROOTS:-/workspace/mall-admin-web}
+      PAGE_OBJECT_SOURCE_ROOTS_BY_PROJECT: '${PAGE_OBJECT_SOURCE_ROOTS_BY_PROJECT:-{"mall":"/workspace/mall-admin-web"}}'
+      PAGE_OBJECT_SOURCE_ROOTS_MALL: ${PAGE_OBJECT_SOURCE_ROOTS_MALL:-/workspace/mall-admin-web}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${WEB_HOST_PORT:-8013}:8013"
+      - "${WEB_HOST_PORT:-8015}:8013"
+      - "${RECORDER_NOVNC_HOST_PORT:-6080}:6080"
     volumes:
       - platform_logs:/var/log/ai-test-platform
+      - ./web-ui/state:/app/web-ui/state
+      - ./assets/test-cases:/app/assets/test-cases
+      - ${MALL_ADMIN_WEB_SOURCE_ROOT:-/Users/bettyhuang/IdeaProjects/mall-admin-web}:/workspace/mall-admin-web:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,6 +64,19 @@ services:
     networks:
       - platform
 
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "${NGINX_HOST_PORT:-8013}:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - platform
+
   orchestrator:
     build:
       context: .
@@ -62,10 +89,18 @@ services:
       LOG_FILE_PATH: /var/log/ai-test-platform/ai-orchestrator.log
       PYTHONPATH: /app:/app/apps/ai-orchestrator/src
       ORCHESTRATOR_API_KEY: ${ORCHESTRATOR_API_KEY:?ORCHESTRATOR_API_KEY must be set}
+      OPENAI_API_KEY: ${DOCKER_OPENAI_API_KEY:?DOCKER_OPENAI_API_KEY must be set}
+      OPENAI_BASE_URL: ${DOCKER_OPENAI_BASE_URL:?DOCKER_OPENAI_BASE_URL must be set}
+      OPENAI_MODEL: ${DOCKER_OPENAI_MODEL:?DOCKER_OPENAI_MODEL must be set}
+      REQUIREMENT_PARSER_LLM_TIMEOUT_SECONDS: ${REQUIREMENT_PARSER_LLM_TIMEOUT_SECONDS:-150}
+      REQUIREMENT_PARSER_LLM_MAX_RETRIES: ${REQUIREMENT_PARSER_LLM_MAX_RETRIES:-1}
+      REQUIREMENT_PARSER_MAX_TOKENS: ${REQUIREMENT_PARSER_MAX_TOKENS:-8192}
     ports:
       - "${ORCHESTRATOR_HOST_PORT:-8000}:8000"
     volumes:
       - platform_logs:/var/log/ai-test-platform
+      - ./web-ui/state:/app/web-ui/state
+      - ./assets/test-cases:/app/assets/test-cases
     depends_on:
       redis:
         condition: service_healthy

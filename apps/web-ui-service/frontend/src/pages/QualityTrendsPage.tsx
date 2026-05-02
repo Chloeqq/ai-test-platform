@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getDashboardGovernance, getDashboardOverview, type DashboardGovernanceResponse, type DashboardOverviewResponse } from "../api/governance";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
 
 function text(value: unknown): string {
   const normalized = String(value || "").trim();
@@ -60,7 +62,7 @@ export function QualityTrendsPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>趋势分析（React + TypeScript）</h1>
+          <h1>趋势分析</h1>
           <p className="muted">观察 24h 执行走势与治理趋势。</p>
         </div>
         <div className="header-actions">
@@ -88,13 +90,7 @@ export function QualityTrendsPage() {
         </article>
       </section>
 
-      <section className="panel table-panel">
-        <div className="table-head">
-          <strong>24h 执行趋势</strong>
-        </div>
-        {loading ? <p>正在加载趋势...</p> : null}
-        {errorText ? <p className="error">{errorText}</p> : null}
-        {!loading && !errorText ? (
+      <DataTable title="24h 执行趋势" loading={loading} loadingText="正在加载趋势..." errorText={errorText}>
           <table>
             <thead>
               <tr>
@@ -116,19 +112,16 @@ export function QualityTrendsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4}>暂无 24h 趋势数据。</td>
+                  <td colSpan={4}>
+                    <EmptyState title="暂无 24h 趋势数据" description="执行任务产生后，系统会按时间桶汇总通过率和失败数。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
 
-      <section className="panel table-panel">
-        <div className="table-head">
-          <strong>治理趋势</strong>
-        </div>
-        {!loading && !errorText ? (
+      <DataTable title="治理趋势" loading={loading} loadingText="正在加载治理趋势..." errorText={errorText}>
           <table>
             <thead>
               <tr>
@@ -150,13 +143,14 @@ export function QualityTrendsPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4}>暂无治理趋势数据。</td>
+                  <td colSpan={4}>
+                    <EmptyState title="暂无治理趋势数据" description="门禁、人工复核和高风险任务产生后，会在这里展示趋势。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
     </main>
   );
 }

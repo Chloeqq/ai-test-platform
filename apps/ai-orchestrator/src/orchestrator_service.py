@@ -6,6 +6,7 @@ import subprocess
 import sys
 import json
 import logging
+import sqlite3
 
 _logger = logging.getLogger(__name__)
 import importlib.util
@@ -15,6 +16,7 @@ from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
+import yaml
 
 from services.execution_report_support import ExecutionReportSupport
 from services.multisource_support import MultisourceSupport
@@ -875,10 +877,19 @@ class OrchestratorService:
         case: dict[str, Any],
         requirement_spec: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._requirement_testpoint_support.build_test_points_preview(
-            case=case,
-            requirement_spec=requirement_spec,
-        )
+        try:
+            return self._requirement_testpoint_support.build_test_points_preview(
+                case=case,
+                requirement_spec=requirement_spec,
+            )
+        except ValueError as exc:
+            raise OrchestratorValidationError(
+                str(exc) or "test point preview failed",
+                details={
+                    "reason_code": "test_point_preview_failed",
+                    "upstream_error": str(exc)[:500],
+                },
+            ) from exc
 
     def _build_test_points_from_requirement_spec(
         self,
@@ -932,14 +943,18 @@ class OrchestratorService:
         intent_type: str,
         title: str,
         steps_hint: Any,
-        page_elements: list[str] | None = None,
+        target: Any = None,
+        value: Any = None,
+        page_element_alias_map: dict[str, str] | None = None,
     ) -> tuple[str, str | None, Any]:
         return RequirementTestPointSupport.map_intent_to_step(
             page=page,
             intent_type=intent_type,
             title=title,
             steps_hint=steps_hint,
-            page_elements=page_elements,
+            target=target,
+            value=value,
+            page_element_alias_map=page_element_alias_map,
         )
 
     def _save_case(self, case: dict[str, Any]) -> Path:
@@ -964,28 +979,69 @@ class OrchestratorService:
             sys.path.insert(0, str(self.runner_root))
 
     def _resolve_page_object(self, *, project: str, page: str) -> dict[str, Any]:
-        normalized_project = str(project).strip() or "atp"
+        normalized_project = str(project).strip() or "mall"
         normalized_page = str(page).strip().lower()
         if not normalized_page:
             raise OrchestratorValidationError(
                 "page object identity must not be empty",
                 details={"reason_code": "page_object_not_found", "project": normalized_project, "page": normalized_page},
             )
+        asset_path = self.repo_root / "assets" / "page-objects" / "web" / f"{normalized_page}.page-object.yaml"
+        if asset_path.exists():
+            try:
+                raw = yaml.safe_load(asset_path.read_text(encoding="utf-8")) or {}
+            except Exception as exc:
+                raise OrchestratorValidationError(
+                    "failed to resolve page object from assets",
+                    details={
+                        "reason_code": "page_object_not_found",
+                        "project": normalized_project,
+                        "page": normalized_page,
+                        "upstream_error": str(exc)[:500],
+                    },
+                ) from exc
+            if isinstance(raw, dict):
+                elements_raw = raw.get("elements")
+                if isinstance(elements_raw, dict):
+                    elements: dict[str, dict[str, str]] = {}
+                    for code, item in elements_raw.items():
+                        element_code = str(code or "").strip()
+                        selector = ""
+                        locator_type = "css"
+                        role = ""
+                        if isinstance(item, dict):
+                            selector = str(item.get("locator_value") or item.get("selector") or "").strip()
+                            locator_type = str(item.get("locator_type") or "").strip() or "css"
+                            role = str(item.get("role") or "").strip()
+                        elif isinstance(item, str):
+                            selector = str(item or "").strip()
+                        if not element_code or not selector:
+                            continue
+                        elements[element_code] = {
+                            "selector": selector,
+                            "type": locator_type,
+                            "role": role,
+                        }
+                    if elements:
+                        return {"page": normalized_page, "elements": elements}
         try:
-            from sqlalchemy import select
-
-            from app.core.database import SessionLocal
-            from app.models.page_object import PageElement, PageObject
-
-            with SessionLocal() as db:
-                page_object = db.execute(
-                    select(PageObject).where(
-                        PageObject.project_code == normalized_project,
-                        PageObject.client == "web",
-                        PageObject.page_code == normalized_page,
-                    )
-                ).scalar_one_or_none()
-                if page_object is None:
+            db_url = str(os.getenv("DATABASE_URL", "")).strip()
+            if db_url.startswith("sqlite:///"):
+                db_path = db_url.removeprefix("sqlite:///")
+            else:
+                db_path = str(self.repo_root / "apps" / "web-ui-service" / "dev.db")
+            with sqlite3.connect(db_path) as db:
+                cursor = db.cursor()
+                cursor.execute(
+                    """
+                    select id
+                    from page_objects
+                    where project_code = ? and client = ? and page_code = ?
+                    """,
+                    (normalized_project, "web", normalized_page),
+                )
+                page_object_row = cursor.fetchone()
+                if page_object_row is None:
                     raise OrchestratorValidationError(
                         "page object not found",
                         details={
@@ -994,15 +1050,16 @@ class OrchestratorService:
                             "page": normalized_page,
                         },
                     )
-                element_rows = (
-                    db.execute(
-                        select(PageElement)
-                        .where(PageElement.page_object_id == int(page_object.id))
-                        .order_by(PageElement.id.asc())
-                    )
-                    .scalars()
-                    .all()
+                cursor.execute(
+                    """
+                    select element_code, locator_type, locator_value, role
+                    from page_elements
+                    where page_object_id = ?
+                    order by id asc
+                    """,
+                    (int(page_object_row[0]),),
                 )
+                element_rows = cursor.fetchall()
             if not element_rows:
                 raise OrchestratorValidationError(
                     "page object has no elements",
@@ -1014,14 +1071,14 @@ class OrchestratorService:
                 )
             elements: dict[str, dict[str, str]] = {}
             for element in element_rows:
-                code = str(getattr(element, "element_code", "")).strip()
-                selector = str(getattr(element, "locator_value", "")).strip()
+                code = str(element[0] if len(element) > 0 else "").strip()
+                selector = str(element[2] if len(element) > 2 else "").strip()
                 if not code or not selector:
                     continue
                 elements[code] = {
                     "selector": selector,
-                    "type": str(getattr(element, "locator_type", "")).strip() or "css",
-                    "role": str(getattr(element, "role", "")).strip(),
+                    "type": str(element[1] if len(element) > 1 else "").strip() or "css",
+                    "role": str(element[3] if len(element) > 3 else "").strip(),
                 }
             if not elements:
                 raise OrchestratorValidationError(

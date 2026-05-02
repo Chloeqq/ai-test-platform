@@ -26,6 +26,7 @@ class TestFieldCompleteness:
                 "key": "intent-01",
                 "action": "fill",
                 "target": "username_input",
+                "expected_result": "用户名输入成功并可见。",
                 "involved_elements": ["username_input"],
                 "steps": [{"action": "fill", "target": "username_input"}],
             }
@@ -52,7 +53,12 @@ class TestFieldCompleteness:
         assert not result.valid
 
     def test_missing_involved_elements_strict_error(self, validator: ContractValidator) -> None:
-        points = [{"intent_id": "intent-01", "action": "click", "steps": [{"action": "click", "target": "login_button"}]}]
+        points = [{
+            "intent_id": "intent-01",
+            "action": "click",
+            "expected_result": "点击后页面有反馈。",
+            "steps": [{"action": "click", "target": "login_button"}],
+        }]
         result = validator.validate_normalized_test_points(points, strict=True)
         assert not result.valid
         assert any("involved_elements" in e for e in result.errors)
@@ -64,12 +70,42 @@ class TestFieldCompleteness:
 
     def test_duplicate_intent_step_pair_error(self, validator: ContractValidator) -> None:
         points = [
-            {"intent_id": "intent-01", "action": "click", "step_index": 1},
-            {"intent_id": "intent-01", "action": "fill", "step_index": 1},
+            {"intent_id": "intent-01", "action": "click", "expected_result": "按钮可点击。", "step_index": 1},
+            {"intent_id": "intent-01", "action": "fill", "expected_result": "输入可成功。", "step_index": 1},
         ]
         result = validator.validate_normalized_test_points(points, strict=True)
         assert not result.valid
         assert any("duplicate" in e for e in result.errors)
+
+    def test_missing_expected_result_strict_error(self, validator: ContractValidator) -> None:
+        points = [
+            {
+                "intent_id": "intent-01",
+                "key": "intent-01",
+                "action": "click",
+                "target": "login_button",
+                "involved_elements": ["login_button"],
+                "steps": [{"action": "click", "target": "login_button"}],
+            }
+        ]
+        result = validator.validate_normalized_test_points(points, strict=True)
+        assert not result.valid
+        assert any("missing expected_result" in e for e in result.errors)
+
+    def test_precondition_login_allows_empty_expected_result(self, validator: ContractValidator) -> None:
+        points = [
+            {
+                "intent_id": "login-00",
+                "key": "login-00",
+                "point_type": "precondition",
+                "action": "login",
+                "steps": [{"action": "login", "raw_text": "Use shared login precondition."}],
+                "involved_elements": [],
+            }
+        ]
+        result = validator.validate_normalized_test_points(points, strict=True)
+        assert result.valid
+        assert not result.errors
 
 
 class TestIntentCoverage:
@@ -126,6 +162,7 @@ class TestFullValidation:
                 "intent_id": "intent-01",
                 "action": "fill",
                 "target": "username_input",
+                "expected_result": "输入后值正确。",
                 "involved_elements": ["username_input"],
             }
         ]

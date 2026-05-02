@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import { getFailureClusters, type FailureClustersResponse } from "../api/governance";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
 
 function text(value: unknown): string {
   const normalized = String(value || "").trim();
@@ -14,18 +17,6 @@ function numberValue(value: unknown): string {
   }
   const normalized = String(value || "").trim();
   return normalized || "0";
-}
-
-function formatDate(value: unknown): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) {
-    return raw;
-  }
-  return parsed.toLocaleString("zh-CN", { hour12: false });
 }
 
 export function QualityClustersPage() {
@@ -68,7 +59,7 @@ export function QualityClustersPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>失败聚类（React + TypeScript）</h1>
+          <h1>失败聚类</h1>
           <p className="muted">按故障模式聚合失败，提升排障效率。</p>
         </div>
         <div className="header-actions">
@@ -92,10 +83,7 @@ export function QualityClustersPage() {
         </article>
       </section>
 
-      <section className="panel table-panel">
-        {loading ? <p>正在加载失败聚类...</p> : null}
-        {errorText ? <p className="error">{errorText}</p> : null}
-        {!loading ? (
+      <DataTable loading={loading} loadingText="正在加载失败聚类..." errorText={errorText}>
           <table>
             <thead>
               <tr>
@@ -118,18 +106,19 @@ export function QualityClustersPage() {
                     <td>{text(item.severity)}</td>
                     <td>{numberValue(item.occurrence_count)}</td>
                     <td>{numberValue(item.requires_manual_review_count)}</td>
-                    <td>{formatDate(item.last_seen_at)}</td>
+                    <td>{formatDateTime(item.last_seen_at)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7}>暂无聚类数据。</td>
+                  <td colSpan={7}>
+                    <EmptyState title="暂无聚类数据" description="当执行失败积累到一定数量后，系统会在这里沉淀失败聚类。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
     </main>
   );
 }

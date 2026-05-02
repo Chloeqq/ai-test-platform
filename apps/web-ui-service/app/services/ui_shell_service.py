@@ -10,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from app.core.security import decode_access_token
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
+STATIC_REACT_DIR = Path(__file__).resolve().parents[1] / "static" / "react"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 PLATFORM_NAME = "企业AI测试平台"
@@ -118,6 +119,8 @@ def _navigation(current_key: str) -> list[dict[str, Any]]:
             "label": "系统管理",
             "icon": "system_settings",
             "children": [
+                {"key": "project_management", "label": "项目管理", "href": "/system/projects"},
+                {"key": "source_config", "label": "源码管理", "href": "/system/source-config"},
                 {"key": "env_management", "label": "环境管理", "href": "/system/environments"},
                 {"key": "node_management", "label": "节点管理", "href": "/system/nodes"},
                 {"key": "integration_config", "label": "集成配置", "href": "/system/integrations"},
@@ -158,7 +161,16 @@ def build_base_context(request: Request, current_key: str) -> dict[str, Any]:
         "user_name": user_context["user_name"],
         "user_initial": user_context["user_initial"],
         "nav_sections": _navigation(current_key),
+        "react_asset_version": _react_asset_version(),
     }
+
+
+def _react_asset_version() -> str:
+    main_js = STATIC_REACT_DIR / "assets" / "main.js"
+    try:
+        return str(int(main_js.stat().st_mtime))
+    except OSError:
+        return "dev"
 
 
 def safe_next_path(value: str) -> str:

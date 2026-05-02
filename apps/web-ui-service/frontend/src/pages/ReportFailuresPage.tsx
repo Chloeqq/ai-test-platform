@@ -1,7 +1,11 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import { getReportFailures, type ReportFailureItem } from "../api/report";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
+import { FilterBar } from "../components/FilterBar";
 import { ReportTabs } from "./ReportTabs";
 
 interface FailureFilters {
@@ -16,18 +20,6 @@ const DEFAULT_FILTERS: FailureFilters = {
   defect_status: "all",
 };
 
-function formatDate(value: string | undefined): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) {
-    return raw;
-  }
-  return date.toLocaleString("zh-CN", { hour12: false });
-}
-
 function normalizeFilters(params: URLSearchParams): FailureFilters {
   const caseId = String(params.get("case_id") || "").trim();
   const keyword = String(params.get("keyword") || "").trim();
@@ -37,6 +29,22 @@ function normalizeFilters(params: URLSearchParams): FailureFilters {
     keyword,
     defect_status: defectStatus || "all",
   };
+}
+
+function buildGovernanceHref(item: ReportFailureItem): string {
+  const impact = item.element_impact;
+  const pageCode = String(impact?.page_code || "").trim();
+  const elementCode = String(impact?.element_code || "").trim();
+  if (!pageCode || !elementCode) {
+    return "#";
+  }
+  const query = new URLSearchParams();
+  const projectCode = String(impact?.project_code || "").trim();
+  if (projectCode) {
+    query.set("project", projectCode);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return `/assets/page-objects/${encodeURIComponent(pageCode)}/elements/${encodeURIComponent(elementCode)}${suffix}`;
 }
 
 export function ReportFailuresPage() {
@@ -89,13 +97,13 @@ export function ReportFailuresPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>失败详情（React + TypeScript）</h1>
+          <h1>失败详情</h1>
           <p className="muted">可按 case_id、关键词和缺陷关联状态筛选。</p>
         </div>
       </header>
       <ReportTabs />
 
-      <section className="panel filters">
+      <FilterBar>
         <label>
           Case ID
           <input
@@ -154,24 +162,26 @@ export function ReportFailuresPage() {
             重置
           </button>
         </div>
-      </section>
+      </FilterBar>
 
-      <section className="panel table-panel">
-        <div className="table-head">
-          <strong>命中失败：{total}（高风险：{highRiskCount}）</strong>
+      <DataTable
+        title={`命中失败：${total}（高风险：${highRiskCount}）`}
+        loading={loading}
+        loadingText="正在加载失败详情..."
+        errorText={errorText}
+        actions={(
           <Link className="button secondary" to="/execution/results">
             返回总览
           </Link>
-        </div>
-        {loading ? <p>正在加载失败详情...</p> : null}
-        {errorText ? <p className="error">{errorText}</p> : null}
-        {!loading && !errorText ? (
+        )}
+      >
           <table>
             <thead>
               <tr>
                 <th>Case ID</th>
                 <th>失败摘要</th>
                 <th>来源</th>
+                <th>影响元素</th>
                 <th>风险</th>
                 <th>建议动作</th>
                 <th>缺陷</th>
@@ -185,21 +195,34 @@ export function ReportFailuresPage() {
                     <td className="mono">{item.case_id || "-"}</td>
                     <td>{item.summary || "-"}</td>
                     <td>{item.failure_source || "-"}</td>
+                    <td>
+                      {item.element_impact?.element_code ? (
+                        <Link
+                          className="link"
+                          to={buildGovernanceHref(item)}
+                        >
+                          {item.element_impact.element_code}
+                        </Link>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td>{item.risk_level || "-"}</td>
                     <td>{item.recommended_action || "-"}</td>
                     <td>{item.defect_count ?? 0}</td>
-                    <td>{formatDate(item.finished_at)}</td>
+                    <td>{formatDateTime(item.finished_at)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7}>当前筛选条件下没有失败项。</td>
+                  <td colSpan={8}>
+                    <EmptyState title="没有失败项" description="当前筛选条件下没有失败记录，可以调整筛选条件或返回报告总览查看整体质量。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
     </main>
   );
 }

@@ -79,7 +79,7 @@ StatsPayload: TypeAlias = dict[str, int | float]
 REPO_ROOT = Path(__file__).resolve().parents[4]
 ASSETS_CASES_ROOT = REPO_ROOT / "assets" / "test-cases"
 EXECUTION_REPORTS_ROOT = REPO_ROOT / "reports" / "executions"
-DEFAULT_PROJECT_CODE = "atp"
+DEFAULT_PROJECT_CODE = "mall"
 
 
 @dataclass(frozen=True)
@@ -329,6 +329,24 @@ def _classify_login_element_role(element: PageElement) -> str:
             ]
         )
     )
+    if any(
+        token in blob
+        for token in [
+            "密码显隐",
+            "显示密码",
+            "隐藏密码",
+            "明文",
+            "密文",
+            "passwordvisibility",
+            "showpassword",
+            "hidepassword",
+            "togglepassword",
+            "visibilitytoggle",
+            "eyetoggle",
+            "ipath3",
+        ]
+    ):
+        return "password_toggle"
     if any(token in blob for token in ["用户名", "username", "account", "账号"]):
         return "username"
     if any(token in blob for token in ["密码", "password", "passwd"]):
@@ -346,6 +364,7 @@ def _build_login_element_map(elements: list[PageElement]) -> dict[str, list[Page
     result: dict[str, list[PageElement]] = {
         "username": [],
         "password": [],
+        "password_toggle": [],
         "login_button": [],
         "error": [],
         "home": [],
@@ -405,6 +424,27 @@ def _score_login_role_element(element: PageElement, role: str) -> int:
         if any(token in blob for token in ["密码", "password", "passwd"]):
             score += 40
         if locator_type in {"role", "id", "name"}:
+            score += 15
+    elif role == "password_toggle":
+        if any(
+            token in blob
+            for token in [
+                "密码显隐",
+                "显示密码",
+                "隐藏密码",
+                "明文",
+                "密文",
+                "passwordvisibility",
+                "showpassword",
+                "hidepassword",
+                "toggle",
+                "eye",
+                "icon",
+                "ipath3",
+            ]
+        ):
+            score += 45
+        if locator_type in {"css", "role", "id", "name"}:
             score += 15
     elif role == "login_button":
         if any(token in blob for token in ["登录", "login", "submit", "提交"]):
@@ -477,7 +517,24 @@ def _pick_login_element_for_step(
         else:
             desired_role = "username" if input_index == 0 else "password"
     elif action == "click":
-        if any(token in merged for token in ["登录", "login", "submit", "提交"]) or not _normalize_step_text(step.get("target")):
+        if any(
+            token in merged
+            for token in [
+                "密码显隐",
+                "显示密码",
+                "隐藏密码",
+                "明文",
+                "密文",
+                "passwordvisibility",
+                "showpassword",
+                "hidepassword",
+                "togglepassword",
+                "eyetoggle",
+                "visibilitytoggle",
+            ]
+        ):
+            desired_role = "password_toggle"
+        elif any(token in merged for token in ["登录", "login", "submit", "提交"]) or not _normalize_step_text(step.get("target")):
             desired_role = "login_button"
     elif action in {"assert_visible", "wait_for", "assert_text"}:
         if any(token in merged for token in ["错误", "提示", "error", "toast"]):
@@ -552,6 +609,8 @@ def _default_expected_for_login_step(role: str, action: str, scenario_context: d
         return "用户名输入框内容正确显示"
     if role == "password" and action in {"input", "fill", "type"}:
         return "密码输入框内容正确显示（掩码）"
+    if role == "password_toggle" and action == "click":
+        return "密码输入框在明文与掩码之间切换成功"
     if role == "login_button" and action == "click":
         if scenario_context.get("lock"):
             return "登录失败，页面提示“账号已锁定，请稍后重试”"
@@ -634,6 +693,8 @@ def _friendly_target_name_for_login(role: str, element: PageElement) -> str:
         return "用户名输入框"
     if role == "password":
         return "密码输入框"
+    if role == "password_toggle":
+        return "密码显隐开关"
     if role == "login_button":
         return "登录按钮"
     if role == "error":
@@ -1547,6 +1608,7 @@ def create_test_case(db: Session, payload: TestCaseCreate) -> TestCase:
     normalized_automation_status = normalize_optional_text(payload.automation_status) or (
         "automated" if (payload.pytest_path.strip() or script_code.strip()) else "manual"
     )
+    now_ts = datetime.now(UTC)
 
     case = TestCase(
         case_id=resolved_identity["case_id"],
@@ -1598,6 +1660,8 @@ def create_test_case(db: Session, payload: TestCaseCreate) -> TestCase:
         last_execution_result="unknown",
         last_report_url="",
         last_synced_at=datetime.now(UTC) if created_source in {"ai", "workbench"} else None,
+        created_at=now_ts,
+        updated_at=now_ts,
     )
     db.add(case)
     db.flush()
@@ -1715,6 +1779,7 @@ def upsert_test_case_from_workbench(
     test_steps_text = render_test_steps_text(steps)
 
     if existing is None:
+        now_ts = datetime.now(UTC)
         case = TestCase(
             case_id=resolved_identity["case_id"],
             project_code=resolved_identity["project_code"],
@@ -1764,7 +1829,9 @@ def upsert_test_case_from_workbench(
             data_config=normalize_data_config(TestCaseDataConfig()),
             last_execution_result="unknown",
             last_report_url="",
-            last_synced_at=datetime.now(UTC),
+            last_synced_at=now_ts,
+            created_at=now_ts,
+            updated_at=now_ts,
         )
         db.add(case)
         db.flush()

@@ -95,6 +95,7 @@ class CandidateNormalizer:
         for raw_candidate in raw_candidates:
             if not isinstance(raw_candidate, dict):
                 continue
+            intent_id = self._normalize_candidate_text(str(raw_candidate.get("intent_id", "")).strip())
             title = self._normalize_candidate_text(str(raw_candidate.get("title", "")).strip())
             summary = self._normalize_candidate_text(str(raw_candidate.get("summary", "")).strip())
             if filter_enabled and (self._looks_like_heading_only_text(title) or self._looks_like_metadata_noise_text(title)):
@@ -117,6 +118,13 @@ class CandidateNormalizer:
             if filter_enabled and self._looks_like_metadata_noise_text(expected):
                 expected = ""
             steps = self._normalize_candidate_steps(raw_candidate.get("steps"), filter_enabled=filter_enabled)
+            raw_steps_hint = raw_candidate.get("steps_hint")
+            steps_hint: list[str] = []
+            if isinstance(raw_steps_hint, list):
+                for item in raw_steps_hint:
+                    hint = self._normalize_candidate_text(str(item or ""))
+                    if hint and hint not in steps_hint:
+                        steps_hint.append(hint)
             scene_type = self._normalize_candidate_text(str(raw_candidate.get("scene_type", "")).strip())
             test_data_type = self._normalize_candidate_text(str(raw_candidate.get("test_data_type", "")).strip())
             raw_elements = raw_candidate.get("involved_elements")
@@ -126,6 +134,13 @@ class CandidateNormalizer:
                     element = self._normalize_candidate_text(str(item or ""))
                     if element and (not filter_enabled or not self._looks_like_metadata_noise_text(element)) and element not in involved_elements:
                         involved_elements.append(element)
+            raw_element_codes = raw_candidate.get("involved_element_codes")
+            involved_element_codes: list[str] = []
+            if isinstance(raw_element_codes, list):
+                for item in raw_element_codes:
+                    code = self._normalize_candidate_text(str(item or ""))
+                    if code and code not in involved_element_codes:
+                        involved_element_codes.append(code)
             raw_tags = raw_candidate.get("tags")
             tags: list[str] = []
             if isinstance(raw_tags, list):
@@ -141,12 +156,13 @@ class CandidateNormalizer:
             if filter_enabled and self._looks_like_metadata_noise_text(requirement_hint):
                 requirement_hint = ""
             has_meaningful_content = bool(
-                requirement_hint or title or summary or precondition or expected or steps or involved_elements
+                requirement_hint or title or summary or precondition or expected or steps or steps_hint or involved_elements
             )
             if not has_meaningful_content:
                 continue
             normalized.append(
                 {
+                    "intent_id": intent_id,
                     "title": title,
                     "summary": summary,
                     "intent_type": intent_type,
@@ -155,10 +171,12 @@ class CandidateNormalizer:
                     "requirement_hint": requirement_hint,
                     "precondition": precondition,
                     "steps": steps,
+                    "steps_hint": steps_hint,
                     "expected": expected,
                     "scene_type": scene_type,
                     "test_data_type": test_data_type,
                     "involved_elements": involved_elements,
+                    "involved_element_codes": involved_element_codes,
                 }
             )
         return normalized
@@ -167,31 +185,51 @@ class CandidateNormalizer:
         requirement = str(base_requirement or "").strip()
         hint = str(candidate.get("requirement_hint", "")).strip()
         intent_type = str(candidate.get("intent_type", "")).strip()
-        if not hint and not intent_type:
+        title = str(candidate.get("title", "")).strip()
+        summary = str(candidate.get("summary", "")).strip()
+        precondition = str(candidate.get("precondition", "")).strip()
+        steps = candidate.get("steps")
+        steps_hint = candidate.get("steps_hint")
+        expected = str(candidate.get("expected", "")).strip()
+        involved_elements = candidate.get("involved_elements")
+        involved_element_codes = candidate.get("involved_element_codes")
+        intent_id = str(candidate.get("intent_id", "")).strip()
+        if not any([intent_id, title, summary, hint, intent_type, precondition, expected, steps, steps_hint, involved_elements, involved_element_codes]):
             return requirement
-        lines = [requirement] if requirement else []
+        lines: list[str] = []
+        if intent_id:
+            lines.append(f"测试点ID：{intent_id}")
+        if title:
+            lines.append(f"测试点标题：{title}")
         if hint:
             lines.append(f"测试意图：{hint}")
         if intent_type:
             lines.append(f"测试类型：{intent_type}")
-        precondition = str(candidate.get("precondition", "")).strip()
         if precondition:
             lines.append(f"前置条件：{precondition}")
-        steps = candidate.get("steps")
+        if isinstance(steps_hint, list):
+            hint_rows = [str(item).strip() for item in steps_hint if str(item).strip()]
+            if hint_rows:
+                lines.append("steps_hint:")
+                for index, hint_row in enumerate(hint_rows[:10], start=1):
+                    lines.append(f"{index}. {hint_row}")
         if isinstance(steps, list):
             step_rows = [str(item).strip() for item in steps if str(item).strip()]
             if step_rows:
                 lines.append("操作步骤：")
                 for index, step in enumerate(step_rows[:10], start=1):
                     lines.append(f"{index}. {step}")
-        expected = str(candidate.get("expected", "")).strip()
         if expected:
             lines.append(f"预期结果：{expected}")
-        involved_elements = candidate.get("involved_elements")
         if isinstance(involved_elements, list):
             elements = [str(item).strip() for item in involved_elements if str(item).strip()]
             if elements:
                 lines.append(f"涉及元素：{'、'.join(elements)}")
+        if isinstance(involved_element_codes, list):
+            codes = [str(item).strip() for item in involved_element_codes if str(item).strip()]
+            if codes:
+                lines.append(f"涉及元素Code：{'、'.join(codes)}")
+        lines.append("约束：仅围绕上述单个测试意图生成，不要扩展到其他测试意图。")
         return "\n".join(line for line in lines if line).strip()
 
     def extract_case_candidates_from_preview(
@@ -222,6 +260,7 @@ class CandidateNormalizer:
                 continue
             candidates.append(
                 {
+                    "intent_id": str(intent.get("intent_id") or "").strip(),
                     "title": title or summary,
                     "summary": summary or title,
                     "intent_type": intent_type,
@@ -229,6 +268,7 @@ class CandidateNormalizer:
                     "tags": tags,
                     "precondition": str(intent.get("precondition") or "").strip(),
                     "steps": intent.get("steps") if isinstance(intent.get("steps"), list) else [],
+                    "steps_hint": intent.get("steps_hint") if isinstance(intent.get("steps_hint"), list) else [],
                     "expected": str(
                         intent.get("expected") or intent.get("expected_result") or intent.get("expect_result") or ""
                     ).strip(),

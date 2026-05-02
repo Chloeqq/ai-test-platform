@@ -1,29 +1,19 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import { listProjects } from "../api/workbench";
 import { listWorkbenchCases, type CasesListResponse } from "../api/assets";
+import { DEFAULT_PROJECT_CODE, normalizeProjectCode, projectOptions } from "../config/projects";
 
 function text(value: unknown): string {
   const normalized = String(value || "").trim();
   return normalized || "-";
 }
 
-function formatDate(value: unknown): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) {
-    return raw;
-  }
-  return parsed.toLocaleString("zh-CN", { hour12: false });
-}
-
 export function CasesPage() {
-  const [project, setProject] = useState<string>("default");
-  const [projectCodes, setProjectCodes] = useState<string[]>([]);
+  const [project, setProject] = useState<string>(DEFAULT_PROJECT_CODE);
+  const [projectCodes, setProjectCodes] = useState<string[]>([DEFAULT_PROJECT_CODE]);
   const [keyword, setKeyword] = useState<string>("");
   const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
   const [pagination, setPagination] = useState<CasesListResponse["pagination"]>({});
@@ -35,7 +25,7 @@ export function CasesPage() {
     setErrorText("");
     try {
       const payload = await listWorkbenchCases({
-        project: targetProject || "default",
+        project: normalizeProjectCode(targetProject),
         page: targetPage,
         page_size: 20,
       });
@@ -56,17 +46,17 @@ export function CasesPage() {
       try {
         const projects = await listProjects();
         if (!cancelled) {
-          const codes = Array.isArray(projects.codes) ? projects.codes : [];
+          const codes = projectOptions(projects.codes);
           setProjectCodes(codes);
           if (codes.length && !project) {
             setProject(codes[0]);
           }
         }
       } catch {
-        // Ignore project list errors; page can still work with default project.
+        // Ignore project list errors; page can still work with the default project.
       }
       if (!cancelled) {
-        await reload(project || "default", 1);
+        await reload(normalizeProjectCode(project), 1);
       }
     }
     void bootstrap();
@@ -107,7 +97,7 @@ export function CasesPage() {
 
   return (
     <main className="shell">
-      <section className="hero-card cases-shell">
+      <section className="hero-card cases-shell unified-topbar">
         <div className="cases-page-head">
           <div className="cases-page-copy">
             <p className="breadcrumb">
@@ -116,7 +106,7 @@ export function CasesPage() {
               <span>用例中心</span>
             </p>
           </div>
-          <div className="cases-page-actions">
+          <div className="cases-page-actions unified-topbar-actions">
             <Link className="button secondary" to="/ai-generation">
               前往 AI 生成
             </Link>
@@ -181,12 +171,11 @@ export function CasesPage() {
                     <select
                       value={project}
                       onChange={(event) => {
-                        const next = String(event.target.value || "").trim() || "default";
+                        const next = normalizeProjectCode(event.target.value);
                         setProject(next);
                         void reload(next, 1);
                       }}
                     >
-                      <option value="default">default</option>
                       {projectCodes.map((code) => (
                         <option key={code} value={code}>
                           {code}
@@ -204,11 +193,22 @@ export function CasesPage() {
                   </label>
                 </div>
                 <div className="search-command-group">
-                  <button type="button" className="button" onClick={() => void reload(project || "default", Number(pagination?.page || 1))}>
+                  <button type="button" className="button" onClick={() => void reload(normalizeProjectCode(project), Number(pagination?.page || 1))}>
                     重新加载
                   </button>
                   <button type="button" className="button secondary" onClick={() => setKeyword("")}>
                     重置搜索
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => {
+                      setProject(DEFAULT_PROJECT_CODE);
+                      setKeyword("");
+                      void reload(DEFAULT_PROJECT_CODE, 1);
+                    }}
+                  >
+                    重置全部
                   </button>
                 </div>
               </section>
@@ -238,7 +238,7 @@ export function CasesPage() {
                             <td>{text(item.priority)}</td>
                             <td>{text(item.last_result || item.status)}</td>
                             <td>{text(item.module || item.page)}</td>
-                            <td>{formatDate(item.updated_at)}</td>
+                            <td>{formatDateTime(item.updated_at)}</td>
                             <td>
                               <Link to={`/cases/${encodeURIComponent(String(item.case_id || ""))}`}>查看</Link>
                             </td>

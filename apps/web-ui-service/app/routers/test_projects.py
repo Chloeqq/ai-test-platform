@@ -17,6 +17,8 @@ def _serialize_project(item: TestProject) -> dict[str, object]:
         "project_code": item.project_code,
         "project_name": item.project_name,
         "description": item.description,
+        "source_roots": list(item.source_roots_json or []),
+        "source_terms": dict(item.source_terms_json or {}),
         "status": item.status,
         "created_by": item.created_by,
         "created_at": item.created_at,

@@ -306,6 +306,44 @@ def build_workbench_runtime_context() -> WorkbenchRuntimeContext:
         load_runtime_execution_record_from_artifacts=load_runtime_execution_record_from_artifacts,
         normalize_execution_record_payload=_identity_normalize_execution_record,
     )
+    def _build_test_point_asset_semantic_summary(page: str, normalized_plan: dict[str, Any]) -> dict[str, Any]:
+        return workbench_asset_service.build_test_point_asset_semantic_summary(
+            page=page,
+            normalized_plan=normalized_plan,
+            normalize_page_slug_fn=normalize_page_slug,
+            clamp_confidence=workbench_analysis_service._clamp_confidence,
+        )
+
+    def _build_test_point_asset_technique_summary(normalized_plan: dict[str, Any]) -> dict[str, Any]:
+        return workbench_asset_service.build_test_point_asset_technique_summary(
+            normalized_plan=normalized_plan,
+        )
+
+    def _normalize_test_point_plan_payload(payload: dict[str, Any], strict: bool = False) -> dict[str, Any]:
+        return workbench_analysis_service.normalize_test_point_plan(payload, strict=strict)
+
+    upsert_test_point_asset_snapshot = partial(
+        workbench_asset_service.upsert_test_point_asset_snapshot,
+        now_iso_fn=workbench_state_store.now_iso,
+        count_test_point_types_fn=workbench_asset_service.count_test_point_types,
+        build_test_point_asset_semantic_summary_fn=_build_test_point_asset_semantic_summary,
+        build_test_point_asset_technique_summary_fn=_build_test_point_asset_technique_summary,
+        merge_reference_items_fn=workbench_asset_service.merge_reference_items,
+    )
+    save_case_state = partial(
+        workbench_asset_service.save_case_state,
+        safe_case_id_fn=safe_case_id,
+        now_iso_fn=workbench_state_store.now_iso,
+        derive_points_fn=workbench_asset_service.derive_points,
+        state_case_file_fn=workbench_asset_service.state_case_file,
+        state_case_versions_dir_fn=workbench_asset_service.state_case_versions_dir,
+    )
+    save_test_point_plan = partial(
+        workbench_asset_service.save_test_point_plan,
+        now_iso_fn=workbench_state_store.now_iso,
+        normalize_test_point_plan_payload=_normalize_test_point_plan_payload,
+        upsert_test_point_asset_snapshot=upsert_test_point_asset_snapshot,
+    )
 
     def _read_runtime_runs() -> list[dict[str, Any]]:
         return workbench_state_store.read_json_list(workbench_state_store.RUNTIME_RUNS_FILE)
@@ -524,8 +562,8 @@ def build_workbench_runtime_context() -> WorkbenchRuntimeContext:
         get_python_bin=workbench_runtime_service.get_python_bin,
         read_case_yaml=workbench_asset_service.read_case_yaml,
         write_case_yaml=workbench_asset_service.write_case_yaml,
-        save_case_state=workbench_asset_service.save_case_state,
-        save_test_point_plan=workbench_asset_service.save_test_point_plan,
+        save_case_state=save_case_state,
+        save_test_point_plan=save_test_point_plan,
         append_history=workbench_state_store.append_history,
         append_runtime_run=workbench_state_store.append_runtime_run,
         read_json_list=workbench_state_store.read_json_list,
@@ -578,6 +616,7 @@ def build_workbench_context(db: Session) -> WorkbenchContext:
             infer_targets=runtime.infer_targets,
             write_case_yaml=runtime.write_case_yaml,
             save_case_state=runtime.save_case_state,
+            save_test_point_plan=runtime.save_test_point_plan,
             append_history=runtime.append_history,
             now_iso=runtime.now_iso,
             is_quality_gate_blocked=orchestrator_client.is_quality_gate_blocked,

@@ -4,10 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ page_title or "AI Test Platform React Console" }}</title>
-  <link rel="stylesheet" href="/static/react/assets/main.css" />
+  <link rel="stylesheet" href="/static/react/assets/main.css?v={{ react_asset_version }}" />
 </head>
 <body>
   <div id="root"></div>
-  <script type="module" src="/static/react/assets/main.js"></script>
+  <script type="module" src="/static/react/assets/main.js?v={{ react_asset_version }}"></script>
 </body>
 </html>

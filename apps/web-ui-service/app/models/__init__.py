@@ -3,8 +3,12 @@ from app.models.orchestration_task import OrchestrationTask
 from app.models.page_object import (
     PageElement,
     PageElementHealthCheck,
+    PageElementLocator,
     PageElementVersion,
     PageObject,
+    PageObjectCandidateElement,
+    PageObjectCandidateGroup,
+    PageObjectGovernanceLog,
     PageObjectRef,
     PageObjectRecorderSession,
 )
@@ -34,6 +38,10 @@ __all__ = [
     "PageObject",
     "PageElement",
     "PageElementVersion",
+    "PageElementLocator",
+    "PageObjectCandidateGroup",
+    "PageObjectCandidateElement",
+    "PageObjectGovernanceLog",
     "PageObjectRef",
     "PageElementHealthCheck",
     "PageObjectRecorderSession",

@@ -7,7 +7,7 @@ try:
     from datetime import UTC
 except ImportError:  # Python < 3.11
     UTC = timezone.utc
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import pytest
 import yaml
@@ -114,12 +114,16 @@ def build_failure_analysis_payload(
     screenshot_path: Path,
     html_path: Path,
     meta_path: Path,
+    failure_context: dict | None = None,
 ) -> dict:
+    normalized_context = normalize_failure_context(failure_context)
     return {
         "error": error_message,
         "current_url": current_url,
         "page_title": page_title,
         "page_html": page_html,
+        "failed_step": normalized_context.get("failed_step", {}),
+        "element_impact": normalized_context.get("element_impact", {}),
         "report": {
             "status": "failed",
             "runner_stdout_excerpt": "",
@@ -134,6 +138,88 @@ def build_failure_analysis_payload(
             },
         },
     }
+
+
+def normalize_failure_context(value: dict | None) -> dict:
+    source = value if isinstance(value, dict) else {}
+    failed_step = source.get("failed_step") if isinstance(source.get("failed_step"), dict) else source
+    failed_step = failed_step if isinstance(failed_step, dict) else {}
+    element_code = str(
+        failed_step.get("element_code")
+        or failed_step.get("target")
+        or ""
+    ).strip()
+    page_code = str(failed_step.get("page_code") or failed_step.get("page") or "").strip()
+    project_code = str(
+        source.get("project_code")
+        or failed_step.get("project_code")
+        or os.getenv("TEST_PROJECT", "mall")
+        or "mall"
+    ).strip() or "mall"
+    normalized_step = {
+        "step_index": failed_step.get("step_index"),
+        "page_code": page_code,
+        "action": str(failed_step.get("action") or "").strip(),
+        "element_code": element_code,
+        "target": element_code,
+        "selector": str(failed_step.get("selector") or "").strip(),
+        "locator_type": str(failed_step.get("locator_type") or "").strip(),
+        "role": str(failed_step.get("role") or "").strip(),
+        "intent_id": str(failed_step.get("intent_id") or "").strip(),
+        "traceability": failed_step.get("traceability") if isinstance(failed_step.get("traceability"), dict) else {},
+    }
+    element_impact: dict = {}
+    if element_code and page_code:
+        element_impact = {
+            "project_code": project_code,
+            "page_code": page_code,
+            "element_code": element_code,
+            "locator_type": normalized_step["locator_type"],
+            "locator_value": normalized_step["selector"],
+            "role": normalized_step["role"],
+            "governance_action": "review_element",
+            "governance_href": (
+                f"/assets/page-objects/{quote(page_code)}/elements/"
+                f"{quote(element_code)}?project={quote(project_code)}"
+            ),
+        }
+    has_step_context = any(
+        str(value or "").strip()
+        for value in normalized_step.values()
+        if not isinstance(value, dict)
+    )
+    return {
+        "failed_step": normalized_step if has_step_context else {},
+        "element_impact": element_impact,
+    }
+
+
+def resolve_project_code_from_request(request) -> str:
+    node = getattr(request, "node", request)
+    test_case = getattr(getattr(node, "callspec", None), "params", {}).get("test_case")
+    if isinstance(test_case, dict):
+        for key in ("project_code", "project"):
+            value = str(test_case.get(key, "")).strip()
+            if value:
+                return value
+        metadata = test_case.get("metadata")
+        if isinstance(metadata, dict):
+            for key in ("project_code", "project"):
+                value = str(metadata.get(key, "")).strip()
+                if value:
+                    return value
+    return str(os.getenv("TEST_PROJECT", "mall") or "mall").strip() or "mall"
+
+
+def extract_failure_context_from_page(page: Page | None, *, project_code: str = "") -> dict:
+    if page is None:
+        return {}
+    failed_step = getattr(page, "_ai_failed_step_context", None)
+    if not isinstance(failed_step, dict):
+        failed_step = getattr(page, "_ai_current_step_context", None)
+    if not isinstance(failed_step, dict):
+        return {}
+    return normalize_failure_context({"failed_step": failed_step, "project_code": project_code})
 
 
 def render_meta_text(
@@ -185,10 +271,7 @@ def resolve_case_id_from_request(request) -> str:
     test_case = getattr(getattr(node, "callspec", None), "params", {}).get("test_case")
     if not isinstance(test_case, dict):
         return ""
-    raw = str(test_case.get("id", "")).strip()
-    if callable(normalize_case_id):
-        return normalize_case_id(raw)
-    return raw
+    return str(test_case.get("id", "")).strip()
 
 
 def build_execution_record(
@@ -235,7 +318,7 @@ def build_execution_record(
         "schema_version": "execution-record.v1",
         "run_id": f"{resolve_case_id_from_request(node) or sanitize_artifact_name(node.nodeid)}:{started_at}",
         "case_id": resolve_case_id_from_request(request),
-        "project": os.getenv("TEST_PROJECT", "default"),
+        "project": resolve_project_code_from_request(request),
         "source": os.getenv("RUN_SOURCE", "manual").strip() or "manual",
         "mode": "generate_and_run",
         "status": status,
@@ -261,6 +344,17 @@ def build_execution_record(
             "pytest_phase": str(phase or "call").strip() or "call",
         },
     }
+    failure_context_source = getattr(node, "_failure_context", {})
+    if isinstance(failure_context_source, dict) and not str(failure_context_source.get("project_code", "")).strip():
+        failure_context_source = {
+            **failure_context_source,
+            "project_code": resolve_project_code_from_request(node),
+        }
+    failure_context = normalize_failure_context(failure_context_source)
+    if failure_context.get("failed_step"):
+        raw_record["metadata"]["failed_step"] = failure_context["failed_step"]
+    if failure_context.get("element_impact"):
+        raw_record["metadata"]["element_impact"] = failure_context["element_impact"]
     return _normalize_execution_record_payload(raw_record)
 
 
@@ -423,9 +517,17 @@ def resolve_case_yaml_path(request) -> Path | None:
     case_id = str(test_case.get("id", "")).strip()
     if not case_id:
         return None
-    normalized_case_id = normalize_case_id(case_id) if callable(normalize_case_id) else case_id
     assets_root = Path(__file__).resolve().parents[2] / "assets" / "test-cases"
-    for candidate in [assets_root / "ai-generated" / f"{normalized_case_id}.yaml", *sorted(assets_root.rglob(f"{normalized_case_id}.yaml"))]:
+    candidate_ids = [case_id]
+    if callable(normalize_case_id):
+        normalized_case_id = normalize_case_id(case_id)
+        if normalized_case_id and normalized_case_id not in candidate_ids:
+            candidate_ids.append(normalized_case_id)
+    candidates: list[Path] = []
+    for candidate_id in candidate_ids:
+        candidates.append(assets_root / "ai-generated" / f"{candidate_id}.yaml")
+        candidates.extend(sorted(assets_root.rglob(f"{candidate_id}.yaml")))
+    for candidate in candidates:
         if candidate.exists():
             return candidate.resolve()
     return None
@@ -449,6 +551,8 @@ def render_analysis_text(result: dict) -> str:
     source_evidence = result.get("source_evidence", [])
     if not isinstance(source_evidence, list):
         source_evidence = []
+    failed_step = result.get("failed_step") if isinstance(result.get("failed_step"), dict) else {}
+    element_impact = result.get("element_impact") if isinstance(result.get("element_impact"), dict) else {}
     return "\n".join(
         [
             f"Summary: {result.get('summary', '')}",
@@ -461,6 +565,8 @@ def render_analysis_text(result: dict) -> str:
             f"Recommended Action: {result.get('recommended_action', '')}",
             f"Requires Manual Review: {result.get('requires_manual_review', False)}",
             f"Confidence: {result.get('confidence', '')}",
+            f"Failed Step: {json.dumps(failed_step, ensure_ascii=False)}",
+            f"Element Impact: {json.dumps(element_impact, ensure_ascii=False)}",
             f"Evidence Used: {', '.join(evidence_used)}",
             f"Source Evidence: {json.dumps(source_evidence, ensure_ascii=False)}",
             "",
@@ -607,16 +713,14 @@ def extract_allure_test_metadata(request) -> dict[str, object]:
     execution = test_case.get("execution", {})
     title = str(test_case.get("title", "")).strip()
     case_id = str(test_case.get("id", "")).strip()
-    normalized_case_id = normalize_case_id(case_id) if callable(normalize_case_id) and case_id else case_id
     page_name = str(execution.get("page", "")).strip()
     tags = test_case.get("tags", [])
     if not isinstance(tags, list):
         tags = []
 
     metadata: dict[str, object] = {
-        "title": normalized_case_id or title or request.node.name,
-        "case_title": title,
-        "case_id": normalized_case_id,
+        "title": title or case_id or request.node.name,
+        "case_id": case_id,
         "page": page_name,
         "tags": [str(tag).strip() for tag in tags if str(tag).strip()],
         "base_url": os.getenv("BASE_URL", "http://localhost:5173/login#/login"),
@@ -631,7 +735,7 @@ def apply_allure_test_metadata(metadata: dict[str, object]) -> bool:
         return False
     try:
         title = str(metadata.get("title", "")).strip()
-        case_title = str(metadata.get("case_title", "")).strip()
+        case_title = str(metadata.get("case_title", "") or title).strip()
         case_id = str(metadata.get("case_id", "")).strip()
         page_name = str(metadata.get("page", "")).strip()
         base_url = str(metadata.get("base_url", "")).strip()
@@ -870,6 +974,11 @@ def capture_failure_artifacts(request):
         captured_at = datetime.now(UTC).isoformat()
         page_name = resolve_page_name_from_request(request)
         analysis_result = {}
+        failure_context = extract_failure_context_from_page(
+            page,
+            project_code=resolve_project_code_from_request(request),
+        )
+        request.node._failure_context = failure_context
 
         try:
             page.screenshot(path=str(screenshot_path), full_page=True)
@@ -913,8 +1022,13 @@ def capture_failure_artifacts(request):
                     screenshot_path=screenshot_path,
                     html_path=html_path,
                     meta_path=meta_path,
+                    failure_context=failure_context,
                 )
             )
+            if failure_context.get("failed_step"):
+                analysis_result["failed_step"] = failure_context["failed_step"]
+            if failure_context.get("element_impact"):
+                analysis_result["element_impact"] = failure_context["element_impact"]
             analysis_path.write_text(render_analysis_text(analysis_result), encoding="utf-8")
         except Exception as e:
             print(f"[artifact] analysis generation failed: {e}")

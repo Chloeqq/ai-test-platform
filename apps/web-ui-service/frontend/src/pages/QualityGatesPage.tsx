@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { formatDateTime } from "../lib/datetime";
 
 import {
   approveExecutionGateDecision,
@@ -8,7 +9,10 @@ import {
   revokeExecutionGateDecision,
   saveExecutionGateDecision,
 } from "../api/governance";
-import { listWorkbenchHistory, type WorkbenchHistoryItem } from "../api/workbench";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
+import { listProjects, listWorkbenchHistory, type WorkbenchHistoryItem } from "../api/workbench";
+import { DEFAULT_PROJECT_CODE, normalizeProjectCode, projectOptions } from "../config/projects";
 
 interface GateForm {
   project: string;
@@ -20,7 +24,7 @@ interface GateForm {
 }
 
 const DEFAULT_FORM: GateForm = {
-  project: "default",
+  project: DEFAULT_PROJECT_CODE,
   run_id: "",
   page: "",
   case_id: "",
@@ -41,23 +45,12 @@ function numberValue(value: unknown): string {
   return normalized || "0";
 }
 
-function formatDate(value: unknown): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) {
-    return raw;
-  }
-  return parsed.toLocaleString("zh-CN", { hour12: false });
-}
-
 export function QualityGatesPage() {
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [qualitySummary, setQualitySummary] = useState<Record<string, unknown>>({});
   const [historyItems, setHistoryItems] = useState<WorkbenchHistoryItem[]>([]);
   const [form, setForm] = useState<GateForm>(DEFAULT_FORM);
+  const [projectCodes, setProjectCodes] = useState<string[]>([DEFAULT_PROJECT_CODE]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorText, setErrorText] = useState<string>("");
@@ -86,7 +79,22 @@ export function QualityGatesPage() {
   }
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadProjectOptions() {
+      try {
+        const projects = await listProjects();
+        if (!cancelled) {
+          setProjectCodes(projectOptions(projects.codes));
+        }
+      } catch {
+        // Keep default option.
+      }
+    }
+    void loadProjectOptions();
     void reload();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const summary24h = (qualitySummary.summary_24h as Record<string, unknown>) || {};
@@ -104,7 +112,7 @@ export function QualityGatesPage() {
     try {
       if (action === "save") {
         await saveExecutionGateDecision({
-          project: form.project.trim() || "default",
+          project: normalizeProjectCode(form.project),
           run_id: form.run_id.trim(),
           page: form.page.trim(),
           case_id: form.case_id.trim(),
@@ -113,14 +121,14 @@ export function QualityGatesPage() {
         });
       } else if (action === "approve") {
         await approveExecutionGateDecision({
-          project: form.project.trim() || "default",
+          project: normalizeProjectCode(form.project),
           run_id: form.run_id.trim(),
           page: form.page.trim(),
           note: form.note.trim(),
         });
       } else {
         await revokeExecutionGateDecision({
-          project: form.project.trim() || "default",
+          project: normalizeProjectCode(form.project),
           run_id: form.run_id.trim(),
           page: form.page.trim(),
           note: form.note.trim(),
@@ -139,7 +147,7 @@ export function QualityGatesPage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>质量门禁（React + TypeScript）</h1>
+          <h1>质量门禁</h1>
           <p className="muted">统一查看门禁配置、阻断统计和审批历史。</p>
         </div>
         <div className="header-actions">
@@ -173,8 +181,14 @@ export function QualityGatesPage() {
 
       <section className="panel form-grid">
         <label>
-          Project
-          <input value={form.project} onChange={(event) => setForm((prev) => ({ ...prev, project: event.target.value }))} />
+          项目
+          <select value={form.project} onChange={(event) => setForm((prev) => ({ ...prev, project: normalizeProjectCode(event.target.value) }))}>
+            {projectCodes.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           Run ID
@@ -220,11 +234,7 @@ export function QualityGatesPage() {
         {feedback ? <p>{feedback}</p> : null}
       </section>
 
-      <section className="panel table-panel">
-        <div className="table-head">
-          <strong>门禁历史</strong>
-        </div>
-        {!loading && !errorText ? (
+      <DataTable title="门禁历史" loading={loading} loadingText="正在加载门禁历史..." errorText={errorText}>
           <table>
             <thead>
               <tr>
@@ -240,7 +250,7 @@ export function QualityGatesPage() {
               {historyItems.length ? (
                 historyItems.map((item, index) => (
                   <tr key={String(item.timestamp || item.run_id || index)}>
-                    <td>{formatDate(item.timestamp)}</td>
+                    <td>{formatDateTime(item.timestamp)}</td>
                     <td>{text(item.action)}</td>
                     <td className="mono">{text(item.run_id)}</td>
                     <td>{text(item.page)}</td>
@@ -250,13 +260,14 @@ export function QualityGatesPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>暂无门禁历史。</td>
+                  <td colSpan={6}>
+                    <EmptyState title="暂无门禁历史" description="当执行门禁被保存、审批或撤销时，会在这里记录审计轨迹。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
     </main>
   );
 }

@@ -84,6 +84,91 @@ def test_build_failure_analysis_payload_includes_error_html_and_url(tmp_path: Pa
     assert payload["report"]["evidence"]["screenshots"] == [str(screenshot_path)]
 
 
+def test_build_failure_analysis_payload_includes_failed_element_context(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("TEST_PROJECT", "mall")
+    payload = MODULE.build_failure_analysis_payload(
+        error_message="Timeout waiting for locator",
+        page_html="<html></html>",
+        current_url="http://example.test/product",
+        page_title="商品列表",
+        screenshot_path=tmp_path / "failed.png",
+        html_path=tmp_path / "page.html",
+        meta_path=tmp_path / "meta.txt",
+        failure_context={
+            "failed_step": {
+                "step_index": 2,
+                "page_code": "product",
+                "action": "click",
+                "target": "product_name_input",
+                "selector": "[data-testid='product-name']",
+                "locator_type": "testid",
+                "intent_id": "intent-01",
+            }
+        },
+    )
+
+    assert payload["failed_step"]["element_code"] == "product_name_input"
+    assert payload["element_impact"]["project_code"] == "mall"
+    assert payload["element_impact"]["page_code"] == "product"
+    assert payload["element_impact"]["governance_href"] == (
+        "/assets/page-objects/product/elements/product_name_input?project=mall"
+    )
+
+
+def test_normalize_failure_context_prefers_case_project_over_env(monkeypatch):
+    monkeypatch.setenv("TEST_PROJECT", "mall")
+
+    context = MODULE.normalize_failure_context(
+        {
+            "project_code": "atp",
+            "failed_step": {
+                "step_index": 1,
+                "page_code": "profile",
+                "target": "profile_title",
+                "locator_type": "testid",
+            },
+        }
+    )
+
+    assert context["element_impact"]["project_code"] == "atp"
+    assert context["element_impact"]["governance_href"].endswith("profile_title?project=atp")
+
+
+def test_resolve_project_code_from_request_prefers_test_case_project(monkeypatch):
+    monkeypatch.setenv("TEST_PROJECT", "mall")
+
+    class FakeCallSpec:
+        params = {"test_case": {"id": "case-01", "project_code": "atp"}}
+
+    class FakeNode:
+        callspec = FakeCallSpec()
+
+    assert MODULE.resolve_project_code_from_request(FakeNode()) == "atp"
+
+
+def test_build_execution_record_uses_test_case_project(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("TEST_PROJECT", "mall")
+
+    class FakeCallSpec:
+        params = {"test_case": {"id": "case-01", "project_code": "atp", "execution": {"steps": []}}}
+
+    class FakeNode:
+        nodeid = "tests/test_demo.py::test_demo[case-01]"
+        callspec = FakeCallSpec()
+
+    record = MODULE.build_execution_record(
+        request=FakeNode(),
+        case_dir=tmp_path,
+        status="passed",
+        started_at="2026-05-01T00:00:00+00:00",
+        finished_at="2026-05-01T00:00:01+00:00",
+        duration_seconds=1.0,
+        runner_exit_code=0,
+    )
+
+    assert record["project"] == "atp"
+
+
 def test_render_meta_text_includes_core_fields(tmp_path: Path):
     text = MODULE.render_meta_text(
         nodeid="tests/test_yaml_ai_generated.py::test_yaml_ai_generated[case]",
@@ -112,12 +197,15 @@ def test_render_analysis_text_outputs_human_readable_summary():
             "risk_level": "high",
             "recommended_action": "Check the product page locator.",
             "confidence": 0.82,
+            "failed_step": {"page_code": "product", "element_code": "product_name_input"},
+            "element_impact": {"governance_href": "/assets/page-objects/product/elements/product_name_input?project=mall"},
             "evidence_used": ["error", "page_html", "current_url"],
         }
     )
 
     assert "Summary: UI assertion failed on product page." in text
     assert "Failure Category: assertion" in text
+    assert "Element Impact: " in text
     assert "Evidence Used: error, page_html, current_url" in text
 
 
@@ -320,6 +408,52 @@ def test_build_execution_record_contains_core_fields(tmp_path: Path):
     assert record["evidence_index"]["artifact_categories"]["meta_files"] == 1
     assert record["evidence_index"]["artifact_categories"]["execution_record_files"] == 1
     assert record["metadata"]["pytest_phase"] == "call"
+
+
+def test_build_execution_record_includes_failure_element_impact(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("TEST_PROJECT", "mall")
+    case_dir = tmp_path / "case"
+    case_dir.mkdir()
+
+    class FakeCallSpec:
+        params = {
+            "test_case": {
+                "id": "tc-product-GEN-001",
+                "execution": {
+                    "page": "product",
+                    "steps": [{"action": "click", "target": "product_name_input"}],
+                },
+            }
+        }
+
+    class FakeNode:
+        callspec = FakeCallSpec()
+        nodeid = "tests/test_yaml_ai_generated.py::test_yaml_ai_generated[case]"
+        _failure_context = {
+            "failed_step": {
+                "step_index": 1,
+                "page_code": "product",
+                "action": "click",
+                "target": "product_name_input",
+                "selector": "[data-testid='product-name']",
+                "locator_type": "testid",
+            }
+        }
+
+    record = MODULE.build_execution_record(
+        request=FakeNode(),
+        case_dir=case_dir,
+        status="failed",
+        started_at="2026-03-18T00:00:00+00:00",
+        finished_at="2026-03-18T00:00:01+00:00",
+        duration_seconds=1.0,
+        runner_exit_code=1,
+    )
+
+    assert record["metadata"]["failed_step"]["element_code"] == "product_name_input"
+    assert record["metadata"]["element_impact"]["governance_href"].endswith(
+        "/product/elements/product_name_input?project=mall"
+    )
 
 
 def test_report_status_and_exit_code_handles_failed():

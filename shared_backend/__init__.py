@@ -38,18 +38,38 @@ from .execution_compiler import (
     PreviewTestPointsCompiler,
     compile_execution_steps,
 )
+from .element_binding import (
+    build_element_alias_map,
+    enrich_candidate_with_element_codes,
+    resolve_element_code,
+    resolve_involved_element_codes,
+)
+from .page_object_assets import (
+    load_page_object_yaml,
+    merge_page_object_elements,
+    merge_page_object_with_yaml,
+)
+from .intent_mapping import resolve_explicit_step
 
 __all__ = [
     "build_case_id",
     "build_case_metadata",
     "CaseRuleViolation",
+    "build_element_alias_map",
     "compile_execution_steps",
     "enrich_case_metadata",
+    "enrich_candidate_with_element_codes",
     "ExecutionCompilerError",
     "get_dictionary_items",
     "get_run_status_name",
     "normalize_case_id",
     "normalize_run_status",
+    "load_page_object_yaml",
     "PreviewTestPointsCompiler",
+    "merge_page_object_elements",
+    "merge_page_object_with_yaml",
+    "resolve_explicit_step",
+    "resolve_element_code",
+    "resolve_involved_element_codes",
     "validate_case_payload",
 ]

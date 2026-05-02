@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import { formatDateTime } from "../lib/datetime";
 
 import { getReportPerformance, type ReportPerformanceCaseItem, type ReportPerformanceSummary } from "../api/report";
+import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
 import { ReportTabs } from "./ReportTabs";
 
 function summaryValue(value: number | string | undefined, suffix = ""): string {
@@ -9,18 +12,6 @@ function summaryValue(value: number | string | undefined, suffix = ""): string {
   }
   const text = String(value || "").trim();
   return text ? `${text}${suffix}` : "-";
-}
-
-function formatDate(value: string | undefined): string {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "-";
-  }
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) {
-    return raw;
-  }
-  return date.toLocaleString("zh-CN", { hour12: false });
 }
 
 export function ReportPerformancePage() {
@@ -60,7 +51,7 @@ export function ReportPerformancePage() {
     <main className="page shell">
       <header className="header panel">
         <div>
-          <h1>性能耗时（React + TypeScript）</h1>
+          <h1>性能耗时</h1>
           <p className="muted">展示平均耗时、最大耗时与慢用例 Top10。</p>
         </div>
       </header>
@@ -85,10 +76,7 @@ export function ReportPerformancePage() {
         </article>
       </section>
 
-      <section className="panel table-panel">
-        {loading ? <p>正在加载性能数据...</p> : null}
-        {errorText ? <p className="error">{errorText}</p> : null}
-        {!loading && !errorText ? (
+      <DataTable loading={loading} loadingText="正在加载性能数据..." errorText={errorText}>
           <table>
             <thead>
               <tr>
@@ -109,18 +97,19 @@ export function ReportPerformancePage() {
                     <td>{item.status || "-"}</td>
                     <td>{summaryValue(item.duration_seconds)}</td>
                     <td>{item.source || "-"}</td>
-                    <td>{formatDate(item.finished_at)}</td>
+                    <td>{formatDateTime(item.finished_at)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6}>暂无性能样本。</td>
+                  <td colSpan={6}>
+                    <EmptyState title="暂无性能样本" description="执行完成后会在这里展示用例耗时和性能波动。" />
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
-        ) : null}
-      </section>
+      </DataTable>
     </main>
   );
 }

@@ -34,8 +34,23 @@ from app.services.workbench_generation_api.repository import WorkbenchGeneration
 REPO_ROOT = Path(__file__).resolve().parents[4]
 ASSETS_CASES_ROOT = REPO_ROOT / "assets" / "test-cases"
 AI_CASES_ROOT = ASSETS_CASES_ROOT / "ai-generated"
-DEFAULT_PROJECT_CODE = "atp"
-DEFAULT_PROJECT_NAME = "AI Test Platform"
+DEFAULT_PROJECT_CODE = "mall"
+DEFAULT_PROJECT_NAME = "Mall"
+DEFAULT_PROJECT_SOURCE_TERMS = {
+    "商品货号": "product_sn",
+    "商品分类": "product_category",
+    "商品品牌": "product_brand",
+    "商品列表": "product_list",
+    "商品菜单": "product_menu",
+    "商品名称": "product_name",
+    "手机通讯": "mobile_communication",
+    "手机数码": "mobile_digital",
+    "手机配件": "mobile_accessories",
+    "商品": "product",
+    "品牌": "brand",
+    "分类": "category",
+    "货号": "sn",
+}
 
 
 def _normalize_project_code(value: str) -> str:
@@ -164,7 +179,11 @@ def _assign_case_defaults(
 def ensure_test_cases_schema_compatibility(db: Session) -> None:
     inspector = inspect(db.get_bind())
     dialect_name = str(inspector.bind.dialect.name or "").strip().lower()
-    columns = {str(item.get("name", "")).strip() for item in inspector.get_columns("test_cases")}
+    column_details = {
+        str(item.get("name", "")).strip(): item
+        for item in inspector.get_columns("test_cases")
+    }
+    columns = set(column_details.keys())
 
     def ensure_column(column_name: str, ddl: str, fill_sql: str | None = None) -> None:
         nonlocal columns
@@ -236,6 +255,38 @@ def ensure_test_cases_schema_compatibility(db: Session) -> None:
     ensure_column("last_report_url", "ALTER TABLE test_cases ADD COLUMN last_report_url TEXT")
     last_synced_at_type = "TIMESTAMP WITH TIME ZONE" if dialect_name == "postgresql" else "DATETIME"
     ensure_column("last_synced_at", f"ALTER TABLE test_cases ADD COLUMN last_synced_at {last_synced_at_type}")
+    created_at_type = "TIMESTAMP WITH TIME ZONE" if dialect_name == "postgresql" else "DATETIME"
+    ensure_column("created_at", f"ALTER TABLE test_cases ADD COLUMN created_at {created_at_type}")
+    ensure_column("updated_at", f"ALTER TABLE test_cases ADD COLUMN updated_at {created_at_type}")
+
+    if dialect_name == "postgresql":
+        db.execute(
+            text(
+                "UPDATE test_cases "
+                "SET created_at = COALESCE(created_at, NOW()), "
+                "updated_at = COALESCE(updated_at, NOW()) "
+                "WHERE created_at IS NULL OR updated_at IS NULL"
+            )
+        )
+        created_at_default = str((column_details.get("created_at") or {}).get("default") or "").strip().lower()
+        updated_at_default = str((column_details.get("updated_at") or {}).get("default") or "").strip().lower()
+        if "now()" not in created_at_default and "current_timestamp" not in created_at_default:
+            db.execute(text("ALTER TABLE test_cases ALTER COLUMN created_at SET DEFAULT NOW()"))
+        if "now()" not in updated_at_default and "current_timestamp" not in updated_at_default:
+            db.execute(text("ALTER TABLE test_cases ALTER COLUMN updated_at SET DEFAULT NOW()"))
+        if bool((column_details.get("created_at") or {}).get("nullable")):
+            db.execute(text("ALTER TABLE test_cases ALTER COLUMN created_at SET NOT NULL"))
+        if bool((column_details.get("updated_at") or {}).get("nullable")):
+            db.execute(text("ALTER TABLE test_cases ALTER COLUMN updated_at SET NOT NULL"))
+    else:
+        db.execute(
+            text(
+                "UPDATE test_cases "
+                "SET created_at = COALESCE(created_at, CURRENT_TIMESTAMP), "
+                "updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP) "
+                "WHERE created_at IS NULL OR updated_at IS NULL"
+            )
+        )
     db.commit()
 
 
@@ -245,12 +296,23 @@ def ensure_project_seed(db: Session) -> None:
         select(TestProject).where(TestProject.project_code == DEFAULT_PROJECT_CODE)
     ).scalar_one_or_none()
     if existing:
+        current_terms = dict(existing.source_terms_json or {})
+        missing_terms = {
+            phrase: code
+            for phrase, code in DEFAULT_PROJECT_SOURCE_TERMS.items()
+            if phrase not in current_terms
+        }
+        if missing_terms:
+            existing.source_terms_json = {**DEFAULT_PROJECT_SOURCE_TERMS, **current_terms}
+            db.add(existing)
+            db.commit()
         return
     db.add(
         TestProject(
             project_code=DEFAULT_PROJECT_CODE,
             project_name=DEFAULT_PROJECT_NAME,
             description="默认平台项目，用于统一当前测试用例资产。",
+            source_terms_json=DEFAULT_PROJECT_SOURCE_TERMS,
             status="active",
             created_by="system",
         )

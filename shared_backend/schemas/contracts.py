@@ -715,6 +715,7 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                 "api_method": _string(item.get("api_method")),
                 "api_path": _string(item.get("api_path")),
                 "priority": _string(item.get("priority"), default="P1"),
+                "expected_result": _string(item.get("expected_result") or item.get("expected")),
                 "dependencies": _string_list(item.get("dependencies")),
                 "source_ids": _string_list(item.get("source_ids")),
                 "involved_elements": _dedup_strings(involved_elements),

@@ -471,6 +471,9 @@ class RequirementParserAgent:
                             "test_data_type": "correct|empty|boundary|invalid|wrong|lock|timeout|forbidden",
                             "precondition": "string",
                             "steps": ["string"],
+                            "steps_hint": ["string"],
+                            "target": "string",
+                            "value": "string|number|boolean|null",
                             "expected_result": "string",
                             "involved_elements": ["string"],
                         }
@@ -480,15 +483,19 @@ class RequirementParserAgent:
                 },
             }
             llm_meta["prompt_chars"] = len(json.dumps(prompt_payload, ensure_ascii=False))
-            max_tokens = int(str(os.getenv("REQUIREMENT_PARSER_MAX_TOKENS", "3400")).strip() or 3400)
+            max_tokens = int(str(os.getenv("REQUIREMENT_PARSER_MAX_TOKENS", "8192")).strip() or 8192)
             if max_tokens < 400:
                 max_tokens = 400
             if max_tokens > 8192:
                 max_tokens = 8192
+            llm_meta["max_tokens"] = max_tokens
 
             last_error = ""
             last_output = ""
             for attempt in range(1, llm_overlay_attempts + 1):
+                request_max_tokens = max_tokens
+                if attempt > 1 and llm_meta.get("max_tokens"):
+                    request_max_tokens = int(llm_meta["max_tokens"])
                 user_prompt = self._build_overlay_user_prompt(
                     prompt_payload=prompt_payload,
                     attempt=attempt,
@@ -497,10 +504,11 @@ class RequirementParserAgent:
                 )
                 llm_meta["attempt"] = attempt
                 llm_meta["user_prompt_chars"] = len(user_prompt)
+                llm_meta["request_max_tokens"] = request_max_tokens
                 completion = client.chat.completions.create(
                     model=configured_model,
                     temperature=0.1,
-                    max_tokens=max_tokens,
+                    max_tokens=request_max_tokens,
                     response_format={"type": "json_object"},
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT},
@@ -521,6 +529,9 @@ class RequirementParserAgent:
                 if not isinstance(overlay, dict) or not overlay:
                     if llm_meta["finish_reason"] == "length":
                         last_error = "llm output truncated by max_tokens"
+                        if attempt < llm_overlay_attempts:
+                            max_tokens = min(8192, max(max_tokens + 2048, int(max_tokens * 1.5)))
+                            llm_meta["max_tokens"] = max_tokens
                     else:
                         last_error = "llm output is not valid JSON object"
                     llm_meta["reason_code"] = "invalid_overlay"
@@ -551,6 +562,16 @@ class RequirementParserAgent:
         base_payload = json.dumps(prompt_payload, ensure_ascii=False)
         if attempt <= 1:
             return base_payload
+        if "truncated by max_tokens" in str(previous_error).lower():
+            return "\n".join(
+                [
+                    "上一次输出被 max_tokens 截断，请重新输出完整 JSON 对象。",
+                    "硬性要求：只输出一个 JSON 对象，禁止 Markdown、解释文字、代码块。",
+                    "请尽量保持字段简洁，不要加入额外说明。",
+                    "请基于以下输入重新输出完整 JSON 对象：",
+                    base_payload,
+                ]
+            )
         return "\n".join(
             [
                 "上一次输出未通过 JSON 对象校验，请严格修复。",
@@ -694,6 +715,13 @@ class RequirementParserAgent:
                         "test_data_type": str(row.get("test_data_type", "")).strip().lower(),
                         "precondition": precondition[:240],
                         "steps": steps,
+                        "steps_hint": [
+                            str(item).strip()[:200]
+                            for item in (row.get("steps_hint") if isinstance(row.get("steps_hint"), list) else [])
+                            if str(item).strip()
+                        ],
+                        "target": str(row.get("target", "")).strip()[:120],
+                        "value": row.get("value"),
                         "expected_result": expected_result[:240],
                         "involved_elements": [
                             str(item).strip()[:100]
@@ -745,6 +773,8 @@ class RequirementParserAgent:
                 priority=RequirementParserAgent._normalize_priority_value(str(item.get("priority", "")).strip()),
                 precondition=str(item.get("precondition", "")).strip()[:240],
                 steps=steps,
+                target=str(item.get("target", "")).strip()[:120],
+                value=item.get("value"),
                 expected_result=str(item.get("expected_result", "")).strip()[:240],
                 scene_type=str(item.get("scene_type", "")).strip().lower(),
                 test_data_type=str(item.get("test_data_type", "")).strip().lower(),
@@ -763,7 +793,11 @@ class RequirementParserAgent:
                     for value in (item.get("source_ids") if isinstance(item.get("source_ids"), list) else [])
                     if str(value).strip()
                 ],
-                steps_hint=[],
+                steps_hint=[
+                    str(value).strip()[:200]
+                    for value in (item.get("steps_hint") if isinstance(item.get("steps_hint"), list) else [])
+                    if str(value).strip()
+                ],
             )
             if not intent.steps and intent.precondition:
                 continue

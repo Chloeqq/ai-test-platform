@@ -21,7 +21,7 @@ ACTIONS_REQUIRING_TARGET: frozenset[str] = frozenset({
     "hover", "scroll", "upload", "drag", "focus", "blur", "clear",
     "assert_visible", "assert_text", "assert_value",
     "assert_hidden", "assert_enabled", "assert_disabled",
-    "assert_count",
+    "assert_count", "assert_metric",
 })
 
 
@@ -178,6 +178,7 @@ class ContractValidator:
                     result.add_warning(f"points[{idx}] missing intent_id")
 
             action = str(point.get("action", "")).strip().lower()
+            point_type = str(point.get("point_type", "")).strip().lower()
             steps = point.get("steps")
             has_steps = isinstance(steps, list) and bool(steps)
             if not action and not has_steps:
@@ -193,6 +194,14 @@ class ContractValidator:
                     result.add_error(f"points[{idx}] has no involved_elements")
                 else:
                     result.add_warning(f"points[{idx}] has no involved_elements")
+
+            expected_result = str(point.get("expected_result") or "").strip()
+            expected_required = point_type != "precondition" and action not in {"login"}
+            if expected_required and not expected_result:
+                if strict:
+                    result.add_error(f"points[{idx}] missing expected_result")
+                else:
+                    result.add_warning(f"points[{idx}] missing expected_result")
 
             if action and action in ACTIONS_REQUIRING_TARGET:
                 target = str(point.get("target", "")).strip()
