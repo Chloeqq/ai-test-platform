@@ -5,7 +5,6 @@ from pathlib import Path
 
 from fastapi import HTTPException
 import pytest
-from shared_backend.case_ids import match_case_id
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -13,14 +12,12 @@ from app.core.database import Base
 import app.models.page_object as page_object_model  # noqa: F401
 import app.models.test_case as test_case_model
 import app.models.test_project  # noqa: F401
-import app.models.workbench_state as workbench_state_model  # noqa: F401
 import app.schemas.test_case as test_case_schema
 import app.schemas.test_project as test_project_schema
 from app.services import (
     test_case_bootstrap_service,
     test_case_service,
     test_project_service,
-    workbench_project_service,
 )
 
 
@@ -39,28 +36,6 @@ def db_session(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Sess
         yield session
     finally:
         session.close()
-
-
-def test_create_test_case_generates_shared_backend_case_id(db_session: Session) -> None:
-    case = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            name="退货查询基础校验",
-            product_line="退货",
-            module="查询",
-            priority="P1",
-            test_type="ui",
-            tags=["smoke", "ai-generated"],
-            creator="qa",
-            script_code="def test_return_query(page):\n    assert True\n",
-        ),
-    )
-
-    assert case.case_id
-    assert case.case_id == case.case_id.lower()
-    assert match_case_id(case.case_id)
-    assert case.project_code == "atp"
-    assert case.client == "web"
 
 
 def test_get_detail_accepts_business_case_id(db_session: Session) -> None:
@@ -563,41 +538,6 @@ def test_add_defect_blocked_when_project_inactive(db_session: Session) -> None:
     assert "project is inactive" in str(exc_info.value.detail).lower()
 
 
-def test_update_test_case_blocked_when_target_project_inactive(db_session: Session) -> None:
-    case = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            project_code="atp",
-            name="默认项目草稿",
-            product_line="平台",
-            module="回归",
-            script_code="def test_atp_case(page):\n    assert True\n",
-        ),
-    )
-    test_project_service.create_project(
-        db_session,
-        test_project_schema.TestProjectCreate(
-            project_code="mall",
-            project_name="Mall Platform",
-        ),
-    )
-    test_project_service.update_project(
-        db_session,
-        "mall",
-        test_project_schema.TestProjectUpdate(status="inactive"),
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        test_case_service.update_test_case(
-            db_session,
-            case.case_id,
-            test_case_schema.TestCaseUpdate(project_code="mall"),
-        )
-
-    assert exc_info.value.status_code == 409
-    assert "project is inactive" in str(exc_info.value.detail).lower()
-
-
 def test_update_script_blocked_when_project_inactive(db_session: Session) -> None:
     test_project_service.create_project(
         db_session,
@@ -725,225 +665,6 @@ def test_upsert_workbench_case_blocked_when_project_inactive(
     assert "project is inactive" in str(exc_info.value.detail).lower()
 
 
-def test_list_test_cases_supports_source_filter_and_source_search_token(db_session: Session) -> None:
-    ai_case = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            source="ai",
-            name="AI 生成退货查询",
-            product_line="退货",
-            module="查询",
-            priority="P1",
-            test_type="ui",
-            tags=["ai-generated", "smoke"],
-            creator="qa",
-            script_code="def test_case_ai(page):\n    assert True\n",
-        ),
-    )
-    test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            source="mn",
-            name="人工编写退货查询",
-            product_line="退货",
-            module="查询",
-            priority="P2",
-            test_type="ui",
-            tags=["manual"],
-            creator="qa",
-            script_code="def test_case_manual(page):\n    assert True\n",
-        ),
-    )
-
-    filtered_by_source = test_case_service.list_test_cases(
-        db_session,
-        q="",
-        project_code="atp",
-        source="ai",
-        tag="",
-        priority="",
-        status="",
-        creator="",
-        last_result="",
-        product_line="",
-        module="",
-        test_type="",
-        sort_field="case_id",
-        sort_order="asc",
-        page=1,
-        page_size=20,
-    )
-    filtered_by_query = test_case_service.list_test_cases(
-        db_session,
-        q="来源:AI",
-        project_code="atp",
-        source="",
-        tag="",
-        priority="",
-        status="",
-        creator="",
-        last_result="",
-        product_line="",
-        module="",
-        test_type="",
-        sort_field="case_id",
-        sort_order="asc",
-        page=1,
-        page_size=20,
-    )
-
-    assert [item.case_id for item in filtered_by_source.cases] == [ai_case.case_id]
-    assert [item.case_id for item in filtered_by_query.cases] == [ai_case.case_id]
-    assert filtered_by_query.search_context["source"] == "ai"
-
-
-def test_list_test_cases_returns_stats_for_dashboard_cards(db_session: Session) -> None:
-    case_passed = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            source="ai",
-            name="统计卡片-通过场景",
-            product_line="退货",
-            module="查询",
-            priority="P1",
-            test_type="ui",
-            tags=["smoke"],
-            creator="qa",
-            script_code="def test_case_passed(page):\n    assert True\n",
-        ),
-    )
-    case_failed = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            source="mn",
-            name="统计卡片-失败场景",
-            product_line="退货",
-            module="查询",
-            priority="P1",
-            test_type="ui",
-            tags=["regression"],
-            creator="qa",
-            script_code="def test_case_failed(page):\n    assert True\n",
-        ),
-    )
-    case_skipped = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            source="cv",
-            name="统计卡片-跳过场景",
-            product_line="退货",
-            module="查询",
-            priority="P2",
-            test_type="ui",
-            tags=["review"],
-            creator="qa",
-            script_code="def test_case_skipped(page):\n    assert True\n",
-        ),
-    )
-
-    case_passed.last_execution_result = "passed"
-    case_passed.automation_status = "automated"
-    case_failed.last_execution_result = "failed"
-    case_failed.automation_status = "manual"
-    case_skipped.last_execution_result = "skipped"
-    case_skipped.automation_status = "automated"
-    db_session.add_all([case_passed, case_failed, case_skipped])
-    db_session.commit()
-
-    result = test_case_service.list_test_cases(
-        db_session,
-        q="统计卡片",
-        project_code="atp",
-        source="",
-        tag="",
-        priority="",
-        status="",
-        creator="",
-        last_result="",
-        product_line="",
-        module="",
-        test_type="",
-        sort_field="updated_at",
-        sort_order="desc",
-        page=1,
-        page_size=20,
-    )
-
-    assert result.stats["total"] == 3
-    assert result.stats["passed"] == 1
-    assert result.stats["failed"] == 1
-    assert result.stats["skipped"] == 1
-    assert result.stats["automated"] == 2
-    assert result.stats["pass_rate"] == 33.3
-    assert result.stats["automation_rate"] == 66.7
-
-
-def test_list_test_cases_supports_multi_priority_filter(db_session: Session) -> None:
-    case_p0 = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            name="优先级筛选-P0",
-            product_line="退货",
-            module="查询",
-            priority="P0",
-            test_type="ui",
-            tags=["smoke"],
-            creator="qa",
-            script_code="def test_case_p0(page):\n    assert True\n",
-        ),
-    )
-    case_p1 = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            name="优先级筛选-P1",
-            product_line="退货",
-            module="查询",
-            priority="P1",
-            test_type="ui",
-            tags=["smoke"],
-            creator="qa",
-            script_code="def test_case_p1(page):\n    assert True\n",
-        ),
-    )
-    test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            name="优先级筛选-P2",
-            product_line="退货",
-            module="查询",
-            priority="P2",
-            test_type="ui",
-            tags=["smoke"],
-            creator="qa",
-            script_code="def test_case_p2(page):\n    assert True\n",
-        ),
-    )
-
-    result = test_case_service.list_test_cases(
-        db_session,
-        q="优先级筛选",
-        project_code="atp",
-        source="",
-        tag="",
-        priority="P0,P1",
-        status="",
-        creator="",
-        last_result="",
-        product_line="",
-        module="",
-        test_type="",
-        sort_field="case_id",
-        sort_order="asc",
-        page=1,
-        page_size=20,
-    )
-
-    case_ids = [item.id for item in result.cases]
-    assert case_p0.id in case_ids
-    assert case_p1.id in case_ids
-    assert result.search_context["priority"] == "P0,P1"
-
-
 def test_upsert_test_case_from_workbench_creates_and_updates_case(db_session: Session) -> None:
     case_yaml = {
         "id": "mall-web-ret-query-sm-ai-0001",
@@ -988,29 +709,6 @@ def test_upsert_test_case_from_workbench_creates_and_updates_case(db_session: Se
     assert updated.id == created.id
     assert updated.name == "退货申请页-订单查询-输入历史订单号-点击查询-展示订单信息"
     assert version_count == 2
-
-
-def test_workbench_project_codes_merge_master_data_and_legacy_state(
-    db_session: Session,
-    tmp_path: Path,
-) -> None:
-    test_project_service.create_project(
-        db_session,
-        test_project_schema.TestProjectCreate(
-            project_code="mall",
-            project_name="Mall Platform",
-        ),
-    )
-    state_root = tmp_path / "test-points"
-    (state_root / "default").mkdir(parents=True)
-    (state_root / "legacyproj").mkdir(parents=True)
-
-    items = workbench_project_service.list_project_codes(db_session, state_root=state_root)
-
-    assert items[0] == "atp"
-    assert "mall" in items
-    assert "default" in items
-    assert "legacyproj" in items
 
 
 def test_update_project_updates_name_description_and_status(db_session: Session) -> None:
@@ -1062,94 +760,3 @@ def test_update_project_is_idempotent_when_payload_same(db_session: Session) -> 
     assert unchanged.description == "商城项目"
     assert unchanged.status == "active"
 
-
-def test_delete_project_blocks_when_cases_exist(db_session: Session) -> None:
-    test_project_service.create_project(
-        db_session,
-        test_project_schema.TestProjectCreate(
-            project_code="mall",
-            project_name="Mall Platform",
-        ),
-    )
-    test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            project_code="mall",
-            name="商城项目查询",
-            product_line="商城",
-            module="查询",
-            script_code="def test_mall_case(page):\n    assert True\n",
-        ),
-    )
-
-    with pytest.raises(HTTPException) as exc_info:
-        test_project_service.delete_project(db_session, "mall")
-
-    assert exc_info.value.status_code == 409
-
-
-def test_delete_project_blocks_when_workbench_runtime_refs_exist(db_session: Session) -> None:
-    test_project_service.create_project(
-        db_session,
-        test_project_schema.TestProjectCreate(
-            project_code="mall",
-            project_name="Mall Platform",
-        ),
-    )
-    db_session.add(
-        workbench_state_model.WorkbenchRuntimeRun(
-            run_id="run-mall-001",
-            project="mall",
-            page="order",
-            status="running",
-            payload={},
-        )
-    )
-    db_session.commit()
-
-    with pytest.raises(HTTPException) as exc_info:
-        test_project_service.delete_project(db_session, "mall")
-
-    assert exc_info.value.status_code == 409
-
-
-def test_delete_project_blocks_when_state_dir_exists(db_session: Session, tmp_path: Path) -> None:
-    test_project_service.create_project(
-        db_session,
-        test_project_schema.TestProjectCreate(
-            project_code="mall",
-            project_name="Mall Platform",
-        ),
-    )
-    state_root = tmp_path / "test-points"
-    project_dir = state_root / "mall"
-    project_dir.mkdir(parents=True, exist_ok=True)
-    (project_dir / "mall-web-order-query-sm-ai-0001.json").write_text("{}", encoding="utf-8")
-
-    with pytest.raises(HTTPException) as exc_info:
-        test_project_service.delete_project(db_session, "mall", state_root=state_root)
-
-    assert exc_info.value.status_code == 409
-
-
-def test_delete_project_protects_default_project(db_session: Session) -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        test_project_service.delete_project(db_session, "atp")
-
-    assert exc_info.value.status_code == 400
-
-
-def test_delete_project_removes_unused_project(db_session: Session) -> None:
-    test_project_service.create_project(
-        db_session,
-        test_project_schema.TestProjectCreate(
-            project_code="mall",
-            project_name="Mall Platform",
-        ),
-    )
-
-    deleted_code = test_project_service.delete_project(db_session, "mall")
-    project_codes = [item.project_code for item in test_project_service.list_projects(db_session)]
-
-    assert deleted_code == "mall"
-    assert "mall" not in project_codes

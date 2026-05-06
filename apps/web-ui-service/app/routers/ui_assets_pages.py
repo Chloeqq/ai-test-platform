@@ -60,6 +60,13 @@ def test_point_asset_detail_page(request: Request, asset_id: str) -> RedirectRes
     return RedirectResponse(url=f"/react/assets/test-points/{asset_id}{suffix}", status_code=307)
 
 
+@router.get("/assets/test-points/{asset_id}/edit", response_class=RedirectResponse)
+def test_point_asset_edit_page(request: Request, asset_id: str) -> RedirectResponse:
+    query = str(request.url.query or "").strip()
+    suffix = f"?{query}" if query else ""
+    return RedirectResponse(url=f"/react/assets/test-points/{asset_id}/edit{suffix}", status_code=307)
+
+
 @router.get("/assets/test-points/{asset_id}/matrix", response_class=RedirectResponse)
 def test_point_coverage_matrix_page(request: Request, asset_id: str) -> RedirectResponse:
     query = str(request.url.query or "").strip()

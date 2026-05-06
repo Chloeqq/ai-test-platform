@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -35,7 +36,7 @@ AppendHistory = Callable[[dict[str, Any]], None]
 EnsureProjectWritable = Callable[[str], str]
 DerivePoints = Callable[[dict[str, Any]], dict[str, Any]]
 BuildReviewAuditSummary = Callable[[dict[str, Any]], dict[str, Any]]
-BuildTestPointAssetTechniqueSummary = Callable[[dict[str, Any]], dict[str, Any]]
+BuildTestPointAssetTechniqueSummary = Callable[..., dict[str, Any]]
 BuildPageSemanticSummary = Callable[[dict[str, Any]], dict[str, Any]]
 BuildRiskReportSummary = Callable[[dict[str, Any] | None], dict[str, Any]]
 BuildExecutionGate = Callable[..., dict[str, Any]]
@@ -86,6 +87,114 @@ def _float_value(value: Any, *, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+_SOURCE_TYPE_LABELS = {
+    "selection_save": "来自 AI 生成",
+    "generate_chain": "AI 生成链路",
+    "requirement_intents": "AI 需求解析",
+    "manual": "手动保存",
+    "yaml_case": "YAML 用例同步",
+    "fallback": "系统兜底生成",
+    "openapi_spec": "OpenAPI 导入",
+}
+_TECHNICAL_ASSET_ID_RE = re.compile(r"^[a-z0-9]+-web-[a-z0-9][a-z0-9-]*-(?:fn|sm|api|e2e)-ai-\d{4}$", re.IGNORECASE)
+
+
+def source_type_label(source_type: str) -> str:
+    normalized = str(source_type or "").strip().lower()
+    return _SOURCE_TYPE_LABELS.get(normalized, normalized or "未知来源")
+
+
+def _looks_like_asset_identifier(value: Any, *, asset_id: str = "") -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return True
+    asset = str(asset_id or "").strip()
+    if asset and text == asset:
+        return True
+    if asset and text == _safe_case_id(asset):
+        return True
+    return bool(_TECHNICAL_ASSET_ID_RE.match(text))
+
+
+def _candidate_rows_from_plan(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = _dict_value(plan.get("metadata"))
+    candidates_raw = _list_value(metadata.get("selected_candidates"))
+    candidates = [item for item in candidates_raw if isinstance(item, dict)]
+    if candidates:
+        return candidates
+    rows: list[dict[str, Any]] = []
+    for point in _list_value(plan.get("points")):
+        if not isinstance(point, dict):
+            continue
+        point_metadata = _dict_value(point.get("metadata"))
+        snapshot = _dict_value(point_metadata.get("candidate_snapshot"))
+        if snapshot:
+            rows.append(snapshot)
+            continue
+        rows.append(point)
+    return rows
+
+
+def _derive_asset_title(asset: dict[str, Any], *, fallback_id: str) -> str:
+    existing_title = str(asset.get("title", "")).strip()
+    if existing_title and not _looks_like_asset_identifier(existing_title, asset_id=fallback_id):
+        return existing_title
+    plan = _dict_value(asset.get("plan"))
+    plan_title = str(plan.get("title", "")).strip()
+    if plan_title and not _looks_like_asset_identifier(plan_title, asset_id=fallback_id):
+        return plan_title
+    metadata = _dict_value(plan.get("metadata"))
+    metadata_title = str(metadata.get("asset_title", "")).strip()
+    if metadata_title and not _looks_like_asset_identifier(metadata_title, asset_id=fallback_id):
+        return metadata_title
+    for row in _candidate_rows_from_plan(plan):
+        title = str(row.get("title") or row.get("summary") or row.get("description") or "").strip()
+        if title and not _looks_like_asset_identifier(title, asset_id=fallback_id):
+            return title
+    return existing_title or fallback_id
+
+
+def _derive_requirement_list(asset: dict[str, Any]) -> list[str]:
+    plan = _dict_value(asset.get("plan"))
+    metadata = _dict_value(plan.get("metadata"))
+    for key in ("normalized_requirement", "raw_requirement", "original_requirement"):
+        value = str(metadata.get(key, "")).strip()
+        if value:
+            return [value]
+    requirement = asset.get("requirement")
+    if isinstance(requirement, list):
+        rows = [str(item).strip() for item in requirement if str(item).strip()]
+        if rows:
+            return rows
+    plan_requirement = plan.get("requirement")
+    if isinstance(plan_requirement, list):
+        return [str(item).strip() for item in plan_requirement if str(item).strip()]
+    if isinstance(plan_requirement, str) and plan_requirement.strip():
+        return [plan_requirement.strip()]
+    return []
+
+
+def _derive_intent_count(asset: dict[str, Any]) -> int:
+    plan = _dict_value(asset.get("plan"))
+    metadata = _dict_value(plan.get("metadata"))
+    selected_ids = _dedup_keep_order([str(item).strip() for item in _list_value(metadata.get("selected_intent_ids"))])
+    if selected_ids:
+        return len(selected_ids)
+    selected_candidates = [item for item in _list_value(metadata.get("selected_candidates")) if isinstance(item, dict)]
+    if selected_candidates:
+        return len(selected_candidates)
+    point_ids = _dedup_keep_order(
+        [
+            str(point.get("intent_id") or point.get("key") or "").strip()
+            for point in _list_value(plan.get("points"))
+            if isinstance(point, dict)
+        ]
+    )
+    if point_ids:
+        return len(point_ids)
+    return int(asset.get("point_count", 0) or 0)
 
 
 def count_test_point_types(points: list[dict[str, Any]]) -> dict[str, int]:
@@ -296,10 +405,6 @@ def build_test_point_asset_coverage_matrix(
     }
     coverage_payload = _dict_value(latest_run_payload.get("coverage"))
     rows: list[dict[str, Any]] = []
-    covered_count = 0
-    partial_count = 0
-    gap_count = 0
-    orphan_count = 0
 
     for index, row in enumerate(raw_matrix, start=1):
         if not isinstance(row, dict):
@@ -308,14 +413,6 @@ def build_test_point_asset_coverage_matrix(
         point_keys = [str(item).strip() for item in _list_value(row.get("point_keys")) if str(item).strip()]
         source_ids = [str(item).strip() for item in _list_value(row.get("source_ids")) if str(item).strip()]
         intent_ids = [str(item).strip() for item in _list_value(row.get("intent_ids")) if str(item).strip()]
-        if status == "covered":
-            covered_count += 1
-        elif status == "partial":
-            partial_count += 1
-        elif status == "gap":
-            gap_count += 1
-        elif status == "orphan":
-            orphan_count += 1
         rows.append(
             {
                 "row_id": str(row.get("row_id", "")).strip() or f"coverage-row-{index:02d}",
@@ -335,15 +432,22 @@ def build_test_point_asset_coverage_matrix(
             if not isinstance(point, dict):
                 continue
             point_key = str(point.get("key", "")).strip() or f"point-{index:02d}"
+            point_intent_id = str(point.get("intent_id", "")).strip() or point_key
             point_metadata = _dict_value(point.get("metadata"))
             traceability = _dict_value(point_metadata.get("traceability"))
-            source_ids = [str(item).strip() for item in _list_value(traceability.get("source_ids")) if str(item).strip()]
+            raw_source_ids = [str(item).strip() for item in _list_value(traceability.get("source_ids")) if str(item).strip()]
             intent_ids = [str(item).strip() for item in _list_value(traceability.get("intent_ids")) if str(item).strip()]
+            if not intent_ids and point_intent_id:
+                intent_ids = [point_intent_id]
+            # Older saved assets used the intent id itself as source_id. Treat those as one
+            # requirement source so the coverage view stays human-readable instead of 1 row per intent.
+            real_source_ids = [
+                source_id
+                for source_id in raw_source_ids
+                if source_id.lower().startswith(("source-", "req-", "requirement-"))
+            ]
+            source_ids = real_source_ids or (["source-01"] if intent_ids else [])
             status = "covered" if source_ids or intent_ids else "orphan"
-            if status == "covered":
-                covered_count += 1
-            else:
-                orphan_count += 1
             rows.append(
                 {
                     "row_id": f"derived-{point_key}",
@@ -357,6 +461,63 @@ def build_test_point_asset_coverage_matrix(
                     "explanation": "derived from test point traceability metadata",
                 }
             )
+
+    grouped_rows: dict[tuple[str, tuple[str, ...]], dict[str, Any]] = {}
+    for index, row in enumerate(rows, start=1):
+        status = str(row.get("traceability_status", "unknown")).strip().lower() or "unknown"
+        source_ids = _dedup_keep_order([str(item).strip() for item in _list_value(row.get("source_ids"))])
+        group_key = (status, tuple(source_ids))
+        existing_row = grouped_rows.get(group_key)
+        if existing_row is None:
+            existing_row = {
+                "row_id": f"coverage-{status}-{index:02d}",
+                "traceability_status": status,
+                "source_ids": source_ids,
+                "intent_ids": [],
+                "point_keys": [],
+                "has_point_links": False,
+                "missing_point_keys": [],
+                "changed_areas": [],
+                "explanation": "",
+            }
+            grouped_rows[group_key] = existing_row
+        existing_row["intent_ids"] = _dedup_keep_order(
+            [*existing_row["intent_ids"], *[str(item).strip() for item in _list_value(row.get("intent_ids"))]]
+        )
+        existing_row["point_keys"] = _dedup_keep_order(
+            [*existing_row["point_keys"], *[str(item).strip() for item in _list_value(row.get("point_keys"))]]
+        )
+        existing_row["missing_point_keys"] = _dedup_keep_order(
+            [*existing_row["missing_point_keys"], *[str(item).strip() for item in _list_value(row.get("missing_point_keys"))]]
+        )
+        existing_row["changed_areas"] = _dedup_keep_order(
+            [*existing_row["changed_areas"], *[str(item).strip() for item in _list_value(row.get("changed_areas"))]]
+        )
+        explanations = _dedup_keep_order(
+            [
+                str(existing_row.get("explanation", "")).strip(),
+                str(row.get("explanation", "")).strip(),
+            ]
+        )
+        existing_row["explanation"] = "；".join(explanations)
+        existing_row["has_point_links"] = bool(existing_row["point_keys"])
+
+    rows = list(grouped_rows.values())
+    covered_count = 0
+    partial_count = 0
+    gap_count = 0
+    orphan_count = 0
+    for row in rows:
+        status = str(row.get("traceability_status", "unknown")).strip().lower() or "unknown"
+        item_count = len(_list_value(row.get("intent_ids"))) or len(_list_value(row.get("point_keys"))) or 1
+        if status == "covered":
+            covered_count += item_count
+        elif status == "partial":
+            partial_count += item_count
+        elif status == "gap":
+            gap_count += item_count
+        elif status == "orphan":
+            orphan_count += item_count
 
     latest_run_status = str(coverage_payload.get("status", "")).strip() or "unknown"
     matrix_status = "covered"
@@ -639,6 +800,10 @@ def save_test_point_plan(
             "case_id": case_id,
             "page": page,
             "page_url": page_url,
+            "title": str(plan.get("title", "")).strip() if isinstance(plan, dict) else "",
+            "priority": str(plan.get("priority", "")).strip() if isinstance(plan, dict) else "",
+            "source_name": str(plan.get("source_name", "")).strip() if isinstance(plan, dict) else "",
+            "source_ref": str(plan.get("source_ref", "")).strip() if isinstance(plan, dict) else "",
             "source_type": str(plan.get("source_type", "generate_chain")).strip() if isinstance(plan, dict) else "generate_chain",
             "requirement": [requirement],
             "generated_at": now_iso_fn(),
@@ -739,25 +904,34 @@ def upsert_test_point_asset_snapshot(
         )
     type_counts = count_test_point_types_fn([point for point in points if isinstance(point, dict)])
     semantic_summary = build_test_point_asset_semantic_summary_fn(page, normalized_plan)
-    technique_summary = build_test_point_asset_technique_summary_fn(normalized_plan)
+    technique_summary = build_test_point_asset_technique_summary_fn(normalized_plan=normalized_plan)
     requirement_list = _list_value(normalized_plan.get("requirement"))
     if not requirement_list:
         requirement_list = [requirement]
     existing_confidence = _float_value(existing.get("confidence", 0))
+    provisional_asset = {
+        **existing,
+        "plan": normalized_plan,
+        "requirement": [str(item).strip() for item in requirement_list if str(item).strip()],
+    }
+    title = _derive_asset_title(provisional_asset, fallback_id=case_id)
+    source_type = str(normalized_plan.get("source_type", existing.get("source_type", "generate_chain"))).strip() or "generate_chain"
     asset = {
         **existing,
         "asset_id": _safe_case_id(case_id),
         "version": int(existing.get("version", 0) or 0) + 1,
         "updated_at": now_iso_fn(),
-        "title": str(existing.get("title", "")).strip() or str(normalized_plan.get("title", "")).strip() or case_id,
+        "title": title,
         "page": str(page).strip() or str(existing.get("page", "")).strip() or "unknown",
         "requirement": [str(item).strip() for item in requirement_list if str(item).strip()],
         "priority": str(normalized_plan.get("priority", existing.get("priority", "P1"))).strip() or "P1",
-        "source_type": str(normalized_plan.get("source_type", existing.get("source_type", "generate_chain"))).strip() or "generate_chain",
+        "source_type": source_type,
+        "source_label": source_type_label(source_type),
         "source_name": str(normalized_plan.get("source_name", existing.get("source_name", case_id))).strip() or case_id,
         "source_ref": str(normalized_plan.get("source_ref", existing.get("source_ref", str(plan_path.resolve())))).strip() or str(plan_path.resolve()),
         "plan_path": str(plan_path.resolve()),
         "point_count": len(points),
+        "intent_count": 0,
         "point_types": point_types,
         "point_keys": point_keys,
         "review_summary": _dict_value(normalized_plan.get("review_summary")),
@@ -772,6 +946,8 @@ def upsert_test_point_asset_snapshot(
         "plan": normalized_plan,
         **type_counts,
     }
+    asset["intent_count"] = _derive_intent_count(asset)
+    asset["requirement"] = _derive_requirement_list(asset)
     asset_path.parent.mkdir(parents=True, exist_ok=True)
     asset_path.write_text(json.dumps(asset, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return asset
@@ -782,9 +958,24 @@ def load_test_point_asset(project: str, case_id: str) -> dict[str, Any]:
 
 
 def load_test_point_asset_with_root(project: str, case_id: str, *, state_root: Path | None = None) -> dict[str, Any]:
+    raw_case_id = str(case_id or "").strip()
     normalized_case_id = _safe_case_id(case_id)
-    asset_path = _state_case_file(project, normalized_case_id, state_root=state_root)
-    plan_path = _state_project_dir(project, state_root=state_root) / "plans" / f"{normalized_case_id}.json"
+    project_dir = _state_project_dir(project, state_root=state_root)
+    candidate_ids = [normalized_case_id]
+    if raw_case_id and raw_case_id not in candidate_ids:
+        candidate_ids.append(raw_case_id)
+    asset_path = next(
+        (project_dir / f"{candidate_id}.json" for candidate_id in candidate_ids if (project_dir / f"{candidate_id}.json").exists()),
+        project_dir / f"{normalized_case_id}.json",
+    )
+    plan_path = next(
+        (
+            project_dir / "plans" / f"{candidate_id}.json"
+            for candidate_id in candidate_ids
+            if (project_dir / "plans" / f"{candidate_id}.json").exists()
+        ),
+        project_dir / "plans" / f"{normalized_case_id}.json",
+    )
     asset: dict[str, Any] = {}
     if asset_path.exists():
         try:
@@ -816,6 +1007,12 @@ def load_test_point_asset_with_root(project: str, case_id: str, *, state_root: P
     if isinstance(asset, dict):
         if str(asset.get("asset_id", "")).strip():
             asset["asset_id"] = _safe_case_id(str(asset.get("asset_id", "")).strip())
+        fallback_id = str(asset.get("asset_id", normalized_case_id)).strip() or normalized_case_id
+        source_type = str(asset.get("source_type", "unknown")).strip() or "unknown"
+        asset["title"] = _derive_asset_title(asset, fallback_id=fallback_id)
+        asset["source_label"] = source_type_label(source_type)
+        asset["intent_count"] = _derive_intent_count(asset)
+        asset["requirement"] = _derive_requirement_list(asset)
         return asset
     return {}
 
@@ -1027,12 +1224,9 @@ def build_test_point_asset_items(
         asset_source_type = str(asset.get("source_type", "")).strip().lower()
         if source_type_value and asset_source_type != source_type_value:
             continue
-        requirement_text = (
-            " ".join(str(item).strip() for item in asset.get("requirement", []) if str(item).strip())
-            if isinstance(asset.get("requirement"), list)
-            else ""
-        )
-        title_text = str(asset.get("title", "")).strip()
+        requirement_rows = _derive_requirement_list(asset)
+        requirement_text = " ".join(requirement_rows)
+        title_text = _derive_asset_title(asset, fallback_id=case_id)
         haystack = " ".join([case_id, title_text, requirement_text, asset_page, asset_source_type]).lower()
         if keyword_value and keyword_value not in haystack:
             continue
@@ -1058,7 +1252,9 @@ def build_test_point_asset_items(
                 "page": asset_page,
                 "priority": str(asset.get("priority", "P1")).strip() or "P1",
                 "source_type": asset_source_type or "unknown",
+                "source_label": source_type_label(asset_source_type),
                 "point_count": int(asset.get("point_count", 0) or 0),
+                "intent_count": _derive_intent_count(asset),
                 "updated_at": str(asset.get("updated_at", "")).strip(),
                 "requires_review": bool(asset.get("requires_review", False)),
                 "confidence": clamp_confidence(asset.get("confidence", 0)),
@@ -1130,16 +1326,19 @@ def build_test_point_asset_detail(
     latest_run = latest_run_snapshot_for_case(project=project, case_id=normalized_asset_id, page=page)
     traceability_summary = build_traceability_summary(asset=asset, latest_run=latest_run)
     coverage_matrix = build_test_point_asset_coverage_matrix(asset=asset, latest_run=latest_run)
+    source_type = str(asset.get("source_type", "unknown")).strip() or "unknown"
     return {
         "item": {
             "asset_id": normalized_asset_id,
             "project": project,
-            "title": str(asset.get("title", normalized_asset_id)).strip() or normalized_asset_id,
+            "title": _derive_asset_title(asset, fallback_id=normalized_asset_id),
             "page": page,
             "priority": str(asset.get("priority", "P1")).strip() or "P1",
-            "source_type": str(asset.get("source_type", "unknown")).strip() or "unknown",
-            "requirement": asset.get("requirement", []) if isinstance(asset.get("requirement"), list) else [],
+            "source_type": source_type,
+            "source_label": source_type_label(source_type),
+            "requirement": _derive_requirement_list(asset),
             "point_count": int(asset.get("point_count", 0) or 0),
+            "intent_count": _derive_intent_count(asset),
             "point_types": asset.get("point_types", []) if isinstance(asset.get("point_types"), list) else [],
             "point_keys": asset.get("point_keys", []) if isinstance(asset.get("point_keys"), list) else [],
             "coverage": asset.get("coverage", {}) if isinstance(asset.get("coverage"), dict) else {},
@@ -1291,13 +1490,16 @@ def build_test_point_asset_summary(
         page=str(asset.get("page", "")).strip(),
     )
     traceability_summary = build_traceability_summary(asset=asset, latest_run=latest_run)
+    source_type = str(asset.get("source_type", "unknown")).strip() or "unknown"
     return {
         "asset_id": str(asset.get("asset_id", case_id)).strip() or case_id,
-        "title": str(asset.get("title", case_id)).strip() or case_id,
+        "title": _derive_asset_title(asset, fallback_id=case_id),
         "page": str(asset.get("page", "")).strip(),
         "priority": str(asset.get("priority", "P1")).strip() or "P1",
-        "source_type": str(asset.get("source_type", "unknown")).strip() or "unknown",
+        "source_type": source_type,
+        "source_label": source_type_label(source_type),
         "point_count": int(asset.get("point_count", 0) or 0),
+        "intent_count": _derive_intent_count(asset),
         "confidence": clamp_confidence(asset.get("confidence", 0)),
         "requires_review": bool(asset.get("requires_review", False)),
         "plan_path": str(asset.get("plan_path", "")).strip(),
@@ -1383,7 +1585,7 @@ def build_test_point_asset_traceability_summary(
         _dict_value(asset_payload.get("technique_summary"))
         if isinstance(asset_payload.get("technique_summary"), dict)
         else build_test_point_asset_technique_summary_fn(
-            _dict_value(asset_payload.get("plan"))
+            normalized_plan=_dict_value(asset_payload.get("plan"))
         )
     )
     run_review_state = _dict_value(latest_run_payload.get("review_state"))

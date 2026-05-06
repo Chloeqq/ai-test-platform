@@ -173,7 +173,6 @@ def list_projects(db: Session) -> list[TestProject]:
 
 
 def create_project(db: Session, payload: TestProjectCreate) -> TestProject:
-    ensure_project_seed(db)
     project_code = _normalize_project_code(payload.project_code)
     existing = db.execute(
         select(TestProject).where(TestProject.project_code == project_code)

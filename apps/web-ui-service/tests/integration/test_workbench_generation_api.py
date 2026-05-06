@@ -11,7 +11,9 @@ import app.models.page_object as page_object_model
 import app.models.test_case as test_case_model
 import app.models.test_point as test_point_model
 from app.services import test_case_service, workbench_generation_service, workbench_runtime_service, workbench_state_store
+from app.services import workbench_asset_service
 from app.services.workbench_generation_api import context as generation_context
+from app.services.workbench_generation_api import preview_store
 from app.services.workbench_generation_api import preview_test_points_usecase
 
 
@@ -33,6 +35,209 @@ class _StubOrchestratorClient:
 
     def render_requirement_spec_markdown(self, requirement_spec: dict[str, object]) -> str:
         return workbench_generation_service.render_requirement_spec_markdown(requirement_spec)
+
+
+def test_save_test_point_assets_batches_selected_intents_and_keeps_normalized_requirement(
+    workbench_generation_client: tuple[TestClient, Session],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    client, _db_session = workbench_generation_client
+    assets_root = tmp_path / "test-cases"
+    ai_cases_root = assets_root / "ai-generated"
+    state_root = tmp_path / "state"
+    preview_root = state_root / "preview-test-points"
+    ai_cases_root.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("WORKBENCH_STATE_BACKEND", "file")
+    monkeypatch.setattr(workbench_state_store, "WEB_UI_STATE_ROOT", state_root)
+    monkeypatch.setattr(workbench_state_store, "WEB_UI_DEFAULT_STATE_DIR", state_root / "default")
+    monkeypatch.setattr(workbench_state_store, "WEB_UI_RUNS_DIR", state_root / "runs")
+    monkeypatch.setattr(workbench_state_store, "WEB_UI_REPORTING_DIR", state_root / "reporting")
+    monkeypatch.setattr(workbench_state_store, "TEST_POINTS_ROOT", state_root / "test-points")
+    monkeypatch.setattr(workbench_state_store, "ASSETS_CASES_ROOT", assets_root)
+    monkeypatch.setattr(workbench_state_store, "AI_CASES_ROOT", ai_cases_root)
+    monkeypatch.setattr(workbench_state_store, "HISTORY_FILE", state_root / "default" / "history.json")
+    monkeypatch.setattr(workbench_state_store, "RUNTIME_RUNS_FILE", state_root / "default" / "runtime-runs.json")
+    monkeypatch.setattr(preview_store, "PREVIEW_ROOT", preview_root)
+
+    normalized_requirement = "业务目标：登录页账号密码校验；验收点：密码非法字符提示密码格式错误，未登录访问工作台跳转登录页。"
+    snapshot = preview_store.save_preview_snapshot(
+        project="mall",
+        page="login",
+        source="manual",
+        effective_requirement="二次摘要内容不应覆盖原始需求",
+        trace_id="trace-save-assets",
+        preview_payload={
+            "item": {
+                "requirement_spec": {
+                    "page": "login",
+                    "priority": "P0",
+                    "parse_confidence": 0.9,
+                    "normalized_requirement": normalized_requirement,
+                    "test_intents": [
+                        {
+                            "intent_id": "intent-20",
+                            "title": "密码输入非法字符登录",
+                            "intent_type": "format",
+                            "priority": "P1",
+                            "steps": ["输入账号 test001", "输入密码 1234@", "点击登录"],
+                            "expected_result": "提示密码格式错误",
+                            "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+                        },
+                        {
+                            "intent_id": "intent-13",
+                            "title": "未登录时直接访问工作台URL",
+                            "intent_type": "security",
+                            "priority": "P0",
+                            "steps": ["访问工作台URL"],
+                            "expected_result": "自动跳转登录页",
+                            "involved_elements": ["浏览器地址栏"],
+                        },
+                    ],
+                    "coverage_matrix": [
+                        {
+                            "requirement_id": "REQ-001",
+                            "traceability_status": "covered",
+                            "intent_ids": ["intent-20", "intent-13"],
+                            "source_ids": ["source-01"],
+                        }
+                    ],
+                }
+            }
+        },
+    )
+
+    response = client.post(
+        "/api/workbench/test-point-assets/save",
+        json={
+            "project": "mall",
+            "page": "login",
+            "requirement": "这个字段是页面输入，不应优先于 preview normalized_requirement",
+            "preview_id": snapshot["preview_id"],
+            "selected_intent_ids": ["intent-20", "intent-13"],
+            "selected_candidates": [],
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["count"] == 1
+    item = payload["items"][0]
+    assert item["title"] == "密码输入非法字符登录"
+    assert int(item["intent_count"]) == 2
+
+    asset = workbench_asset_service.load_test_point_asset_with_root(
+        "mall",
+        item["case_id"],
+        state_root=state_root / "test-points",
+    )
+    assert asset["title"] == "密码输入非法字符登录"
+    assert asset["source_type"] == "selection_save"
+    assert asset["source_label"] == "来自 AI 生成"
+    assert asset["requirement"] == [normalized_requirement]
+    assert int(asset["point_count"]) == 2
+    assert int(asset["intent_count"]) == 2
+    assert len(asset["plan"]["points"]) == 2
+    assert len(asset["plan"]["metadata"]["selected_candidates"]) == 2
+    assert asset["plan"]["metadata"]["coverage_matrix"][0]["point_keys"] == ["intent-20", "intent-13"]
+    assert len(list((state_root / "test-points" / "mall").glob("*.json"))) == 1
+
+
+def test_save_test_point_assets_keeps_all_selected_intents_in_one_asset(
+    workbench_generation_client: tuple[TestClient, Session],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    client, _db_session = workbench_generation_client
+    assets_root = tmp_path / "test-cases"
+    ai_cases_root = assets_root / "ai-generated"
+    state_root = tmp_path / "state"
+    preview_root = state_root / "preview-test-points"
+    ai_cases_root.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setenv("WORKBENCH_STATE_BACKEND", "file")
+    monkeypatch.setattr(workbench_state_store, "WEB_UI_STATE_ROOT", state_root)
+    monkeypatch.setattr(workbench_state_store, "WEB_UI_DEFAULT_STATE_DIR", state_root / "default")
+    monkeypatch.setattr(workbench_state_store, "WEB_UI_RUNS_DIR", state_root / "runs")
+    monkeypatch.setattr(workbench_state_store, "WEB_UI_REPORTING_DIR", state_root / "reporting")
+    monkeypatch.setattr(workbench_state_store, "TEST_POINTS_ROOT", state_root / "test-points")
+    monkeypatch.setattr(workbench_state_store, "ASSETS_CASES_ROOT", assets_root)
+    monkeypatch.setattr(workbench_state_store, "AI_CASES_ROOT", ai_cases_root)
+    monkeypatch.setattr(workbench_state_store, "HISTORY_FILE", state_root / "default" / "history.json")
+    monkeypatch.setattr(workbench_state_store, "RUNTIME_RUNS_FILE", state_root / "default" / "runtime-runs.json")
+    monkeypatch.setattr(preview_store, "PREVIEW_ROOT", preview_root)
+
+    intents = [
+        {
+            "intent_id": f"intent-{index:02d}",
+            "title": f"登录测试点 {index:02d}",
+            "intent_type": "functional",
+            "priority": "P0" if index <= 2 else "P1",
+            "steps": [f"执行登录相关步骤 {index:02d}"],
+            "expected_result": f"得到预期结果 {index:02d}",
+            "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+        }
+        for index in range(1, 23)
+    ]
+    selected_intent_ids = [str(intent["intent_id"]) for intent in intents]
+    snapshot = preview_store.save_preview_snapshot(
+        project="mall",
+        page="login",
+        source="manual",
+        effective_requirement="登录页完整需求",
+        trace_id="trace-save-all-assets",
+        preview_payload={
+            "item": {
+                "requirement_spec": {
+                    "page": "login",
+                    "priority": "P0",
+                    "parse_confidence": 0.9,
+                    "normalized_requirement": "登录页完整需求原文",
+                    "test_intents": intents,
+                    "coverage_matrix": [
+                        {
+                            "requirement_id": "REQ-001",
+                            "traceability_status": "covered",
+                            "intent_ids": selected_intent_ids,
+                            "source_ids": ["source-01"],
+                        }
+                    ],
+                }
+            }
+        },
+    )
+
+    response = client.post(
+        "/api/workbench/test-point-assets/save",
+        json={
+            "project": "mall",
+            "page": "login",
+            "requirement": "登录页完整需求",
+            "preview_id": snapshot["preview_id"],
+            "selected_intent_ids": selected_intent_ids,
+            "selected_candidates": [],
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["count"] == 1
+    item = payload["items"][0]
+    assert int(item["intent_count"]) == 22
+
+    asset = workbench_asset_service.load_test_point_asset_with_root(
+        "mall",
+        item["case_id"],
+        state_root=state_root / "test-points",
+    )
+    assert int(asset["point_count"]) == 22
+    assert int(asset["intent_count"]) == 22
+    assert len(asset["plan"]["points"]) == 22
+    assert len(asset["plan"]["metadata"]["selected_candidates"]) == 22
+    assert asset["plan"]["metadata"]["selected_intent_ids"] == selected_intent_ids
+    assert asset["plan"]["metadata"]["coverage_matrix"][0]["point_keys"] == selected_intent_ids
+    assert len(list((state_root / "test-points" / "mall").glob("*.json"))) == 1
 
 
 def test_generate_case_sync_does_not_fail_for_same_asset_case_id(
@@ -329,12 +534,13 @@ def test_preview_test_points_keeps_llm_intents_without_rule_filtering(
     item = payload.get("item") if isinstance(payload, dict) else {}
     item = item if isinstance(item, dict) else {}
     assert int(item.get("intent_count", 0)) == 11
-    requirement_spec = item.get("requirement_spec") if isinstance(item.get("requirement_spec"), dict) else {}
-    intents = requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
+    intents = item.get("test_intents") if isinstance(item.get("test_intents"), list) else []
     assert len(intents) == 11
     titles = [str(intent.get("title", "")).strip() for intent in intents if isinstance(intent, dict)]
     assert 'type":"new_requirement",' in titles
     assert "[priority_policy] P1=业务规则异常" in titles
+    assert item.get("requirement_spec") is None
+    assert str(item.get("preview_id", "")).startswith("preview-")
 
 
 def test_preview_test_points_does_not_expand_login_compound_intents(
@@ -377,8 +583,7 @@ def test_preview_test_points_does_not_expand_login_compound_intents(
     payload = response.json()
     item = payload.get("item") if isinstance(payload, dict) else {}
     item = item if isinstance(item, dict) else {}
-    requirement_spec = item.get("requirement_spec") if isinstance(item.get("requirement_spec"), dict) else {}
-    intents = requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
+    intents = item.get("test_intents") if isinstance(item.get("test_intents"), list) else []
     titles = [str(intent.get("title", "")).strip() for intent in intents if isinstance(intent, dict)]
 
     assert "1. 正常流程：用户输入正确的用户名密码，点击登录，成功进入首页" in titles

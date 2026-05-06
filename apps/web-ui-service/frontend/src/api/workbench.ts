@@ -72,6 +72,7 @@ export interface GenerateCasePayload {
   title?: string;
   priority?: string;
   source?: string;
+  preview_id?: string;
   selected_candidates?: Array<Record<string, unknown>>;
   selected_intent_ids?: string[];
 }
@@ -98,6 +99,7 @@ export interface FullChainRunPayload {
   max_cases?: number;
   run_after_generate?: boolean;
   wait_seconds?: number;
+  preview_id?: string;
 }
 
 export interface FullChainRunResponse {
@@ -116,20 +118,30 @@ export interface PreviewTestPointsPayload {
 export interface PreviewTestPointsIntent {
   intent_id?: string;
   title?: string;
-  summary?: string;
   intent_type?: string;
   priority?: string;
-  precondition?: string;
-  steps?: unknown[];
-  steps_hint?: unknown[];
+  steps_summary?: string;
   expected_result?: string;
-  expected?: string;
-  involved_elements?: string[];
+  detail_url?: string;
 }
 
 export interface PreviewTestPointsResponse {
   item?: {
+    preview_id?: string;
+    page?: string;
+    priority?: string;
+    parse_confidence?: number;
     intent_count?: number;
+    intent_type_distribution?: Record<string, number>;
+    test_intents?: PreviewTestPointsIntent[];
+    diagnostics_url?: string;
+    output_contract?: Record<string, unknown>;
+    quality_gate?: {
+      decision?: string;
+      stage?: string;
+      blocker_count?: number;
+      blockers?: Array<Record<string, unknown>>;
+    };
     requirement_spec?: {
       page?: string;
       parse_confidence?: number;
@@ -147,6 +159,8 @@ export interface PreviewTestPointsResponse {
 export interface PrecheckSelectedIntentsPayload {
   project: string;
   page: string;
+  preview_id?: string;
+  selected_intent_ids?: string[];
   selected_candidates: Array<Record<string, unknown>>;
 }
 
@@ -265,6 +279,10 @@ export async function saveTestPointAssets(payload: GenerateCasePayload): Promise
 
 export async function previewTestPoints(payload: PreviewTestPointsPayload): Promise<PreviewTestPointsResponse> {
   return postJson<PreviewTestPointsResponse>("/api/workbench/preview-test-points", payload);
+}
+
+export async function getPreviewTestPointDiagnostics(previewId: string): Promise<Record<string, unknown>> {
+  return getJson<Record<string, unknown>>(`/api/workbench/preview-test-points/${encodeURIComponent(previewId)}/diagnostics`);
 }
 
 export async function precheckSelectedIntents(

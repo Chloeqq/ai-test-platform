@@ -241,7 +241,11 @@ class CandidateNormalizer:
         item = preview_payload.get("item") if isinstance(preview_payload, dict) else {}
         item = item if isinstance(item, dict) else {}
         requirement_spec = item.get("requirement_spec") if isinstance(item.get("requirement_spec"), dict) else {}
-        test_intents = requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
+        test_intents = (
+            item.get("test_intents")
+            if isinstance(item.get("test_intents"), list)
+            else requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
+        )
         candidates: list[dict[str, Any]] = []
         for intent in test_intents:
             if not isinstance(intent, dict):
@@ -267,7 +271,13 @@ class CandidateNormalizer:
                     "priority": priority,
                     "tags": tags,
                     "precondition": str(intent.get("precondition") or "").strip(),
-                    "steps": intent.get("steps") if isinstance(intent.get("steps"), list) else [],
+                    "steps": (
+                        intent.get("steps")
+                        if isinstance(intent.get("steps"), list)
+                        else [str(intent.get("steps_summary") or "").strip()]
+                        if str(intent.get("steps_summary") or "").strip()
+                        else []
+                    ),
                     "steps_hint": intent.get("steps_hint") if isinstance(intent.get("steps_hint"), list) else [],
                     "expected": str(
                         intent.get("expected") or intent.get("expected_result") or intent.get("expect_result") or ""

@@ -48,13 +48,37 @@ const PAGE_OBJECT_STATUS_LABELS: Record<string, string> = {
 const GOVERNANCE_STATUS_LABELS: Record<string, string> = {
   draft: "草稿",
   active: "已可用",
+  approved: "已通过",
   governing: "治理中",
+  pending: "待审核",
+  needs_review: "待审核",
+  rejected: "已驳回",
   retired: "已下线",
+};
+
+const PAGE_NAME_LABELS: Record<string, string> = {
+  home: "首页",
+  login: "登录页",
+  order: "订单页",
+  payment: "支付页",
+  permission: "权限页",
+  product: "商品页",
+  profile: "个人中心",
 };
 
 function text(value: unknown): string {
   const normalized = String(value || "").trim();
   return normalized || "-";
+}
+
+function pageDisplayName(item: Record<string, unknown>): string {
+  const pageCode = String(item.page_code || "").trim().toLowerCase();
+  const pageName = String(item.page_name || "").trim();
+  const normalizedPageName = pageName.toLowerCase();
+  if (pageName && pageName !== pageCode && !PAGE_NAME_LABELS[normalizedPageName]) {
+    return pageName;
+  }
+  return PAGE_NAME_LABELS[pageCode] || PAGE_NAME_LABELS[normalizedPageName] || text(pageName || pageCode);
 }
 
 function pageObjectStatusText(value: unknown): string {
@@ -165,14 +189,14 @@ export function PageObjectsPage() {
       if (!normalizedKeyword) {
         return true;
       }
-      return [item.page_code, item.page_name, item.page_url, item.route_pattern]
+      return [item.page_code, item.page_name, pageDisplayName(item), item.page_url, item.route_pattern]
         .map((value) => String(value || "").toLowerCase())
         .some((value) => value.includes(normalizedKeyword));
     });
   }, [governanceFilter, items, keyword, moduleFilter, statusFilter]);
   const summary = useMemo(() => {
     const pageCount = items.length;
-    const governedCount = items.filter((item) => String(item.governance_status || "").trim().toLowerCase() === "active").length;
+    const governedCount = items.filter((item) => ["active", "approved"].includes(String(item.governance_status || "").trim().toLowerCase())).length;
     const pendingCandidateCount = items.reduce((total, item) => total + numberOf(item.candidate_pending_count), 0);
     const averageTestability = pageCount
       ? Math.round(items.reduce((total, item) => total + numberOf(item.testability_score), 0) / pageCount)
@@ -380,7 +404,7 @@ export function PageObjectsPage() {
       <MetricCards
         items={[
           { label: "页面总数", value: summary.pageCount, hint: "当前项目页面对象总量" },
-          { label: "已治理页面", value: summary.governedCount, hint: "治理状态为已可用" },
+          { label: "已治理页面", value: summary.governedCount, hint: "治理状态为已可用或已通过" },
           {
             label: "待审候选组",
             value: summary.pendingCandidateCount,
@@ -440,7 +464,10 @@ export function PageObjectsPage() {
             <option value="">全部</option>
             <option value="draft">草稿</option>
             <option value="active">已可用</option>
+            <option value="approved">已通过</option>
             <option value="governing">治理中</option>
+            <option value="pending">待审核</option>
+            <option value="rejected">已驳回</option>
             <option value="retired">已下线</option>
           </select>
         </label>
@@ -599,10 +626,10 @@ export function PageObjectsPage() {
                       <td>
                         {pageCode ? (
                           <Link className="link-strong" to={buildElementsLink(pageCode, projectCode)}>
-                            {text(item.page_name)}
+                            {pageDisplayName(item)}
                           </Link>
                         ) : (
-                          text(item.page_name)
+                          pageDisplayName(item)
                         )}
                       </td>
                       <td className="compact-cell">

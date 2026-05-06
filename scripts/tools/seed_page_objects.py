@@ -9,6 +9,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -24,7 +25,11 @@ YAML_ROOT = REPO_ROOT / "assets" / "page-objects" / "web"
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Seed YAML page objects into the database")
-    parser.add_argument("--project", default="atp", help="Project code (default: atp)")
+    parser.add_argument(
+        "--project",
+        default=os.getenv("PAGE_OBJECT_SEED_PROJECT", "mall"),
+        help="Project code (default: PAGE_OBJECT_SEED_PROJECT or mall)",
+    )
     parser.add_argument("--client", default="web", help="Client type (default: web)")
     parser.add_argument("--dry-run", action="store_true", help="Print actions without writing to DB")
     parser.add_argument("--force", action="store_true", help="Update existing page objects instead of skipping")
@@ -39,6 +44,39 @@ def _load_yaml_file(path: Path) -> dict:
     if not isinstance(data, dict):
         raise ValueError(f"Expected dict in {path}, got {type(data).__name__}")
     return data
+
+
+def _text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _string_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [_text(item) for item in value if _text(item)]
+    text = _text(value)
+    return [text] if text else []
+
+
+def _infer_business_type(element_code: str, element_meta: dict, *, locator_type: str, role: str) -> str:
+    explicit = _text(element_meta.get("business_type"))
+    if explicit:
+        return explicit
+    normalized_code = _text(element_code).lower()
+    normalized_type = _text(locator_type).lower()
+    normalized_role = _text(role).lower()
+    if normalized_code == "password_toggle" or "password_toggle" in normalized_code:
+        return "password_toggle"
+    if normalized_role == "button" or normalized_code.endswith("_button") or normalized_code.endswith("_btn"):
+        return "button"
+    if normalized_role == "checkbox" or normalized_code.endswith("_checkbox"):
+        return "checkbox"
+    if normalized_role == "menuitem" or normalized_code.endswith("_menu") or normalized_code.endswith("_option"):
+        return "menu"
+    if normalized_role == "link" or normalized_code.endswith("_link"):
+        return "link"
+    if normalized_type == "placeholder" or normalized_code.endswith("_input"):
+        return "input"
+    return ""
 
 
 def _seed_one(
@@ -80,6 +118,7 @@ def _seed_one(
         page_obj.page_name = str(page_name)
         page_obj.description = str(yaml_data.get("description", "")).strip()
         page_obj.status = "published"
+        page_obj.governance_status = "approved"
         action = "UPDATED"
     else:
         page_obj = PageObject(
@@ -89,6 +128,7 @@ def _seed_one(
             page_name=str(page_name),
             element_count=len(elements),
             status="published",
+            governance_status="approved",
             created_by="seed_page_objects",
         )
         db.add(page_obj)
@@ -109,6 +149,11 @@ def _seed_one(
         locator_value = str(element_meta.get("locator_value", "")).strip()
         role = str(element_meta.get("role", "")).strip()
         element_name = str(element_meta.get("element_name") or element_meta.get("name") or element_code).strip()
+        aliases = _string_list(element_meta.get("aliases"))
+        business_type = _infer_business_type(str(element_code), element_meta, locator_type=locator_type, role=role)
+        business_domain = _text(element_meta.get("business_domain"))
+        review_status = _text(element_meta.get("review_status")) or "approved"
+        stability_level = _text(element_meta.get("stability_level")) or "high"
         elem = existing_elements.get(str(element_code).strip())
         if elem is None:
             db.add(
@@ -119,6 +164,11 @@ def _seed_one(
                     locator_type=locator_type,
                     locator_value=locator_value,
                     role=role,
+                    aliases_json=aliases,
+                    business_type=business_type,
+                    business_domain=business_domain,
+                    review_status=review_status,
+                    stability_level=stability_level,
                     status="active",
                 )
             )
@@ -127,11 +177,19 @@ def _seed_one(
         elem.locator_type = locator_type
         elem.locator_value = locator_value
         elem.role = role
+        elem.aliases_json = aliases
+        elem.business_type = business_type
+        elem.business_domain = business_domain
+        elem.review_status = review_status
+        elem.stability_level = stability_level
         elem.status = "active"
 
+    db.flush()
     page_obj.element_count = int(
         db.query(PageElement).filter(PageElement.page_object_id == page_obj.id).count() or 0
     )
+    page_obj.approved_element_count = page_obj.element_count
+    page_obj.key_element_count = page_obj.element_count
     db.flush()
     return f"  {action} {page_code}: {page_obj.element_count} elements (id={page_obj.id})"
 

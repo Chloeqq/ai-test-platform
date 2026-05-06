@@ -99,13 +99,6 @@ export function CasesPage() {
     <main className="shell">
       <section className="hero-card cases-shell unified-topbar">
         <div className="cases-page-head">
-          <div className="cases-page-copy">
-            <p className="breadcrumb">
-              <span>测试资产</span>
-              <span className="crumb-sep">/</span>
-              <span>用例中心</span>
-            </p>
-          </div>
           <div className="cases-page-actions unified-topbar-actions">
             <Link className="button secondary" to="/ai-generation">
               前往 AI 生成

@@ -383,6 +383,17 @@ def ensure_seed_data(db: Session) -> None:
     TestCaseStep.__table__.create(bind=db.get_bind(), checkfirst=True)
     TestPoint.__table__.create(bind=db.get_bind(), checkfirst=True)
     ensure_test_cases_schema_compatibility(db)
+    # Keep routine service calls safe: they should not inject demo cases into a
+    # real or test project. Demo/default project seed is opt-in via explicit
+    # project writes or ensure_demo_seed_data.
+    return
+
+
+def ensure_demo_seed_data(db: Session) -> None:
+    TestCaseTreeNode.__table__.create(bind=db.get_bind(), checkfirst=True)
+    TestCaseStep.__table__.create(bind=db.get_bind(), checkfirst=True)
+    TestPoint.__table__.create(bind=db.get_bind(), checkfirst=True)
+    ensure_test_cases_schema_compatibility(db)
     ensure_project_seed(db)
     case_id_repository = WorkbenchGenerationRepository(db)
     existing_count = db.execute(select(func.count(TestCase.id))).scalar_one()

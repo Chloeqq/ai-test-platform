@@ -32,6 +32,7 @@ class FullChainRunPayload(BaseModel):
     openapi_url: str = Field(default="")
     defect_ticket: str = Field(default="")
     runtime_logs: str = Field(default="")
+    preview_id: str = Field(default="")
     selected_candidates: list[dict[str, Any]] = Field(default_factory=list)
     selected_intent_ids: list[str] = Field(default_factory=list)
 
@@ -55,6 +56,7 @@ class GenerateCasePayload(BaseModel):
     openapi_url: str = Field(default="")
     defect_ticket: str = Field(default="")
     runtime_logs: str = Field(default="")
+    preview_id: str = Field(default="")
     selected_candidates: list[dict[str, Any]] = Field(default_factory=list)
     selected_intent_ids: list[str] = Field(default_factory=list)
 
@@ -62,6 +64,8 @@ class GenerateCasePayload(BaseModel):
 class PrecheckSelectedIntentsPayload(BaseModel):
     project: str = Field(default="mall")
     page: str = Field(default="")
+    preview_id: str = Field(default="")
+    selected_intent_ids: list[str] = Field(default_factory=list)
     selected_candidates: list[dict[str, Any]] = Field(default_factory=list)
 
 

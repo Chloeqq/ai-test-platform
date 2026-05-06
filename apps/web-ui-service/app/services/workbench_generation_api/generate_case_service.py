@@ -7,6 +7,7 @@ from shared_backend.execution_compiler import ExecutionCompilerError
 from shared_backend.element_binding import enrich_candidate_with_element_codes
 
 from .context import WorkbenchContext
+from . import preview_store
 from ..workbench_generation_compiler.runtime.generate_pipeline import resolve_page_object
 
 
@@ -149,7 +150,17 @@ class GenerateCaseService:
                 detail="requirement must not be empty when no page or additional input sources are provided",
             )
         existing_case_ids = repository.collect_existing_case_ids(assets_cases_root=runtime.ASSETS_CASES_ROOT)
-        enriched_candidates = list(payload.selected_candidates)
+        selected_intent_ids = [
+            str(item or "").strip()
+            for item in list(getattr(payload, "selected_intent_ids", []) or [])
+            if str(item or "").strip()
+        ]
+        raw_candidates = [item for item in list(payload.selected_candidates or []) if isinstance(item, dict)]
+        enriched_candidates = preview_store.resolve_selected_candidates(
+            preview_id=str(getattr(payload, "preview_id", "") or "").strip(),
+            selected_intent_ids=selected_intent_ids,
+            fallback_candidates=raw_candidates,
+        )
         try:
             page_object = resolve_page_object(payload.project, normalized_page)
         except ExecutionCompilerError:

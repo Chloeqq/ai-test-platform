@@ -21,6 +21,7 @@ class preview_usecase:
         self._orchestrator_client = orchestrator_client
 
     def execute(self, payload: Any) -> dict[str, Any]:
+        project = str(getattr(payload, "project", "") or "").strip() or "mall"
         page = str(getattr(payload, "page", "") or "").strip()
         normalized_page = _normalize_page_slug(page) if page else ""
         requirement_text = str(getattr(payload, "requirement", "") or "").strip()
@@ -65,6 +66,7 @@ class preview_usecase:
             run_orchestrator_parse=self._orchestrator_client.parse,
             render_requirement_spec_markdown=self._orchestrator_client.render_requirement_spec_markdown,
             extract_quality_gate=self._orchestrator_client.extract_quality_gate,
+            project=project,
         )
 
 

@@ -33,6 +33,7 @@ import { ReportOverviewPage } from "./pages/ReportOverviewPage";
 import { ReportPerformancePage } from "./pages/ReportPerformancePage";
 import { SchedulerPage } from "./pages/SchedulerPage";
 import { TestPointAssetDetailPage } from "./pages/TestPointAssetDetailPage";
+import { TestPointAssetEditPage } from "./pages/TestPointAssetEditPage";
 import { TestPointAssetsPage } from "./pages/TestPointAssetsPage";
 
 function NotFound() {
@@ -65,6 +66,7 @@ export function App() {
         <Route path="/cases/versions" element={<CaseVersionsPage />} />
         <Route path="/cases/tags" element={<CaseTagsPage />} />
         <Route path="/assets/test-points" element={<TestPointAssetsPage />} />
+        <Route path="/assets/test-points/:assetId/edit" element={<TestPointAssetEditPage />} />
         <Route path="/assets/test-points/:assetId" element={<TestPointAssetDetailPage />} />
         <Route path="/assets/test-points/:assetId/matrix" element={<TestPointAssetDetailPage />} />
         <Route path="/assets/page-objects" element={<PageObjectsPage />} />

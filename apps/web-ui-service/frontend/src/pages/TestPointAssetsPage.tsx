@@ -5,9 +5,7 @@ import {
   batchDeleteTestPointAssets,
   batchGenerateCasesFromTestPointAssets,
   deleteTestPointAsset,
-  getTestPointAsset,
   listTestPointAssets,
-  updateTestPointAsset,
   upsertTestPointAsset,
 } from "../api/assets";
 import { BulkActionBar } from "../components/BulkActionBar";
@@ -55,6 +53,14 @@ function numberValue(value: unknown): string {
   }
   const normalized = String(value || "").trim();
   return normalized || "0";
+}
+
+function sourceDisplay(item: Record<string, unknown>): string {
+  return text(item.source_label || item.source_type);
+}
+
+function intentCountDisplay(item: Record<string, unknown>): string {
+  return numberValue(item.intent_count || item.point_count);
 }
 
 function toStepTextList(steps: unknown): string[] {
@@ -110,9 +116,9 @@ export function TestPointAssetsPage() {
   const [errorText, setErrorText] = useState<string>("");
   const [actionText, setActionText] = useState<string>("");
   const [editorOpen, setEditorOpen] = useState<boolean>(false);
-  const [editing, setEditing] = useState<boolean>(false);
   const [editor, setEditor] = useState<AssetEditorState>(EMPTY_EDITOR);
   const [deleteTarget, setDeleteTarget] = useState<{ mode: "single" | "batch"; assetId?: string } | null>(null);
+  const [openActionMenu, setOpenActionMenu] = useState<{ assetId: string; top: number; left: number } | null>(null);
 
   function pickDefaultProject(codes: string[], currentProject = ""): string {
     const normalizedCurrent = String(currentProject || "").trim();
@@ -192,6 +198,23 @@ export function TestPointAssetsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!openActionMenu) {
+      return undefined;
+    }
+    function closeActionMenu() {
+      setOpenActionMenu(null);
+    }
+    window.addEventListener("click", closeActionMenu);
+    window.addEventListener("resize", closeActionMenu);
+    window.addEventListener("scroll", closeActionMenu, true);
+    return () => {
+      window.removeEventListener("click", closeActionMenu);
+      window.removeEventListener("resize", closeActionMenu);
+      window.removeEventListener("scroll", closeActionMenu, true);
+    };
+  }, [openActionMenu]);
+
   const selectedCount = selectedAssetIds.length;
   const allAssetIds = useMemo(
     () => items.map((item) => String(item.asset_id || "").trim()).filter(Boolean),
@@ -217,7 +240,6 @@ export function TestPointAssetsPage() {
   }
 
   function openCreateEditor() {
-    setEditing(false);
     setEditor({
       ...EMPTY_EDITOR,
       assetId: suggestAssetId(normalizeProjectCode(project)),
@@ -226,38 +248,6 @@ export function TestPointAssetsPage() {
     });
     setEditorOpen(true);
     setActionText("");
-  }
-
-  async function openEditEditor(assetId: string) {
-    setBusy(true);
-    setErrorText("");
-    setActionText("");
-    try {
-      const detailPayload = await getTestPointAsset(assetId, normalizeProjectCode(project));
-      const item = (detailPayload.item || {}) as Record<string, unknown>;
-      const plan = (item.plan || {}) as Record<string, unknown>;
-      const points = Array.isArray(plan.points) ? plan.points : [];
-      const firstPoint = (points[0] || {}) as Record<string, unknown>;
-      setEditor({
-        assetId: String(item.asset_id || assetId).trim(),
-        title: String(item.title || "").trim(),
-        page: String(item.page || "").trim(),
-        priority: String(item.priority || "P1").trim() || "P1",
-        requirement: Array.isArray(item.requirement) ? item.requirement.map((row) => String(row || "").trim()).filter(Boolean).join("\n") : "",
-        summary: String(firstPoint.description || item.title || "").trim(),
-        stepsText: toStepTextList(firstPoint.steps).join("\n"),
-        expected: String(firstPoint.expected_result || "").trim(),
-        involvedElementsText: Array.isArray(firstPoint.involved_elements)
-          ? firstPoint.involved_elements.map((row) => String(row || "").trim()).filter(Boolean).join(", ")
-          : "",
-      });
-      setEditing(true);
-      setEditorOpen(true);
-    } catch (error) {
-      setErrorText(error instanceof Error ? error.message : "测试点资产详情加载失败");
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function submitEditor() {
@@ -299,13 +289,9 @@ export function TestPointAssetsPage() {
         source_type: "manual",
         selected_candidates: [candidate],
       };
-      if (editing) {
-        await updateTestPointAsset(normalizedAssetId, payload);
-      } else {
-        await upsertTestPointAsset(payload);
-      }
+      await upsertTestPointAsset(payload);
       setEditorOpen(false);
-      setActionText(editing ? "测试点资产已更新。" : "测试点资产已创建。");
+      setActionText("测试点资产已创建。");
       await reload(normalizeProjectCode(project));
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : "测试点资产保存失败");
@@ -479,14 +465,14 @@ export function TestPointAssetsPage() {
 
       {editorOpen ? (
         <section className="panel">
-          <h2>{editing ? "编辑测试点资产" : "新增测试点资产"}</h2>
+          <h2>新增测试点资产</h2>
           <div className="form-grid">
             <label>
               资产编码
               <input
                 value={editor.assetId}
                 onChange={(event) => setEditor((prev) => ({ ...prev, assetId: event.target.value }))}
-                disabled={busy || editing}
+                disabled={busy}
               />
             </label>
             <label>
@@ -599,7 +585,7 @@ export function TestPointAssetsPage() {
                 <th>标题</th>
                 <th>页面</th>
                 <th>来源</th>
-                <th>点位数</th>
+                <th>包含意图数</th>
                 <th>置信度</th>
                 <th>更新时间</th>
                 <th>操作</th>
@@ -623,25 +609,66 @@ export function TestPointAssetsPage() {
                       <td className="mono">{text(assetId)}</td>
                       <td>{text(item.title)}</td>
                       <td>{text(item.page)}</td>
-                      <td>{text(item.source_type)}</td>
-                      <td>{numberValue(item.point_count)}</td>
+                      <td>{sourceDisplay(item)}</td>
+                      <td>{intentCountDisplay(item)}</td>
                       <td>{numberValue(item.confidence)}</td>
                       <td>{formatDateTime(item.updated_at)}</td>
                       <td>
                         <div className="header-actions">
                           <Link className="button secondary" to={`/assets/test-points/${encodeURIComponent(assetId)}?project=${encodeURIComponent(normalizeProjectCode(project))}`}>查看</Link>
-                          <button type="button" className="button secondary" onClick={() => void openEditEditor(assetId)} disabled={busy || !assetId}>
-                            编辑
-                          </button>
-                          <details className="action-menu">
-                            <summary>更多</summary>
-                            <button type="button" onClick={() => void generateOne(assetId)} disabled={busy || !assetId}>
-                              生成用例
+                          <div className="asset-action-menu" onClick={(event) => event.stopPropagation()}>
+                            <button
+                              type="button"
+                              className="asset-action-menu-trigger"
+                              aria-haspopup="menu"
+                              aria-expanded={openActionMenu?.assetId === assetId}
+                              onClick={(event) => {
+                                if (openActionMenu?.assetId === assetId) {
+                                  setOpenActionMenu(null);
+                                  return;
+                                }
+                                const rect = event.currentTarget.getBoundingClientRect();
+                                const menuWidth = 128;
+                                const menuHeight = 86;
+                                const left = Math.min(Math.max(12, rect.right - menuWidth), Math.max(12, window.innerWidth - menuWidth - 12));
+                                const top = rect.bottom + 6 + menuHeight > window.innerHeight
+                                  ? Math.max(12, rect.top - menuHeight - 6)
+                                  : rect.bottom + 6;
+                                setOpenActionMenu({ assetId, top, left });
+                              }}
+                              disabled={busy || !assetId}
+                            >
+                              更多
                             </button>
-                            <button type="button" className="danger-text" onClick={() => void removeOne(assetId)} disabled={busy || !assetId}>
-                              删除
-                            </button>
-                          </details>
+                            {openActionMenu?.assetId === assetId ? (
+                              <div className="asset-action-menu-panel" role="menu" style={{ top: openActionMenu.top, left: openActionMenu.left }}>
+                                <button
+                                  type="button"
+                                  className="asset-action-menu-item"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setOpenActionMenu(null);
+                                    void generateOne(assetId);
+                                  }}
+                                  disabled={busy || !assetId}
+                                >
+                                  生成用例
+                                </button>
+                                <button
+                                  type="button"
+                                  className="asset-action-menu-item danger-text"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setOpenActionMenu(null);
+                                    void removeOne(assetId);
+                                  }}
+                                  disabled={busy || !assetId}
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
                       </td>
                     </tr>

@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { type FocusEvent, type MouseEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
-import { getTestPointAsset, getTestPointAssetCoverageMatrix } from "../api/assets";
+import { getTestPointAsset, getTestPointAssetCoverageMatrix, updateTestPointAsset } from "../api/assets";
+import { BulkActionBar } from "../components/BulkActionBar";
+import { ColumnFilter } from "../components/ColumnFilter";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { DataTable } from "../components/DataTable";
 import { EmptyState } from "../components/EmptyState";
+import { TablePagination } from "../components/TablePagination";
 import { normalizeProjectCode } from "../config/projects";
 
 function text(value: unknown): string {
@@ -17,6 +21,268 @@ function numberValue(value: unknown): string {
   }
   const normalized = String(value || "").trim();
   return normalized || "0";
+}
+
+type SummaryBadgeTone = "ai" | "manual" | "warning" | "success" | "danger" | "neutral";
+type PointReviewStatus = "pending" | "approved" | "rejected";
+
+interface SummaryBadgeConfig {
+  label: string;
+  tone: SummaryBadgeTone;
+  hint?: string;
+  raw?: string;
+}
+
+const SOURCE_BADGE_MAP: Record<string, SummaryBadgeConfig> = {
+  selection_save: { label: "AI 自动生成", tone: "ai" },
+  generate_chain: { label: "AI 自动生成", tone: "ai" },
+  requirement_intents: { label: "AI 自动生成", tone: "ai" },
+  manual: { label: "手动创建", tone: "manual" },
+  yaml_case: { label: "YAML 用例同步", tone: "neutral" },
+  fallback: { label: "系统兜底生成", tone: "neutral" },
+  openapi_spec: { label: "OpenAPI 导入", tone: "neutral" },
+};
+
+const STATUS_BADGE_MAP: Record<string, SummaryBadgeConfig> = {
+  needs_review: { label: "⚠️ 待审核", tone: "warning", hint: "建议先审核再生成用例" },
+  review: { label: "⚠️ 待审核", tone: "warning", hint: "建议先审核再生成用例" },
+  pending: { label: "⚠️ 待审核", tone: "warning", hint: "建议先审核再生成用例" },
+  approved: { label: "✅ 已通过", tone: "success", hint: "可进入生成用例" },
+  ready: { label: "✅ 已通过", tone: "success", hint: "可进入生成用例" },
+  active: { label: "✅ 已通过", tone: "success", hint: "可进入生成用例" },
+  rejected: { label: "❌ 已驳回", tone: "danger", hint: "需修改后重新审核" },
+  blocked: { label: "已阻断", tone: "danger", hint: "请先处理阻断原因" },
+  block: { label: "已阻断", tone: "danger", hint: "请先处理阻断原因" },
+  draft: { label: "草稿", tone: "neutral", hint: "可继续编辑完善" },
+  unknown: { label: "未知", tone: "neutral" },
+};
+
+function sourceBadgeConfig(item: Record<string, unknown>): SummaryBadgeConfig {
+  const raw = String(item.source_type || item.source_label || "").trim();
+  const normalized = raw.toLowerCase();
+  const mapped = SOURCE_BADGE_MAP[normalized];
+  if (mapped) {
+    return { ...mapped, raw };
+  }
+  const label = text(item.source_label || item.source_type);
+  return { label, tone: "neutral", raw };
+}
+
+function statusBadgeConfig(item: Record<string, unknown>): SummaryBadgeConfig {
+  const plan = (item.plan || {}) as Record<string, unknown>;
+  const selectionSummary = (item.selection_summary || {}) as Record<string, unknown>;
+  const reviewSummary = (item.review_summary || plan.review_summary || {}) as Record<string, unknown>;
+  const rawCandidates = [
+    reviewSummary.manual_review_status,
+    reviewSummary.review_status,
+    item.review_status,
+    selectionSummary.selection_state,
+    item.status,
+  ];
+  const raw = String(rawCandidates.find((value) => String(value || "").trim()) || "").trim();
+  const normalized = raw.toLowerCase();
+  const needsReview = Boolean(item.requires_review || plan.requires_review);
+  const fallbackStatus = needsReview && (!normalized || normalized === "unknown" || normalized === "ready") ? "needs_review" : normalized;
+  const mapped = STATUS_BADGE_MAP[fallbackStatus] || STATUS_BADGE_MAP.unknown;
+  return { ...mapped, raw: raw || fallbackStatus };
+}
+
+function traceabilityStatusLabel(value: unknown): string {
+  const normalized = String(value || "").trim().toLowerCase();
+  const labels: Record<string, string> = {
+    covered: "已覆盖",
+    partial: "部分覆盖",
+    gap: "存在缺口",
+    orphan: "待关联",
+    unknown: "未知",
+  };
+  return labels[normalized] || text(value);
+}
+
+function intentTypeLabel(value: unknown): string {
+  const normalized = String(value || "").trim().toLowerCase();
+  const labels: Record<string, string> = {
+    functional: "功能",
+    positive: "正向",
+    negative: "异常",
+    business_exception: "业务异常",
+    security: "安全",
+    boundary: "边界",
+    format: "格式",
+    interaction_exception: "交互异常",
+  };
+  return labels[normalized] || text(value);
+}
+
+function intentTypeClass(value: unknown): string {
+  const normalized = String(value || "unknown").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") || "unknown";
+  return `type-${normalized}`;
+}
+
+function priorityClass(value: unknown): string {
+  const normalized = String(value || "unknown").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-") || "unknown";
+  return `priority-${normalized}`;
+}
+
+function priorityRank(value: unknown): number {
+  const normalized = String(value || "").trim().toUpperCase();
+  const matched = normalized.match(/^P(\d+)$/);
+  return matched ? Number(matched[1]) : 999;
+}
+
+function reviewStatusValue(row: Record<string, unknown>): PointReviewStatus {
+  const normalized = String(row.review_status || row.manual_review_status || "").trim().toLowerCase();
+  if (["approved", "pass", "passed", "ready"].includes(normalized)) {
+    return "approved";
+  }
+  if (["rejected", "reject", "failed"].includes(normalized)) {
+    return "rejected";
+  }
+  return "pending";
+}
+
+function reviewStatusLabel(value: unknown): string {
+  const normalized = String(value || "").trim().toLowerCase();
+  const labels: Record<string, string> = {
+    pending: "待审核",
+    approved: "已通过",
+    rejected: "已驳回",
+  };
+  return labels[normalized] || "待审核";
+}
+
+function reviewStatusClass(value: unknown): string {
+  return `review-${reviewStatusValue({ review_status: value })}`;
+}
+
+function reviewStatusOptions(rows: Array<Record<string, unknown>>): Array<{ value: string; label: string; count: number }> {
+  const counts: Record<PointReviewStatus, number> = {
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  };
+  rows.forEach((row) => {
+    counts[reviewStatusValue(row)] += 1;
+  });
+  return (["pending", "approved", "rejected"] as PointReviewStatus[])
+    .filter((value) => counts[value] > 0)
+    .map((value) => ({
+      value,
+      label: reviewStatusLabel(value),
+      count: counts[value],
+    }));
+}
+
+function reviewCounts(rows: Array<Record<string, unknown>>): Record<PointReviewStatus | "total", number> {
+  const counts: Record<PointReviewStatus | "total", number> = {
+    total: rows.length,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  };
+  rows.forEach((row) => {
+    counts[reviewStatusValue(row)] += 1;
+  });
+  return counts;
+}
+
+function assetReviewBadgeConfig(counts: Record<PointReviewStatus | "total", number>, fallback: SummaryBadgeConfig): SummaryBadgeConfig {
+  if (!counts.total) {
+    return fallback;
+  }
+  if (counts.approved === counts.total) {
+    return { label: "✅ 已通过", tone: "success", hint: "全部测试点已通过，可进入生成用例" };
+  }
+  if (counts.rejected === counts.total) {
+    return { label: "❌ 已驳回", tone: "danger", hint: "全部测试点被驳回，请修改后重新审核" };
+  }
+  if (counts.approved > 0) {
+    return { label: "部分通过", tone: "warning", hint: `已通过 ${counts.approved}/${counts.total} 条，可基于已通过测试点继续推进` };
+  }
+  return { label: "⚠️ 待审核", tone: "warning", hint: "请选择测试点进行批量或单条审核" };
+}
+
+function optionCounts(
+  rows: Array<Record<string, unknown>>,
+  key: string,
+  labelForValue: (value: unknown) => string,
+  sortValues: (left: string, right: string) => number,
+): Array<{ value: string; label: string; count: number }> {
+  const counts = new Map<string, number>();
+  rows.forEach((row) => {
+    const value = String(row[key] || "").trim();
+    if (value) {
+      counts.set(value, (counts.get(value) || 0) + 1);
+    }
+  });
+  return Array.from(counts.entries())
+    .sort(([left], [right]) => sortValues(left, right))
+    .map(([value, count]) => ({
+      value,
+      label: labelForValue(value),
+      count,
+    }));
+}
+
+function pointIdOf(row: Record<string, unknown>): string {
+  return String(row.intent_id || row.key || "").trim();
+}
+
+function candidatePayloadFromRow(row: Record<string, unknown>): Record<string, unknown> {
+  const expected = String(row.expected || row.expected_result || "").trim();
+  return {
+    ...row,
+    intent_id: pointIdOf(row),
+    title: String(row.title || row.summary || row.intent_id || "").trim(),
+    summary: String(row.summary || row.title || "").trim(),
+    intent_type: String(row.intent_type || "functional").trim(),
+    priority: String(row.priority || "P1").trim(),
+    precondition: String(row.precondition || "").trim(),
+    steps: stepTextList(row.steps),
+    expected,
+    expected_result: expected,
+    involved_elements: listText(row.involved_elements),
+    review_status: reviewStatusValue(row),
+    review_note: String(row.review_note || "").trim(),
+    reviewed_at: String(row.reviewed_at || "").trim(),
+    reviewed_by: String(row.reviewed_by || "").trim(),
+  };
+}
+
+function coverageExplanationLabel(value: unknown): string {
+  const normalized = String(value || "").trim();
+  const labels: Record<string, string> = {
+    "derived from test point traceability metadata": "由测试点追溯关系自动生成",
+  };
+  return labels[normalized.toLowerCase()] || text(value);
+}
+
+function sourceIdLabel(value: unknown, index: number): string {
+  const normalized = String(value || "").trim();
+  const matched = normalized.match(/^source-(\d+)$/i);
+  if (matched) {
+    return "手动输入";
+  }
+  return normalized ? `来源 ${index + 1}` : `来源 ${index + 1}`;
+}
+
+function sourceSummary(value: unknown): { label: string; tooltip: string } {
+  const sourceIds = Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  if (!sourceIds.length) {
+    return { label: "未关联来源", tooltip: "" };
+  }
+  if (sourceIds.every((item) => /^source-\d+$/i.test(item))) {
+    return {
+      label: "手动输入",
+      tooltip: `原始来源编号：${sourceIds.join(", ")}`,
+    };
+  }
+  const labels = sourceIds.map((item, index) => sourceIdLabel(item, index));
+  const label = labels.length === 1 ? labels[0] : `${labels[0]} 等 ${labels.length} 个来源`;
+  return {
+    label,
+    tooltip: `原始来源编号：${sourceIds.join(", ")}`,
+  };
 }
 
 function listText(value: unknown): string[] {
@@ -50,6 +316,61 @@ function stepTextList(value: unknown): string[] {
   return rows;
 }
 
+function formatRequirementText(value: string): string {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\t/g, " ")
+    .replace(/[ ]{2,}/g, " ")
+    .replace(/\s*(业务目标：)/g, "\n$1")
+    .replace(/\s*(关键流程：)/g, "\n\n$1\n")
+    .replace(/\s*(验收点：)/g, "\n\n$1\n")
+    .replace(/\s+(?=\d+\.\s)/g, "\n")
+    .replace(/\s+-\s+/g, "\n- ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function requirementLineNode(line: string, index: number) {
+  const normalized = String(line || "").trim();
+  if (!normalized) {
+    return <div key={`requirement-gap-${index}`} className="requirement-doc-gap" />;
+  }
+  const sectionMatch = normalized.match(/^(业务目标|关键流程|验收点)：\s*(.*)$/);
+  if (sectionMatch) {
+    const label = sectionMatch[1];
+    const content = sectionMatch[2] || "";
+    return (
+      <div key={`requirement-section-${index}`} className="requirement-doc-section">
+        <strong>{label}</strong>
+        {content ? <span>{content}</span> : null}
+      </div>
+    );
+  }
+  const orderedMatch = normalized.match(/^(\d+)\.\s*(.*)$/);
+  if (orderedMatch) {
+    return (
+      <div key={`requirement-step-${index}`} className="requirement-doc-item">
+        <span className="requirement-doc-index">{orderedMatch[1]}</span>
+        <span>{orderedMatch[2]}</span>
+      </div>
+    );
+  }
+  const bulletMatch = normalized.match(/^-\s*(.*)$/);
+  if (bulletMatch) {
+    return (
+      <div key={`requirement-bullet-${index}`} className="requirement-doc-item">
+        <span className="requirement-doc-dot" />
+        <span>{bulletMatch[1]}</span>
+      </div>
+    );
+  }
+  return (
+    <p key={`requirement-paragraph-${index}`} className="requirement-doc-paragraph">
+      {normalized}
+    </p>
+  );
+}
+
 function pointRows(item: Record<string, unknown>): Array<Record<string, unknown>> {
   const plan = (item.plan || {}) as Record<string, unknown>;
   const metadata = (plan.metadata || {}) as Record<string, unknown>;
@@ -74,6 +395,10 @@ function pointRows(item: Record<string, unknown>): Array<Record<string, unknown>
         involved_elements: Array.isArray(snapshot.involved_elements) && snapshot.involved_elements.length
           ? snapshot.involved_elements
           : listText(point.involved_elements),
+        review_status: String(snapshot.review_status || point.review_status || "").trim(),
+        review_note: String(snapshot.review_note || point.review_note || "").trim(),
+        reviewed_at: String(snapshot.reviewed_at || point.reviewed_at || "").trim(),
+        reviewed_by: String(snapshot.reviewed_by || point.reviewed_by || "").trim(),
       };
     });
 }
@@ -90,7 +415,20 @@ export function TestPointAssetDetailPage() {
   const [item, setItem] = useState<Record<string, unknown>>({});
   const [matrix, setMatrix] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState<boolean>(true);
+  const [busy, setBusy] = useState<boolean>(false);
   const [errorText, setErrorText] = useState<string>("");
+  const [actionText, setActionText] = useState<string>("");
+  const [floatingTooltip, setFloatingTooltip] = useState<{ content: string; x: number; y: number } | null>(null);
+  const [requirementExpanded, setRequirementExpanded] = useState<boolean>(false);
+  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [priorityFilter, setPriorityFilter] = useState<string>("");
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<string>("");
+  const [detailPage, setDetailPage] = useState<number>(1);
+  const [detailPageSize, setDetailPageSize] = useState<number>(10);
+  const [selectedPointIds, setSelectedPointIds] = useState<string[]>([]);
+  const [pointDeleteTarget, setPointDeleteTarget] = useState<{ mode: "single" | "batch"; pointId?: string; title?: string } | null>(null);
+  const [pointReviewTarget, setPointReviewTarget] = useState<{ mode: "single" | "batch"; status: PointReviewStatus; pointId?: string; title?: string } | null>(null);
+  const [reviewNote, setReviewNote] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -102,6 +440,8 @@ export function TestPointAssetDetailPage() {
       }
       setLoading(true);
       setErrorText("");
+      setActionText("");
+      setRequirementExpanded(false);
       try {
         const [detailPayload, matrixPayload] = await Promise.all([
           getTestPointAsset(assetId, project),
@@ -110,6 +450,7 @@ export function TestPointAssetDetailPage() {
         if (!cancelled) {
           setItem((detailPayload.item || {}) as Record<string, unknown>);
           setMatrix((matrixPayload.item || {}) as Record<string, unknown>);
+          setSelectedPointIds([]);
         }
       } catch (error) {
         if (!cancelled) {
@@ -129,19 +470,212 @@ export function TestPointAssetDetailPage() {
     };
   }, [assetId, project]);
 
+  useEffect(() => {
+    setDetailPage(1);
+  }, [typeFilter, priorityFilter, reviewStatusFilter, detailPageSize]);
+
   const rows = Array.isArray(matrix.rows) ? matrix.rows : [];
   const summary = (matrix.summary || {}) as Record<string, unknown>;
   const detailRows = pointRows(item);
+  const typeOptions = useMemo(
+    () => optionCounts(
+      detailRows,
+      "intent_type",
+      intentTypeLabel,
+      (left, right) => intentTypeLabel(left).localeCompare(intentTypeLabel(right), "zh-Hans-CN"),
+    ),
+    [detailRows],
+  );
+  const priorityOptions = useMemo(
+    () => optionCounts(
+      detailRows,
+      "priority",
+      (value) => String(value || "").trim().toUpperCase() || "-",
+      (left, right) => priorityRank(left) - priorityRank(right),
+    ),
+    [detailRows],
+  );
+  const reviewOptions = useMemo(() => reviewStatusOptions(detailRows), [detailRows]);
+  const pointReviewCounts = useMemo(() => reviewCounts(detailRows), [detailRows]);
+  const filteredDetailRows = useMemo(
+    () => detailRows.filter((row) => {
+      const rowType = String(row.intent_type || "").trim();
+      const rowPriority = String(row.priority || "").trim();
+      const rowReviewStatus = reviewStatusValue(row);
+      return (!typeFilter || rowType === typeFilter)
+        && (!priorityFilter || rowPriority === priorityFilter)
+        && (!reviewStatusFilter || rowReviewStatus === reviewStatusFilter);
+    }),
+    [detailRows, priorityFilter, reviewStatusFilter, typeFilter],
+  );
+  const detailTotalPages = Math.max(1, Math.ceil(filteredDetailRows.length / Math.max(1, detailPageSize)));
+  const safeDetailPage = Math.min(Math.max(1, detailPage), detailTotalPages);
+  const pagedDetailRows = filteredDetailRows.slice((safeDetailPage - 1) * detailPageSize, safeDetailPage * detailPageSize);
+  const pagedPointIds = pagedDetailRows.map(pointIdOf).filter(Boolean);
+  const allPagedPointsSelected = Boolean(pagedPointIds.length && pagedPointIds.every((pointId) => selectedPointIds.includes(pointId)));
+  const selectedPointCount = selectedPointIds.length;
+  const pendingDeletePointIds = pointDeleteTarget?.mode === "batch"
+    ? selectedPointIds
+    : [pointDeleteTarget?.pointId || ""].filter(Boolean);
+  const pendingReviewPointIds = pointReviewTarget?.mode === "batch"
+    ? selectedPointIds
+    : [pointReviewTarget?.pointId || ""].filter(Boolean);
   const requirementText = listText(item.requirement).join("\n");
+  const formattedRequirementText = formatRequirementText(requirementText);
+  const requirementLines = formattedRequirementText ? formattedRequirementText.split("\n") : [];
+  const requirementPreviewLines = requirementLines.filter((line) => line.trim()).slice(0, 3);
+  const visibleRequirementLines = requirementExpanded ? requirementLines : requirementPreviewLines;
+  const hasRequirementOverflow = requirementLines.filter((line) => line.trim()).length > requirementPreviewLines.length;
+  const sourceBadge = sourceBadgeConfig(item);
+  const statusBadge = statusBadgeConfig(item);
+  const assetReviewBadge = assetReviewBadgeConfig(pointReviewCounts, statusBadge);
+
+  function showFloatingTooltip(target: HTMLElement, content: string) {
+    const normalized = String(content || "").trim();
+    if (!normalized) {
+      setFloatingTooltip(null);
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || 360;
+    const x = Math.min(Math.max(rect.left + rect.width / 2, 180), Math.max(180, viewportWidth - 180));
+    setFloatingTooltip({
+      content: normalized,
+      x,
+      y: rect.bottom + 10,
+    });
+  }
+
+  function showTooltipFromEvent(event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>, content: string) {
+    showFloatingTooltip(event.currentTarget, content);
+  }
+
+  function togglePoint(pointId: string) {
+    if (!pointId || busy) {
+      return;
+    }
+    setSelectedPointIds((prev) => (prev.includes(pointId) ? prev.filter((item) => item !== pointId) : [...prev, pointId]));
+  }
+
+  function togglePagedPoints() {
+    if (busy || !pagedPointIds.length) {
+      return;
+    }
+    setSelectedPointIds((prev) => {
+      if (pagedPointIds.every((pointId) => prev.includes(pointId))) {
+        return prev.filter((pointId) => !pagedPointIds.includes(pointId));
+      }
+      return Array.from(new Set([...prev, ...pagedPointIds]));
+    });
+  }
+
+  async function removePoints(pointIds: string[]) {
+    const normalizedIds = pointIds.map((pointId) => String(pointId || "").trim()).filter(Boolean);
+    if (!normalizedIds.length) {
+      setPointDeleteTarget(null);
+      return;
+    }
+    const remainingRows = detailRows.filter((row) => !normalizedIds.includes(pointIdOf(row)));
+    if (!remainingRows.length) {
+      setErrorText("至少需要保留一条测试点，不能删除全部明细。");
+      setPointDeleteTarget(null);
+      return;
+    }
+    setBusy(true);
+    setErrorText("");
+    setActionText("");
+    try {
+      await updateTestPointAsset(assetId, {
+        project,
+        asset_id: assetId,
+        page: text(item.page),
+        title: text(item.title) || assetId,
+        priority: text(item.priority) || "P1",
+        requirement: requirementText || text(item.title) || assetId,
+        source_type: text(item.source_type) || "manual",
+        selected_candidates: remainingRows.map(candidatePayloadFromRow),
+      });
+      const [detailPayload, matrixPayload] = await Promise.all([
+        getTestPointAsset(assetId, project),
+        getTestPointAssetCoverageMatrix(assetId, project),
+      ]);
+      setItem((detailPayload.item || {}) as Record<string, unknown>);
+      setMatrix((matrixPayload.item || {}) as Record<string, unknown>);
+      setSelectedPointIds([]);
+      setPointDeleteTarget(null);
+      setActionText(`已删除 ${normalizedIds.length} 条测试点明细。`);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : "删除测试点明细失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reviewPoints(pointIds: string[], nextStatus: PointReviewStatus, note = "") {
+    const normalizedIds = pointIds.map((pointId) => String(pointId || "").trim()).filter(Boolean);
+    if (!normalizedIds.length) {
+      setPointReviewTarget(null);
+      return;
+    }
+    const normalizedNote = String(note || "").trim();
+    if (nextStatus === "rejected" && !normalizedNote) {
+      setErrorText("驳回测试点时必须填写驳回原因。");
+      return;
+    }
+    const reviewedAt = new Date().toISOString();
+    const reviewedRows = detailRows.map((row) => {
+      if (!normalizedIds.includes(pointIdOf(row))) {
+        return row;
+      }
+      return {
+        ...row,
+        review_status: nextStatus,
+        review_note: nextStatus === "rejected" ? normalizedNote : "",
+        reviewed_at: reviewedAt,
+        reviewed_by: "admin",
+      };
+    });
+    setBusy(true);
+    setErrorText("");
+    setActionText("");
+    try {
+      await updateTestPointAsset(assetId, {
+        project,
+        asset_id: assetId,
+        page: text(item.page),
+        title: text(item.title) || assetId,
+        priority: text(item.priority) || "P1",
+        requirement: requirementText || text(item.title) || assetId,
+        source_type: text(item.source_type) || "manual",
+        selected_candidates: reviewedRows.map(candidatePayloadFromRow),
+      });
+      const [detailPayload, matrixPayload] = await Promise.all([
+        getTestPointAsset(assetId, project),
+        getTestPointAssetCoverageMatrix(assetId, project),
+      ]);
+      setItem((detailPayload.item || {}) as Record<string, unknown>);
+      setMatrix((matrixPayload.item || {}) as Record<string, unknown>);
+      setSelectedPointIds([]);
+      setPointReviewTarget(null);
+      setReviewNote("");
+      setActionText(`已${nextStatus === "approved" ? "通过" : "驳回"} ${normalizedIds.length} 条测试点。`);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : "审核测试点失败");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <main className="page shell">
       <header className="header panel">
         <div>
           <h1>测试点资产详情</h1>
-          <p className="muted">查看资产摘要与覆盖矩阵。</p>
         </div>
         <div className="header-actions">
+          <Link className="button" to={`/assets/test-points/${encodeURIComponent(assetId)}/edit?project=${encodeURIComponent(project)}`}>
+            编辑资产
+          </Link>
           <Link className="button secondary" to={`/assets/test-points?project=${encodeURIComponent(project)}`}>
             返回资产列表
           </Link>
@@ -150,85 +684,246 @@ export function TestPointAssetDetailPage() {
 
       {loading ? <section className="panel">正在加载资产详情...</section> : null}
       {errorText ? <section className="panel error">{errorText}</section> : null}
+      {actionText ? <section className="panel">{actionText}</section> : null}
 
       {!loading && !errorText && !showMatrixOnly ? (
-        <section className="panel">
-          <p>
-            <strong>资产编码:</strong> <span className="mono">{text(item.asset_id)}</span>
-          </p>
-          <p>
-            <strong>标题:</strong> {text(item.title)}
-          </p>
-          <p>
-            <strong>页面:</strong> {text(item.page)}
-          </p>
-          <p>
-            <strong>优先级:</strong> {text(item.priority)}
-          </p>
-          <p>
-            <strong>来源:</strong> {text(item.source_type)}
-          </p>
-          <p>
-            <strong>点位数:</strong> {numberValue(item.point_count)}
-          </p>
-          <p>
-            <strong>置信度:</strong> {numberValue(item.confidence)}
-          </p>
-          <p>
-            <strong>状态:</strong> {text((item.selection_summary as Record<string, unknown> | undefined)?.selection_state)}
-          </p>
-          <p>
-            <strong>需求:</strong>
-          </p>
-          <pre className="json-block">{requirementText || "-"}</pre>
-          <p>
-            <Link to={`/assets/test-points/${encodeURIComponent(assetId)}/matrix?project=${encodeURIComponent(project)}`}>查看覆盖矩阵</Link>
-          </p>
+        <section className="panel asset-detail-panel">
+          <div className="asset-summary-strip" aria-label="资产基础信息">
+            <div className="asset-summary-item asset-summary-primary">
+              <span>标题</span>
+              <strong>{text(item.title)}</strong>
+            </div>
+            <div className="asset-summary-item">
+              <span>资产编码</span>
+              <strong className="mono">{text(item.asset_id)}</strong>
+            </div>
+            <div className="asset-summary-item">
+              <span>页面</span>
+              <strong>{text(item.page)}</strong>
+            </div>
+            <div className="asset-summary-item">
+              <span>优先级</span>
+              <strong>{text(item.priority)}</strong>
+            </div>
+            <div className="asset-summary-item">
+              <span>来源</span>
+              <strong>
+                <span className={`asset-state-badge asset-state-${sourceBadge.tone}`} title={sourceBadge.raw || sourceBadge.label}>
+                  {sourceBadge.label}
+                </span>
+              </strong>
+            </div>
+            <div className="asset-summary-item">
+              <span>点位数</span>
+              <strong>{numberValue(item.point_count)}</strong>
+              <small>可维护测试点</small>
+            </div>
+            <div className="asset-summary-item">
+              <span>置信度</span>
+              <strong>{numberValue(item.confidence)}</strong>
+              <small>AI 解析参考值</small>
+            </div>
+            <div className="asset-summary-item asset-summary-muted">
+              <span>状态</span>
+              <strong>
+                <span className={`asset-state-badge asset-state-${assetReviewBadge.tone}`} title={assetReviewBadge.raw || assetReviewBadge.label}>
+                  {assetReviewBadge.label}
+                </span>
+              </strong>
+              {assetReviewBadge.hint ? <small>{assetReviewBadge.hint}</small> : null}
+            </div>
+          </div>
+          <div className={`asset-review-banner asset-review-${assetReviewBadge.tone}`}>
+            <strong>{assetReviewBadge.label}</strong>
+            <span>
+              共 {pointReviewCounts.total} 条测试点，已通过 {pointReviewCounts.approved} 条，已驳回 {pointReviewCounts.rejected} 条，待审核 {pointReviewCounts.pending} 条。
+            </span>
+          </div>
+          <div className="asset-requirement-panel">
+            <div className="asset-requirement-header">
+              <div>
+                <p className="asset-requirement-label">
+                  <strong>需求原文</strong>
+                </p>
+                <span className="asset-requirement-help">默认展示前 3 行，展开后查看完整业务目标、关键流程和验收点。</span>
+              </div>
+              {hasRequirementOverflow ? (
+                <button type="button" className="requirement-toggle-button" onClick={() => setRequirementExpanded((value) => !value)}>
+                  {requirementExpanded ? "收起" : "展开全部"}
+                </button>
+              ) : null}
+            </div>
+            <div className={`requirement-doc ${requirementExpanded ? "" : "requirement-doc-preview"}`}>
+              {visibleRequirementLines.length ? visibleRequirementLines.map(requirementLineNode) : "-"}
+            </div>
+          </div>
         </section>
       ) : null}
 
       {!loading && !errorText && !showMatrixOnly ? (
-        <DataTable title="测试点明细（与候选预览对齐）" actions={<span className="muted">共 {detailRows.length} 条</span>}>
-          <table>
+        <DataTable
+          title="测试点明细（与候选预览对齐）"
+          actions={(
+            <span className="muted">
+              共 {detailRows.length} 条，当前 {filteredDetailRows.length} 条
+            </span>
+          )}
+        >
+          <table className="test-point-detail-table">
             <thead>
               <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={allPagedPointsSelected}
+                    disabled={busy || !pagedPointIds.length}
+                    aria-label="选择当前页测试点"
+                    onChange={togglePagedPoints}
+                  />
+                </th>
                 <th>intent_id</th>
                 <th>标题</th>
-                <th>类型</th>
-                <th>优先级</th>
+                <th>
+                  <ColumnFilter label="类型" value={typeFilter} options={typeOptions} onChange={setTypeFilter} />
+                </th>
+                <th>
+                  <ColumnFilter label="优先级" value={priorityFilter} options={priorityOptions} onChange={setPriorityFilter} />
+                </th>
+                <th>
+                  <ColumnFilter label="审核状态" value={reviewStatusFilter} options={reviewOptions} onChange={setReviewStatusFilter} />
+                </th>
                 <th>前置条件</th>
                 <th>步骤</th>
                 <th>预期结果</th>
                 <th>涉及元素</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
-              {detailRows.length ? (
-                detailRows.map((row, index) => {
+              {pagedDetailRows.length ? (
+                pagedDetailRows.map((row, index) => {
                   const steps = stepTextList(row.steps);
                   const elements = listText(row.involved_elements);
+                  const pointId = pointIdOf(row);
                   return (
-                    <tr key={`${String(row.intent_id || index)}-${index}`}>
+                    <tr key={`${pointId || index}-${index}`}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedPointIds.includes(pointId)}
+                          disabled={busy || !pointId}
+                          aria-label={`选择测试点 ${pointId || index + 1}`}
+                          onChange={() => togglePoint(pointId)}
+                        />
+                      </td>
                       <td className="mono">{text(row.intent_id)}</td>
                       <td>{text(row.title || row.summary)}</td>
-                      <td>{text(row.intent_type)}</td>
-                      <td>{text(row.priority)}</td>
+                      <td>
+                        <span className={`intent-type-badge ${intentTypeClass(row.intent_type)}`}>
+                          {intentTypeLabel(row.intent_type)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`priority-badge ${priorityClass(row.priority)}`}>
+                          {text(row.priority)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`review-status-badge ${reviewStatusClass(reviewStatusValue(row))}`} title={String(row.review_note || "")}>
+                          {reviewStatusLabel(reviewStatusValue(row))}
+                        </span>
+                      </td>
                       <td>{text(row.precondition)}</td>
                       <td>{steps.length ? steps.join(" / ") : "-"}</td>
                       <td>{text(row.expected)}</td>
                       <td className="mono">{elements.length ? elements.join(", ") : "-"}</td>
+                      <td>
+                        <div className="table-row-actions">
+                          <button
+                            type="button"
+                            className="link-button success-text"
+                            disabled={busy || !pointId || reviewStatusValue(row) === "approved"}
+                            onClick={() => {
+                              setReviewNote("");
+                              setPointReviewTarget({ mode: "single", pointId, status: "approved", title: text(row.title || row.summary) });
+                            }}
+                          >
+                            通过
+                          </button>
+                          <button
+                            type="button"
+                            className="link-button danger-text"
+                            disabled={busy || !pointId}
+                            onClick={() => {
+                              setReviewNote(String(row.review_note || ""));
+                              setPointReviewTarget({ mode: "single", pointId, status: "rejected", title: text(row.title || row.summary) });
+                            }}
+                          >
+                            驳回
+                          </button>
+                          <button
+                            type="button"
+                            className="link-button danger-text"
+                            disabled={busy || !pointId}
+                            onClick={() => setPointDeleteTarget({ mode: "single", pointId, title: text(row.title || row.summary) })}
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={8}>
-                    <EmptyState title="暂无测试点明细" description="当前资产还没有保存完整测试点明细，请回到测试点资产页检查生成结果。" />
+                  <td colSpan={11}>
+                    <EmptyState
+                      title={detailRows.length ? "当前筛选下暂无测试点" : "暂无测试点明细"}
+                      description={detailRows.length ? "请调整类型、优先级或审核状态筛选条件后再查看。" : "当前资产还没有保存完整测试点明细，请回到测试点资产页检查生成结果。"}
+                    />
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+          {selectedPointCount ? (
+            <BulkActionBar selectedCount={selectedPointCount}>
+              <button
+                type="button"
+                className="button secondary"
+                disabled={busy}
+                onClick={() => {
+                  setReviewNote("");
+                  setPointReviewTarget({ mode: "batch", status: "approved" });
+                }}
+              >
+                批量通过
+              </button>
+              <button
+                type="button"
+                className="button danger secondary"
+                disabled={busy}
+                onClick={() => {
+                  setReviewNote("");
+                  setPointReviewTarget({ mode: "batch", status: "rejected" });
+                }}
+              >
+                批量驳回
+              </button>
+              <button type="button" className="button danger secondary" disabled={busy} onClick={() => setPointDeleteTarget({ mode: "batch" })}>
+                批量删除
+              </button>
+            </BulkActionBar>
+          ) : null}
+          {detailRows.length ? (
+            <TablePagination
+              page={safeDetailPage}
+              pageSize={detailPageSize}
+              total={filteredDetailRows.length}
+              onPageChange={setDetailPage}
+              onPageSizeChange={setDetailPageSize}
+            />
+          ) : null}
         </DataTable>
       ) : null}
 
@@ -237,37 +932,68 @@ export function TestPointAssetDetailPage() {
           title="覆盖矩阵"
           actions={(
             <span className="muted">
-              status={text(summary.status)} ｜ covered={numberValue(summary.covered_count)} ｜ partial={numberValue(summary.partial_count)} ｜ gap=
-              {numberValue(summary.gap_count)} ｜ orphan={numberValue(summary.orphan_count)}
+              {traceabilityStatusLabel(summary.status)} ｜ 已覆盖 {numberValue(summary.covered_count)} ｜ 部分覆盖 {numberValue(summary.partial_count)} ｜ 缺口
+              {numberValue(summary.gap_count)} ｜ 待关联 {numberValue(summary.orphan_count)}
             </span>
           )}
         >
-          <table>
+          <table className="coverage-matrix-table">
             <thead>
               <tr>
-                <th>Row ID</th>
                 <th>追溯状态</th>
-                <th>source_ids</th>
-                <th>intent_ids</th>
-                <th>point_keys</th>
+                <th>来源</th>
+                <th>覆盖意图数</th>
                 <th>说明</th>
               </tr>
             </thead>
             <tbody>
               {rows.length ? (
-                rows.map((row, index) => (
-                  <tr key={String(row.row_id || index)}>
-                    <td className="mono">{text(row.row_id)}</td>
-                    <td>{text(row.traceability_status)}</td>
-                    <td className="mono">{text((Array.isArray(row.source_ids) ? row.source_ids : []).join(", "))}</td>
-                    <td className="mono">{text((Array.isArray(row.intent_ids) ? row.intent_ids : []).join(", "))}</td>
-                    <td className="mono">{text((Array.isArray(row.point_keys) ? row.point_keys : []).join(", "))}</td>
-                    <td>{text(row.explanation)}</td>
-                  </tr>
-                ))
+                rows.map((row, index) => {
+                  const rowSource = sourceSummary(row.source_ids);
+                  const intentIds = Array.isArray(row.intent_ids)
+                    ? row.intent_ids.map((intentId: unknown) => String(intentId || "").trim()).filter(Boolean)
+                    : [];
+                  const intentTooltip = intentIds.join(", ");
+                  const statusClass = String(row.traceability_status || "unknown").trim().toLowerCase() || "unknown";
+                  return (
+                    <tr key={String(row.row_id || index)}>
+                      <td>
+                        <span className={`coverage-status-badge status-${statusClass}`}>
+                          {traceabilityStatusLabel(row.traceability_status)}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="coverage-source-label"
+                          tabIndex={rowSource.tooltip ? 0 : undefined}
+                          onMouseEnter={(event) => showTooltipFromEvent(event, rowSource.tooltip)}
+                          onMouseLeave={() => setFloatingTooltip(null)}
+                          onFocus={(event) => showTooltipFromEvent(event, rowSource.tooltip)}
+                          onBlur={() => setFloatingTooltip(null)}
+                        >
+                          {rowSource.label}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="coverage-intent-count"
+                          tabIndex={intentTooltip ? 0 : undefined}
+                          aria-label={intentTooltip ? `覆盖的意图：${intentTooltip}` : undefined}
+                          onMouseEnter={(event) => showTooltipFromEvent(event, intentTooltip)}
+                          onMouseLeave={() => setFloatingTooltip(null)}
+                          onFocus={(event) => showTooltipFromEvent(event, intentTooltip)}
+                          onBlur={() => setFloatingTooltip(null)}
+                        >
+                          {intentIds.length} 个意图
+                        </span>
+                      </td>
+                      <td>{coverageExplanationLabel(row.explanation)}</td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={4}>
                     <EmptyState title="暂无覆盖矩阵数据" description="生成或同步测试点资产后，覆盖矩阵会展示测试点与来源意图的追溯关系。" />
                   </td>
                 </tr>
@@ -275,6 +1001,55 @@ export function TestPointAssetDetailPage() {
             </tbody>
           </table>
         </DataTable>
+      ) : null}
+      {floatingTooltip ? (
+        <div className="floating-tooltip" style={{ left: floatingTooltip.x, top: floatingTooltip.y }}>
+          {floatingTooltip.content}
+        </div>
+      ) : null}
+      {pointDeleteTarget ? (
+        <ConfirmDialog
+          title={pointDeleteTarget.mode === "batch" ? "确认批量删除测试点" : "确认删除测试点"}
+          description="删除后会更新当前测试点资产内的完整明细，请确认这些测试点不再需要继续维护或生成用例。"
+          confirmText="确认删除"
+          danger
+          busy={busy}
+          details={
+            pointDeleteTarget.mode === "batch"
+              ? [`将删除 ${pendingDeletePointIds.length} 条测试点`, "资产内至少需要保留 1 条测试点"]
+              : [`测试点：${pointDeleteTarget.title || pointDeleteTarget.pointId || "-"}`, "资产内至少需要保留 1 条测试点"]
+          }
+          onCancel={() => setPointDeleteTarget(null)}
+          onConfirm={() => void removePoints(pendingDeletePointIds)}
+        />
+      ) : null}
+      {pointReviewTarget ? (
+        <ConfirmDialog
+          title={pointReviewTarget.status === "approved" ? "确认通过测试点" : "确认驳回测试点"}
+          description={
+            pointReviewTarget.status === "approved"
+              ? "通过后，这些测试点可作为后续生成用例的有效输入。"
+              : "驳回后，这些测试点需要修改后再重新审核。"
+          }
+          confirmText={pointReviewTarget.status === "approved" ? "确认通过" : "确认驳回"}
+          danger={pointReviewTarget.status === "rejected"}
+          busy={busy}
+          details={
+            pointReviewTarget.mode === "batch"
+              ? [`将处理 ${pendingReviewPointIds.length} 条测试点`, pointReviewTarget.status === "approved" ? "批量通过所选测试点" : "批量驳回所选测试点"]
+              : [`测试点：${pointReviewTarget.title || pointReviewTarget.pointId || "-"}`]
+          }
+          noteLabel={pointReviewTarget.status === "rejected" ? "驳回原因" : undefined}
+          noteValue={reviewNote}
+          notePlaceholder="请说明驳回原因，便于后续修改"
+          noteRequired={pointReviewTarget.status === "rejected"}
+          onNoteChange={setReviewNote}
+          onCancel={() => {
+            setPointReviewTarget(null);
+            setReviewNote("");
+          }}
+          onConfirm={() => void reviewPoints(pendingReviewPointIds, pointReviewTarget.status, reviewNote)}
+        />
       ) : null}
     </main>
   );

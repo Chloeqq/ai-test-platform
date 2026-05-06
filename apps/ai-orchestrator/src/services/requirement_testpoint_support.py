@@ -660,15 +660,37 @@ class RequirementTestPointSupport:
         target: Any = None,
         value: Any = None,
         page_element_alias_map: dict[str, str] | None = None,
+        page_elements: list[str] | dict[str, Any] | None = None,
     ) -> tuple[str, str | None, Any]:
         _ = intent_type, title
-        return resolve_explicit_step(
-            steps_hint=steps_hint,
-            page=page,
-            target=target,
-            value=value,
-            page_element_alias_map=page_element_alias_map,
-        )
+        effective_alias_map = page_element_alias_map
+        if effective_alias_map is None and page_elements:
+            if isinstance(page_elements, dict):
+                effective_alias_map = build_element_alias_map({"elements": page_elements})
+            elif isinstance(page_elements, list):
+                effective_alias_map = build_element_alias_map(
+                    {"elements": {str(code): {"selector": str(code), "type": "css", "role": ""} for code in page_elements}}
+                )
+        try:
+            return resolve_explicit_step(
+                steps_hint=steps_hint,
+                page=page,
+                target=target,
+                value=value,
+                page_element_alias_map=effective_alias_map,
+            )
+        except ValueError:
+            hints = steps_hint if isinstance(steps_hint, list) else ([] if steps_hint is None else [steps_hint])
+            first_hint = str(hints[0] if hints else "").strip().lower()
+            title_text = str(title or "").strip().lower()
+            if first_hint in {"search", "query"} or any(token in title_text for token in ("搜索", "查询", "search", "query")):
+                resolved_target = "search_input"
+                if effective_alias_map:
+                    resolved_target = resolve_element_code(resolved_target, effective_alias_map)
+                    if not resolved_target:
+                        raise ValueError("target 'search_input' not found in PO Store element_codes")
+                return "fill", resolved_target, value if value is not None else ""
+            raise
 
     @staticmethod
     def render_requirement_spec_markdown(requirement_spec: dict[str, Any]) -> str:

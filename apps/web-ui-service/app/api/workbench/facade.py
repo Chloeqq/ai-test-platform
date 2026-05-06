@@ -254,6 +254,37 @@ def _steps_from_candidate(candidate: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _candidate_snapshot_from_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
+    snapshot: dict[str, Any] = {}
+    for key in (
+        "intent_id",
+        "title",
+        "summary",
+        "intent_type",
+        "priority",
+        "precondition",
+        "steps",
+        "steps_hint",
+        "expected",
+        "expected_result",
+        "involved_elements",
+        "review_status",
+        "review_note",
+        "reviewed_at",
+        "reviewed_by",
+    ):
+        value = candidate.get(key)
+        if isinstance(value, list):
+            rows = _text_list(value)
+            if rows:
+                snapshot[key] = rows
+            continue
+        text = _text(value)
+        if text:
+            snapshot[key] = text
+    return snapshot
+
+
 def _manual_point_from_candidate(candidate: dict[str, Any], *, index: int) -> dict[str, Any]:
     intent_id = _text(candidate.get("intent_id")) or f"manual-intent-{index:02d}"
     title = _text(candidate.get("title")) or intent_id
@@ -278,6 +309,13 @@ def _manual_point_from_candidate(candidate: dict[str, Any], *, index: int) -> di
         "expected_result": expected,
         "precondition": precondition,
         "confidence": 0.8,
+        "metadata": {
+            "candidate_snapshot": _candidate_snapshot_from_candidate(candidate),
+            "traceability": {
+                "source_ids": [intent_id],
+                "intent_ids": [intent_id],
+            },
+        },
     }
 
 
@@ -676,6 +714,10 @@ class WorkbenchFacade:
 
         points = [_manual_point_from_candidate(candidate, index=index) for index, candidate in enumerate(selected_candidates, start=1)]
         selected_intent_ids = [intent_id for intent_id in [_text(item.get("intent_id")) for item in selected_candidates] if intent_id]
+        technique_distribution: dict[str, int] = {}
+        for candidate in selected_candidates:
+            intent_type = _text(candidate.get("intent_type")) or source_type or "manual"
+            technique_distribution[intent_type] = int(technique_distribution.get(intent_type, 0) or 0) + 1
         plan = {
             "version": "TestPointPlanV1",
             "project": project,
@@ -699,12 +741,15 @@ class WorkbenchFacade:
                 "total_points": len(points),
                 "mainline_point_count": len(points),
                 "design_only_point_count": 0,
-                "technique_distribution": {"manual": len(points)},
+                "technique_distribution": technique_distribution,
             },
             "metadata": {
                 "saved_by": "web-ui-service",
-                "origin": "manual",
+                "origin": source_type,
                 "selected_intent_ids": selected_intent_ids,
+                "selected_candidates": [_candidate_snapshot_from_candidate(candidate) for candidate in selected_candidates],
+                "asset_title": title,
+                "normalized_requirement": requirement,
             },
             "involved_elements": _text_list(
                 [

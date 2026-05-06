@@ -74,11 +74,6 @@ export function DashboardPage() {
       <section className="hero-card dashboard-shell">
         <section className="dashboard-hero">
           <div className="dashboard-hero-copy">
-            <p className="breadcrumb">
-              <span>首页</span>
-              <span className="crumb-sep">/</span>
-              <span>仪表盘</span>
-            </p>
             <div className="hero-kicker">
               <span className="hero-pill hero-pill-primary">平台概览</span>
               <span className="hero-pill">本周重点</span>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -237,6 +238,187 @@ def test_test_point_assets_follow_generation_plan_snapshot(
     assert detail_item["asset_id"] == expected_asset_id
     assert detail_item["plan"]["source_type"] == "generate_chain"
     assert detail_item["coverage_matrix"]["summary"]["status"] in {"covered", "partial", "orphan", "gap"}
+
+
+def test_test_point_asset_list_derives_business_title_and_source_label_for_saved_selection(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0020"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+
+    project_dir = workbench_constants.TEST_POINTS_ROOT / project_code
+    (project_dir / "plans").mkdir(parents=True, exist_ok=True)
+    (project_dir / f"{asset_id}.json").write_text(
+        (
+            "{"
+            f"\"asset_id\":\"{asset_id}\","
+            f"\"title\":\"{asset_id}\","
+            "\"page\":\"login\","
+            "\"source_type\":\"selection_save\","
+            "\"requirement\":[\"原始登录需求\"],"
+            "\"point_count\":1,"
+            "\"confidence\":0.8,"
+            "\"updated_at\":\"2026-04-24T12:33:30+00:00\""
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+    (project_dir / "plans" / f"{asset_id}.json").write_text(
+        (
+            "{"
+            "\"version\":\"TestPointPlanV1\","
+            f"\"case_id\":\"{asset_id}\","
+            "\"page\":\"login\","
+            "\"source_type\":\"selection_save\","
+            "\"requirement\":[\"原始登录需求\"],"
+            "\"metadata\":{\"selected_candidates\":[{\"intent_id\":\"intent-20\",\"title\":\"密码输入非法字符登录\"}]},"
+            "\"points\":[{\"key\":\"intent-20\",\"intent_id\":\"intent-20\",\"description\":\"密码输入非法字符登录\"}]"
+            "}\n"
+        ),
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/api/workbench/test-point-assets?project={project_code}&keyword=密码输入")
+    assert response.status_code == 200
+    payload = response.json()
+    assert int(payload["selection_summary"]["total_assets"]) == 1
+    item = payload["items"][0]
+    assert item["title"] == "密码输入非法字符登录"
+    assert item["source_type"] == "selection_save"
+    assert item["source_label"] == "来自 AI 生成"
+    assert int(item["intent_count"]) == 1
+
+    detail = client.get(f"/api/workbench/test-point-assets/{asset_id}?project={project_code}")
+    assert detail.status_code == 200
+    detail_item = detail.json()["item"]
+    assert detail_item["title"] == "密码输入非法字符登录"
+    assert detail_item["source_label"] == "来自 AI 生成"
+    assert detail_item["requirement"] == ["原始登录需求"]
+
+
+def test_update_test_point_asset_preserves_multiple_selected_candidates(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0021"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+
+    response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页身份验证测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求",
+            "source_type": "selection_save",
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "首次登录成功",
+                    "summary": "输入正确账号密码后登录成功",
+                    "intent_type": "functional",
+                    "priority": "P0",
+                    "steps": ["输入账号 test001", "输入密码 123456", "点击登录按钮"],
+                    "expected": "跳转至工作台首页",
+                    "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+                },
+                {
+                    "intent_id": "intent-20",
+                    "title": "密码输入非法字符登录",
+                    "summary": "密码包含非法字符时应提示格式错误",
+                    "intent_type": "format",
+                    "priority": "P1",
+                    "steps": ["输入账号 test001", "输入密码 1234@", "点击登录按钮"],
+                    "expected": "页面弹出提示框，显示密码格式错误的信息",
+                    "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    item = response.json()["item"]
+    assert item["title"] == "登录页身份验证测试点集"
+    assert item["source_label"] == "来自 AI 生成"
+    assert int(item["point_count"]) == 2
+    assert int(item["intent_count"]) == 2
+    assert len(item["plan"]["points"]) == 2
+    assert len(item["plan"]["metadata"]["selected_candidates"]) == 2
+    assert [row["intent_id"] for row in item["plan"]["metadata"]["selected_candidates"]] == ["intent-01", "intent-20"]
+
+
+def test_test_point_asset_coverage_matrix_groups_derived_points_into_one_row(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0030"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+
+    project_dir = workbench_constants.TEST_POINTS_ROOT / project_code
+    (project_dir / "plans").mkdir(parents=True, exist_ok=True)
+    points = [
+        {
+            "key": f"intent-{index:02d}",
+            "intent_id": f"intent-{index:02d}",
+            "description": f"登录测试点 {index:02d}",
+            "metadata": {
+                "traceability": {
+                    "source_ids": [f"intent-{index:02d}"],
+                    "intent_ids": [f"intent-{index:02d}"],
+                }
+            },
+        }
+        for index in range(1, 4)
+    ]
+    (project_dir / f"{asset_id}.json").write_text(
+        '{"asset_id":"%s","title":"登录页测试点集","page":"login","source_type":"selection_save","updated_at":"2026-04-24T12:33:30+00:00"}\n'
+        % asset_id,
+        encoding="utf-8",
+    )
+    (project_dir / "plans" / f"{asset_id}.json").write_text(
+        (
+            '{"case_id":"%s","page":"login","source_type":"selection_save","requirement":["登录需求"],'
+            '"points":%s,"metadata":{"selected_intent_ids":["intent-01","intent-02","intent-03"]}}\n'
+        )
+        % (asset_id, json.dumps(points, ensure_ascii=False)),
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/api/workbench/test-point-assets/{asset_id}/coverage-matrix?project={project_code}")
+    assert response.status_code == 200
+    matrix = response.json()["item"]
+    assert int(matrix["row_count"]) == 1
+    assert int(matrix["summary"]["covered_count"]) == 3
+    assert matrix["summary"]["status"] == "covered"
+    assert matrix["rows"][0]["source_ids"] == ["source-01"]
+    assert matrix["rows"][0]["intent_ids"] == ["intent-01", "intent-02", "intent-03"]
 
 
 def test_batch_delete_test_point_assets_hard_delete_persists_after_refresh(

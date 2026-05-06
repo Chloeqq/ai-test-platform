@@ -116,7 +116,11 @@ class ScenarioEngine:
         item = preview_payload.get("item") if isinstance(preview_payload, dict) else {}
         item = item if isinstance(item, dict) else {}
         requirement_spec = item.get("requirement_spec") if isinstance(item.get("requirement_spec"), dict) else {}
-        intents = requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
+        intents = (
+            item.get("test_intents")
+            if isinstance(item.get("test_intents"), list)
+            else requirement_spec.get("test_intents") if isinstance(requirement_spec.get("test_intents"), list) else []
+        )
         detected_input_scenarios: list[str] = []
         for raw_intent in intents:
             if not isinstance(raw_intent, dict):

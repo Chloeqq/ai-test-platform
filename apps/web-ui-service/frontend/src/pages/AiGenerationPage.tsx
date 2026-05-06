@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import {
   generateCase,
+  getPreviewTestPointDiagnostics,
   listProjects,
   precheckSelectedIntents,
   saveTestPointAssets,
@@ -30,11 +31,9 @@ interface PipelineCandidate {
   summary: string;
   intentType: string;
   priority: string;
-  precondition: string;
   expected: string;
-  steps: string[];
-  stepsHint: string[];
-  involvedElements: string[];
+  stepsSummary: string;
+  detailUrl: string;
 }
 
 interface CandidatePrecheckState {
@@ -53,7 +52,7 @@ interface PipelineEvent {
 type StageState = "pending" | "running" | "success" | "error" | "block";
 type StepId = 1 | 2 | 3 | 4;
 
-const MAX_SELECTED = 20;
+const MAX_GENERATE_SELECTED = 20;
 
 const DEFAULT_FORM: GenerationForm = {
   project: DEFAULT_PROJECT_CODE,
@@ -70,24 +69,6 @@ function nowText(): string {
 
 function toText(value: unknown): string {
   return String(value || "").trim();
-}
-
-function normalizeComparableText(value: string): string {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[\s\u3000.,;:!?，。；：、/\\_|\-—()（）\[\]【】{}<>《》"'“”‘’·~`]+/g, "");
-}
-
-function isRedundantSummary(title: string, summary: string): boolean {
-  const normalizedTitle = normalizeComparableText(title);
-  const normalizedSummary = normalizeComparableText(summary);
-  if (!normalizedTitle || !normalizedSummary) {
-    return true;
-  }
-  if (normalizedTitle === normalizedSummary) {
-    return true;
-  }
-  return normalizedTitle.includes(normalizedSummary) || normalizedSummary.includes(normalizedTitle);
 }
 
 function normalizeSteps(value: unknown): string[] {
@@ -114,20 +95,6 @@ function normalizeSteps(value: unknown): string[] {
   return rows;
 }
 
-function normalizeStepHints(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const rows: string[] = [];
-  value.forEach((row) => {
-    const text = toText(row);
-    if (text && !rows.includes(text)) {
-      rows.push(text);
-    }
-  });
-  return rows;
-}
-
 function readCaseIds(response: GenerateCaseResponse): string[] {
   const items = Array.isArray(response.items) ? response.items : [];
   const fromItems = items
@@ -147,12 +114,24 @@ function readPreviewItem(payload: PreviewTestPointsResponse): Record<string, unk
   return payload as Record<string, unknown>;
 }
 
+function readPreviewId(payload: PreviewTestPointsResponse | null): string {
+  if (!payload) {
+    return "";
+  }
+  const item = readPreviewItem(payload);
+  return toText(item.preview_id || (payload as Record<string, unknown>).preview_id);
+}
+
 function normalizeCandidates(payload: PreviewTestPointsResponse): PipelineCandidate[] {
   const item = readPreviewItem(payload);
   const requirementSpec = item.requirement_spec && typeof item.requirement_spec === "object"
     ? (item.requirement_spec as Record<string, unknown>)
     : {};
-  const intents = Array.isArray(requirementSpec.test_intents) ? requirementSpec.test_intents : [];
+  const intents = Array.isArray(item.test_intents)
+    ? item.test_intents
+    : Array.isArray(requirementSpec.test_intents)
+      ? requirementSpec.test_intents
+      : [];
   const candidates: PipelineCandidate[] = [];
 
   intents.forEach((raw, index) => {
@@ -162,10 +141,9 @@ function normalizeCandidates(payload: PreviewTestPointsResponse): PipelineCandid
     const intent = raw as Record<string, unknown>;
     const intentId = toText(intent.intent_id) || `intent-${index + 1}`;
     const title = toText(intent.title) || toText(intent.summary) || `测试点 ${index + 1}`;
-    const summary = toText(intent.summary) || title;
-    const involvedElements = Array.isArray(intent.involved_elements)
-      ? intent.involved_elements.map((itemValue) => toText(itemValue)).filter(Boolean)
-      : [];
+    const stepRows = normalizeSteps(intent.steps);
+    const stepsSummary = toText(intent.steps_summary) || stepRows.slice(0, 2).join("，") || toText(intent.summary) || title;
+    const summary = toText(intent.summary) || stepsSummary || title;
     candidates.push({
       key: `${intentId}-${index}`,
       intentId,
@@ -173,11 +151,9 @@ function normalizeCandidates(payload: PreviewTestPointsResponse): PipelineCandid
       summary,
       intentType: toText(intent.intent_type) || "functional",
       priority: toText(intent.priority) || "P1",
-      precondition: toText(intent.precondition),
       expected: toText(intent.expected_result || intent.expected),
-      steps: normalizeSteps(intent.steps),
-      stepsHint: normalizeStepHints(intent.steps_hint),
-      involvedElements,
+      stepsSummary,
+      detailUrl: toText(intent.detail_url),
     });
   });
 
@@ -192,9 +168,11 @@ function readQualityDecision(payload: PreviewTestPointsResponse | null): string 
   const requirementSpec = item.requirement_spec && typeof item.requirement_spec === "object"
     ? (item.requirement_spec as Record<string, unknown>)
     : {};
-  const qualityGate = requirementSpec.quality_gate && typeof requirementSpec.quality_gate === "object"
-    ? (requirementSpec.quality_gate as Record<string, unknown>)
-    : {};
+  const qualityGate = item.quality_gate && typeof item.quality_gate === "object"
+    ? (item.quality_gate as Record<string, unknown>)
+    : requirementSpec.quality_gate && typeof requirementSpec.quality_gate === "object"
+      ? (requirementSpec.quality_gate as Record<string, unknown>)
+      : {};
   return toText(qualityGate.decision).toLowerCase() || "unknown";
 }
 
@@ -321,6 +299,8 @@ export function AiGenerationPage() {
   const [events, setEvents] = useState<PipelineEvent[]>([]);
   const [candidateView, setCandidateView] = useState<"card" | "table">("table");
   const [diagnosticsOpen, setDiagnosticsOpen] = useState<boolean>(false);
+  const [previewDiagnostics, setPreviewDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [loadingDiagnostics, setLoadingDiagnostics] = useState<boolean>(false);
   const [prechecking, setPrechecking] = useState<boolean>(false);
   const [precheckErrorText, setPrecheckErrorText] = useState<string>("");
   const [precheckByIntentId, setPrecheckByIntentId] = useState<Record<string, CandidatePrecheckState>>({});
@@ -373,16 +353,19 @@ export function AiGenerationPage() {
   const selectedIntentIds = selectedCandidates.map((item) => item.intentId).filter(Boolean);
 
   const previewItem = previewPayload ? readPreviewItem(previewPayload) : {};
+  const previewId = readPreviewId(previewPayload);
   const requirementSpec = previewItem.requirement_spec && typeof previewItem.requirement_spec === "object"
     ? (previewItem.requirement_spec as Record<string, unknown>)
     : {};
-  const qualityGate = requirementSpec.quality_gate && typeof requirementSpec.quality_gate === "object"
-    ? (requirementSpec.quality_gate as Record<string, unknown>)
-    : {};
+  const qualityGate = previewItem.quality_gate && typeof previewItem.quality_gate === "object"
+    ? (previewItem.quality_gate as Record<string, unknown>)
+    : requirementSpec.quality_gate && typeof requirementSpec.quality_gate === "object"
+      ? (requirementSpec.quality_gate as Record<string, unknown>)
+      : {};
   const qualityDecision = toText(qualityGate.decision).toLowerCase() || "unknown";
   const qualityBlocked = qualityDecision === "block";
   const blockers = Array.isArray(qualityGate.blockers) ? qualityGate.blockers : [];
-  const parseConfidence = Number(requirementSpec.parse_confidence || 0);
+  const parseConfidence = Number(previewItem.parse_confidence || requirementSpec.parse_confidence || 0);
   const selectedPrecheckStates = selectedCandidates
     .map((candidate) => precheckByIntentId[candidate.intentId])
     .filter(Boolean);
@@ -418,16 +401,50 @@ export function AiGenerationPage() {
   const selectedSignature = selectedIntentIds.slice().sort().join("|");
   const syncSignature = useMemo(
     () => [
+      previewId,
       form.project.trim(),
       form.page.trim(),
       form.requirement.trim(),
       form.title.trim(),
       form.priority.trim(),
       form.source.trim(),
+      selectedSignature,
       candidates.map((candidate) => candidate.key).join("|"),
     ].join("::"),
-    [candidates, form.page, form.priority, form.project, form.requirement, form.source, form.title],
+    [candidates, form.page, form.priority, form.project, form.requirement, form.source, form.title, previewId, selectedSignature],
   );
+
+  useEffect(() => {
+    if (!diagnosticsOpen || !previewId) {
+      setPreviewDiagnostics(null);
+      setLoadingDiagnostics(false);
+      return;
+    }
+    let cancelled = false;
+    async function loadDiagnostics() {
+      setLoadingDiagnostics(true);
+      try {
+        const payload = await getPreviewTestPointDiagnostics(previewId);
+        if (!cancelled) {
+          setPreviewDiagnostics(payload);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPreviewDiagnostics({
+            error: error instanceof Error ? error.message : "诊断信息加载失败",
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDiagnostics(false);
+        }
+      }
+    }
+    void loadDiagnostics();
+    return () => {
+      cancelled = true;
+    };
+  }, [diagnosticsOpen, previewId]);
 
   useEffect(() => {
     if (!previewPayload || !selectedCandidates.length || !form.project.trim() || !form.page.trim()) {
@@ -444,14 +461,19 @@ export function AiGenerationPage() {
         const response = await precheckSelectedIntents({
           project: form.project.trim(),
           page: form.page.trim(),
-          selected_candidates: selectedCandidates.map((candidate) => ({
-            intent_id: candidate.intentId,
-            title: candidate.title,
-            steps: candidate.steps,
-            steps_hint: candidate.stepsHint,
-            expected_result: candidate.expected,
-            involved_elements: candidate.involvedElements,
-          })),
+          preview_id: previewId,
+          selected_intent_ids: selectedIntentIds,
+          selected_candidates: previewId
+            ? []
+            : selectedCandidates.map((candidate) => ({
+              intent_id: candidate.intentId,
+              title: candidate.title,
+              summary: candidate.summary,
+              intent_type: candidate.intentType,
+              priority: candidate.priority,
+              steps: candidate.stepsSummary ? [candidate.stepsSummary] : [],
+              expected_result: candidate.expected,
+            })),
         });
         if (cancelled) {
           return;
@@ -481,7 +503,7 @@ export function AiGenerationPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [previewPayload, selectedSignature, form.project, form.page]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [previewPayload, previewId, selectedSignature, form.project, form.page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (
@@ -499,7 +521,8 @@ export function AiGenerationPage() {
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       try {
-        const allIntentIds = candidates.map((candidate) => candidate.intentId).filter(Boolean);
+        const candidatesToSync = candidates;
+        const allIntentIds = candidatesToSync.map((candidate) => candidate.intentId).filter(Boolean);
         const response = await saveTestPointAssets({
           project: form.project.trim(),
           page: form.page.trim(),
@@ -507,26 +530,28 @@ export function AiGenerationPage() {
           title: form.title.trim(),
           priority: form.priority.trim() || "P1",
           source: form.source.trim() || "manual",
+          preview_id: previewId,
           selected_intent_ids: allIntentIds,
-          selected_candidates: candidates.map((candidate) => ({
-            intent_id: candidate.intentId,
-            title: candidate.title,
-            summary: candidate.summary,
-            intent_type: candidate.intentType,
-            priority: candidate.priority,
-            precondition: candidate.precondition,
-            steps: candidate.steps,
-            steps_hint: candidate.stepsHint,
-            expected: candidate.expected,
-            involved_elements: candidate.involvedElements,
-          })),
+          selected_candidates: previewId
+            ? []
+            : candidatesToSync.map((candidate) => ({
+              intent_id: candidate.intentId,
+              title: candidate.title,
+              summary: candidate.summary,
+              intent_type: candidate.intentType,
+              priority: candidate.priority,
+              steps: candidate.stepsSummary ? [candidate.stepsSummary] : [],
+              expected: candidate.expected,
+            })),
         });
         if (!cancelled) {
           const savedCount = Number(response.count || 0);
           appendEvent({
             stage: "candidate",
             level: "success",
-            message: savedCount ? `已自动同步全部测试点资产 ${savedCount} 条。` : "测试点资产已自动同步。",
+            message: savedCount
+              ? `已自动同步测试点资产 ${savedCount} 个资产，包含 ${allIntentIds.length} 条测试点。`
+              : "测试点资产已自动同步。",
           });
           setLastSyncedSignature(syncSignature);
         }
@@ -544,7 +569,7 @@ export function AiGenerationPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [extracting, generating, previewPayload, candidates, form.project, form.page, form.requirement, form.title, form.priority, form.source, syncSignature, lastSyncedSignature]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [extracting, generating, previewPayload, previewId, candidates, form.project, form.page, form.requirement, form.title, form.priority, form.source, syncSignature, lastSyncedSignature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function getExtractDisabledReason(): string {
     if (extracting) {
@@ -602,6 +627,7 @@ export function AiGenerationPage() {
     setGenerateErrorText("");
     setPrecheckErrorText("");
     setPrecheckByIntentId({});
+    setPreviewDiagnostics(null);
     setResultText("正在提取测试点...");
     appendEvent({ stage: "extract", level: "info", message: "已提交需求解析与测试点提取请求。" });
     setActiveStep(2);
@@ -613,7 +639,7 @@ export function AiGenerationPage() {
         source: form.source.trim() || "manual",
       });
       const normalized = normalizeCandidates(response);
-      const limited = normalized.slice(0, MAX_SELECTED);
+      const limited = normalized.slice(0, MAX_GENERATE_SELECTED);
       const gateDecision = readQualityDecision(response);
       setPreviewPayload(response);
       setCandidates(normalized);
@@ -623,14 +649,14 @@ export function AiGenerationPage() {
       if (gateDecision === "block") {
         setResultText(`提取完成：识别 ${normalized.length} 个测试点，但质量门禁阻断，需先处理后再生成。`);
       } else {
-        setResultText(`提取完成：识别 ${normalized.length} 个测试点，默认选择 ${limited.length} 个用于生成。`);
+        setResultText(`提取完成：识别 ${normalized.length} 个测试点，已全部同步到测试点资产；默认选择 ${limited.length} 个用于生成用例。`);
       }
       appendEvent({ stage: "extract", level: "success", message: `测试点提取完成，识别 ${normalized.length} 项。` });
-      if (normalized.length > MAX_SELECTED) {
+      if (normalized.length > MAX_GENERATE_SELECTED) {
         appendEvent({
           stage: "candidate",
           level: "info",
-          message: `已自动限制为前 ${MAX_SELECTED} 个候选，避免超过后端批量上限。`,
+          message: `生成用例默认限制为前 ${MAX_GENERATE_SELECTED} 个候选；测试点资产会保存全部 ${normalized.length} 条。`,
         });
       }
       setActiveStep(3);
@@ -654,7 +680,7 @@ export function AiGenerationPage() {
       if (prev.includes(key)) {
         return prev.filter((item) => item !== key);
       }
-      if (prev.length >= MAX_SELECTED) {
+      if (prev.length >= MAX_GENERATE_SELECTED) {
         return prev;
       }
       return [...prev, key];
@@ -662,7 +688,7 @@ export function AiGenerationPage() {
   }
 
   function selectAllCandidates() {
-    setSelectedKeys(candidates.slice(0, MAX_SELECTED).map((item) => item.key));
+    setSelectedKeys(candidates.slice(0, MAX_GENERATE_SELECTED).map((item) => item.key));
   }
 
   function clearAllCandidates() {
@@ -686,19 +712,19 @@ export function AiGenerationPage() {
         title: form.title.trim(),
         priority: form.priority.trim() || "P1",
         source: form.source.trim() || "manual",
+        preview_id: previewId,
         selected_intent_ids: selectedIntentIds,
-            selected_candidates: selectedCandidates.map((candidate) => ({
-          intent_id: candidate.intentId,
-          title: candidate.title,
-          summary: candidate.summary,
-          intent_type: candidate.intentType,
-          priority: candidate.priority,
-          precondition: candidate.precondition,
-          steps: candidate.steps,
-          steps_hint: candidate.stepsHint,
-          expected: candidate.expected,
-          involved_elements: candidate.involvedElements,
-        })),
+        selected_candidates: previewId
+          ? []
+          : selectedCandidates.map((candidate) => ({
+            intent_id: candidate.intentId,
+            title: candidate.title,
+            summary: candidate.summary,
+            intent_type: candidate.intentType,
+            priority: candidate.priority,
+            steps: candidate.stepsSummary ? [candidate.stepsSummary] : [],
+            expected: candidate.expected,
+          })),
       });
       const caseIds = readCaseIds(response);
       setGeneratePayload(response);
@@ -723,6 +749,7 @@ export function AiGenerationPage() {
     setForm({ ...DEFAULT_FORM, project: firstProject });
     setActiveStep(1);
     setPreviewPayload(null);
+    setPreviewDiagnostics(null);
     setCandidates([]);
     setSelectedKeys([]);
     setGeneratePayload(null);
@@ -931,7 +958,7 @@ export function AiGenerationPage() {
                 表格视图
               </button>
               <button type="button" className="button secondary" onClick={selectAllCandidates} disabled={!candidates.length}>
-                全选前 20 条
+                选择前 20 条生成
               </button>
               <button type="button" className="button secondary" onClick={clearAllCandidates} disabled={!selectedCandidates.length}>
                 清空
@@ -939,7 +966,7 @@ export function AiGenerationPage() {
             </div>
           </header>
 
-          <p className="muted">当前已选：{selectedCandidates.length}/{MAX_SELECTED}</p>
+          <p className="muted">当前已选用于生成：{selectedCandidates.length}/{MAX_GENERATE_SELECTED}；测试点资产会保存全部 {candidates.length} 条。</p>
           {selectedCandidates.length ? (
             precheckErrorText ? (
               <section className="aiw-error-box aiw-step-error">
@@ -956,10 +983,9 @@ export function AiGenerationPage() {
               {candidates.length ? (
                 candidates.map((candidate, index) => {
                   const selected = selectedKeys.includes(candidate.key);
-                  const disabled = !selected && selectedKeys.length >= MAX_SELECTED;
+                  const disabled = !selected && selectedKeys.length >= MAX_GENERATE_SELECTED;
                   const precheck = precheckByIntentId[candidate.intentId];
                   const precheckStatus = precheck?.status || "ok";
-                  const stepPreview = candidate.steps.slice(0, 3);
                   return (
                     <article
                       key={candidate.key}
@@ -1089,9 +1115,9 @@ export function AiGenerationPage() {
                           className="candidate-module"
                           style={{ display: "grid", gap: "8px", padding: "12px", border: "1px solid #dfe8f5", borderRadius: "8px", background: "#f9fbff", minWidth: 0 }}
                         >
-                          <span className="candidate-section-label">前置条件</span>
+                          <span className="candidate-section-label">测试意图</span>
                           <p className="candidate-section-text" style={{ margin: 0, fontSize: "13px", lineHeight: 1.55 }}>
-                            {candidate.precondition || "未返回前置条件。"}
+                            {candidate.summary || candidate.title}
                           </p>
                         </section>
                         <section
@@ -1099,30 +1125,9 @@ export function AiGenerationPage() {
                           style={{ display: "grid", gap: "8px", padding: "12px", border: "1px solid #dfe8f5", borderRadius: "8px", background: "#f9fbff", minWidth: 0 }}
                         >
                           <span className="candidate-section-label">步骤概览</span>
-                          {stepPreview.length ? (
-                            <ol className="candidate-step-list" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "8px" }}>
-                              {stepPreview.map((step, stepIndex) => (
-                                <li
-                                  key={`${candidate.key}-${step}`}
-                                  style={{ display: "grid", gridTemplateColumns: "24px minmax(0, 1fr)", gap: "10px", alignItems: "start", fontSize: "13px", lineHeight: 1.5 }}
-                                >
-                                  <span
-                                    className="candidate-step-index"
-                                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "999px", background: "#dbeafe", color: "#1d4ed8", fontSize: "12px", fontWeight: 800 }}
-                                  >
-                                    {stepIndex + 1}
-                                  </span>
-                                  <span className="candidate-step-text" style={{ minWidth: 0 }}>
-                                    {step}
-                                  </span>
-                                </li>
-                              ))}
-                            </ol>
-                          ) : (
-                            <p className="candidate-section-text" style={{ margin: 0, fontSize: "13px", lineHeight: 1.55 }}>
-                              未返回结构化步骤。
-                            </p>
-                          )}
+                          <p className="candidate-section-text" style={{ margin: 0, fontSize: "13px", lineHeight: 1.55 }}>
+                            {candidate.stepsSummary || "完整步骤已在服务端保留，生成时按测试点 ID 读取。"}
+                          </p>
                         </section>
                         <section
                           className="candidate-module"
@@ -1132,29 +1137,6 @@ export function AiGenerationPage() {
                           <p className="candidate-section-text" style={{ margin: 0, fontSize: "13px", lineHeight: 1.55 }}>
                             {candidate.expected || "未返回预期结果。"}
                           </p>
-                        </section>
-                        <section
-                          className="candidate-module"
-                          style={{ display: "grid", gap: "8px", padding: "12px", border: "1px solid #dfe8f5", borderRadius: "8px", background: "#f9fbff", minWidth: 0 }}
-                        >
-                          <span className="candidate-section-label">涉及元素</span>
-                          {candidate.involvedElements.length ? (
-                            <div className="candidate-chip-row" style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                              {candidate.involvedElements.map((element) => (
-                                <span
-                                  key={`${candidate.key}-${element}`}
-                                  className="candidate-chip"
-                                  style={{ display: "inline-flex", alignItems: "center", minHeight: "26px", padding: "0 10px", borderRadius: "999px", background: "#eff6ff", color: "#1f5fa8", border: "1px solid #d6e2f5", fontSize: "12px", fontWeight: 700 }}
-                                >
-                                  {element}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="candidate-section-text" style={{ margin: 0, fontSize: "13px", lineHeight: 1.55 }}>
-                              未返回涉及元素。
-                            </p>
-                          )}
                         </section>
                       </div>
                       {precheck && precheck.reasons.length ? (
@@ -1184,9 +1166,8 @@ export function AiGenerationPage() {
                     <th>标题</th>
                     <th>类型</th>
                     <th>优先级</th>
-                    <th>步骤数</th>
+                    <th>步骤概览</th>
                     <th>预期结果</th>
-                    <th>涉及元素</th>
                     <th>预校验</th>
                   </tr>
                 </thead>
@@ -1194,7 +1175,7 @@ export function AiGenerationPage() {
                   {candidates.length ? (
                     candidates.map((candidate) => {
                       const selected = selectedKeys.includes(candidate.key);
-                      const disabled = !selected && selectedKeys.length >= MAX_SELECTED;
+                      const disabled = !selected && selectedKeys.length >= MAX_GENERATE_SELECTED;
                       const precheck = precheckByIntentId[candidate.intentId];
                       const precheckStatus = precheck?.status || "ok";
                       return (
@@ -1214,9 +1195,8 @@ export function AiGenerationPage() {
                           <td>{candidate.title}</td>
                           <td>{intentTypeLabel(candidate.intentType || "")}</td>
                           <td>{candidate.priority || "P1"}</td>
-                          <td>{candidate.steps.length}</td>
+                          <td>{candidate.stepsSummary || "-"}</td>
                           <td>{candidate.expected || "-"}</td>
-                          <td>{candidate.involvedElements.slice(0, 3).join(" / ") || "-"}</td>
                           <td className={`aiw-precheck-cell status-${precheckStatus}`}>
                             {precheckStatus === "ok" ? "通过" : precheckStatus === "block" ? "阻断" : "提示"}
                             {precheck && precheck.reasons.length ? `：${precheck.reasons[0]}` : ""}
@@ -1226,7 +1206,7 @@ export function AiGenerationPage() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={9} className="asset-empty">
+                      <td colSpan={8} className="asset-empty">
                         <div className="aiw-empty-state">
                           <strong>暂无候选测试点</strong>
                           <p>请先完成步骤 2 提取测试点。</p>
@@ -1353,8 +1333,16 @@ export function AiGenerationPage() {
             <section>
               <h3>原始响应</h3>
               <details>
-                <summary>查看步骤 2 原始响应（诊断）</summary>
+                <summary>查看步骤 2 轻量响应</summary>
                 <pre className="json-block">{JSON.stringify(previewPayload || {}, null, 2)}</pre>
+              </details>
+              <details>
+                <summary>按需查看解析诊断</summary>
+                <pre className="json-block">
+                  {loadingDiagnostics
+                    ? "诊断信息加载中..."
+                    : JSON.stringify(previewDiagnostics || { message: previewId ? "暂无诊断信息" : "请先提取测试点" }, null, 2)}
+                </pre>
               </details>
               <details>
                 <summary>查看步骤 4 原始响应（诊断）</summary>
@@ -1426,8 +1414,8 @@ export function AiGenerationPage() {
                 <strong>{candidates.length}</strong>
               </li>
               <li className="simple-list-item">
-                <span>已选数量</span>
-                <strong>{selectedCandidates.length}/{MAX_SELECTED}</strong>
+                <span>生成已选</span>
+                <strong>{selectedCandidates.length}/{MAX_GENERATE_SELECTED}</strong>
               </li>
             </ul>
           </section>
@@ -1437,7 +1425,7 @@ export function AiGenerationPage() {
 
       <section className="aiw-sticky-bar">
         <div className="aiw-sticky-inner">
-          <span className="muted">步骤进度 {completedStages}/4 · 已选 {selectedCandidates.length}/{MAX_SELECTED}</span>
+          <span className="muted">步骤进度 {completedStages}/4 · 已选用于生成 {selectedCandidates.length}/{MAX_GENERATE_SELECTED}</span>
           <div className="header-actions">
             <button type="button" className="button secondary" onClick={goStepPrev} disabled={activeStep === 1}>
               上一步

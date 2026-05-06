@@ -13,6 +13,7 @@ from app.services.workbench_generation_api.payloads import (
     PrecheckSelectedIntentsPayload,
 )
 from app.services.workbench_generation_api.preview_test_points_usecase import build_preview_usecase
+from app.services.workbench_generation_api import preview_store
 from app.services.workbench_generation_api.usecase_factory import (
     build_auto_run_usecase,
     build_full_chain_usecase,
@@ -47,6 +48,16 @@ def preview_test_points(
         return usecase.execute(payload)
     except ExecutionCompilerError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.to_detail()) from exc
+
+
+@router.get("/api/workbench/preview-test-points/{preview_id}/diagnostics")
+def get_preview_test_points_diagnostics(preview_id: str) -> dict[str, Any]:
+    return preview_store.build_preview_diagnostics(preview_id)
+
+
+@router.get("/api/workbench/preview-test-points/{preview_id}/test-intents/{intent_id}")
+def get_preview_test_intent(preview_id: str, intent_id: str) -> dict[str, Any]:
+    return preview_store.build_preview_intent_detail(preview_id, intent_id)
 
 
 @router.post("/api/workbench/auto-run")

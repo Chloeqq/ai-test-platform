@@ -8,6 +8,7 @@ from fastapi import HTTPException
 import pytest
 
 from app.services import workbench_generation_service
+from app.services.workbench_generation_api import preview_store
 from app.services.workbench_generation_api.candidate_normalizer import CandidateNormalizer
 from app.services.workbench_generation_compiler.runtime import generate_pipeline as generate_pipeline_module
 
@@ -70,8 +71,11 @@ def test_preview_payload_uses_parser_runtime_source_count_when_source_summary_mi
     )
 
     item = payload["item"]
-    assert item["source_count"] == 2
-    assert item["source_types"] == ["text", "prd"]
+    assert "source_count" not in item
+    diagnostics = preview_store.build_preview_diagnostics(str(item["preview_id"]))
+    diagnostic_item = diagnostics["item"]
+    parser_runtime = diagnostic_item["parser_runtime"]
+    assert parser_runtime["source_count"] == 2
 
 
 def test_normalize_generated_case_title_strips_heading_and_bullet_text() -> None:
