@@ -1,3 +1,5 @@
+"""AI 编排器 CLI 入口：支持 orchestrate 与 serve 子命令。"""
+
 import argparse
 import json
 
@@ -6,6 +8,7 @@ from orchestrator_service import OrchestratorService  # type: ignore[import-not-
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """构建 CLI 参数解析器（orchestrate / serve）。"""
     parser = argparse.ArgumentParser(description="Minimal AI orchestrator for test generation and execution")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -22,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    """根据子命令调用编排服务或启动 HTTP 服务。"""
     parser = build_parser()
     args = parser.parse_args()
 

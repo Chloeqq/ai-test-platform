@@ -76,15 +76,15 @@ export function QualityTrendsPage() {
       </header>
 
       <section className="panel stat-grid">
-        <article className="stat-card">
+        <article className="stat-card metric-tone-info">
           <span className="label">方向</span>
           <strong>{text((summary7d as Record<string, unknown>).direction)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-danger">
           <span className="label">阻断总数(7d)</span>
           <strong>{numberValue((summary7d as Record<string, unknown>).blocked_total)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-warning">
           <span className="label">人工复核(7d)</span>
           <strong>{numberValue((summary7d as Record<string, unknown>).manual_review_total)}</strong>
         </article>

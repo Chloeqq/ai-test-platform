@@ -75,7 +75,7 @@ class WorkbenchGenerationRepository:
             if value and match_case_id(value) and value not in seen_case_ids:
                 seen_case_ids.add(value)
                 all_existing_case_ids.append(value)
-        if requested and match_case_id(requested) and requested not in seen_case_ids:
+        if requested and match_case_id(requested):
             return requested
         sequence = next_case_sequence(
             existing_case_ids=all_existing_case_ids,

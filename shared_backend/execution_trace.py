@@ -1,3 +1,4 @@
+"""单次测试运行的步骤级执行追踪（时间戳与 PASS/FAIL 状态）。"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -11,6 +12,7 @@ def _utc_now_iso() -> str:
 
 @dataclass
 class StepTrace:
+    """单步执行的追踪记录。"""
     index: int
     action: str
     target: str
@@ -35,6 +37,7 @@ class StepTrace:
 
 @dataclass
 class ExecutionTrace:
+    """一次 run 的聚合追踪；finalize 时根据各步 PASS 判定整体 passed/failed。"""
     run_id: str
     status: str = "running"
     started_at: str = field(default_factory=_utc_now_iso)
@@ -46,6 +49,7 @@ class ExecutionTrace:
 
     def finalize(self) -> None:
         self.finished_at = _utc_now_iso()
+        # 任一步非 PASS 则整次 run 记为 failed
         self.status = "passed" if all(step.status == "PASS" for step in self.steps) else "failed"
 
     def to_dict(self) -> dict[str, Any]:

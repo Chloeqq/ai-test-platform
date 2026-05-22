@@ -44,7 +44,7 @@ REFERENCE_TYPE_VALUES = {"test_case", "script", "test_point", "plan", "suite"}
 GOVERNANCE_STATUS_VALUES = {"draft", "active", "governing", "retired"}
 ELEMENT_REVIEW_STATUS_VALUES = {"approved", "pending", "rejected"}
 ELEMENT_STABILITY_LEVEL_VALUES = {"high", "medium", "low"}
-ELEMENT_MATCH_STRATEGY_VALUES = {"exact", "alias", "derived", "composite"}
+ELEMENT_MATCH_STRATEGY_VALUES = {"exact", "alias", "derived", "composite", "template"}
 ELEMENT_LOCATOR_SOURCE_VALUES = {"", "testid", "qa", "role_name", "placeholder", "id", "name", "css", "xpath", "manual"}
 CANDIDATE_PROMOTION_STATUS_VALUES = {"pending", "partially_promoted", "promoted", "rejected"}
 CANDIDATE_STATUS_VALUES = {"pending", "reviewed", "promoted", "rejected", "merged"}
@@ -273,8 +273,23 @@ def _normalize_business_domain(value: str, fallback: str = "") -> str:
     return normalized
 
 
-def _normalize_formal_element_code(value: str, *, page_code: str = "", business_type: str = "") -> str:
-    return require_valid_element_code(value, page_code=page_code, business_type=business_type)
+def _normalize_formal_element_code(
+    value: str,
+    *,
+    page_code: str = "",
+    business_type: str = "",
+    locator_source: str = "",
+    locator_type: str = "",
+    testid_value: str = "",
+) -> str:
+    return require_valid_element_code(
+        value,
+        page_code=page_code,
+        business_type=business_type,
+        locator_source=locator_source,
+        locator_type=locator_type,
+        testid_value=testid_value,
+    )
 
 
 def _locator_identity_key(locator_type: str, locator_value: str, role: str) -> tuple[str, str, str]:
@@ -1415,10 +1430,18 @@ def create_page_element(
     )
     business_type = _normalize_business_type(payload.business_type)
     business_domain = _normalize_business_domain(payload.business_domain)
+    locator_type = _normalize_locator_type(payload.locator_type)
+    locator_source = _normalize_locator_source(payload.locator_source)
+    testid_value = str(payload.testid_value or "").strip()
+    if locator_type == "data-testid" and not testid_value:
+        testid_value = str(payload.locator_value or "").strip()
     normalized_element_code = _normalize_formal_element_code(
         payload.element_code,
         page_code=page_object.page_code,
         business_type=business_type,
+        locator_source=locator_source,
+        locator_type=locator_type,
+        testid_value=testid_value,
     )
     existing = db.execute(
         select(PageElement).where(
@@ -1435,14 +1458,14 @@ def create_page_element(
         page_object_id=page_object.id,
         element_code=normalized_element_code,
         element_name=str(payload.element_name).strip(),
-        locator_type=_normalize_locator_type(payload.locator_type),
+        locator_type=locator_type,
         locator_value=str(payload.locator_value).strip(),
         backup_locator=str(payload.backup_locator or "").strip(),
         business_type=business_type,
         business_domain=business_domain,
         aliases_json=_json_list(payload.aliases_json),
         semantic_tags_json=_json_list(payload.semantic_tags_json),
-        locator_source=_normalize_locator_source(payload.locator_source),
+        locator_source=locator_source,
         match_strategy=_normalize_match_strategy(payload.match_strategy),
         stability_level="low",
         review_status="pending",
@@ -1450,7 +1473,7 @@ def create_page_element(
         route_scope=str(payload.route_scope or "").strip(),
         anchor_required=bool(payload.anchor_required),
         is_key_element=bool(payload.is_key_element),
-        testid_value=str(payload.testid_value or "").strip(),
+        testid_value=testid_value,
         qa_value=str(payload.qa_value or "").strip(),
         governance_note=str(payload.governance_note or "").strip(),
         health_status=_normalize_binary_health_status(payload.health_status),
@@ -1504,10 +1527,18 @@ def update_page_element(
             if payload.business_type is not None
             else str(element.business_type or "").strip().lower()
         )
+        target_locator_type = payload.locator_type if payload.locator_type is not None else element.locator_type
+        target_locator_source = payload.locator_source if payload.locator_source is not None else element.locator_source
+        target_testid_value = payload.testid_value if payload.testid_value is not None else element.testid_value
+        if str(target_locator_type or "").strip().lower() == "data-testid" and not str(target_testid_value or "").strip():
+            target_testid_value = payload.locator_value if payload.locator_value is not None else element.locator_value
         next_value = _normalize_formal_element_code(
             payload.element_code,
             page_code=page_object.page_code,
             business_type=target_business_type,
+            locator_source=target_locator_source,
+            locator_type=target_locator_type,
+            testid_value=target_testid_value,
         )
         if element.element_code != next_value:
             existing = db.execute(
@@ -1550,6 +1581,9 @@ def update_page_element(
             element.element_code,
             page_code=page_object.page_code,
             business_type=next_value,
+            locator_source=element.locator_source,
+            locator_type=element.locator_type,
+            testid_value=element.testid_value,
         )
         if element.business_type != next_value:
             element.business_type = next_value
@@ -1591,6 +1625,9 @@ def update_page_element(
                 element.element_code,
                 page_code=page_object.page_code,
                 business_type=element.business_type,
+                locator_source=element.locator_source,
+                locator_type=element.locator_type,
+                testid_value=element.testid_value,
             )
         if element.review_status != next_value:
             element.review_status = next_value
@@ -2339,17 +2376,6 @@ def promote_candidate_group(
 
     business_type = _normalize_business_type(payload.business_type, group.business_type_guess)
     business_domain = _normalize_business_domain(payload.business_domain, group.business_domain_guess)
-    element_code = _normalize_formal_element_code(
-        payload.element_code,
-        page_code=normalized_page_code,
-        business_type=business_type,
-    )
-    existing = db.execute(
-        select(PageElement).where(PageElement.page_object_id == page_object.id, PageElement.element_code == element_code)
-    ).scalar_one_or_none()
-    if existing is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"page element already exists: {element_code}")
-
     fallback_locator_type, fallback_locator_value, fallback_role, top_candidate = _primary_candidate_locator(group, candidate_rows)
     locator_type = _normalize_locator_type(str(payload.locator_type or fallback_locator_type))
     locator_value = str(payload.locator_value or fallback_locator_value or "").strip()
@@ -2363,6 +2389,19 @@ def promote_candidate_group(
         testid_value = locator_value
     if locator_type == "data-qa" and not qa_value:
         qa_value = locator_value
+    element_code = _normalize_formal_element_code(
+        payload.element_code,
+        page_code=normalized_page_code,
+        business_type=business_type,
+        locator_source=locator_source,
+        locator_type=locator_type,
+        testid_value=testid_value,
+    )
+    existing = db.execute(
+        select(PageElement).where(PageElement.page_object_id == page_object.id, PageElement.element_code == element_code)
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"page element already exists: {element_code}")
     if bool(payload.is_key_element) and not testid_value and not qa_value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

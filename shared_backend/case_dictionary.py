@@ -1,3 +1,4 @@
+"""用例字典加载与编码/别名解析（page、module、case_type 等）。"""
 from __future__ import annotations
 
 import json
@@ -38,6 +39,7 @@ def _normalize_items(items: Any) -> list[dict[str, Any]]:
 
 @lru_cache(maxsize=1)
 def load_case_dictionaries() -> dict[str, list[dict[str, Any]]]:
+    """加载并缓存 case_dictionaries.json，按 kind 分组。"""
     raw = json.loads(_DATA_PATH.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         return {}
@@ -45,14 +47,17 @@ def load_case_dictionaries() -> dict[str, list[dict[str, Any]]]:
 
 
 def get_dictionary_items(kind: str) -> list[dict[str, Any]]:
+    """返回某类字典项列表（如 page、module）。"""
     return list(load_case_dictionaries().get(str(kind).strip().lower(), []))
 
 
 def get_code_name_map(kind: str) -> dict[str, str]:
+    """code → 显示名，仅含 enabled 项。"""
     return {item["code"]: item["name"] for item in get_dictionary_items(kind) if item.get("enabled", True)}
 
 
 def get_alias_code_map(kind: str) -> dict[str, str]:
+    """别名（小写）→ 标准 code。"""
     alias_map: dict[str, str] = {}
     for item in get_dictionary_items(kind):
         if not item.get("enabled", True):
@@ -65,10 +70,12 @@ def get_alias_code_map(kind: str) -> dict[str, str]:
 
 
 def get_enabled_codes(kind: str) -> set[str]:
+    """某类字典下所有 enabled 的 code 集合。"""
     return {item["code"] for item in get_dictionary_items(kind) if item.get("enabled", True)}
 
 
 def resolve_dictionary_code(kind: str, value: str, *, fallback: str = "") -> str:
+    """将 value（含别名）解析为标准 code，未命中则 fallback。"""
     normalized = str(value or "").strip().lower()
     if not normalized:
         return str(fallback or "").strip().lower()
@@ -76,6 +83,7 @@ def resolve_dictionary_code(kind: str, value: str, *, fallback: str = "") -> str
 
 
 def resolve_dictionary_name(kind: str, code: str, *, fallback: str = "") -> str:
+    """由 code 查显示名，未命中则 fallback 或 code 本身。"""
     normalized = str(code or "").strip().lower()
     if not normalized:
         return fallback

@@ -1,3 +1,4 @@
+"""用例、运行与 AI 状态码的规范化及字典显示名查询。"""
 from __future__ import annotations
 
 from typing import Any
@@ -37,24 +38,29 @@ AI_STATE_TRANSITIONS = {
 
 
 def normalize_case_status(value: Any, *, fallback: str = "ready") -> str:
+    """将任意状态值规范为字典内的 case_status code。"""
     normalized = str(value or "").strip().lower()
     return normalized if normalized in CASE_STATUS_CODES else fallback
 
 
 def normalize_run_status(value: Any, *, fallback: str = "generated") -> str:
+    """将任意状态值规范为字典内的 run_status code。"""
     normalized = str(value or "").strip().lower()
     return normalized if normalized in RUN_STATUS_CODES else fallback
 
 
 
 def get_case_status_name(code: str) -> str:
+    """case_status code 的显示名。"""
     return resolve_dictionary_name("case_status", code, fallback=str(code or "").strip())
 
 
 def get_run_status_name(code: str) -> str:
+    """run_status code 的显示名。"""
     return resolve_dictionary_name("run_status", code, fallback=str(code or "").strip())
 
 
 def get_ai_status_name(code: str) -> str:
+    """ai_status code 的显示名。"""
     return resolve_dictionary_name("ai_status", code, fallback=str(code or "").strip())
 

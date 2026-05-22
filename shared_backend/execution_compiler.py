@@ -1,3 +1,4 @@
+"""测试点 DSL 编译为 execution IR，绑定页面对象后渲染为 runner 步骤。"""
 from __future__ import annotations
 
 import logging
@@ -24,6 +25,7 @@ _SPACE_RE = re.compile(r"\s+")
 
 
 class ExecutionCompilerError(ValueError):
+    """编译阶段结构化错误，可序列化为 to_detail()。"""
     def __init__(self, *, code: str, message: str, reason: str = "", stage: str = "execution_compiler") -> None:
         super().__init__(message)
         self.code = str(code).strip() or "execution_compiler_failed"
@@ -137,6 +139,7 @@ def _extract_steps(point: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def normalize_test_points(points: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """校验并规范化 test_points：每点须含 intent_id 与可执行 steps。"""
     if not isinstance(points, list):
         raise ExecutionCompilerError(
             code="execution_compiler_missing_test_points",
@@ -286,6 +289,7 @@ def _is_business_type_allowed_for_action(action_type: str, assertion: str, busin
 
 
 def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """将显式 step 字典映射为内部 DSL action 列表（input/click/assert 等）。"""
     actions: list[dict[str, Any]] = []
     for point in points:
         if not isinstance(point, dict):
@@ -436,6 +440,7 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
 
 
 def build_execution_ir(actions: list[dict[str, Any]]) -> dict[str, Any]:
+    """由 action 列表构建 execution-ir/v1 文档。"""
     if not isinstance(actions, list) or not actions:
         raise ExecutionCompilerError(
             code="execution_ir_empty_steps",
@@ -542,6 +547,7 @@ def build_execution_ir(actions: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def bind_targets(ir: dict[str, Any], page_object: dict[str, Any]) -> dict[str, Any]:
+    """将 IR 中 target 解析为页面对象 selector，并校验 business_type 与动作兼容。"""
     if not isinstance(ir, dict) or not isinstance(ir.get("steps"), list):
         raise ExecutionCompilerError(
             code="execution_ir_empty_steps",
@@ -576,6 +582,7 @@ def bind_targets(ir: dict[str, Any], page_object: dict[str, Any]) -> dict[str, A
         step = dict(raw_step) if isinstance(raw_step, dict) else {}
         action_type = _normalized_text(step.get("type")).lower()
         target = _normalized_text(step.get("target"))
+        # 允许 target 写作 element:CODE 形式
         if target.startswith("element:"):
             target = _normalized_text(target.removeprefix("element:"))
         meta = step.get("meta") if isinstance(step.get("meta"), dict) else {}
@@ -667,6 +674,7 @@ def bind_targets(ir: dict[str, Any], page_object: dict[str, Any]) -> dict[str, A
 
 
 def render_execution_steps(ir: dict[str, Any]) -> list[dict[str, Any]]:
+    """将已绑定 IR 渲染为 runner 步骤（fill/click/assert_* 等）。"""
     steps = ir.get("steps") if isinstance(ir, dict) else None
     if not isinstance(steps, list) or not steps:
         raise ExecutionCompilerError(
@@ -1140,6 +1148,7 @@ class PreviewTestPointsCompiler:
 
 
 def compile_playwright_python(ir: dict[str, Any], page_object: dict[str, Any]) -> str:
+    """将 IR 映射为 Playwright sync API 的 Python 脚本字符串。"""
     from shared_backend.mapping_engine import map_ir_to_selectors
 
     mapped = map_ir_to_selectors(ir, page_object, preserve_target=True)

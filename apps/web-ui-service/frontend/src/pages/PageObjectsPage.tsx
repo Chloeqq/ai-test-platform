@@ -2,10 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
-  createPageObject,
   deletePageObject,
   listPageObjects,
-  updatePageObject,
 } from "../api/assets";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { DataTable } from "../components/DataTable";
@@ -17,26 +15,6 @@ import { StatusPill, statusLabel } from "../components/StatusPill";
 import { listProjects } from "../api/workbench";
 import { DEFAULT_PROJECT_CODE, normalizeProjectCode, projectOptions } from "../config/projects";
 import { formatDateTime } from "../lib/datetime";
-
-interface PageObjectEditorState {
-  pageCode: string;
-  pageName: string;
-  pageUrl: string;
-  preconditionState: string;
-  moduleId: string;
-  description: string;
-  status: string;
-}
-
-const EMPTY_EDITOR: PageObjectEditorState = {
-  pageCode: "",
-  pageName: "",
-  pageUrl: "",
-  preconditionState: "",
-  moduleId: "0",
-  description: "",
-  status: "draft",
-};
 
 const PAGE_OBJECT_STATUS_LABELS: Record<string, string> = {
   draft: "草稿",
@@ -127,6 +105,36 @@ function buildElementsLink(pageCode: string, projectCode: string): string {
   return `/assets/page-objects/${encodeURIComponent(pageCode)}/elements${suffix}`;
 }
 
+function buildEditLink(pageCode: string, projectCode: string): string {
+  const query = new URLSearchParams();
+  const normalizedProject = String(projectCode || "").trim();
+  if (normalizedProject) {
+    query.set("project", normalizedProject);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return `/assets/page-objects/${encodeURIComponent(pageCode)}/edit${suffix}`;
+}
+
+function buildCreateLink(projectCode: string): string {
+  const query = new URLSearchParams();
+  const normalizedProject = String(projectCode || "").trim();
+  if (normalizedProject) {
+    query.set("project", normalizedProject);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return `/assets/page-objects/new${suffix}`;
+}
+
+function buildImportLink(projectCode: string): string {
+  const query = new URLSearchParams();
+  const normalizedProject = String(projectCode || "").trim();
+  if (normalizedProject) {
+    query.set("project", normalizedProject);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return `/assets/page-objects/import${suffix}`;
+}
+
 function buildRecorderLink(item: Record<string, unknown>, projectCode: string): string {
   const query = new URLSearchParams();
   const normalizedProject = String(projectCode || item.project_code || "").trim();
@@ -162,9 +170,6 @@ export function PageObjectsPage() {
   const [busy, setBusy] = useState<boolean>(false);
   const [errorText, setErrorText] = useState<string>("");
   const [actionText, setActionText] = useState<string>("");
-  const [editorOpen, setEditorOpen] = useState<boolean>(false);
-  const [editing, setEditing] = useState<boolean>(false);
-  const [editor, setEditor] = useState<PageObjectEditorState>(EMPTY_EDITOR);
   const [deleteTarget, setDeleteTarget] = useState<{ mode: "single" | "batch"; pageCode?: string } | null>(null);
 
   const allPageCodes = useMemo(
@@ -249,80 +254,6 @@ export function PageObjectsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectCode]);
 
-  function openCreateEditor() {
-    setEditing(false);
-    setEditor(EMPTY_EDITOR);
-    setEditorOpen(true);
-    setActionText("");
-  }
-
-  function openEditEditor(item: Record<string, unknown>) {
-    setEditing(true);
-    setEditor({
-      pageCode: String(item.page_code || "").trim(),
-      pageName: String(item.page_name || "").trim(),
-      pageUrl: String(item.page_url || "").trim(),
-      preconditionState: String(item.precondition_state || "").trim(),
-      moduleId: String(item.module_id || "0").trim() || "0",
-      description: String(item.description || "").trim(),
-      status: String(item.status || "draft").trim() || "draft",
-    });
-    setEditorOpen(true);
-    setActionText("");
-  }
-
-  async function submitEditor() {
-    const pageCode = String(editor.pageCode || "").trim();
-    const pageName = String(editor.pageName || "").trim();
-    if (!pageCode) {
-      setErrorText("页面编码不能为空。");
-      return;
-    }
-    if (!pageName) {
-      setErrorText("页面名称不能为空。");
-      return;
-    }
-    setBusy(true);
-    setErrorText("");
-    setActionText("");
-    try {
-      if (editing) {
-        await updatePageObject(
-          pageCode,
-          {
-            page_name: pageName,
-            page_url: String(editor.pageUrl || "").trim(),
-            precondition_state: String(editor.preconditionState || "").trim(),
-            module_id: Number(editor.moduleId || 0) || 0,
-            description: String(editor.description || "").trim(),
-            status: String(editor.status || "draft").trim() || "draft",
-          },
-          { project_code: projectCode, client: "web" },
-        );
-      } else {
-        await createPageObject({
-          project_code: projectCode,
-          client: "web",
-          page_code: pageCode,
-          page_name: pageName,
-          page_url: String(editor.pageUrl || "").trim(),
-          precondition_state: String(editor.preconditionState || "").trim(),
-          module_id: Number(editor.moduleId || 0) || 0,
-          description: String(editor.description || "").trim(),
-          status: String(editor.status || "draft").trim() || "draft",
-          created_by: "web-ui",
-        });
-      }
-      setEditorOpen(false);
-      setActionText(editing ? "页面对象已更新。" : "页面对象已创建。");
-      await reload();
-    } catch (error) {
-      setErrorText(error instanceof Error ? error.message : "页面对象保存失败");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function toggleSelection(pageCode: string) {
     setSelectedPageCodes((prev) => {
       if (prev.includes(pageCode)) {
@@ -395,9 +326,12 @@ export function PageObjectsPage() {
           <p className="muted">统一管理页面资产、录制过程与元素治理状态。</p>
         </div>
         <div className="header-actions">
-          <button type="button" className="button" onClick={openCreateEditor} disabled={busy}>
+          <Link className="button secondary" to={buildImportLink(projectCode)}>
+            导入页面对象
+          </Link>
+          <Link className="button" to={buildCreateLink(projectCode)}>
             新建页面对象
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -502,86 +436,6 @@ export function PageObjectsPage() {
         </div>
       </FilterBar>
 
-      {editorOpen ? (
-        <section className="panel">
-          <h2>{editing ? "编辑页面对象" : "新增页面对象"}</h2>
-          <div className="form-grid">
-            <label>
-              页面编码（page_code）
-              <input
-                value={editor.pageCode}
-                onChange={(event) => setEditor((prev) => ({ ...prev, pageCode: event.target.value }))}
-                disabled={busy || editing}
-              />
-            </label>
-            <label>
-              页面名称（page_name）
-              <input
-                value={editor.pageName}
-                onChange={(event) => setEditor((prev) => ({ ...prev, pageName: event.target.value }))}
-                disabled={busy}
-              />
-            </label>
-            <label>
-              状态
-              <select
-                value={editor.status}
-                onChange={(event) => setEditor((prev) => ({ ...prev, status: event.target.value }))}
-                disabled={busy}
-              >
-                <option value="draft">草稿</option>
-                <option value="review">评审中</option>
-                <option value="published">已发布</option>
-                <option value="retired">已下线</option>
-              </select>
-            </label>
-            <label className="span-2">
-              页面地址（page_url）
-              <input
-                value={editor.pageUrl}
-                onChange={(event) => setEditor((prev) => ({ ...prev, pageUrl: event.target.value }))}
-                disabled={busy}
-              />
-            </label>
-            <label>
-              模块
-              <input
-                value={editor.moduleId}
-                onChange={(event) => setEditor((prev) => ({ ...prev, moduleId: event.target.value }))}
-                placeholder="默认模块可填 0"
-                disabled={busy}
-              />
-            </label>
-            <label className="span-3">
-              前置状态（precondition_state）
-              <textarea
-                rows={3}
-                value={editor.preconditionState}
-                onChange={(event) => setEditor((prev) => ({ ...prev, preconditionState: event.target.value }))}
-                disabled={busy}
-              />
-            </label>
-            <label className="span-3">
-              说明（description）
-              <textarea
-                rows={3}
-                value={editor.description}
-                onChange={(event) => setEditor((prev) => ({ ...prev, description: event.target.value }))}
-                disabled={busy}
-              />
-            </label>
-          </div>
-          <div className="header-actions">
-            <button type="button" className="button" onClick={() => void submitEditor()} disabled={busy}>
-              保存
-            </button>
-            <button type="button" className="button secondary" onClick={() => setEditorOpen(false)} disabled={busy}>
-              取消
-            </button>
-          </div>
-        </section>
-      ) : null}
-
       {actionText ? <section className="panel">{actionText}</section> : null}
       {loading ? <section className="panel">正在加载页面对象...</section> : null}
       {errorText ? <section className="panel error">{errorText}</section> : null}
@@ -633,7 +487,11 @@ export function PageObjectsPage() {
                         )}
                       </td>
                       <td className="compact-cell">
-                        <span>{text(item.page_url || item.route_pattern)}</span>
+                        {String(item.page_url || item.route_pattern || "").trim() ? (
+                          <span>{text(item.page_url || item.route_pattern)}</span>
+                        ) : (
+                          <span className="count-badge warn">未配置 URL</span>
+                        )}
                         {item.route_pattern ? <small>{text(item.route_pattern)}</small> : null}
                       </td>
                       <td>{numberValue(item.element_count)}</td>
@@ -670,11 +528,17 @@ export function PageObjectsPage() {
                           <Link className="button secondary" to={buildRecorderLink(item, projectCode)}>
                             开始录制
                           </Link>
+                          {pageCode ? (
+                            <Link className="button secondary" to={buildEditLink(pageCode, projectCode)} title="编辑页面 URL 和基础信息">
+                              编辑 URL
+                            </Link>
+                          ) : (
+                            <button type="button" className="button secondary" disabled>
+                              编辑 URL
+                            </button>
+                          )}
                           <details className="action-menu">
                             <summary>更多</summary>
-                            <button type="button" onClick={() => openEditEditor(item)} disabled={busy || !pageCode}>
-                              编辑页面
-                            </button>
                             <button type="button" className="danger-text" onClick={() => void removeOne(pageCode)} disabled={busy || !pageCode}>
                               删除
                             </button>
@@ -691,9 +555,9 @@ export function PageObjectsPage() {
                       title="还没有页面对象"
                       description="建议先创建页面对象，再开始录制和治理元素资产。"
                       action={(
-                        <button type="button" className="button" onClick={openCreateEditor} disabled={busy}>
+                        <Link className="button" to={buildCreateLink(projectCode)}>
                           新建页面对象
-                        </button>
+                        </Link>
                       )}
                     />
                   </td>

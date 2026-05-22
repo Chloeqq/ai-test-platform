@@ -1,3 +1,5 @@
+"""分析查询支撑：执行报告、失败聚类与需求解析遥测汇总。"""
+
 from __future__ import annotations
 
 import hashlib
@@ -7,6 +9,8 @@ from typing import Any, Callable
 
 
 class AnalyticsQuerySupport:
+    """只读聚合 reports/ 与 telemetry JSONL，不触发编排副作用。"""
+
     def __init__(
         self,
         *,

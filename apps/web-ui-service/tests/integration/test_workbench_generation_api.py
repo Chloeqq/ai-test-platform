@@ -461,7 +461,7 @@ def test_generate_case_batch_filters_metadata_noise_candidates(
             "requirement": "登录测试",
             "source": "manual",
             "selected_candidates": [
-                {"title": "[page_url] http://localhost:5173/#/login", "intent_type": "api", "priority": "P0"},
+                {"title": "[page_url] http://localhost:5174/#/login", "intent_type": "api", "priority": "P0"},
                 {"title": 'source": "manual",', "intent_type": "functional", "priority": "P1"},
                 {"title": "[user_story] 需求: 一次生成可追溯测试点", "intent_type": "functional", "priority": "P1"},
                 {"title": "【模块】认证中心-登录", "intent_type": "functional", "priority": "P1"},

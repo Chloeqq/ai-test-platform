@@ -22,7 +22,14 @@ interface FormalElementsTableProps {
   };
   text: (value: unknown) => string;
   elementApiCode: (item: Row) => string;
-  elementCodePolicyHint: (value: unknown, pageCode: string, businessType: unknown) => string;
+  elementCodePolicyHint: (
+    value: unknown,
+    pageCode: string,
+    businessType: unknown,
+    locatorSource?: unknown,
+    locatorType?: unknown,
+    testidValue?: unknown,
+  ) => string;
   inferDisplayElementCode: (pageCode: string, item: Row) => string;
   inferDisplayElementName: (item: Row) => string;
   buildElementDetailLink: (code: string, mode: ElementDetailMode) => string;
@@ -86,7 +93,14 @@ export function FormalElementsTable({
           {rows.length ? (
             rows.map((item, index) => {
               const code = elementApiCode(item);
-              const codeHint = elementCodePolicyHint(item.element_code, normalizedPageCode, item.business_type);
+              const codeHint = elementCodePolicyHint(
+                item.element_code,
+                normalizedPageCode,
+                item.business_type,
+                item.locator_source,
+                item.locator_type,
+                item.testid_value || item.locator_value,
+              );
               const isPendingReview = String(item.review_status || "").trim().toLowerCase() === "pending";
               return (
                 <tr key={String(item.element_id || index)}>

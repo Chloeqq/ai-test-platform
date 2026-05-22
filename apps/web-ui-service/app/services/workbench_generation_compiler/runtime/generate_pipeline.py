@@ -7,6 +7,7 @@ from typing import Any, Callable, Protocol
 import yaml
 
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from app.core.database import SessionLocal
 from app.models.page_object import PageElement, PageObject
@@ -14,6 +15,8 @@ from app.models.page_object import PageElement, PageObject
 from ..debug import debug_enabled, log_debug_event
 from shared_backend.observability import summarize_http_context
 from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
+from shared_backend.element_binding import build_element_alias_map
+from shared_backend.intent_mapping import resolve_explicit_step
 from shared_backend.page_object_assets import merge_page_object_with_yaml
 from shared_backend.schemas.contracts import normalize_test_point_plan_v1
 from shared_backend.schemas.validator import ContractValidator
@@ -202,7 +205,65 @@ def _infer_element_aliases(
                 continue
             seen.add(key)
             deduped.append(raw)
+    semantic_blob = " ".join([element_code, element_name, locator_value, role, business_type]).lower()
+    if any(token in semantic_blob for token in ["username", "user_name", "account", "账号", "用户名"]):
+        for raw in ["账号输入框", "用户名输入框", "用户输入框"]:
+            key = _normalized_key(raw)
+            if key and key not in seen:
+                seen.add(key)
+                deduped.append(raw)
+    if _is_password_input_element(
+        element_code=element_code,
+        element_name=element_name,
+        locator_value=locator_value,
+        role=role,
+        business_type=business_type,
+    ):
+        for raw in ["密码输入框"]:
+            key = _normalized_key(raw)
+            if key and key not in seen:
+                seen.add(key)
+                deduped.append(raw)
+    if ("login" in semantic_blob or "登录" in semantic_blob) and "logout" not in semantic_blob and "退出" not in semantic_blob:
+        for raw in ["登录按钮"]:
+            key = _normalized_key(raw)
+            if key and key not in seen:
+                seen.add(key)
+                deduped.append(raw)
     return deduped
+
+
+def _is_password_input_element(
+    *,
+    element_code: str,
+    element_name: str,
+    locator_value: str,
+    role: str,
+    business_type: str
+) -> bool:
+    business = _normalized_text(business_type).lower()
+    # 第一步：只允许输入框类型，其它（checkbox/radio/button等）直接排除
+    if business not in {"input", "text_input", "password", "password_input"}:
+        return False
+
+    role_text = _normalized_text(role).lower()
+    semantic_parts = [
+        _normalized_text(element_code).lower(),
+        _normalized_text(element_name).lower(),
+        _normalized_text(locator_value).lower(),
+        role_text,
+        business
+    ]
+    semantic_blob = " ".join(semantic_parts)
+
+    # 排除“记住密码”这类复选框语义（冗余但作为安全兜底保留）
+    if any(token in semantic_blob for token in ["记住密码", "rememberpassword", "rememberme", "checkbox", "复选框"]):
+        return False
+
+    has_password_keyword = "password" in semantic_blob or "密码" in semantic_blob
+    # 角色检查：标准输入框角色，或 role 为空时只看密码关键词
+    is_valid_role = role_text in {"textbox", "password"} or not role_text
+    return has_password_keyword and is_valid_role
 
 
 def _normalize_json_list(value: Any) -> list[str]:
@@ -400,10 +461,686 @@ def _normalize_candidate_snapshot(candidate: dict[str, Any]) -> dict[str, Any]:
         "steps_hint": _list_text(candidate.get("steps_hint")),
         "expected": _normalized_text(candidate.get("expected") or candidate.get("expected_result")),
         "involved_elements": _list_text(candidate.get("involved_elements")),
+        "involved_element_codes": _list_text(candidate.get("involved_element_codes")),
+        "source_asset_id": _normalized_text(candidate.get("source_asset_id") or candidate.get("asset_id")),
+        "source_asset_title": _normalized_text(candidate.get("source_asset_title") or candidate.get("asset_title")),
     }
     if not normalized["intent_id"]:
         normalized["intent_id"] = _normalized_text(candidate.get("key"))
     return normalized
+
+
+def _point_type_from_intent_type(value: Any) -> str:
+    normalized = _normalized_text(value).lower()
+    if normalized in {"negative", "security", "compatibility", "performance"}:
+        return "assertion"
+    if normalized == "api":
+        return "api"
+    return normalized or "action"
+
+
+def _candidate_identity(candidate: dict[str, Any]) -> tuple[str, str]:
+    intent_id = _normalized_text(candidate.get("intent_id") or candidate.get("key")) or "manual-intent"
+    title = (
+        _normalized_text(candidate.get("title"))
+        or _normalized_text(candidate.get("summary"))
+        or intent_id
+    )
+    return intent_id, title
+
+
+def _direct_candidate_requirement_lines(candidate: dict[str, Any], *, intent_id: str, title: str) -> list[str]:
+    lines: list[str] = []
+    intent_type = _normalized_text(candidate.get("intent_type")) or "functional"
+    precondition = _normalized_text(candidate.get("precondition"))
+    expected = _normalized_text(candidate.get("expected") or candidate.get("expected_result"))
+    involved_elements = _list_text(candidate.get("involved_elements"))
+    if intent_id:
+        lines.append(f"测试点ID：{intent_id}")
+    if title:
+        lines.append(f"测试点标题：{title}")
+    if intent_type:
+        lines.append(f"测试类型：{intent_type}")
+    if precondition:
+        lines.append(f"前置条件：{precondition}")
+    if expected:
+        lines.append(f"预期结果：{expected}")
+    if involved_elements:
+        lines.append(f"涉及元素：{'、'.join(involved_elements)}")
+    return lines or [title or intent_id or "AI生成用例"]
+
+
+def _find_candidate_snapshot_by_intent(
+    *,
+    intent_id: str,
+    candidate_snapshots: list[dict[str, Any]],
+) -> dict[str, Any]:
+    normalized_intent_id = _normalized_text(intent_id)
+    if not normalized_intent_id:
+        return {}
+    for candidate in candidate_snapshots:
+        if isinstance(candidate, dict) and _normalized_text(candidate.get("intent_id")) == normalized_intent_id:
+            return candidate
+    return {}
+
+
+def _find_requirement_intent_by_id(requirement_spec: dict[str, Any] | None, intent_id: str) -> dict[str, Any]:
+    if not isinstance(requirement_spec, dict):
+        return {}
+    normalized_intent_id = _normalized_text(intent_id)
+    intents = requirement_spec.get("test_intents")
+    if not isinstance(intents, list) or not normalized_intent_id:
+        return {}
+    for item in intents:
+        if isinstance(item, dict) and _normalized_text(item.get("intent_id")) == normalized_intent_id:
+            return item
+    return {}
+
+
+def _find_test_point_by_intent(test_points: list[dict[str, Any]], intent_id: str) -> dict[str, Any]:
+    normalized_intent_id = _normalized_text(intent_id)
+    if not normalized_intent_id:
+        return {}
+    for point in test_points:
+        if isinstance(point, dict) and _normalized_text(point.get("intent_id") or point.get("key")) == normalized_intent_id:
+            return point
+    return {}
+
+
+def _execution_intent_ids(
+    *,
+    selected_intent_ids: list[str],
+    execution_payload: dict[str, Any],
+    compiled_steps: list[dict[str, Any]],
+    test_points: list[dict[str, Any]],
+) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: Any) -> None:
+        intent_id = _normalized_text(value)
+        if not intent_id or intent_id == "__page_entry__" or intent_id in seen:
+            return
+        seen.add(intent_id)
+        deduped.append(intent_id)
+
+    for value in selected_intent_ids:
+        add(value)
+    raw_selected = execution_payload.get("selected_intent_ids")
+    if isinstance(raw_selected, list):
+        for value in raw_selected:
+            add(value)
+    for step in compiled_steps:
+        if isinstance(step, dict):
+            add(step.get("intent_id"))
+    for point in test_points:
+        if isinstance(point, dict) and not _is_precondition_point(point):
+            add(point.get("intent_id") or point.get("key"))
+    return deduped
+
+
+def _intent_product_metadata(
+    *,
+    intent_id: str,
+    case_yaml: dict[str, Any],
+    candidate_snapshots: list[dict[str, Any]],
+    requirement_spec: dict[str, Any] | None,
+    test_points: list[dict[str, Any]],
+    effective_requirement: str,
+) -> dict[str, str]:
+    candidate = _find_candidate_snapshot_by_intent(
+        intent_id=intent_id,
+        candidate_snapshots=candidate_snapshots,
+    )
+    requirement_intent = _find_requirement_intent_by_id(requirement_spec, intent_id)
+    point = _find_test_point_by_intent(test_points, intent_id)
+    point_snapshot = {}
+    metadata = point.get("metadata") if isinstance(point.get("metadata"), dict) else {}
+    if isinstance(metadata.get("candidate_snapshot"), dict):
+        point_snapshot = metadata["candidate_snapshot"]
+    title = (
+        _normalized_text(candidate.get("title") or candidate.get("summary"))
+        or _normalized_text(point_snapshot.get("title") or point_snapshot.get("summary"))
+        or _normalized_text(requirement_intent.get("title") or requirement_intent.get("summary"))
+        or _normalized_text(point.get("description") or point.get("title"))
+        or _normalized_text(case_yaml.get("title"))
+        or intent_id
+    )
+    intent_type = (
+        _normalized_text(candidate.get("intent_type"))
+        or _normalized_text(point_snapshot.get("intent_type"))
+        or _normalized_text(requirement_intent.get("intent_type"))
+        or _normalized_text(point.get("point_type"))
+        or "functional"
+    )
+    precondition = (
+        _normalized_text(candidate.get("precondition"))
+        or _normalized_text(point_snapshot.get("precondition"))
+        or _normalized_text(requirement_intent.get("precondition"))
+        or _normalized_text(point.get("precondition"))
+    )
+    expected = (
+        _normalized_text(candidate.get("expected") or candidate.get("expected_result"))
+        or _normalized_text(point_snapshot.get("expected") or point_snapshot.get("expected_result"))
+        or _normalized_text(requirement_intent.get("expected") or requirement_intent.get("expected_result"))
+        or _normalized_text(point.get("expected_result") or point.get("expected"))
+        or _normalized_text(case_yaml.get("expected_result"))
+    )
+    source_asset_id = (
+        _normalized_text(candidate.get("source_asset_id") or candidate.get("asset_id"))
+        or _normalized_text(point_snapshot.get("source_asset_id") or point_snapshot.get("asset_id"))
+        or _normalized_text(case_yaml.get("source_asset_id"))
+    )
+    source_asset_title = (
+        _normalized_text(candidate.get("source_asset_title") or candidate.get("asset_title"))
+        or _normalized_text(point_snapshot.get("source_asset_title") or point_snapshot.get("asset_title"))
+        or _normalized_text(case_yaml.get("source_asset_title"))
+        or _normalized_text(effective_requirement)
+    )
+    return {
+        "intent_id": intent_id,
+        "title": title,
+        "type": intent_type,
+        "precondition": precondition,
+        "expected": expected,
+        "source_asset_id": source_asset_id,
+        "source_asset_title": source_asset_title,
+    }
+
+
+def _product_description(title: str, expected: str) -> str:
+    title = _normalized_text(title) or "AI生成用例"
+    expected = _normalized_text(expected)
+    title_key = _normalized_key(title)
+    expected_key = _normalized_key(expected)
+    if "首次登录成功" in title and any(token in expected for token in ["跳转", "工作台", "首页", "登录用户名"]):
+        return f"{title} — 验证输入正确账号密码后可以成功登录并跳转至工作台首页"
+    if title_key and expected_key and title_key == expected_key:
+        return title
+    if expected:
+        return f"{title} — {expected[:180]}"
+    return title
+
+
+def _product_page_load_expected(page: str, page_object: dict[str, Any]) -> str:
+    normalized_page = _normalized_text(page).lower()
+    if normalized_page == "login":
+        return "登录页面加载完成，显示账号输入框、密码输入框、登录按钮"
+    element_names: list[str] = []
+    elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
+    for raw_meta in list(elements.values())[:3]:
+        if not isinstance(raw_meta, dict):
+            continue
+        name = _normalized_text(raw_meta.get("name"))
+        if name:
+            element_names.append(name)
+    if element_names:
+        return f"{page or '目标'}页面加载完成，显示{'、'.join(element_names)}"
+    return f"{page or '目标'}页面加载完成"
+
+
+def _product_element_name(page: str, target_code: str, element_meta: dict[str, Any]) -> str:
+    normalized_page = _normalized_text(page).lower()
+    normalized_code = _normalized_text(target_code)
+    if normalized_page == "login":
+        if normalized_code == "username_input":
+            return "用户名输入框"
+        if normalized_code == "password_input":
+            return "密码输入框"
+        if normalized_code == "login_button":
+            return "登录按钮"
+        if normalized_code == "home_menu":
+            return "首页菜单"
+    return _normalized_text(element_meta.get("name") or element_meta.get("element_name")) or normalized_code
+
+
+def _product_locator(
+    *,
+    page: str,
+    target_code: str,
+    locator_type: str,
+    locator_value: str,
+) -> tuple[str, str]:
+    normalized_page = _normalized_text(page).lower()
+    normalized_code = _normalized_text(target_code)
+    if normalized_page == "login":
+        if normalized_code == "username_input":
+            return (
+                "css",
+                "input[name='username'], #username, #username-input, "
+                "input[placeholder*='请输入用户名'], input[placeholder*='用户名']",
+            )
+        if normalized_code == "password_input":
+            return (
+                "css",
+                "input[type='password'], input[name='password'], #password, #password-input, "
+                "input[placeholder*='请输入密码'], input[placeholder*='密码']",
+            )
+    return _normalized_text(locator_type), _normalized_text(locator_value)
+
+
+def _product_step_expected(
+    *,
+    action: str,
+    target_name: str,
+    target_code: str,
+    value: Any,
+    intent_expected: str,
+    is_last_intent_step: bool,
+    existing_expected: str,
+) -> str:
+    if is_last_intent_step and intent_expected:
+        return intent_expected
+    if existing_expected:
+        return existing_expected
+    normalized_action = _normalized_text(action).lower()
+    value_text = _normalized_text(value)
+    target_name = _normalized_text(target_name) or _normalized_text(target_code)
+    if normalized_action == "input":
+        if target_code == "password_input" or "密码" in target_name:
+            return f"{target_name}内容以掩码形式显示"
+        if value_text:
+            return f"{target_name}内容显示为 {value_text}"
+        return f"{target_name}内容已清空"
+    if normalized_action == "click":
+        return f"已点击{target_name}"
+    return ""
+
+
+def _format_product_execution_steps(
+    *,
+    compiled_steps: list[dict[str, Any]],
+    page: str,
+    page_url: str,
+    page_object: dict[str, Any],
+    expected_by_intent: dict[str, str],
+) -> list[dict[str, Any]]:
+    elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
+    last_step_index_by_intent: dict[str, int] = {}
+    for index, step in enumerate(compiled_steps):
+        if not isinstance(step, dict):
+            continue
+        intent_id = _normalized_text(step.get("intent_id"))
+        action = _normalized_text(step.get("action")).lower()
+        if intent_id and intent_id != "__page_entry__" and action not in {"goto", "login"}:
+            last_step_index_by_intent[intent_id] = index
+
+    product_steps: list[dict[str, Any]] = []
+    for index, raw_step in enumerate(compiled_steps):
+        if not isinstance(raw_step, dict):
+            continue
+        raw_action = _normalized_text(raw_step.get("action")).lower()
+        if raw_action in {"fill", "type"}:
+            action = "input"
+        else:
+            action = raw_action or "custom_step"
+        if action == "goto":
+            value = _normalized_text(raw_step.get("value") or raw_step.get("target") or page_url)
+            if not value and page_url:
+                value = page_url
+            step_payload = {
+                "action": "goto",
+                "value": value,
+                "expected_result": _normalized_text(raw_step.get("expected_result"))
+                or _product_page_load_expected(page, page_object),
+            }
+            product_steps.append(step_payload)
+            continue
+
+        target_code = _normalized_text(raw_step.get("target"))
+        if target_code.startswith("element:"):
+            target_code = target_code.removeprefix("element:").strip()
+        element_meta = elements.get(target_code) if isinstance(elements.get(target_code), dict) else {}
+        locator_type = _normalized_text(raw_step.get("locator_type") or element_meta.get("type") or element_meta.get("locator_type"))
+        locator_value = _normalized_text(raw_step.get("locator_value") or raw_step.get("selector") or element_meta.get("selector") or element_meta.get("locator_value"))
+        locator_type, locator_value = _product_locator(
+            page=page,
+            target_code=target_code,
+            locator_type=locator_type,
+            locator_value=locator_value,
+        )
+        target_name = _product_element_name(page, target_code, element_meta)
+        intent_id = _normalized_text(raw_step.get("intent_id"))
+        intent_expected = expected_by_intent.get(intent_id, "")
+        step_payload: dict[str, Any] = {
+            "action": action,
+            "target": f"element:{target_code}" if target_code else "",
+            "locator_type": locator_type,
+            "locator_value": locator_value,
+            "target_name": target_name,
+        }
+        role = _normalized_text(raw_step.get("role") or element_meta.get("role"))
+        if locator_type == "role" and role:
+            step_payload["role"] = role
+        if raw_step.get("value") is not None:
+            step_payload["value"] = raw_step.get("value")
+        expected = _product_step_expected(
+            action=action,
+            target_name=target_name,
+            target_code=target_code,
+            value=raw_step.get("value"),
+            intent_expected=intent_expected,
+            is_last_intent_step=bool(intent_id and last_step_index_by_intent.get(intent_id) == index),
+            existing_expected=_normalized_text(raw_step.get("expected_result") or raw_step.get("expected")),
+        )
+        if expected:
+            step_payload["expected_result"] = expected
+        product_steps.append(step_payload)
+    _append_login_success_assertion(
+        product_steps=product_steps,
+        page=page,
+        page_object=page_object,
+        expected_by_intent=expected_by_intent,
+    )
+    return product_steps
+
+
+def _append_login_success_assertion(
+    *,
+    product_steps: list[dict[str, Any]],
+    page: str,
+    page_object: dict[str, Any],
+    expected_by_intent: dict[str, str],
+) -> None:
+    if _normalized_text(page).lower() != "login":
+        return
+    if any(_normalized_text(step.get("action")).lower().startswith("assert") for step in product_steps):
+        return
+    expected_text = " ".join(_normalized_text(value) for value in expected_by_intent.values()).lower()
+    if not expected_text:
+        return
+    negative_tokens = ("失败", "错误", "请输入", "不跳转", "未跳转", "停留", "提示")
+    success_tokens = ("登录成功", "跳转至平台工作台首页", "工作台首页", "权限导航菜单")
+    if any(token in expected_text for token in negative_tokens):
+        return
+    if not any(token in expected_text for token in success_tokens):
+        return
+
+    elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
+    home_meta = elements.get("home_menu") if isinstance(elements.get("home_menu"), dict) else {}
+    locator_type = _normalized_text(home_meta.get("type") or home_meta.get("locator_type"))
+    locator_value = _normalized_text(home_meta.get("selector") or home_meta.get("locator_value"))
+    if not locator_type or not locator_value:
+        return
+    assertion_step: dict[str, Any] = {
+        "action": "assert_visible",
+        "target": "element:home_menu",
+        "locator_type": locator_type,
+        "locator_value": locator_value,
+        "target_name": _product_element_name("login", "home_menu", home_meta),
+        "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
+    }
+    role = _normalized_text(home_meta.get("role"))
+    if locator_type == "role" and role:
+        assertion_step["role"] = role
+    product_steps.append(assertion_step)
+
+
+def _format_product_case_yaml(
+    *,
+    case_yaml: dict[str, Any],
+    payload: Any,
+    page: str,
+    page_url: str,
+    page_object: dict[str, Any],
+    test_points: list[dict[str, Any]],
+    candidate_snapshots: list[dict[str, Any]],
+    requirement_spec: dict[str, Any] | None,
+    selected_intent_ids: list[str],
+    effective_requirement: str,
+) -> dict[str, Any]:
+    execution_payload = case_yaml.get("execution") if isinstance(case_yaml.get("execution"), dict) else {}
+    compiled_steps = execution_payload.get("steps") if isinstance(execution_payload.get("steps"), list) else []
+    intent_ids = _execution_intent_ids(
+        selected_intent_ids=selected_intent_ids,
+        execution_payload=execution_payload,
+        compiled_steps=compiled_steps,
+        test_points=test_points,
+    )
+    primary_intent_id = intent_ids[0] if intent_ids else ""
+    intent_meta = _intent_product_metadata(
+        intent_id=primary_intent_id,
+        case_yaml=case_yaml,
+        candidate_snapshots=candidate_snapshots,
+        requirement_spec=requirement_spec,
+        test_points=test_points,
+        effective_requirement=effective_requirement,
+    ) if primary_intent_id else {
+        "intent_id": "",
+        "title": _normalized_text(case_yaml.get("title")),
+        "type": "functional",
+        "precondition": "",
+        "expected": _normalized_text(case_yaml.get("expected_result")),
+        "source_asset_id": "",
+        "source_asset_title": _normalized_text(effective_requirement),
+    }
+    expected_by_intent = {
+        intent_id: _intent_product_metadata(
+            intent_id=intent_id,
+            case_yaml=case_yaml,
+            candidate_snapshots=candidate_snapshots,
+            requirement_spec=requirement_spec,
+            test_points=test_points,
+            effective_requirement=effective_requirement,
+        ).get("expected", "")
+        for intent_id in intent_ids
+    }
+    expected = _normalized_text(intent_meta.get("expected")) or _normalized_text(case_yaml.get("expected_result"))
+    title = _normalized_text(case_yaml.get("title")) or _normalized_text(intent_meta.get("title")) or _normalized_text(getattr(payload, "title", "")) or "AI生成用例"
+    priority = _normalized_text(case_yaml.get("priority")) or _normalized_text(getattr(payload, "priority", "")) or "P1"
+    tags = [item for item in case_yaml.get("tags", []) if _normalized_text(item)] if isinstance(case_yaml.get("tags"), list) else []
+    product_yaml: dict[str, Any] = {
+        "version": "v1",
+        "id": _normalized_text(case_yaml.get("id")),
+        "project": _normalized_text(case_yaml.get("project")) or _normalized_text(getattr(payload, "project", "")) or "mall",
+        "module": page or _normalized_text(case_yaml.get("module")) or "product",
+        "title": title,
+        "priority": priority,
+        "tags": tags or ["ai-generated"],
+        "owner": _normalized_text(case_yaml.get("owner")) or "qa-team",
+        "status": _normalized_text(case_yaml.get("status")) or "automated",
+        "description": _product_description(title, expected),
+        "requirement": {
+            "intent_id": _normalized_text(intent_meta.get("intent_id")) or primary_intent_id,
+            "title": _normalized_text(intent_meta.get("title")) or title,
+            "type": _normalized_text(intent_meta.get("type")) or "functional",
+            "precondition": _normalized_text(intent_meta.get("precondition")),
+            "source_asset_id": _normalized_text(intent_meta.get("source_asset_id")),
+        },
+        "data": case_yaml.get("data") if isinstance(case_yaml.get("data"), dict) else {},
+        "execution": {
+            "runner": _normalized_text(execution_payload.get("runner")) or "playwright",
+            "page": page or _normalized_text(execution_payload.get("page")) or "product",
+            "page_url": page_url,
+            "variables": execution_payload.get("variables") if isinstance(execution_payload.get("variables"), dict) else {},
+            "steps": _format_product_execution_steps(
+                compiled_steps=compiled_steps,
+                page=page,
+                page_url=page_url,
+                page_object=page_object,
+                expected_by_intent=expected_by_intent,
+            ),
+            "selected_intent_ids": intent_ids,
+        },
+        "expected_result": expected,
+    }
+    if not product_yaml["requirement"]["source_asset_id"]:
+        product_yaml["requirement"].pop("source_asset_id", None)
+    if not product_yaml["requirement"]["precondition"]:
+        product_yaml["requirement"].pop("precondition", None)
+    return product_yaml
+
+
+def _attach_point_expected_results(compiled_steps: list[dict[str, Any]], test_points: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    expected_by_intent: dict[str, str] = {}
+    for point in test_points:
+        if not isinstance(point, dict):
+            continue
+        intent_id = _normalized_text(point.get("intent_id") or point.get("key"))
+        expected = _normalized_text(point.get("expected_result") or point.get("expected"))
+        if intent_id and expected:
+            expected_by_intent[intent_id] = expected
+    if not expected_by_intent:
+        return compiled_steps
+
+    last_step_index_by_intent: dict[str, int] = {}
+    for index, step in enumerate(compiled_steps):
+        if not isinstance(step, dict):
+            continue
+        intent_id = _normalized_text(step.get("intent_id"))
+        action = _normalized_text(step.get("action")).lower()
+        if not intent_id or intent_id == "__page_entry__" or action in {"goto", "login"}:
+            continue
+        if intent_id in expected_by_intent:
+            last_step_index_by_intent[intent_id] = index
+
+    for intent_id, index in last_step_index_by_intent.items():
+        step = compiled_steps[index]
+        # 修改：直接强制覆盖，不再判断是否为空
+        step["expected_result"] = expected_by_intent[intent_id]
+    return compiled_steps
+
+
+def _build_direct_candidate_orchestrator_result(
+    *,
+    payload: Any,
+    normalized_page: str,
+    effective_requirement: str,
+    candidate_snapshots: list[dict[str, Any]],
+    selected_candidate: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    candidates: list[dict[str, Any]] = []
+    if isinstance(selected_candidate, dict) and selected_candidate:
+        candidates.append(_normalize_candidate_snapshot(selected_candidate))
+    candidates.extend(candidate_snapshots)
+    candidate = next((item for item in candidates if _list_text(item.get("steps_hint"))), None)
+    if not candidate:
+        return None
+
+    page = _normalized_text(normalized_page or getattr(payload, "page", "")) or "product"
+    page_object = resolve_page_object(str(getattr(payload, "project", "") or ""), page)
+    alias_map = build_element_alias_map(page_object)
+    intent_id, title = _candidate_identity(candidate)
+    steps: list[dict[str, Any]] = []
+    involved_codes: list[str] = []
+    for index, hint in enumerate(_list_text(candidate.get("steps_hint"))):
+        action, target, value = resolve_explicit_step(
+            steps_hint=[hint],
+            page=page,
+            page_element_alias_map=alias_map,
+        )
+        step: dict[str, Any] = {
+            "action": action,
+            "target": target or "",
+            "raw_text": hint,
+            "description": hint,
+        }
+        if value is not None:
+            step["value"] = value
+        if action == "assert_metric" and value is not None:
+            step["metric_rule"] = value
+            step["rule"] = value
+        steps.append(step)
+        if target and target not in involved_codes:
+            involved_codes.append(target)
+
+    if not steps:
+        return None
+
+    candidate_codes = _list_text(candidate.get("involved_element_codes")) or involved_codes
+    if not candidate_codes:
+        candidate_codes = involved_codes
+    expected = _normalized_text(candidate.get("expected") or candidate.get("expected_result"))
+    priority = _normalized_text(candidate.get("priority")) or _normalized_text(getattr(payload, "priority", "")) or "P1"
+    intent_type = _normalized_text(candidate.get("intent_type")) or "functional"
+    point = {
+        "key": intent_id,
+        "intent_id": intent_id,
+        "point_type": _point_type_from_intent_type(intent_type),
+        "action": _normalized_text(steps[0].get("action")) or "candidate",
+        "description": title,
+        "priority": priority,
+        "expected_result": expected,
+        "dependencies": [],
+        "source_ids": [intent_id],
+        "steps": steps,
+        "involved_elements": candidate_codes,
+        "metadata": {
+            "candidate_snapshot": candidate,
+            "traceability": {
+                "intent_ids": [intent_id],
+                "source_ids": [intent_id],
+                "origin": "selected_candidate_direct_compile",
+            },
+        },
+    }
+    precondition = _normalized_text(candidate.get("precondition"))
+    if precondition:
+        point["precondition"] = precondition
+
+    requirement_spec = {
+        "project": _normalized_text(getattr(payload, "project", "")) or "mall",
+        "page": page,
+        "raw_requirement": effective_requirement,
+        "design_input": effective_requirement,
+        "source_type": "test_point_asset",
+        "priority": priority,
+        "parse_confidence": 1.0,
+        "test_intents": [
+            {
+                "intent_id": intent_id,
+                "title": title,
+                "summary": _normalized_text(candidate.get("summary")) or title,
+                "intent_type": intent_type,
+                "priority": priority,
+                "expected_result": expected,
+                "steps_hint": _list_text(candidate.get("steps_hint")),
+                "involved_elements": candidate_codes,
+                "quality_gate": {"decision": "allow", "blockers": []},
+            }
+        ],
+        "quality_gate": {"decision": "allow", "blockers": []},
+    }
+    case_yaml = {
+        "version": "v4",
+        "id": _normalized_text(getattr(payload, "case_id", "")),
+        "project": _normalized_text(getattr(payload, "project", "")) or "mall",
+        "module": page,
+        "title": _normalized_text(getattr(payload, "title", "")) or title,
+        "priority": priority,
+        "tags": [item for item in getattr(payload, "tags", []) if _normalized_text(item)] or ["ai-generated"],
+        "owner": "qa-team",
+        "status": "automated",
+        "description": _normalized_text(candidate.get("summary")) or title,
+        "requirement": _direct_candidate_requirement_lines(candidate, intent_id=intent_id, title=title),
+        "data": {},
+        "execution": {
+            "runner": "playwright",
+            "page": page,
+            "variables": {},
+            "steps": [],
+            "selected_intent_ids": [intent_id],
+        },
+        "expected_result": expected,
+    }
+    return {
+        "requirement_spec": requirement_spec,
+        "case": case_yaml,
+        "test_points": {
+            "version": "TestPointPlanV1",
+            "project": _normalized_text(getattr(payload, "project", "")) or "mall",
+            "case_id": _normalized_text(getattr(payload, "case_id", "")),
+            "page": page,
+            "source_type": "selected_candidate_direct_compile",
+            "requirement": [effective_requirement or title],
+            "points": [point],
+            "metadata": {
+                "build_source": "selected_candidate.steps_hint",
+                "selected_intent_ids": [intent_id],
+            },
+        },
+        "direct_compile": True,
+    }
 
 
 def _extract_candidate_snapshots(*, payload: Any, selected_candidate: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -463,11 +1200,22 @@ def _enrich_test_points_with_candidate_snapshots(
         point["precondition"] = _normalized_text(candidate.get("precondition")) or _normalized_text(point.get("precondition"))
         point["expected_result"] = _normalized_text(candidate.get("expected")) or _normalized_text(point.get("expected_result"))
         point["priority"] = _normalized_text(candidate.get("priority")) or _normalized_text(point.get("priority")) or "P1"
+        candidate_element_codes = _list_text(candidate.get("involved_element_codes"))
         candidate_elements = _list_text(candidate.get("involved_elements"))
-        if candidate_elements:
+        if candidate_element_codes:
+            point["involved_elements"] = candidate_element_codes
+            point["involved_element_aliases"] = candidate_elements
+        elif candidate_elements:
             point["involved_elements"] = candidate_elements
+        existing_steps = point.get("steps") if isinstance(point.get("steps"), list) else []
+        has_executable_steps = any(
+            isinstance(step, dict)
+            and _normalized_text(step.get("action"))
+            and _normalized_text(step.get("action")).lower() != "candidate_step"
+            for step in existing_steps
+        )
         candidate_steps = _list_text(candidate.get("steps"))
-        if candidate_steps:
+        if candidate_steps and not has_executable_steps:
             point["steps"] = [
                 {
                     "action": "candidate_step",
@@ -492,25 +1240,25 @@ def _enrich_test_points_with_candidate_snapshots(
 def _resolve_page_object_from_db(project: str, page: str) -> dict[str, Any] | None:
     """Attempt to load page object elements from the database. Returns None on miss."""
     try:
-        with SessionLocal() as db:
-            page_object = db.execute(
-                select(PageObject).where(
-                    PageObject.project_code == project,
-                    PageObject.client == "web",
-                    PageObject.page_code == page,
-                )
-            ).scalar_one_or_none()
+        page_object, elements = _load_page_object_from_db(project, page)
+        if page_object is None:
+            return None
+    except OperationalError:
+        _LOGGER.warning("DB page-object lookup connection failed for %s/%s; retrying once", project, page, exc_info=True)
+        try:
+            page_object, elements = _load_page_object_from_db(project, page)
             if page_object is None:
                 return None
-            elements = (
-                db.execute(
-                    select(PageElement)
-                    .where(PageElement.page_object_id == int(page_object.id))
-                    .order_by(PageElement.id.asc())
-                )
-                .scalars()
-                .all()
-            )
+        except ExecutionCompilerError:
+            raise
+        except Exception as exc:
+            _LOGGER.debug("DB page-object lookup retry failed for %s/%s", project, page, exc_info=True)
+            raise ExecutionCompilerError(
+                code="page_object_db_lookup_failed",
+                message="page object DB lookup failed",
+                reason=f"{project}/web/{page}: {type(exc).__name__}",
+                stage="resolve_page_object",
+            ) from exc
     except ExecutionCompilerError:
         raise
     except Exception as exc:
@@ -581,7 +1329,30 @@ def _resolve_page_object_from_db(project: str, page: str) -> dict[str, Any] | No
         )
     # Governance path must not reintroduce legacy YAML-only elements once a DB
     # page object exists. YAML fallback is only for pages not yet modeled in DB.
-    return {"page": page, "elements": mapping}
+    return {"page": page, "page_url": _normalized_text(getattr(page_object, "page_url", "")), "elements": mapping}
+
+
+def _load_page_object_from_db(project: str, page: str) -> tuple[PageObject | None, list[PageElement]]:
+    with SessionLocal() as db:
+        page_object = db.execute(
+            select(PageObject).where(
+                PageObject.project_code == project,
+                PageObject.client == "web",
+                PageObject.page_code == page,
+            )
+        ).scalar_one_or_none()
+        if page_object is None:
+            return None, []
+        elements = (
+            db.execute(
+                select(PageElement)
+                .where(PageElement.page_object_id == int(page_object.id))
+                .order_by(PageElement.id.asc())
+            )
+            .scalars()
+            .all()
+        )
+        return page_object, list(elements)
 
 
 def _resolve_page_object_from_assets(page: str) -> dict[str, Any] | None:
@@ -739,25 +1510,38 @@ def run_generate_pipeline(
     case_yaml: dict[str, Any] = {}
     resolved_page = normalized_page
     quality_gate: dict[str, Any] | None = None
+    requirement_spec: dict[str, Any] | None = None
+    test_points: list[dict[str, Any]] = []
+    page_object: dict[str, Any] = {}
     selected_intent_ids_list = _extract_selected_intent_ids(payload=payload, selected_candidate=selected_candidate)
     selected_intent_ids = set(selected_intent_ids_list)
     candidate_snapshots = _extract_candidate_snapshots(payload=payload, selected_candidate=selected_candidate)
     try:
-        orchestrator_result = run_orchestrator_generate(
-            requirement=effective_requirement,
-            page=normalized_page,
-            source=payload.source,
-            input_sources=input_sources,
-            openapi_spec=openapi_spec,
-            prd_text=payload.prd_text,
-            prd_url=payload.prd_url,
-            user_story=payload.user_story,
-            git_diff=payload.git_diff,
-            git_diff_path=payload.git_diff_path,
-            openapi_url=payload.openapi_url,
-            defect_ticket=payload.defect_ticket,
-            runtime_logs=payload.runtime_logs,
+        direct_orchestrator_result = _build_direct_candidate_orchestrator_result(
+            payload=payload,
+            normalized_page=normalized_page,
+            effective_requirement=effective_requirement,
+            candidate_snapshots=candidate_snapshots,
+            selected_candidate=selected_candidate,
         )
+        if direct_orchestrator_result is not None:
+            orchestrator_result = direct_orchestrator_result
+        else:
+            orchestrator_result = run_orchestrator_generate(
+                requirement=effective_requirement,
+                page=normalized_page,
+                source=payload.source,
+                input_sources=input_sources,
+                openapi_spec=openapi_spec,
+                prd_text=payload.prd_text,
+                prd_url=payload.prd_url,
+                user_story=payload.user_story,
+                git_diff=payload.git_diff,
+                git_diff_path=payload.git_diff_path,
+                openapi_url=payload.openapi_url,
+                defect_ticket=payload.defect_ticket,
+                runtime_logs=payload.runtime_logs,
+            )
         quality_gate = extract_quality_gate(orchestrator_result.get("requirement_spec"))
         generated_case = orchestrator_result.get("case") or {}
         if not isinstance(generated_case, dict) or not generated_case:
@@ -815,7 +1599,7 @@ def run_generate_pipeline(
                 },
             )
 
-        requirement_spec: dict[str, Any] | None = (
+        requirement_spec = (
             orchestrator_result.get("requirement_spec")
             if isinstance(orchestrator_result.get("requirement_spec"), dict)
             else None
@@ -875,14 +1659,42 @@ def run_generate_pipeline(
                 },
             )
 
-        compiled_steps = compile_execution_steps(test_points, page_object)
+        compiled_steps = _attach_point_expected_results(
+            compile_execution_steps(test_points, page_object),
+            test_points if isinstance(test_points, list) else [],
+        )
+        page_entry_url = _normalized_text(getattr(payload, "page_url", "") or page_object.get("page_url"))
+        if page_entry_url:
+            first_step = compiled_steps[0] if compiled_steps and isinstance(compiled_steps[0], dict) else {}
+            first_action = _normalized_text(first_step.get("action")).lower()
+            first_value = _normalized_text(first_step.get("value") or first_step.get("target"))
+            if first_action != "goto" or first_value != page_entry_url:
+                compiled_steps = [
+                    {
+                        "action": "goto",
+                        "target": "",
+                        "selector": "",
+                        "locator_type": "",
+                        "role": "",
+                        "intent_id": "__page_entry__",
+                        "confidence": 1.0,
+                        "value": page_entry_url,
+                        "traceability": {
+                            "source": "page_object.page_url",
+                            "page": resolved_page,
+                        },
+                    },
+                    *compiled_steps,
+                ]
         if selected_intent_ids:
             compiled_intent_ids = {
                 _normalized_text(step.get("intent_id"))
                 for step in compiled_steps
                 if isinstance(step, dict)
                 and _normalized_text(step.get("intent_id"))
+                and _normalized_text(step.get("intent_id")) != "__page_entry__"
                 and _normalized_text(step.get("action")).lower() != "login"
+                and _normalized_text(step.get("action")).lower() != "goto"
             }
             missing_intent_ids = sorted(selected_intent_ids - compiled_intent_ids)
             unexpected_intent_ids = sorted(compiled_intent_ids - selected_intent_ids)
@@ -1089,6 +1901,26 @@ def run_generate_pipeline(
         case_yaml["execution"] = execution_payload
     execution_payload["page"] = resolved_page or "product"
     case_yaml["module"] = str(case_yaml.get("module", "")).strip() or execution_payload["page"]
+    final_page_url = _normalized_text(
+        getattr(payload, "page_url", "")
+        or page_object.get("page_url")
+        or execution_payload.get("page_url")
+    )
+    if final_page_url:
+        execution_payload["page_url"] = final_page_url
+    case_yaml = _format_product_case_yaml(
+        case_yaml=case_yaml,
+        payload=payload,
+        page=execution_payload["page"],
+        page_url=final_page_url,
+        page_object=page_object,
+        test_points=test_points if isinstance(test_points, list) else [],
+        candidate_snapshots=candidate_snapshots,
+        requirement_spec=requirement_spec,
+        selected_intent_ids=selected_intent_ids_list,
+        effective_requirement=effective_requirement,
+    )
+    execution_payload = case_yaml.get("execution") if isinstance(case_yaml.get("execution"), dict) else {}
 
     case_path = ai_cases_root / f"{case_id}.yaml"
     final_text = write_case_yaml(case_path, case_yaml)

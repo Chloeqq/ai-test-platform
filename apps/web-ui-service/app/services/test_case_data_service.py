@@ -109,7 +109,11 @@ def normalize_report_url(report_url: str, execution_id: int) -> str:
     value = str(report_url or "").strip()
     if value.startswith("http://") or value.startswith("https://"):
         return value
-    return f"/execution/results/{execution_id}"
+    if value.startswith("/react/execution/results/"):
+        return value
+    if value.startswith("/execution/results/"):
+        return f"/react{value}"
+    return f"/react/execution/results/{execution_id}"
 
 
 def positive_ids(values: Sequence[Any]) -> list[int]:

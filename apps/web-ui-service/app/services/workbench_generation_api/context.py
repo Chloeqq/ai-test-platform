@@ -335,14 +335,23 @@ def build_workbench_runtime_context() -> WorkbenchRuntimeContext:
         safe_case_id_fn=safe_case_id,
         now_iso_fn=workbench_state_store.now_iso,
         derive_points_fn=workbench_asset_service.derive_points,
-        state_case_file_fn=workbench_asset_service.state_case_file,
-        state_case_versions_dir_fn=workbench_asset_service.state_case_versions_dir,
+        state_case_file_fn=lambda project, case_id: workbench_asset_service.state_case_file(
+            project,
+            case_id,
+            state_root=workbench_state_store.GENERATED_CASES_STATE_ROOT,
+        ),
+        state_case_versions_dir_fn=lambda project, case_id: workbench_asset_service.state_case_versions_dir(
+            project,
+            case_id,
+            state_root=workbench_state_store.GENERATED_CASES_STATE_ROOT,
+        ),
     )
     save_test_point_plan = partial(
         workbench_asset_service.save_test_point_plan,
         now_iso_fn=workbench_state_store.now_iso,
         normalize_test_point_plan_payload=_normalize_test_point_plan_payload,
         upsert_test_point_asset_snapshot=upsert_test_point_asset_snapshot,
+        state_root=workbench_state_store.GENERATED_CASES_STATE_ROOT,
     )
 
     def _read_runtime_runs() -> list[dict[str, Any]]:
@@ -451,6 +460,14 @@ def build_workbench_runtime_context() -> WorkbenchRuntimeContext:
             run_command=subprocess.run,
             read_allure_summary=partial(
                 workbench_reporting_service.read_allure_summary,
+                allure_report_root=allure_report_root,
+            ),
+            read_allure_environment=partial(
+                workbench_reporting_service.read_allure_environment,
+                allure_report_root=allure_report_root,
+            ),
+            read_allure_executors=partial(
+                workbench_reporting_service.read_allure_executors,
                 allure_report_root=allure_report_root,
             ),
             ensure_allure_snapshot=partial(

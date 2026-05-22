@@ -1,3 +1,4 @@
+"""将 IR 中的 target 映射为页面对象 selector，供 Playwright 等执行层使用。"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,6 +8,7 @@ from .ir_schema_validator import IRSchemaValidationError, IRSchemaValidator
 
 
 class MappingEngineError(ValueError):
+    """映射引擎基类异常。"""
     def __init__(self, code: str, message: str, *, detail: Mapping[str, Any] | None = None) -> None:
         super().__init__(message)
         self.code = str(code).strip() or "mapping_engine_error"
@@ -33,6 +35,7 @@ class TargetNotFoundError(MappingEngineError):
 
 @dataclass(frozen=True)
 class SelectorBinding:
+    """target 解析后的 selector 与元素类型。"""
     target: str
     selector: str
     element_type: str = ""
@@ -53,6 +56,7 @@ def _normalize_selector_list(raw: Any) -> list[str]:
 
 
 class PageObjectRegistry:
+    """页面对象 target → SelectorBinding 注册表，支持嵌套 key。"""
     def __init__(self, page_object: Mapping[str, Any] | None = None) -> None:
         self._entries: dict[str, SelectorBinding] = {}
         if isinstance(page_object, Mapping):
@@ -89,6 +93,7 @@ class PageObjectRegistry:
             )
 
     def resolve(self, target: str) -> SelectorBinding:
+        """按 target 查找绑定，未注册则 TargetNotFoundError。"""
         normalized = str(target or "").strip()
         if not normalized:
             raise IRValidationError("missing_target", "step target is required")
@@ -119,6 +124,7 @@ class PageObjectRegistry:
 
 
 class MappingEngine:
+    """将 IR steps 的 target 绑定为 selector。"""
     def __init__(
         self,
         page_object: Mapping[str, Any],
@@ -131,6 +137,7 @@ class MappingEngine:
         self.schema_validator = schema_validator or IRSchemaValidator()
 
     def map_step(self, step: Mapping[str, Any], *, index: int | None = None) -> dict[str, Any]:
+        """映射单步：target → selector，保留 value 与其它字段。"""
         try:
             normalized_step = self.schema_validator.validate_step(step, index=index)
         except IRSchemaValidationError as exc:
@@ -156,6 +163,7 @@ class MappingEngine:
         return mapped
 
     def map_ir(self, ir: Mapping[str, Any]) -> dict[str, Any]:
+        """映射 IR 中全部 steps。"""
         try:
             normalized_ir = self.schema_validator.validate_ir(ir)
         except IRSchemaValidationError as exc:
@@ -175,6 +183,7 @@ def map_ir_to_selectors(
     *,
     preserve_target: bool = False,
 ) -> dict[str, Any]:
+    """便捷函数：创建 MappingEngine 并映射整份 IR。"""
     engine = MappingEngine(page_object=page_object, preserve_target=preserve_target)
     return engine.map_ir(ir)
 
@@ -186,6 +195,7 @@ def _payload_value(payload: Any, key: str, default: Any = "") -> Any:
 
 
 def build_preview_payload(payload: Any) -> dict[str, Any]:
+    """从请求体（dict 或对象）提取预览管线所需的标准字段。"""
     input_sources = _payload_value(payload, "input_sources", [])
     return {
         "project": str(_payload_value(payload, "project", "") or "").strip(),

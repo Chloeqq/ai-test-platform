@@ -1,3 +1,4 @@
+"""契约层模型、版本常量与 normalize_* 归一化函数的对外导出。"""
 from shared_backend.case_ids import (
     build_case_metadata,
     build_case_id,

@@ -1,3 +1,4 @@
+"""各 pipeline 契约（PageSurface、TestPointPlan 等）的 v1 归一化与版本常量。"""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -116,6 +117,7 @@ def normalize_page_surface_v1(
     requested_url: str = "",
     strict: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
+    """归一化 PageSurfaceV1，返回 (payload, warnings)。"""
     warnings: list[str] = []
     raw = payload if isinstance(payload, dict) else {}
     if not isinstance(payload, dict):
@@ -357,6 +359,7 @@ def normalize_page_object_draft_v1(
     path: str = "",
     strict: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
+    """归一化 PageObjectDraftV1。"""
     warnings: list[str] = []
     raw = payload if isinstance(payload, dict) else {}
     if not isinstance(payload, dict):
@@ -563,6 +566,7 @@ def normalize_page_semantic_model_v1(
     requested_url: str = "",
     strict: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
+    """归一化 PageSemanticModelV1。"""
     warnings: list[str] = []
     raw = payload if isinstance(payload, dict) else {}
     if not isinstance(payload, dict):
@@ -633,6 +637,7 @@ def normalize_page_semantic_model_v1(
 
 
 def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool = False) -> tuple[dict[str, Any], list[str]]:
+    """归一化 TestPointPlanV1（含 points、review_summary、coverage）。"""
     warnings: list[str] = []
     raw = payload if isinstance(payload, dict) else {}
     if not isinstance(payload, dict):
@@ -904,6 +909,7 @@ def normalize_page_analysis_bundle_v1(
     *,
     strict: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
+    """归一化 PageAnalysisBundleV1（聚合 surface/semantic/object/test_points）。"""
     warnings: list[str] = []
     raw = payload if isinstance(payload, dict) else {}
     if not isinstance(payload, dict):
@@ -1027,6 +1033,7 @@ def normalize_page_analysis_bundle_v1(
 
 
 def normalize_execution_record_v1(payload: dict[str, Any] | None, *, strict: bool = False) -> tuple[dict[str, Any], list[str]]:
+    """归一化 ExecutionRecordV1。"""
     warnings: list[str] = []
     raw = payload if isinstance(payload, dict) else {}
     if not isinstance(payload, dict):
@@ -1090,6 +1097,7 @@ def normalize_execution_record_v1(payload: dict[str, Any] | None, *, strict: boo
 
 
 def normalize_evidence_manifest_v1(payload: dict[str, Any] | None, *, strict: bool = False) -> tuple[dict[str, Any], list[str]]:
+    """归一化 EvidenceManifestV1 及各证据文件列表。"""
     warnings: list[str] = []
     raw = payload if isinstance(payload, dict) else {}
     if not isinstance(payload, dict):

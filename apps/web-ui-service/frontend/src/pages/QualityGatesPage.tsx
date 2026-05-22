@@ -161,19 +161,19 @@ export function QualityGatesPage() {
       </header>
 
       <section className="panel stat-grid">
-        <article className="stat-card">
+        <article className="stat-card metric-tone-info">
           <span className="label">阈值</span>
           <strong>{numberValue(config.block_missing_required_threshold)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-danger">
           <span className="label">24h 阻断</span>
           <strong>{numberValue(summary24h.blocked_events)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-warning">
           <span className="label">24h 阻断率</span>
           <strong>{numberValue(summary24h.block_rate)}%</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-accent">
           <span className="label">Top 告警码</span>
           <strong>{text(summary24h.top_alert_code)}</strong>
         </article>

@@ -72,6 +72,115 @@ def page_objects_client() -> Iterator[tuple[TestClient, Session]]:
         session.close()
 
 
+def test_page_object_data_testid_import_preview_and_apply(
+    page_objects_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = page_objects_client
+    page_object = PageObject(
+        project_code="atp",
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="http://localhost:5174/#/login",
+        route_pattern="/login",
+        governance_status="active",
+        status="published",
+        created_by="pytest",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    legacy_element = PageElement(
+        page_object_id=page_object.id,
+        element_code="login-submit-btn",
+        element_name="登录按钮",
+        locator_type="css",
+        locator_value=".login-button",
+        business_type="button",
+        locator_source="css",
+        match_strategy="exact",
+        stability_level="low",
+        review_status="pending",
+        status="active",
+    )
+    db_session.add(legacy_element)
+    db_session.commit()
+
+    markdown = """# data-testid
+
+## 1. 命名规范
+
+- `product-search-submit-btn`
+
+## 3. 已落地清单（首批高频核心页面）
+
+### 登录与布局
+
+- `src/views/normal/login/index.vue`
+  - `login-page`、`login-form`
+  - `login-username-input`、`login-password-input`
+  - `login-submit-btn`、`login-trial-account-btn`
+
+### 商品列表 `src/views/pms/product/index.vue`
+
+- 行级：`product-row-${id}-edit-btn`
+
+## 4. 待落地清单
+""".encode("utf-8")
+    preview_resp = client.post(
+        "/api/page-objects/imports/preview",
+        data={"project_code": "atp", "client": "web", "source_type": "data_testid_guidelines"},
+        files={"data_testid_guidelines": ("data-testid-guidelines.md", markdown, "text/markdown")},
+    )
+    assert preview_resp.status_code == 200
+    preview_item = preview_resp.json()["item"]
+    assert preview_item["summary"]["element_count"] == 7
+    assert preview_item["summary"]["upgrade_count"] == 1
+    assert preview_item["summary"]["template_count"] == 1
+    assert not any(row["testid"] == "product-search-submit-btn" for row in preview_item["elements"])
+    dynamic_row = next(row for row in preview_item["elements"] if row["testid"] == "product-row-${id}-edit-btn")
+    assert dynamic_row["match_strategy"] == "template"
+
+    apply_resp = client.post(f"/api/page-objects/imports/{preview_item['import_id']}/apply", params={"operator": "qa-admin"})
+    assert apply_resp.status_code == 200
+    apply_item = apply_resp.json()["item"]["apply_result"]
+    assert apply_item["created_element_count"] == 6
+    assert apply_item["upgraded_element_count"] == 1
+
+    db_session.expire_all()
+    login_page = db_session.query(PageObject).filter_by(project_code="atp", client="web", page_code="login").one()
+    assert login_page.page_url == "http://localhost:5174/#/login"
+    upgraded = db_session.query(PageElement).filter_by(page_object_id=login_page.id, element_code="login-submit-btn").one()
+    assert upgraded.locator_type == "data-testid"
+    assert upgraded.locator_value == "login-submit-btn"
+    assert upgraded.testid_value == "login-submit-btn"
+    assert upgraded.locator_source == "testid"
+    assert upgraded.stability_level == "high"
+    assert upgraded.review_status == "approved"
+    assert db_session.query(PageElementVersion).filter_by(page_element_id=upgraded.id).count() >= 1
+    assert db_session.query(PageObjectGovernanceLog).filter_by(entity_key="login-submit-btn", action="import_upgrade").count() == 1
+
+    product_page = db_session.query(PageObject).filter_by(project_code="atp", client="web", page_code="product").one()
+    template = db_session.query(PageElement).filter_by(page_object_id=product_page.id, element_code="product-row-id-edit-btn").one()
+    assert template.match_strategy == "template"
+    assert template.testid_value == "product-row-${id}-edit-btn"
+    assert "dynamic-row-template" in template.semantic_tags_json
+
+
+def test_page_object_data_testid_import_rejects_empty_file(
+    page_objects_client: tuple[TestClient, Session],
+) -> None:
+    client, _db_session = page_objects_client
+
+    preview_resp = client.post(
+        "/api/page-objects/imports/preview",
+        data={"project_code": "atp", "client": "web", "source_type": "data_testid_guidelines"},
+        files={"data_testid_guidelines": ("data-testid-guidelines.md", b"", "text/markdown")},
+    )
+
+    assert preview_resp.status_code == 400
+    assert "上传文件为空" in preview_resp.json()["detail"]
+
+
 def test_page_object_crud_element_version_and_refs(
     page_objects_client: tuple[TestClient, Session],
 ) -> None:

@@ -326,9 +326,12 @@ def _classify_login_element_role(element: PageElement) -> str:
                 str(element.element_name or ""),
                 str(element.locator_value or ""),
                 str(element.role or ""),
+                str(element.business_type or ""),
             ]
         )
     )
+    if any(token in blob for token in ["记住密码", "rememberpassword", "rememberme", "checkbox", "复选框"]):
+        return "other"
     if any(
         token in blob
         for token in [
@@ -542,6 +545,10 @@ def _pick_login_element_for_step(
         elif any(token in merged for token in ["首页", "home"]):
             desired_role = "home"
 
+    if matched_by_target is not None and matched_by_target[1] not in {"other", "password_toggle"}:
+        if not desired_role or desired_role == matched_by_target[1]:
+            return matched_by_target
+
     if desired_role and role_map.get(desired_role):
         best = _best_role_element(role_map, desired_role)
         if best is not None:
@@ -571,6 +578,19 @@ def _pick_login_element_for_step(
 
 def _build_login_scenario_context(text: str) -> dict[str, bool]:
     merged = _normalize_match_text(text)
+    positive = any(
+        token in merged
+        for token in [
+            "首次登录成功",
+            "登录成功",
+            "正确账号密码",
+            "正确的账号密码",
+            "跳转至平台工作台首页",
+            "跳转到平台工作台首页",
+            "跳转至工作台首页",
+            "跳转到工作台首页",
+        ]
+    )
     negative = any(
         token in merged
         for token in [
@@ -582,7 +602,8 @@ def _build_login_scenario_context(text: str) -> dict[str, bool]:
             "非法",
             "锁定",
             "禁止",
-            "未登录",
+            "未成功",
+            "超时",
             "negative",
             "invalid",
             "wrong",
@@ -591,16 +612,16 @@ def _build_login_scenario_context(text: str) -> dict[str, bool]:
             "timeout",
             "提示",
         ]
-    )
+    ) and not positive
     return {
         "negative": negative,
-        "lock": any(token in merged for token in ["锁定", "lock"]),
-        "empty_username": ("用户名" in merged and "为空" in merged) or "usernameempty" in merged,
-        "empty_password": ("密码" in merged and "为空" in merged) or "passwordempty" in merged,
-        "wrong_username": ("用户名" in merged and "错误" in merged) or "wrongusername" in merged,
-        "wrong_password": ("密码" in merged and "错误" in merged) or "wrongpassword" in merged,
-        "over_limit_username": ("用户名" in merged and any(token in merged for token in ["超长", "超限", "超过", "长度"])) or "usernametoolong" in merged,
-        "over_limit_password": ("密码" in merged and any(token in merged for token in ["超长", "超限", "超过", "长度"])) or "passwordtoolong" in merged,
+        "lock": not positive and any(token in merged for token in ["锁定", "lock"]),
+        "empty_username": not positive and (("用户名" in merged and "为空" in merged) or "usernameempty" in merged),
+        "empty_password": not positive and (("密码" in merged and "为空" in merged) or "passwordempty" in merged),
+        "wrong_username": not positive and (("用户名" in merged and "错误" in merged) or "wrongusername" in merged),
+        "wrong_password": not positive and (("密码" in merged and "错误" in merged) or "wrongpassword" in merged),
+        "over_limit_username": not positive and (("用户名" in merged and any(token in merged for token in ["超长", "超限", "超过", "长度"])) or "usernametoolong" in merged),
+        "over_limit_password": not positive and (("密码" in merged and any(token in merged for token in ["超长", "超限", "超过", "长度"])) or "passwordtoolong" in merged),
     }
 
 
@@ -663,6 +684,11 @@ def _is_positive_login_expected(value: str) -> bool:
     return any(token in normalized for token in ["跳转", "首页", "已登录", "token", "会话状态正常", "登录成功"])
 
 
+def _is_negative_login_expected(value: str) -> bool:
+    normalized = _normalize_match_text(value)
+    return any(token in normalized for token in ["登录失败", "错误提示", "账号或密码错误", "未成功", "锁定", "超时"])
+
+
 def _is_weak_login_locator(locator_type: str, locator_value: str) -> bool:
     normalized_type = str(locator_type or "").strip().lower()
     normalized_value = _normalize_match_text(locator_value)
@@ -680,9 +706,17 @@ def _stable_locator_for_login_role(*, role: str, locator_type: str, locator_valu
     if not _is_weak_login_locator(locator_type, locator_value):
         return locator_type, locator_value
     if role == "username":
-        return "css", "input[name='username'], #username, #username-input, input[placeholder*='用户名']"
+        return (
+            "css",
+            "input[name='username'], #username, #username-input, "
+            "input[placeholder*='请输入用户名'], input[placeholder*='用户名']",
+        )
     if role == "password":
-        return "css", "input[type='password'], input[name='password'], #password, #password-input"
+        return (
+            "css",
+            "input[type='password'], input[name='password'], #password, #password-input, "
+            "input[placeholder*='请输入密码'], input[placeholder*='密码']",
+        )
     if role == "login_button":
         return "css", "button[type='submit'], #login-btn, .login-button, .el-button--primary"
     return locator_type, locator_value
@@ -804,6 +838,7 @@ def _repair_execution_steps_for_storage(
                 if (
                     not current_expected
                     or (scenario_context.get("negative") and _is_positive_login_expected(current_expected))
+                    or (not scenario_context.get("negative") and role == "login_button" and action == "click" and _is_negative_login_expected(current_expected))
                 ):
                     expected = _default_expected_for_login_step(role, action, scenario_context)
                     if expected:
@@ -857,7 +892,12 @@ def _repair_expected_result_for_storage(
     return normalized_expected
 
 
-def _sanitize_workbench_script_code_for_storage(script_code: str) -> str:
+def _sanitize_workbench_script_code_for_storage(
+    script_code: str,
+    *,
+    steps: Sequence[dict[str, Any]] | None = None,
+    expected_result: str = "",
+) -> str:
     raw_script = str(script_code or "")
     if "requirement:" not in raw_script:
         return raw_script
@@ -869,6 +909,13 @@ def _sanitize_workbench_script_code_for_storage(script_code: str) -> str:
         return raw_script
     if not any(key in parsed for key in ("id", "title", "execution", "module")):
         return raw_script
+    if steps is not None:
+        execution = parsed.get("execution") if isinstance(parsed.get("execution"), dict) else {}
+        execution["steps"] = [dict(step) for step in steps if isinstance(step, dict)]
+        parsed["execution"] = execution
+    normalized_expected = normalize_optional_text(expected_result)
+    if normalized_expected:
+        parsed["expected_result"] = normalized_expected
     return _workbench_yaml_script(parsed)
 
 
@@ -897,7 +944,11 @@ def _repair_case_detail_payload_in_storage(db: Session, *, case: TestCase) -> No
         steps=repaired_steps,
         scenario_context_text=scenario_context_text,
     )
-    repaired_script_code = _sanitize_workbench_script_code_for_storage(case.script_code or "")
+    repaired_script_code = _sanitize_workbench_script_code_for_storage(
+        case.script_code or "",
+        steps=repaired_steps,
+        expected_result=repaired_expected_result,
+    )
 
     changed = False
     if repaired_steps != raw_steps:
@@ -909,6 +960,7 @@ def _repair_case_detail_payload_in_storage(db: Session, *, case: TestCase) -> No
         changed = True
     if repaired_script_code and repaired_script_code != str(case.script_code or ""):
         case.script_code = repaired_script_code
+        sync_generated_case_yaml_file(case.source_ref, repaired_script_code)
         changed = True
 
     if not changed:
@@ -998,6 +1050,285 @@ def _sanitize_workbench_requirement_lines(
     return normalized[:max_items]
 
 
+def _sanitize_workbench_requirement_object(value: dict[str, Any]) -> dict[str, Any]:
+    allowed_keys = ("intent_id", "title", "type", "precondition", "source_asset_id")
+    sanitized: dict[str, Any] = {}
+    for key in allowed_keys:
+        text = normalize_optional_text(value.get(key))
+        if text:
+            sanitized[key] = text
+    return sanitized
+
+
+def _workbench_requirement_lines_from_object(value: dict[str, Any]) -> list[str]:
+    requirement = _sanitize_workbench_requirement_object(value)
+    rows: list[str] = []
+    label_pairs = [
+        ("intent_id", "测试点ID"),
+        ("title", "测试点标题"),
+        ("type", "测试类型"),
+        ("precondition", "前置条件"),
+        ("source_asset_id", "来源资产"),
+    ]
+    for key, label in label_pairs:
+        text = normalize_optional_text(requirement.get(key))
+        if text:
+            rows.append(f"{label}：{text}")
+    return rows
+
+
+def _extract_requirement_value_from_lines(lines: Sequence[Any], *prefixes: str) -> str:
+    normalized_prefixes = tuple(str(prefix or "").strip() for prefix in prefixes if str(prefix or "").strip())
+    if not normalized_prefixes:
+        return ""
+    for raw in lines:
+        for line in str(raw or "").replace("\r", "\n").split("\n"):
+            text = line.strip().lstrip("-*•·").strip()
+            for prefix in normalized_prefixes:
+                if text.startswith(prefix):
+                    return text[len(prefix):].strip()
+    return ""
+
+
+def _append_unique_identity_value(target: list[str], value: Any) -> None:
+    text = normalize_optional_text(value)
+    if text and text not in target:
+        target.append(text)
+
+
+def _normalize_source_asset_identity(value: Any) -> str:
+    text = normalize_optional_text(value).lower()
+    return _normalize_business_case_id(text) or text
+
+
+def _workbench_source_identity(case_yaml: dict[str, Any]) -> tuple[str, list[str]]:
+    if not isinstance(case_yaml, dict):
+        return "", []
+    source_asset_id = normalize_optional_text(case_yaml.get("source_asset_id"))
+    intent_ids: list[str] = []
+    raw_requirement = case_yaml.get("requirement")
+    if isinstance(raw_requirement, dict):
+        source_asset_id = source_asset_id or normalize_optional_text(raw_requirement.get("source_asset_id"))
+        _append_unique_identity_value(intent_ids, raw_requirement.get("intent_id"))
+    else:
+        lines = raw_requirement if isinstance(raw_requirement, list) else ([raw_requirement] if raw_requirement is not None else [])
+        source_asset_id = source_asset_id or _extract_requirement_value_from_lines(
+            lines,
+            "来源资产：",
+            "来源资产:",
+            "source_asset_id：",
+            "source_asset_id:",
+        )
+        _append_unique_identity_value(
+            intent_ids,
+            _extract_requirement_value_from_lines(
+                lines,
+                "测试点ID：",
+                "测试点ID:",
+                "intent_id：",
+                "intent_id:",
+            ),
+        )
+    execution = case_yaml.get("execution") if isinstance(case_yaml.get("execution"), dict) else {}
+    selected_ids = execution.get("selected_intent_ids") if isinstance(execution.get("selected_intent_ids"), list) else []
+    for intent_id in selected_ids:
+        _append_unique_identity_value(intent_ids, intent_id)
+    return source_asset_id, intent_ids
+
+
+def _load_case_yaml_from_script(script_code: Any) -> dict[str, Any]:
+    try:
+        payload = yaml.safe_load(str(script_code or "")) or {}
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _find_existing_workbench_case_by_source_identity(
+    db: Session,
+    *,
+    project_code: str,
+    source_asset_id: str,
+    intent_id: str,
+) -> TestCase | None:
+    normalized_project = _normalize_project_code(project_code)
+    normalized_asset = _normalize_source_asset_identity(source_asset_id)
+    normalized_intent = normalize_optional_text(intent_id)
+    if not normalized_project or not normalized_asset or not normalized_intent:
+        return None
+    candidates = db.execute(
+        select(TestCase)
+        .where(TestCase.project_code == normalized_project)
+        .order_by(TestCase.updated_at.desc(), TestCase.id.desc())
+    ).scalars().all()
+    for candidate in candidates:
+        candidate_asset, candidate_intents = _workbench_source_identity(
+            _load_case_yaml_from_script(candidate.script_code)
+        )
+        if _normalize_source_asset_identity(candidate_asset) == normalized_asset and normalized_intent in candidate_intents:
+            return candidate
+    return None
+
+
+def _legacy_requirement_object(case_yaml: dict[str, Any]) -> dict[str, Any]:
+    raw_requirement = case_yaml.get("requirement")
+    lines = raw_requirement if isinstance(raw_requirement, list) else ([raw_requirement] if raw_requirement is not None else [])
+    sanitized_lines = _sanitize_workbench_requirement_lines(lines, fallback_text="")
+    legacy_title = ""
+    for line in sanitized_lines:
+        if line in {"登录功能", "登录功能："}:
+            continue
+        legacy_title = line
+        break
+    execution = case_yaml.get("execution") if isinstance(case_yaml.get("execution"), dict) else {}
+    selected_ids = execution.get("selected_intent_ids") if isinstance(execution.get("selected_intent_ids"), list) else []
+    intent_id = (
+        _extract_requirement_value_from_lines(lines, "测试点ID：", "测试点ID:")
+        or (normalize_optional_text(selected_ids[0]) if selected_ids else "")
+    )
+    title = (
+        _extract_requirement_value_from_lines(lines, "测试点标题：", "测试点标题:", "测试意图：", "测试意图:")
+        or legacy_title
+        or normalize_optional_text(case_yaml.get("title"))
+    )
+    intent_type = _extract_requirement_value_from_lines(lines, "测试类型：", "测试类型:") or "functional"
+    precondition = _extract_requirement_value_from_lines(lines, "前置条件：", "前置条件:")
+    source_asset_id = normalize_optional_text(case_yaml.get("source_asset_id"))
+    return _sanitize_workbench_requirement_object(
+        {
+            "intent_id": intent_id,
+            "title": title,
+            "type": intent_type,
+            "precondition": precondition,
+            "source_asset_id": source_asset_id,
+        }
+    )
+
+
+def _target_code_from_step(step: dict[str, Any]) -> str:
+    target = normalize_optional_text(step.get("target"))
+    if target.startswith("element:"):
+        return target.removeprefix("element:").strip()
+    return target
+
+
+def _friendly_step_target_name(step: dict[str, Any]) -> str:
+    target_name = normalize_optional_text(step.get("target_name"))
+    if target_name:
+        return target_name
+    target_code = _target_code_from_step(step)
+    if target_code == "username_input":
+        return "用户名输入框"
+    if target_code == "password_input":
+        return "密码输入框"
+    if target_code == "login_button":
+        return "登录按钮"
+    return target_code
+
+
+def _workbench_step_locator(step: dict[str, Any]) -> tuple[str, str]:
+    locator_type = normalize_optional_text(step.get("locator_type"))
+    locator_value = normalize_optional_text(step.get("locator_value")) or normalize_optional_text(step.get("selector"))
+    return locator_type, locator_value
+
+
+def _productize_workbench_steps_for_script(case_yaml: dict[str, Any]) -> list[dict[str, Any]]:
+    execution = case_yaml.get("execution") if isinstance(case_yaml.get("execution"), dict) else {}
+    steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
+    expected_result = normalize_optional_text(case_yaml.get("expected_result"))
+    product_steps: list[dict[str, Any]] = []
+    non_navigation_indexes = [
+        index
+        for index, raw in enumerate(steps)
+        if isinstance(raw, dict) and normalize_optional_text(raw.get("action")).lower() not in {"goto", "login"}
+    ]
+    final_step_index = non_navigation_indexes[-1] if non_navigation_indexes else -1
+    for index, raw in enumerate(steps):
+        if not isinstance(raw, dict):
+            continue
+        raw_action = normalize_optional_text(raw.get("action")).lower()
+        action = "input" if raw_action in {"fill", "type"} else (raw_action or "custom_step")
+        if action == "goto":
+            value = normalize_optional_text(raw.get("value") or raw.get("target"))
+            product_steps.append(
+                {
+                    "action": "goto",
+                    "value": value,
+                    "expected_result": normalize_optional_text(raw.get("expected_result")) or "页面加载完成",
+                }
+            )
+            continue
+        target_code = _target_code_from_step(raw)
+        locator_type, locator_value = _workbench_step_locator(raw)
+        target_name = _friendly_step_target_name(raw)
+        step: dict[str, Any] = {
+            "action": action,
+            "target": f"element:{target_code}" if target_code else "",
+            "locator_type": locator_type,
+            "locator_value": locator_value,
+            "target_name": target_name,
+        }
+        if raw.get("value") is not None:
+            step["value"] = raw.get("value")
+        step_expected = normalize_optional_text(raw.get("expected_result") or raw.get("expected"))
+        if index == final_step_index and expected_result:
+            step_expected = expected_result
+        if step_expected:
+            step["expected_result"] = step_expected
+        product_steps.append(step)
+    return product_steps
+
+
+def _coerce_workbench_case_yaml_for_script(case_yaml: dict[str, Any]) -> dict[str, Any]:
+    payload = _sanitize_workbench_case_yaml_for_storage(case_yaml)
+    execution = payload.get("execution") if isinstance(payload.get("execution"), dict) else {}
+    steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
+    page_url = normalize_optional_text(execution.get("page_url"))
+    if not page_url:
+        for step in steps:
+            if isinstance(step, dict) and normalize_optional_text(step.get("action")).lower() == "goto":
+                page_url = normalize_optional_text(step.get("value") or step.get("target"))
+                if page_url:
+                    break
+    product_execution = {
+        "runner": normalize_optional_text(execution.get("runner")) or "playwright",
+        "page": normalize_optional_text(execution.get("page") or payload.get("module")) or "common",
+        "page_url": page_url,
+        "variables": execution.get("variables") if isinstance(execution.get("variables"), dict) else {},
+        "steps": _productize_workbench_steps_for_script(payload),
+        "selected_intent_ids": execution.get("selected_intent_ids") if isinstance(execution.get("selected_intent_ids"), list) else [],
+    }
+    payload["version"] = "v1"
+    payload["execution"] = product_execution
+    if not isinstance(payload.get("requirement"), dict):
+        legacy_requirement = _legacy_requirement_object(payload)
+        if legacy_requirement:
+            payload["requirement"] = legacy_requirement
+    ordered: dict[str, Any] = {}
+    for key in (
+        "version",
+        "id",
+        "project",
+        "module",
+        "title",
+        "priority",
+        "tags",
+        "owner",
+        "status",
+        "description",
+        "requirement",
+        "data",
+        "execution",
+        "expected_result",
+    ):
+        if key in payload:
+            ordered[key] = payload[key]
+    for key, value in payload.items():
+        if key not in ordered:
+            ordered[key] = value
+    return ordered
+
+
 def _sanitize_workbench_case_yaml_for_storage(case_yaml: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(case_yaml, dict):
         return {}
@@ -1005,6 +1336,11 @@ def _sanitize_workbench_case_yaml_for_storage(case_yaml: dict[str, Any]) -> dict
         return dict(case_yaml)
     sanitized = dict(case_yaml)
     raw_requirement = sanitized.get("requirement")
+    if isinstance(raw_requirement, dict):
+        structured_requirement = _sanitize_workbench_requirement_object(raw_requirement)
+        if structured_requirement:
+            sanitized["requirement"] = structured_requirement
+        return sanitized
     if isinstance(raw_requirement, list):
         requirement_values = raw_requirement
     elif raw_requirement is None:
@@ -1041,6 +1377,8 @@ def _workbench_requirement(case_yaml: dict[str, Any]) -> list[str]:
         text = str(raw_requirement).strip()
         return [text] if text else []
     raw_requirement = case_yaml.get("requirement")
+    if isinstance(raw_requirement, dict):
+        return _workbench_requirement_lines_from_object(raw_requirement)
     if isinstance(raw_requirement, list):
         requirement_values = raw_requirement
     elif raw_requirement is None:
@@ -1054,10 +1392,41 @@ def _workbench_requirement(case_yaml: dict[str, Any]) -> list[str]:
 def _workbench_yaml_script(case_yaml: dict[str, Any]) -> str:
     if not isinstance(case_yaml, dict):
         return ""
-    payload = _sanitize_workbench_case_yaml_for_storage(case_yaml)
+    payload = _coerce_workbench_case_yaml_for_script(case_yaml)
     if not _env_flag("POST_PROCESSING_ENABLED", True):
         payload = dict(case_yaml)
     return yaml.safe_dump(payload, allow_unicode=True, sort_keys=False).strip() + "\n"
+
+
+def sync_generated_case_yaml_file(source_ref: str, script_code: str) -> bool:
+    """Keep the runner YAML aligned with the case-center post-processed script."""
+    raw_source_ref = normalize_optional_text(source_ref)
+    normalized_script_code = str(script_code or "").strip()
+    if not raw_source_ref or not normalized_script_code:
+        return False
+
+    candidate_path = Path(raw_source_ref).expanduser()
+    if not candidate_path.is_absolute():
+        candidate_path = REPO_ROOT / candidate_path
+    try:
+        resolved_path = candidate_path.resolve()
+        resolved_root = ASSETS_CASES_ROOT.resolve()
+        resolved_path.relative_to(resolved_root)
+    except Exception:
+        return False
+
+    if resolved_path.suffix.lower() not in {".yaml", ".yml"}:
+        return False
+
+    next_content = normalized_script_code + "\n"
+    try:
+        if resolved_path.exists() and resolved_path.read_text(encoding="utf-8") == next_content:
+            return True
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        resolved_path.write_text(next_content, encoding="utf-8")
+        return True
+    except OSError:
+        return False
 
 
 def _existing_asset_case_ids() -> list[str]:
@@ -1701,6 +2070,8 @@ def upsert_test_case_from_workbench(
 
     normalized_project_code = _normalize_project_code(project_code)
     _ensure_project_writable(db, normalized_project_code)
+    source_asset_id, source_intent_ids = _workbench_source_identity(case_yaml)
+    source_intent_id = source_intent_ids[0] if len(source_intent_ids) == 1 else ""
 
     title = normalize_optional_text(case_yaml.get("title")) or normalized_case_id
     tags = normalize_tags(normalize_text_list(case_yaml.get("tags")))
@@ -1742,6 +2113,16 @@ def upsert_test_case_from_workbench(
     existing = db.execute(
         select(TestCase).where(TestCase.case_id == normalized_case_id)
     ).scalar_one_or_none()
+    if existing is None and source_asset_id and source_intent_id:
+        existing = _find_existing_workbench_case_by_source_identity(
+            db,
+            project_code=normalized_project_code,
+            source_asset_id=source_asset_id,
+            intent_id=source_intent_id,
+        )
+        if existing is not None:
+            normalized_case_id = _normalize_business_case_id(existing.case_id)
+            case_yaml["id"] = normalized_case_id
     resolved_identity = _resolve_case_identity(
         db,
         requested_case_id=normalized_case_id,
@@ -1777,6 +2158,7 @@ def upsert_test_case_from_workbench(
     chain_stage = normalize_optional_text(case_yaml.get("chain_stage")) or metadata["page_name"]
     notes = normalize_optional_text(case_yaml.get("notes")) or "Synchronized from AI workbench generated asset."
     test_steps_text = render_test_steps_text(steps)
+    sync_generated_case_yaml_file(source_ref, script_code)
 
     if existing is None:
         now_ts = datetime.now(UTC)

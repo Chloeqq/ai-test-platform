@@ -2,6 +2,10 @@
 
 这份文档定义页面对象、元素代码和别名的统一规则。
 
+相关方案：
+
+- [页面对象 data-testid 清单导入维护实现方案](./page_object_data_testid_import_plan.md)
+
 ## 1. 基本原则
 
 - 页面对象必须存在于平台资产中
@@ -38,4 +42,3 @@
 - `shared_backend/element_binding.py` 负责 alias 到 code 的映射
 - `shared_backend/execution_compiler.py` 负责把 code 绑定为 selector
 - 只有明确绑定成功，步骤才可以执行
-

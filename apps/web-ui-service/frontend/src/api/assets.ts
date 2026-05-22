@@ -1,4 +1,4 @@
-import { deleteJson, getJson, postJson, putJson } from "../lib/http";
+import { deleteJson, getJson, postFormData, postJson, putJson } from "../lib/http";
 import { DEFAULT_PROJECT_CODE } from "../config/projects";
 
 export interface CasesListResponse {
@@ -12,6 +12,43 @@ export interface CasesListResponse {
     has_next?: boolean;
   };
   filters?: Record<string, unknown>;
+}
+
+export interface WorkbenchTestCasesResponse {
+  items?: Array<Record<string, unknown>>;
+  summary?: Record<string, unknown>;
+  filters?: Record<string, unknown>;
+  pagination?: {
+    page?: number;
+    page_size?: number;
+    total_items?: number;
+    total_pages?: number;
+    has_prev?: boolean;
+    has_next?: boolean;
+  };
+}
+
+export interface TestCaseGenerationFailuresResponse {
+  items?: Array<Record<string, unknown>>;
+  summary?: Record<string, unknown>;
+  filters?: Record<string, unknown>;
+  pagination?: {
+    page?: number;
+    page_size?: number;
+    total_items?: number;
+    total_pages?: number;
+    has_prev?: boolean;
+    has_next?: boolean;
+  };
+}
+
+export interface DeleteWorkbenchTestCasesResponse {
+  message?: string;
+  project?: string;
+  deleted_count?: number;
+  deleted_case_ids?: string[];
+  missing_case_ids?: string[];
+  delete_all?: boolean;
 }
 
 export interface CaseDetailResponse {
@@ -113,6 +150,32 @@ export interface BatchGenerateFromTestPointAssetsResponse {
   summary?: Record<string, unknown>;
 }
 
+export interface TestPointScriptPreviewResponse {
+  item?: Record<string, unknown>;
+}
+
+export interface TestPointReviewsResponse {
+  items?: Array<Record<string, unknown>>;
+  summary?: Record<string, unknown>;
+  filters?: Record<string, unknown>;
+  pagination?: {
+    page?: number;
+    page_size?: number;
+    total_items?: number;
+    total_pages?: number;
+    has_prev?: boolean;
+    has_next?: boolean;
+  };
+}
+
+export interface BatchTestPointReviewResponse {
+  message?: string;
+  updated_count?: number;
+  status?: string;
+  affected_assets?: string[];
+  missing?: Array<Record<string, unknown>>;
+}
+
 export interface PageObjectsResponse {
   items?: Array<Record<string, unknown>>;
 }
@@ -135,6 +198,10 @@ export interface PageElementVersionsResponse {
 
 export interface PageObjectRefsResponse {
   items?: Array<Record<string, unknown>>;
+}
+
+export interface PageObjectImportResponse {
+  item?: Record<string, unknown>;
 }
 
 export interface CandidateGroupsResponse {
@@ -271,6 +338,67 @@ export async function getWorkbenchCase(caseId: string, project = DEFAULT_PROJECT
   return getJson<CaseDetailResponse>(`/api/workbench/cases/${encodeURIComponent(caseId)}?project=${encodeURIComponent(project)}`);
 }
 
+export async function listWorkbenchTestCases(params?: {
+  project?: string;
+  page?: string;
+  source_asset?: string;
+  intent_type?: string;
+  priority?: string;
+  execution_status?: string;
+  active_status?: string;
+  keyword?: string;
+  page_index?: number;
+  page_size?: number;
+}): Promise<WorkbenchTestCasesResponse> {
+  const qs = toQuery(params || {});
+  return getJson<WorkbenchTestCasesResponse>(qs ? `/api/workbench/test-cases?${qs}` : "/api/workbench/test-cases");
+}
+
+export async function listTestCaseGenerationFailures(params?: {
+  project?: string;
+  asset_id?: string;
+  keyword?: string;
+  page_index?: number;
+  page_size?: number;
+}): Promise<TestCaseGenerationFailuresResponse> {
+  const qs = toQuery(params || {});
+  return getJson<TestCaseGenerationFailuresResponse>(
+    qs ? `/api/workbench/test-case-generation-failures?${qs}` : "/api/workbench/test-case-generation-failures",
+  );
+}
+
+export async function getWorkbenchTestCase(caseId: string, project = DEFAULT_PROJECT_CODE): Promise<CaseDetailResponse> {
+  return getJson<CaseDetailResponse>(`/api/workbench/test-cases/${encodeURIComponent(caseId)}?project=${encodeURIComponent(project)}`);
+}
+
+export async function deleteWorkbenchTestCase(caseId: string, project = DEFAULT_PROJECT_CODE): Promise<DeleteWorkbenchTestCasesResponse> {
+  return deleteJson<DeleteWorkbenchTestCasesResponse>(
+    `/api/workbench/test-cases/${encodeURIComponent(caseId)}?project=${encodeURIComponent(project)}`,
+  );
+}
+
+export async function batchDeleteWorkbenchTestCases(payload: {
+  project: string;
+  case_ids?: string[];
+  delete_all?: boolean;
+  confirm_text?: string;
+}): Promise<DeleteWorkbenchTestCasesResponse> {
+  return postJson<DeleteWorkbenchTestCasesResponse>("/api/workbench/test-cases/batch/delete", payload);
+}
+
+export async function runWorkbenchCase(payload: {
+  project: string;
+  case_id: string;
+  case_path?: string;
+  source?: string;
+}): Promise<Record<string, unknown>> {
+  return postJson<Record<string, unknown>>("/api/workbench/run", payload);
+}
+
+export async function getWorkbenchRun(runId: string): Promise<Record<string, unknown>> {
+  return getJson<Record<string, unknown>>(`/api/workbench/runs/${encodeURIComponent(runId)}`);
+}
+
 export async function listTestCasesDb(params?: {
   q?: string;
   project_code?: string;
@@ -382,9 +510,44 @@ export async function batchDeleteTestPointAssets(payload: {
 export async function batchGenerateCasesFromTestPointAssets(payload: {
   project: string;
   asset_ids: string[];
+  intent_ids?: string[];
   source?: string;
 }): Promise<BatchGenerateFromTestPointAssetsResponse> {
   return postJson<BatchGenerateFromTestPointAssetsResponse>("/api/workbench/test-point-assets/batch/generate-cases", payload);
+}
+
+export async function listTestPointReviews(params?: {
+  project?: string;
+  page?: string;
+  keyword?: string;
+  status?: string;
+  intent_type?: string;
+  priority?: string;
+  can_generate?: string;
+  page_index?: number;
+  page_size?: number;
+}): Promise<TestPointReviewsResponse> {
+  const qs = toQuery(params || {});
+  return getJson<TestPointReviewsResponse>(qs ? `/api/workbench/test-point-reviews?${qs}` : "/api/workbench/test-point-reviews");
+}
+
+export async function batchReviewTestPoints(payload: {
+  project: string;
+  decisions: Array<{ asset_id: string; intent_id: string }>;
+  status: string;
+  note?: string;
+  reviewed_by?: string;
+}): Promise<BatchTestPointReviewResponse> {
+  return postJson<BatchTestPointReviewResponse>("/api/workbench/test-point-reviews/batch", payload);
+}
+
+export async function getTestPointScriptPreview(params: {
+  project: string;
+  asset_id: string;
+  intent_id: string;
+}): Promise<TestPointScriptPreviewResponse> {
+  const qs = toQuery(params);
+  return getJson<TestPointScriptPreviewResponse>(`/api/workbench/preview-script?${qs}`);
 }
 
 export async function listPageObjects(params?: {
@@ -404,6 +567,43 @@ export async function listPageObjects(params?: {
   }
   const qs = query.toString();
   return getJson<PageObjectsResponse>(qs ? `/api/page-objects?${qs}` : "/api/page-objects");
+}
+
+export async function previewPageObjectImport(payload: {
+  project_code: string;
+  client?: string;
+  source_type?: string;
+  page_code?: string;
+  data_testid_guidelines: File;
+  runtime_dom_selectors?: File | null;
+}): Promise<PageObjectImportResponse> {
+  const form = new FormData();
+  form.set("project_code", payload.project_code || DEFAULT_PROJECT_CODE);
+  form.set("client", payload.client || "web");
+  form.set("source_type", payload.source_type || "data_testid_guidelines");
+  if (payload.page_code) {
+    form.set("page_code", payload.page_code);
+  }
+  form.set("data_testid_guidelines", payload.data_testid_guidelines);
+  if (payload.runtime_dom_selectors) {
+    form.set("runtime_dom_selectors", payload.runtime_dom_selectors);
+  }
+  return postFormData<PageObjectImportResponse>("/api/page-objects/imports/preview", form);
+}
+
+export async function getPageObjectImport(importId: string): Promise<PageObjectImportResponse> {
+  return getJson<PageObjectImportResponse>(`/api/page-objects/imports/${encodeURIComponent(importId)}`);
+}
+
+export async function applyPageObjectImport(
+  importId: string,
+  params?: { auto_approve?: boolean; upsert_policy?: string; operator?: string },
+): Promise<PageObjectImportResponse> {
+  const query = new URLSearchParams();
+  query.set("auto_approve", String(params?.auto_approve ?? true));
+  query.set("upsert_policy", params?.upsert_policy || "upgrade_existing");
+  query.set("operator", params?.operator || "admin");
+  return postJson<PageObjectImportResponse>(`/api/page-objects/imports/${encodeURIComponent(importId)}/apply?${query.toString()}`, {});
 }
 
 export async function getPageObject(pageCode: string, params?: {

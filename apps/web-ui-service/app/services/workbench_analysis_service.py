@@ -175,7 +175,7 @@ def resolve_page_url(
 ) -> str:
     parsed = url_parse.urlparse(str(raw_url).strip())
     scheme = parsed.scheme or "http"
-    netloc = parsed.netloc or "localhost:5173"
+    netloc = parsed.netloc or "localhost:5174"
     base = f"{scheme}://{netloc}"
     canonical = (canonical_hash_routes or {}).get(page)
     if canonical:
@@ -710,7 +710,7 @@ def extract_page_surface(
     except Exception:
         return {}
 
-    login_url = str(getattr(settings, "page_surface_login_url", "")).strip() or os.getenv("BASE_URL", "http://localhost:5173/login#/login")
+    login_url = str(getattr(settings, "page_surface_login_url", "")).strip() or os.getenv("BASE_URL", "http://localhost:5174/#/login")
     validate_page_surface_url_fn(login_url)
     username = os.getenv("TEST_USERNAME", "")
     password = os.getenv("TEST_PASSWORD", "")

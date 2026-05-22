@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+"""编排核心服务：协调多 Agent、质量门、执行、报告与失败自愈。"""
 
 import os
 import re
@@ -31,6 +32,8 @@ from shared_backend.observability import build_ai_trace_context
 
 
 class OrchestratorError(Exception):
+    """编排层可预期错误，携带 HTTP 状态码与结构化 error 载荷。"""
+
     def __init__(
         self,
         code: str,
@@ -57,6 +60,8 @@ class OrchestratorError(Exception):
 
 
 class OrchestratorValidationError(OrchestratorError):
+    """请求参数或业务校验失败（422）。"""
+
     def __init__(self, message: str, details: dict[str, Any] | None = None):
         super().__init__(
             code="validation_error",
@@ -67,6 +72,8 @@ class OrchestratorValidationError(OrchestratorError):
 
 
 class RunnerExecutionError(OrchestratorError):
+    """测试 Runner 执行失败（502）。"""
+
     def __init__(self, message: str, details: dict[str, Any] | None = None):
         super().__init__(
             code="runner_failed",
@@ -78,6 +85,8 @@ class RunnerExecutionError(OrchestratorError):
 
 @dataclass
 class OrchestrationResult:
+    """单次 orchestrate 调用的完整产物（规格、用例、执行与报告路径）。"""
+
     requirement_spec: dict[str, Any]
     case: dict[str, Any]
     generated_script: dict[str, Any]
@@ -100,7 +109,10 @@ class OrchestrationResult:
 
 
 class OrchestratorService:
+    """AI 测试编排门面：组合各领域 Support 类完成端到端流程。"""
+
     ALLOWED_SOURCES = {"manual", "ai", "regression"}
+    # 需求质量门阻断项与告警码映射
     REQUIREMENT_QUALITY_BLOCKER_CATALOG: dict[str, dict[str, str]] = {
         "insufficient_test_intents": {
             "category": "coverage",
@@ -141,6 +153,7 @@ class OrchestratorService:
     }
 
     def __init__(self, repo_root: Path | None = None):
+        """初始化仓库路径、Agent 根目录与各领域 Support 依赖注入。"""
         self.repo_root = repo_root or Path(__file__).resolve().parents[3]
         self.apps_root = self.repo_root / "apps"
         # Dev convenience: in Docker the PYTHONPATH is set; this fallback
@@ -599,6 +612,7 @@ class OrchestratorService:
         runtime_logs: str = "",
         runner: str = "playwright",
     ) -> OrchestrationResult:
+        """端到端编排：解析需求 → 生成用例 → 可选执行 → 产出报告。"""
         return self._orchestration_flow_support.orchestrate(
             requirement=requirement,
             page=page,
@@ -1137,6 +1151,7 @@ class OrchestratorService:
         defect_ticket: str = "",
         runtime_logs: str = "",
     ) -> dict[str, Any]:
+        """仅解析需求为 RequirementSpec，并附加质量门与遥测。"""
         if not page.strip():
             raise OrchestratorValidationError("page must not be empty")
         if not requirement.strip():
@@ -1197,6 +1212,7 @@ class OrchestratorService:
         )
 
     def get_llm_health(self, *, probe: bool = True) -> dict[str, Any]:
+        """检查 LLM 配置完整性，可选发起轻量连通性探活。"""
         api_key = str(os.getenv("OPENAI_API_KEY", "")).strip()
         base_url = str(os.getenv("OPENAI_BASE_URL", "")).strip()
         model = str(os.getenv("OPENAI_MODEL", "")).strip()
@@ -1307,6 +1323,7 @@ class OrchestratorService:
         )
 
     def list_runners(self) -> dict[str, Any]:
+        """返回已注册的 Runner 目录（Playwright / API / Mobile 等）。"""
         return self._runner_registry_support.list_runners()
 
     def _resolve_runner_profile(self, runner: str) -> dict[str, Any]:
@@ -1324,6 +1341,7 @@ class OrchestratorService:
         failure_analysis: dict[str, Any],
         failure_triage: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """调用风险评估 Agent，输出 RiskReportV1。"""
         return self._evaluate_risk_report(
             requirement_spec=requirement_spec,
             execution_plan=execution_plan,
@@ -1340,6 +1358,7 @@ class OrchestratorService:
         evidence_manifest: dict[str, Any],
         report: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """对失败进行分诊并融合历史报告上下文。"""
         raw_triage = self._triage_failure(
             failure_analysis=failure_analysis,
             execution_record=self._normalize_execution_record(execution_record),
@@ -1379,6 +1398,7 @@ class OrchestratorService:
         return RequirementTestPointSupport.render_requirement_spec_markdown(requirement_spec)
 
     def get_latest_report(self) -> dict[str, Any]:
+        """读取最近一次执行报告 JSON。"""
         try:
             return self._analytics_query_support.get_latest_report()
         except ValueError as exc:
@@ -1427,6 +1447,7 @@ class OrchestratorService:
         failure_reason: str = "",
         failure_analysis: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """预览自愈建议（不写入执行产物）。"""
         try:
             return self._failure_healing_support.preview_self_healing_advice(
                 page=page,

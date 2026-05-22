@@ -15,7 +15,15 @@ start_recorder_desktop() {
   if pgrep -f "Xvfb ${DISPLAY_VALUE}" >/dev/null 2>&1; then
     echo "[desktop] Xvfb already running on ${DISPLAY_VALUE}."
   else
+    display_number="${DISPLAY_VALUE#:}"
+    lock_file="/tmp/.X${display_number}-lock"
+    socket_file="/tmp/.X11-unix/X${display_number}"
+    if [[ -e "${lock_file}" || -S "${socket_file}" ]]; then
+      echo "[desktop] Removing stale X lock/socket for ${DISPLAY_VALUE}."
+      rm -f "${lock_file}" "${socket_file}"
+    fi
     Xvfb "${DISPLAY_VALUE}" -screen 0 "${SCREEN_VALUE}" -ac +extension RANDR >/tmp/recorder-desktop/xvfb.log 2>&1 &
+    sleep 0.5
     echo "[desktop] Xvfb started on ${DISPLAY_VALUE} (${SCREEN_VALUE})."
   fi
 

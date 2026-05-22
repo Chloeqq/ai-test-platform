@@ -146,9 +146,10 @@ def workbench_quality_gate_summary(
 @router.post("/api/workbench/case-consistency/cleanup")
 def cleanup_case_consistency(
     purge_all: bool = Query(default=False),
+    confirm_text: str = Query(default=""),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    return facade.cleanup_case_consistency(purge_all=purge_all, db=db)
+    return facade.cleanup_case_consistency(purge_all=purge_all, confirm_text=confirm_text, db=db)
 
 
 @router.get("/api/workbench/download-log/{run_id}")

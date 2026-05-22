@@ -1,3 +1,4 @@
+"""带实时 stdout/stderr 流式日志的子进程执行封装。"""
 from __future__ import annotations
 
 import logging
@@ -22,6 +23,7 @@ def run_logged_subprocess(
     logger: logging.Logger | None = None,
     log_prefix: str = "subprocess",
 ) -> subprocess.CompletedProcess[str]:
+    """启动子进程并实时将 stdout/stderr 写入 logger，保留 request_id。"""
     logger = logger or logging.getLogger(__name__)
     captured_request_id = get_request_id()
     logger.info(
@@ -62,6 +64,7 @@ def run_logged_subprocess(
             except Exception:
                 pass
 
+    # 后台线程逐行 drain，避免管道缓冲区塞满导致子进程阻塞
     threads: list[threading.Thread] = []
     if process.stdout is not None:
         stdout_thread = threading.Thread(

@@ -1,1 +1,1 @@
-{"reportName":"Allure Report","testRuns":[],"statistic":{"failed":0,"broken":0,"skipped":0,"passed":0,"unknown":0,"total":0},"time":{}}
+{"reportName": "首次登录成功 - 回归执行报告 (mall-web-login-auth-fn-ai-0001-v1.run-8c06d87b)", "testRuns": [], "statistic": {"failed": 0, "broken": 0, "skipped": 0, "passed": 1, "unknown": 0, "total": 1}, "time": {"start": 1779165820880, "stop": 1779165827441, "duration": 6561, "minDuration": 6561, "maxDuration": 6561, "sumDuration": 6561}}

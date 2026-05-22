@@ -1,8 +1,11 @@
+"""测试点计划 JSON Schema 定义与归一化入口（TestPointPlanV1）。"""
+
 from __future__ import annotations
 
 from typing import Any
 
 
+# TestPointPlanV1 的 JSON Schema 草案（与 shared_backend 归一化逻辑对齐）
 TEST_POINT_PLAN_SCHEMA_V1: dict[str, Any] = {
     "type": "object",
     "required": ["version", "project", "case_id", "page", "points"],
@@ -38,15 +41,18 @@ TEST_POINT_PLAN_SCHEMA_V1: dict[str, Any] = {
 
 
 def normalize_test_point_plan(payload: dict[str, Any] | None, *, strict: bool = False) -> tuple[dict[str, Any], list[str]]:
+    """归一化测试点计划并返回警告列表。"""
     from shared_backend.schemas import normalize_test_point_plan_v1
 
     return normalize_test_point_plan_v1(payload, strict=strict)
 
 
 def validate_test_point_plan(payload: dict[str, Any] | None, *, strict: bool = False) -> list[str]:
+    """校验测试点计划，仅返回归一化警告（不抛异常）。"""
     _normalized, warnings = normalize_test_point_plan(payload, strict=strict)
     return warnings
 
 
 def get_test_point_plan_schema() -> dict[str, Any]:
+    """返回 TestPointPlanV1 的 JSON Schema 字典。"""
     return TEST_POINT_PLAN_SCHEMA_V1

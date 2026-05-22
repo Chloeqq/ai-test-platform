@@ -153,19 +153,19 @@ export function CaseTagsPage() {
         </header>
 
         <section className="asset-kpi-grid">
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-info">
             <span>可治理用例</span>
             <strong>{items.length}</strong>
           </article>
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-success">
             <span>已选用例</span>
             <strong>{selectedCaseIds.length}</strong>
           </article>
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-accent">
             <span>标签总类</span>
             <strong>{uniqueTagCount}</strong>
           </article>
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-cyan">
             <span>当前模式</span>
             <strong>{mode}</strong>
           </article>

@@ -295,11 +295,11 @@ export function CaseVersionsPage() {
                 </div>
 
                 <section className="asset-kpi-grid compact">
-                  <article className="asset-kpi-card">
+                  <article className="asset-kpi-card metric-tone-success">
                     <span>新增行</span>
                     <strong>{Number(compareResult.added_lines || 0)}</strong>
                   </article>
-                  <article className="asset-kpi-card">
+                  <article className="asset-kpi-card metric-tone-danger">
                     <span>删除行</span>
                     <strong>{Number(compareResult.removed_lines || 0)}</strong>
                   </article>

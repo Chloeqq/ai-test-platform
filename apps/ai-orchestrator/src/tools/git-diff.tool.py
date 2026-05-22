@@ -1,3 +1,5 @@
+"""Git diff 分析工具：识别变更文件、模块、页面候选与风险信号。"""
+
 from __future__ import annotations
 
 import re
@@ -5,6 +7,7 @@ from collections import Counter
 from typing import Any
 
 
+# diff 路径/符号关键词 → 页面候选
 PAGE_KEYWORD_MAPPING: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("returnapply", ("returnapply", "return-apply", "refund")),
     ("order", ("order",)),
@@ -41,6 +44,7 @@ def _detect_changed_areas(text: str, file_path: str) -> list[str]:
 
 
 def analyze_git_diff(git_diff: str = "", *, git_diff_path: str = "") -> dict[str, Any]:
+    """分析 unified diff 文本，汇总变更范围与测试设计输入片段。"""
     diff_text = str(git_diff or "").strip()
     path_hint = str(git_diff_path or "").strip()
     changed_files: list[str] = []

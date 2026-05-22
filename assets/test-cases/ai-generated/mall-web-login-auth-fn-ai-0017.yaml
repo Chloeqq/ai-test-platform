@@ -1,0 +1,51 @@
+version: v1
+id: mall-web-login-auth-fn-ai-0017
+project: mall
+module: login
+title: 密码输入非法字符
+priority: P1
+tags:
+- ai-generated
+owner: qa-team
+status: automated
+description: 密码输入非法字符 — 弹出提示框，显示密码输入不合法相关提示
+requirement:
+  intent_id: intent-20
+  title: 密码输入非法字符
+  type: format
+  source_asset_id: mall-web-login-auth-fn-ai-0021
+data: {}
+execution:
+  runner: playwright
+  page: login
+  page_url: http://localhost:5174/#/login
+  variables: {}
+  steps:
+  - action: goto
+    value: http://localhost:5174/#/login
+    expected_result: 登录页面加载完成，显示账号输入框、密码输入框、登录按钮
+  - action: input
+    target: element:username_input
+    locator_type: css
+    locator_value: 'input[name=''username''], #username, #username-input, input[placeholder*=''请输入用户名''],
+      input[placeholder*=''用户名'']'
+    target_name: 用户名输入框
+    value: test001
+    expected_result: 用户名输入框内容显示为 test001
+  - action: input
+    target: element:password_input
+    locator_type: css
+    locator_value: 'input[type=''password''], input[name=''password''], #password,
+      #password-input, input[placeholder*=''请输入密码''], input[placeholder*=''密码'']'
+    target_name: 密码输入框
+    value: 包含非法字符的密码
+    expected_result: 密码输入框内容以掩码形式显示
+  - action: click
+    target: element:password_toggle
+    locator_type: css
+    locator_value: .el-input__suffix, .password-visibility-toggle, [data-testid='password-toggle']
+    target_name: 密码显隐开关
+    expected_result: 弹出提示框，显示密码输入不合法相关提示
+  selected_intent_ids:
+  - intent-20
+expected_result: 弹出提示框，显示密码输入不合法相关提示

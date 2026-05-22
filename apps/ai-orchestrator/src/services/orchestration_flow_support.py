@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+"""编排流程支撑：需求解析、用例生成、执行编译与报告落盘的顺序编排。"""
 
 from __future__ import annotations
 
@@ -10,6 +11,8 @@ from shared_backend.schemas.validator import ContractValidator
 
 
 class OrchestrationFlowSupport:
+    """实现 orchestrate 主流程，通过注入的回调与 OrchestratorService 解耦。"""
+
     def __init__(
         self,
         *,
@@ -176,6 +179,7 @@ class OrchestrationFlowSupport:
         runtime_logs: str = "",
         runner: str = "playwright",
     ):
+        """执行完整编排流水线并返回 OrchestrationResult。"""
         normalized_requirement = requirement.strip()
         normalized_page = page.strip()
         if not normalized_page:

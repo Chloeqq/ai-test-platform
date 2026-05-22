@@ -1,4 +1,4 @@
-import { getJson } from "../lib/http";
+import { getJson, postJson } from "../lib/http";
 
 export interface ReportOverviewSummary {
   total_runs?: number;
@@ -109,8 +109,33 @@ export interface ReportPerformanceResponse {
 export interface ReportAllureResponse {
   allure_index?: string;
   available?: boolean;
-  version?: number;
+  version?: string;
+  display_version?: string;
+  cache_version?: number;
+  report_name?: string;
+  snapshot_slug?: string;
+  report_source?: string;
+  reason?: string;
+  message?: string;
+  legacy_available?: boolean;
+  results_dir?: string;
+  environment?: AllureEnvironmentItem[];
+  executors?: AllureExecutorItem[];
   summary?: Record<string, unknown>;
+}
+
+export interface AllureEnvironmentItem {
+  name?: string;
+  values?: string[];
+}
+
+export interface AllureExecutorItem {
+  name?: string;
+  type?: string;
+  url?: string;
+  buildName?: string;
+  buildUrl?: string;
+  reportName?: string;
 }
 
 export interface ExecutionReportItem {
@@ -166,6 +191,10 @@ export async function getReportPerformance(): Promise<ReportPerformanceResponse>
 
 export async function getReportAllure(): Promise<ReportAllureResponse> {
   return getJson<ReportAllureResponse>("/api/report/allure");
+}
+
+export async function refreshReportAllure(): Promise<ReportAllureResponse> {
+  return postJson<ReportAllureResponse>("/api/report/allure/refresh", {});
 }
 
 export async function getExecutionReportDetail(executionId: string): Promise<ExecutionReportDetailResponse> {

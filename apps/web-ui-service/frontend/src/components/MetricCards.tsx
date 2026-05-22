@@ -17,7 +17,7 @@ export function MetricCards({ items, className = "governance-metrics", cardClass
   return (
     <section className={className}>
       {items.map((item) => (
-        <article className={cardClassName} key={item.label}>
+        <article className={[cardClassName, item.tone ? `metric-tone-${item.tone}` : ""].filter(Boolean).join(" ")} key={item.label}>
           <span>{item.label}</span>
           <strong className={item.tone ? `tone-${item.tone}` : ""}>{item.value}</strong>
           {item.hint ? <em>{item.hint}</em> : null}

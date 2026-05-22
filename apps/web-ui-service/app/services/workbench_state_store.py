@@ -26,6 +26,7 @@ WEB_UI_DEFAULT_STATE_DIR = WEB_UI_STATE_ROOT / "default"
 WEB_UI_RUNS_DIR = WEB_UI_STATE_ROOT / "runs"
 WEB_UI_REPORTING_DIR = WEB_UI_STATE_ROOT / "reporting"
 TEST_POINTS_ROOT = WEB_UI_STATE_ROOT / "test-points"
+GENERATED_CASES_STATE_ROOT = WEB_UI_STATE_ROOT / "generated-cases"
 ASSETS_CASES_ROOT = REPO_ROOT / "assets" / "test-cases"
 AI_CASES_ROOT = ASSETS_CASES_ROOT / "ai-generated"
 RUNNER_ROOT = REPO_ROOT / "runners" / "web-playwright-python"
@@ -336,6 +337,7 @@ def ensure_dirs() -> None:
     WEB_UI_DEFAULT_STATE_DIR.mkdir(parents=True, exist_ok=True)
     WEB_UI_RUNS_DIR.mkdir(parents=True, exist_ok=True)
     WEB_UI_REPORTING_DIR.mkdir(parents=True, exist_ok=True)
+    GENERATED_CASES_STATE_ROOT.mkdir(parents=True, exist_ok=True)
     AI_CASES_ROOT.mkdir(parents=True, exist_ok=True)
     ALLURE_SNAPSHOTS_ROOT.mkdir(parents=True, exist_ok=True)
     if _resolve_state_backend() == "file":

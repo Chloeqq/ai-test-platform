@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+"""OpenAPI 规范解析工具：提取端点、参数约束与页面候选。"""
 
 from __future__ import annotations
 
@@ -7,6 +8,7 @@ from collections import Counter
 from typing import Any
 
 
+# 路径/摘要关键词 → 内部页面代码
 PAGE_KEYWORD_MAPPING: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("returnapply", ("return-apply", "refund", "return", "after-sale")),
     ("order", ("order", "orders")),
@@ -97,6 +99,7 @@ def _iter_schema_properties(
 
 
 def parse_openapi_spec(openapi_spec: dict[str, Any] | None, *, openapi_url: str = "", max_endpoints: int = 20) -> dict[str, Any]:
+    """解析 OpenAPI 文档，输出端点列表、页面候选与参数约束（供多源编排使用）。"""
     spec = openapi_spec if isinstance(openapi_spec, dict) else {}
     paths = spec.get("paths") if isinstance(spec.get("paths"), dict) else {}
     endpoint_rows: list[dict[str, Any]] = []

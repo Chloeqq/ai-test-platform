@@ -1,3 +1,5 @@
+"""将 Flask WSGI 应用适配为 ASGI，供 uvicorn 等 ASGI 服务器加载。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -8,12 +10,14 @@ from urllib.parse import unquote
 
 
 class WSGIToASGIAdapter:
-    """Minimal WSGI -> ASGI bridge used by local uvicorn runs."""
+    """最小 WSGI→ASGI 桥接，供本地 uvicorn 运行 Flask 应用。"""
 
     def __init__(self, wsgi_app: Any) -> None:
+        """绑定底层 WSGI 可调用对象（通常为 Flask app）。"""
         self._wsgi_app = wsgi_app
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        """ASGI 入口：读取请求体后在线程池中调用 WSGI 应用。"""
         if scope.get("type") != "http":
             await send(
                 {
@@ -32,6 +36,7 @@ class WSGIToASGIAdapter:
 
     @staticmethod
     async def _read_body(receive: Any) -> bytes:
+        """从 ASGI receive 通道聚合完整 HTTP 请求体。"""
         chunks: list[bytes] = []
         more_body = True
         while more_body:
@@ -45,6 +50,7 @@ class WSGIToASGIAdapter:
         return b"".join(chunks)
 
     def _invoke_wsgi(self, scope: dict[str, Any], body: bytes) -> tuple[int, list[tuple[bytes, bytes]], bytes]:
+        """构造 WSGI environ 并同步执行 WSGI 应用，返回状态码、头与响应体。"""
         server = scope.get("server") or ("127.0.0.1", 80)
         client = scope.get("client") or ("127.0.0.1", 0)
         path = unquote(str(scope.get("path", "/") or "/"))

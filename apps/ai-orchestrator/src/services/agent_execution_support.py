@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+"""Agent 执行支撑：加载 test-design-agent 并生成用例与设计元数据。"""
 
 from __future__ import annotations
 
@@ -14,6 +15,8 @@ from shared_backend.case_ids import build_case_id, match_case_id, next_case_sequ
 
 
 class AgentExecutionSupport:
+    """封装测试设计 Agent 的动态加载与 case_id 分配。"""
+
     def __init__(
         self,
         *,
@@ -59,6 +62,7 @@ class AgentExecutionSupport:
         return build_case_id(page=page, module=module, case_type="FN", source="AI", sequence=sequence)
 
     def generate_case(self, requirement: str, page: str) -> dict[str, Any]:
+        """调用 TestDesignAgent 根据自然语言需求生成 YAML 用例结构。"""
         agent_module = self._load_test_design_agent_module()
         TestDesignAgent = getattr(agent_module, "TestDesignAgent", None)
         TestDesignAgentError = getattr(agent_module, "TestDesignAgentError", None)

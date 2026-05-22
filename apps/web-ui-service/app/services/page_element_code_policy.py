@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, status
 
 FORMAL_ELEMENT_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,79}$")
+TESTID_ELEMENT_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9-]{2,119}$")
 
 STRICT_LOCATOR_NOISE_TOKENS = {
     "css",
@@ -181,11 +182,44 @@ def suggest_business_element_code(value: str, *, page_code: str = "", business_t
     return suggest_element_code(raw, page_code=page_code, business_type=business_type)
 
 
-def validate_element_code_policy(value: str, *, page_code: str = "", business_type: str = "") -> ElementCodePolicyResult:
+def _is_testid_code_context(*, locator_source: str = "", locator_type: str = "", testid_value: str = "") -> bool:
+    return (
+        str(locator_source or "").strip().lower() == "testid"
+        and str(locator_type or "").strip().lower() == "data-testid"
+        and bool(str(testid_value or "").strip())
+    )
+
+
+def validate_element_code_policy(
+    value: str,
+    *,
+    page_code: str = "",
+    business_type: str = "",
+    locator_source: str = "",
+    locator_type: str = "",
+    testid_value: str = "",
+) -> ElementCodePolicyResult:
     raw = str(value or "").strip()
     normalized_business_type = str(business_type or "").strip().lower()
     suggested_code = suggest_business_element_code(raw, page_code=page_code, business_type=normalized_business_type)
     errors: list[str] = []
+    is_testid_context = _is_testid_code_context(
+        locator_source=locator_source,
+        locator_type=locator_type,
+        testid_value=testid_value,
+    )
+
+    if is_testid_context:
+        if not TESTID_ELEMENT_CODE_PATTERN.fullmatch(raw):
+            errors.append("data-testid 来源元素编码必须使用小写 kebab-case，格式为小写字母开头，仅包含小写字母、数字、中划线，长度 3-120。")
+        if raw != str(testid_value or "").strip():
+            errors.append("data-testid 来源元素编码必须与 testid_value 保持一致，避免测试定位和资产编码脱节。")
+        return ElementCodePolicyResult(
+            valid=not errors,
+            normalized_code=raw,
+            suggested_code=suggested_code,
+            errors=tuple(errors),
+        )
 
     if not FORMAL_ELEMENT_CODE_PATTERN.fullmatch(raw):
         errors.append("元素编码必须使用 snake_case，格式为小写字母开头，仅包含小写字母、数字、下划线，长度 3-80。")
@@ -220,8 +254,23 @@ def validate_element_code_policy(value: str, *, page_code: str = "", business_ty
     )
 
 
-def require_valid_element_code(value: str, *, page_code: str = "", business_type: str = "") -> str:
-    result = validate_element_code_policy(value, page_code=page_code, business_type=business_type)
+def require_valid_element_code(
+    value: str,
+    *,
+    page_code: str = "",
+    business_type: str = "",
+    locator_source: str = "",
+    locator_type: str = "",
+    testid_value: str = "",
+) -> str:
+    result = validate_element_code_policy(
+        value,
+        page_code=page_code,
+        business_type=business_type,
+        locator_source=locator_source,
+        locator_type=locator_type,
+        testid_value=testid_value,
+    )
     if result.valid:
         return result.normalized_code
     suggestion = f" 推荐编码：{result.suggested_code}。" if result.suggested_code else ""

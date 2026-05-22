@@ -1,3 +1,5 @@
+"""失败分析与自愈支撑：风险评估、分诊与自愈建议 Agent 调用。"""
+
 from __future__ import annotations
 
 import hashlib
@@ -11,6 +13,8 @@ from typing import Any, Callable
 
 
 class FailureHealingSupport:
+    """封装 failure-analysis / self-healing / risk / triage 子进程与回退逻辑。"""
+
     def __init__(
         self,
         *,
@@ -39,6 +43,7 @@ class FailureHealingSupport:
         failure_analysis: dict[str, Any],
         failure_triage: dict[str, Any],
     ) -> dict[str, Any]:
+        """子进程调用 risk-evaluation-agent；失败时返回保守回退报告。"""
         payload = {
             "requirement_spec": requirement_spec,
             "execution_plan": execution_plan,

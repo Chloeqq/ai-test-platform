@@ -1,3 +1,4 @@
+"""用例标题、描述与载荷的校验规则，以及元数据补全。"""
 from __future__ import annotations
 
 import re
@@ -33,7 +34,7 @@ _TITLE_CODELIKE_RE = re.compile(r"^[A-Za-z0-9_-]+(?:-[A-Za-z0-9_-]+){2,}$")
 
 
 class CaseRuleViolation(ValueError):
-    pass
+    """用例规则校验失败时抛出的异常。"""
 
 
 def _text(value: Any) -> str:
@@ -49,6 +50,7 @@ def _contains_ascii_word(text: str) -> bool:
 
 
 def validate_case_title(title: str) -> list[str]:
+    """校验标题：中文、分段语义、非纯编码等，返回错误文案列表。"""
     value = _text(title)
     errors: list[str] = []
     if not value:
@@ -68,6 +70,7 @@ def validate_case_title(title: str) -> list[str]:
 
 
 def validate_case_description(description: str) -> list[str]:
+    """非空描述须含中文；空描述不报错。"""
     value = _text(description)
     if not value:
         return []
@@ -78,6 +81,7 @@ def validate_case_description(description: str) -> list[str]:
 
 
 def validate_case_payload(payload: dict[str, Any]) -> list[str]:
+    """校验完整用例载荷（id、字典码、标题、描述）。"""
     raw = payload if isinstance(payload, dict) else {}
     errors: list[str] = []
 
@@ -123,6 +127,7 @@ def validate_case_payload(payload: dict[str, Any]) -> list[str]:
 
 
 def enrich_case_metadata(payload: dict[str, Any]) -> dict[str, Any]:
+    """根据 case_id 与字段补全 page/module/type/source 及状态显示名。"""
     raw = dict(payload if isinstance(payload, dict) else {})
     raw.pop("case_id", None)
     case_id = normalize_case_id(_text(raw.get("id") or raw.get("case_id")))

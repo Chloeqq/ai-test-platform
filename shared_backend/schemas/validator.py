@@ -27,6 +27,7 @@ ACTIONS_REQUIRING_TARGET: frozenset[str] = frozenset({
 
 @dataclass
 class ValidationResult:
+    """契约校验结果，可合并多条 errors/warnings。"""
     valid: bool = True
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)

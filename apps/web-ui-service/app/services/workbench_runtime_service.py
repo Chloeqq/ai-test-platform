@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import selectors
 import threading
 import time
 import uuid
@@ -42,6 +44,8 @@ IsWithin = Callable[[Path, Path], bool]
 UpdateRun = Callable[[str, dict[str, Any]], None]
 GetPythonBin = Callable[[], str]
 NormalizeEvidenceManifestPayload = Callable[[dict[str, Any]], dict[str, Any]]
+
+LOGGER = logging.getLogger(__name__)
 
 
 def runtime_run_id(item: dict[str, Any]) -> str:
@@ -128,6 +132,24 @@ def build_run_command(
         str(allure_results_root),
     ]
     env = dict(environ)
+    batch_run_enabled = str(env.get("WORKBENCH_BATCH_RUN", "")).strip().lower() in {"1", "true", "yes", "on"}
+    visible_run_enabled = str(
+        env.get("WORKBENCH_VISIBLE_RUN") or env.get("RECORDER_DESKTOP_ENABLED") or ""
+    ).strip().lower() in {"1", "true", "yes", "on"} and not batch_run_enabled
+    if batch_run_enabled:
+        env.setdefault("WORKBENCH_VISIBLE_STEP_DELAY_MS", "0")
+        env.setdefault("WORKBENCH_VISIBLE_HOLD_MS", "0")
+        env.setdefault("WORKBENCH_RECORD_VIDEO", "0")
+        env.setdefault("WORKBENCH_RUN_TIMEOUT_SECONDS", "180")
+    elif visible_run_enabled and str(env.get("DISPLAY", "")).strip():
+        command.append("--headed")
+        slowmo_ms = str(env.get("WORKBENCH_VISIBLE_SLOWMO_MS") or "80").strip()
+        if slowmo_ms and slowmo_ms not in {"0", "0.0"}:
+            command.extend(["--slowmo", slowmo_ms])
+        env.setdefault("WORKBENCH_VISIBLE_STEP_DELAY_MS", "100")
+        env.setdefault("WORKBENCH_VISIBLE_HOLD_MS", "800")
+        env.setdefault("WORKBENCH_RUN_TIMEOUT_SECONDS", "120")
+        env.setdefault("WORKBENCH_RECORD_VIDEO", "1")
     current_pythonpath = env.get("PYTHONPATH", "").strip()
     runner_path = str(repo_root / "runners" / "web-playwright-python")
     env["PYTHONPATH"] = f"{runner_path}:{current_pythonpath}" if current_pythonpath else runner_path
@@ -135,8 +157,157 @@ def build_run_command(
     env["RUN_SOURCE"] = "web-ui"
     env["TEST_CASE_PATH"] = str(case_path.resolve())
     env["SELF_HEALING_ENABLED"] = "0"
-    env.setdefault("BASE_URL", "http://localhost:5173/login#/login")
+    env.setdefault("BASE_URL", "http://localhost:5174/#/login")
     return command, env
+
+
+def is_runner_termination(return_code: int | None, *, timed_out: bool = False) -> bool:
+    return bool(timed_out or return_code in {-9, 124})
+
+
+def build_runner_termination_failure(
+    *,
+    run_id: str,
+    case_id: str,
+    project: str,
+    case_path: str,
+    return_code: int | None,
+    timeout_seconds: int,
+    timed_out: bool,
+) -> dict[str, Any]:
+    reason = "runner_timeout" if timed_out else "runner_terminated"
+    title = "执行超时" if timed_out else "执行进程被终止"
+    summary = (
+        f"执行超过 {timeout_seconds}s 后被平台终止，未生成完整执行产物。"
+        if timed_out
+        else f"执行进程异常退出，return_code={return_code}，未生成完整执行产物。"
+    )
+    return {
+        "version": "FailureArtifactV1",
+        "run_id": run_id,
+        "case_id": case_id,
+        "project": project,
+        "case_path": case_path,
+        "summary": summary,
+        "failure_type": reason,
+        "analysis": {
+            "summary": summary,
+            "failure_category": "runner",
+            "failure_source": "runner",
+            "failure_source_reason": "Runner did not complete, so no assertion-level failure artifact was produced.",
+            "failure_source_confidence": 1.0,
+            "likely_cause": title,
+            "risk_level": "high",
+            "recommended_action": "先查看执行日志确认卡住阶段；若是可视化演示执行，建议降低 slowmo/等待时间或改用批量快速执行。",
+            "confidence": 1.0,
+            "requires_manual_review": False,
+            "evidence_used": ["runtime_log"],
+        },
+    }
+
+
+def build_fallback_execution_record(
+    job: dict[str, Any],
+    *,
+    status_value: str,
+    return_code: int | None,
+    started_at: str,
+    finished_at: str,
+    artifacts_dir: Path,
+    videos_dir: Path,
+    timeout_seconds: int,
+    timed_out: bool,
+) -> dict[str, Any]:
+    record = dict(_dict_value(job.get("execution_record")))
+    run_id = str(job.get("run_id", record.get("run_id", ""))).strip()
+    case_id = str(job.get("case_id", record.get("case_id", ""))).strip()
+    project = str(job.get("project", record.get("project", "mall"))).strip() or "mall"
+    source = str(job.get("source", record.get("source", "manual"))).strip() or "manual"
+    mode = str(job.get("mode", record.get("mode", "generate_and_run"))).strip() or "generate_and_run"
+    evidence_index = dict(_dict_value(record.get("evidence_index")))
+    artifact_categories = dict(_dict_value(evidence_index.get("artifact_categories")))
+    evidence_index.update(
+        {
+            "runner_exit_code": return_code,
+            "execution_requested": True,
+            "artifacts_dir": str(artifacts_dir),
+            "videos_dir": str(videos_dir),
+            "runner_timed_out": bool(timed_out),
+            "runner_timeout_seconds": timeout_seconds if timed_out else 0,
+        }
+    )
+    evidence_index["artifact_categories"] = artifact_categories
+    metadata = dict(_dict_value(record.get("metadata")))
+    if is_runner_termination(return_code, timed_out=timed_out):
+        metadata.update(
+            {
+                "failure_type": "runner_timeout" if timed_out else "runner_terminated",
+                "failure_summary": (
+                    f"执行超过 {timeout_seconds}s 后被平台终止。"
+                    if timed_out
+                    else f"执行进程异常退出，return_code={return_code}。"
+                ),
+            }
+        )
+    record.update(
+        {
+            "version": record.get("version") or "ExecutionRecordV1",
+            "schema_version": record.get("schema_version") or "execution-record.v1",
+            "run_id": run_id,
+            "case_id": case_id,
+            "project": project,
+            "source": source,
+            "mode": mode,
+            "status": status_value,
+            "started_at": started_at or str(job.get("started_at", "")).strip(),
+            "finished_at": finished_at,
+            "return_code": return_code,
+            "evidence_index": evidence_index,
+            "metadata": metadata,
+        }
+    )
+    record.setdefault(
+        "step_summary",
+        {
+            "page": "",
+            "requirement_count": 0,
+            "total_steps": 0,
+            "action_types": [],
+        },
+    )
+    return record
+
+
+def update_runtime_run_with_retry(
+    run_id: str,
+    updates: dict[str, Any],
+    *,
+    update_runtime_run: UpdateRun,
+    attempts: int = 3,
+    retry_delay_seconds: float = 1.0,
+) -> None:
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            update_runtime_run(run_id, updates)
+            return
+        except Exception:
+            if attempt >= max(1, attempts):
+                LOGGER.exception("runtime run update failed run_id=%s", run_id)
+                return
+            time.sleep(max(0.0, retry_delay_seconds) * attempt)
+
+
+def replace_allure_results_dir(command: list[str], allure_results_dir: Path) -> list[str]:
+    updated = list(command)
+    for index, item in enumerate(updated):
+        if item == "--alluredir" and index + 1 < len(updated):
+            updated[index + 1] = str(allure_results_dir)
+            return updated
+        if item.startswith("--alluredir="):
+            updated[index] = f"--alluredir={allure_results_dir}"
+            return updated
+    updated.extend(["--alluredir", str(allure_results_dir)])
+    return updated
 
 
 def extract_json_from_text(text: str) -> dict[str, Any]:
@@ -165,6 +336,17 @@ def get_python_bin(*, repo_root: Path) -> str:
     if venv_python.exists():
         return str(venv_python)
     return "python3"
+
+
+def _positive_int_from_env(env: dict[str, str], name: str, *, default: int, min_value: int = 1, max_value: int = 3600) -> int:
+    raw_value = str(env.get(name, "") or "").strip()
+    if not raw_value:
+        return default
+    try:
+        value = int(float(raw_value))
+    except ValueError:
+        return default
+    return max(min_value, min(value, max_value))
 
 
 def resolve_manifest_entries(entries: Any, *, root: Path) -> list[Path]:
@@ -548,6 +730,29 @@ def find_run_item(
     return None
 
 
+def materialize_runtime_case_yaml(
+    *,
+    run_id: str,
+    case_id: str,
+    script_code: str,
+    runs_dir: Path,
+) -> Path:
+    """Write the confirmed case script to an isolated runtime YAML file."""
+    normalized_run_id = str(run_id or "").strip()
+    normalized_case_id = normalize_case_id(str(case_id or "").strip()) or "UNKNOWN"
+    normalized_script_code = str(script_code or "").strip()
+    if not normalized_run_id:
+        raise ValueError("run_id must not be empty")
+    if not normalized_script_code:
+        raise ValueError("script_code must not be empty")
+
+    runtime_cases_dir = runs_dir / "runtime-cases" / normalized_run_id
+    runtime_cases_dir.mkdir(parents=True, exist_ok=True)
+    runtime_case_path = runtime_cases_dir / f"{normalized_case_id}.yaml"
+    runtime_case_path.write_text(normalized_script_code + "\n", encoding="utf-8")
+    return runtime_case_path.resolve()
+
+
 def start_run(
     *,
     project: str,
@@ -562,9 +767,17 @@ def start_run(
     append_runtime_run: AppendRuntimeRun,
     append_history: AppendHistory,
     execute_run_fn: ExecuteRunFn,
+    runtime_case_script: str = "",
     thread_factory: ThreadFactory = threading.Thread,
 ) -> dict[str, Any]:
     run_id = uuid.uuid4().hex
+    if str(runtime_case_script or "").strip():
+        case_path = materialize_runtime_case_yaml(
+            run_id=run_id,
+            case_id=case_id,
+            script_code=runtime_case_script,
+            runs_dir=runs_dir,
+        )
     log_path = runs_dir / f"{run_id}.log"
     artifacts_dir = runs_dir / f"{run_id}-artifacts"
     videos_dir = runs_dir / f"{run_id}-videos"
@@ -658,21 +871,32 @@ def execute_run(
     log_path = Path(job["log_path"]).resolve()
     artifacts_dir = Path(job["artifacts_dir"]).resolve()
     videos_dir = Path(job["videos_dir"]).resolve()
+    allure_results_dir = artifacts_dir / "allure-results"
+    allure_report_dir = runner_root / "allure-report"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     videos_dir.mkdir(parents=True, exist_ok=True)
+    allure_results_dir.mkdir(parents=True, exist_ok=True)
 
     command, env = build_run_command_fn(case_path)
+    command = replace_allure_results_dir(command, allure_results_dir)
     env["PLAYWRIGHT_ARTIFACTS_DIR"] = str(artifacts_dir)
     env["PLAYWRIGHT_VIDEO_DIR"] = str(videos_dir)
+    env["WORKBENCH_RUN_ID"] = run_id
 
-    update_job(run_id, {"status": "running", "started_at": now_iso_fn(), "command": " ".join(command)})
-    update_runtime_run(run_id, {"status": "running", "started_at": now_iso_fn()})
+    started_at_value = now_iso_fn()
+    update_job(run_id, {"status": "running", "started_at": started_at_value, "command": " ".join(command)})
+    update_runtime_run_with_retry(
+        run_id,
+        {"status": "running", "started_at": started_at_value},
+        update_runtime_run=update_runtime_run,
+    )
 
     with log_path.open("w", encoding="utf-8") as log_fp:
         log_fp.write(f"[run] id={run_id}\n")
         log_fp.write(f"[run] case={case_path}\n")
         log_fp.write(f"[run] command={' '.join(command)}\n")
         log_fp.write(f"[run] artifacts={artifacts_dir}\n")
+        log_fp.write(f"[run] allure_results={allure_results_dir}\n")
         log_fp.flush()
 
         process = popen_fn(
@@ -684,17 +908,43 @@ def execute_run(
             text=True,
             bufsize=1,
         )
-        for line in iter(process.stdout.readline, ""):
-            log_fp.write(line)
-            log_fp.flush()
-        process.stdout.close()
+        timeout_seconds = _positive_int_from_env(env, "WORKBENCH_RUN_TIMEOUT_SECONDS", default=600)
+        deadline = time.time() + timeout_seconds
+        timed_out = False
+        selector = selectors.DefaultSelector()
+        if process.stdout is not None:
+            selector.register(process.stdout, selectors.EVENT_READ)
+        while True:
+            if process.poll() is not None:
+                break
+            if time.time() >= deadline:
+                timed_out = True
+                log_fp.write(f"\n[run] timeout after {timeout_seconds}s; terminating runner\n")
+                log_fp.flush()
+                process.kill()
+                break
+            for key, _mask in selector.select(timeout=0.5):
+                line = key.fileobj.readline()
+                if line:
+                    log_fp.write(line)
+                    log_fp.flush()
+        if process.stdout is not None:
+            for line in process.stdout.readlines():
+                log_fp.write(line)
+            process.stdout.close()
         return_code = process.wait()
+        if timed_out and return_code == 0:
+            return_code = 124
         log_fp.write(f"\n[run] completed returncode={return_code}\n")
         log_fp.flush()
 
         allure_cmd = [
             sys.executable,
             str(runner_root / "tools" / "manage_allure.py"),
+            "--results-dir",
+            str(allure_results_dir),
+            "--report-dir",
+            str(allure_report_dir),
             "generate",
         ]
         log_fp.write(f"[allure] command={' '.join(allure_cmd)}\n")
@@ -716,7 +966,20 @@ def execute_run(
         log_fp.flush()
 
     status_value = "passed" if return_code == 0 else "failed"
+    finished_at_value = now_iso_fn()
     artifact_execution_record = load_runtime_execution_record_from_artifacts(artifacts_dir)
+    if not artifact_execution_record:
+        artifact_execution_record = build_fallback_execution_record(
+            job,
+            status_value=status_value,
+            return_code=return_code,
+            started_at=started_at_value,
+            finished_at=finished_at_value,
+            artifacts_dir=artifacts_dir,
+            videos_dir=videos_dir,
+            timeout_seconds=timeout_seconds,
+            timed_out=timed_out,
+        )
     case_failure: dict[str, Any] = {}
     if status_value == "failed":
         run_failure_entries: list[dict[str, Any]] = []
@@ -729,25 +992,36 @@ def execute_run(
                 run_failure_entries.append(item)
         if run_failure_entries:
             case_failure = run_failure_entries[0]
+        elif is_runner_termination(return_code, timed_out=timed_out):
+            case_failure = build_runner_termination_failure(
+                run_id=run_id,
+                case_id=str(job.get("case_id", "")).strip(),
+                project=str(job.get("project", "mall")).strip() or "mall",
+                case_path=str(job.get("case_path", "")).strip(),
+                return_code=return_code,
+                timeout_seconds=timeout_seconds,
+                timed_out=timed_out,
+            )
     update_job(
         run_id,
         {
             "status": status_value,
-            "finished_at": now_iso_fn(),
+            "finished_at": finished_at_value,
             "return_code": return_code,
             "latest_failure": case_failure,
             "execution_record": artifact_execution_record,
         },
     )
-    update_runtime_run(
+    update_runtime_run_with_retry(
         run_id,
         {
             "status": status_value,
-            "finished_at": now_iso_fn(),
+            "finished_at": finished_at_value,
             "return_code": return_code,
             "artifacts_dir": str(artifacts_dir),
             "videos_dir": str(videos_dir),
             "latest_failure": case_failure,
             "execution_record": artifact_execution_record,
         },
+        update_runtime_run=update_runtime_run,
     )

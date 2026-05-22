@@ -1,7 +1,13 @@
 import { type FocusEvent, type MouseEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
-import { getTestPointAsset, getTestPointAssetCoverageMatrix, updateTestPointAsset } from "../api/assets";
+import {
+  batchGenerateCasesFromTestPointAssets,
+  batchReviewTestPoints,
+  getTestPointAsset,
+  getTestPointAssetCoverageMatrix,
+  updateTestPointAsset,
+} from "../api/assets";
 import { BulkActionBar } from "../components/BulkActionBar";
 import { ColumnFilter } from "../components/ColumnFilter";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -21,6 +27,53 @@ function numberValue(value: unknown): string {
   }
   const normalized = String(value || "").trim();
   return normalized || "0";
+}
+
+function asRecordList(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    : [];
+}
+
+function generationFailureLabel(value: unknown): string {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "原因未返回";
+  }
+  if (raw.includes("execution_compiler_intent_coverage_failed")) {
+    return "缺少可编译步骤或测试点未被脚本覆盖";
+  }
+  if (raw.includes("page_object_no_qualified_elements")) {
+    return "页面对象缺少合格元素";
+  }
+  if (raw.includes("page_object_url_missing")) {
+    return "页面对象缺少页面 URL";
+  }
+  if (raw.includes("page_object_db_lookup_failed")) {
+    return "页面对象数据库查询失败";
+  }
+  return raw.length > 80 ? `${raw.slice(0, 80)}...` : raw;
+}
+
+function buildGenerationFeedback(response: Record<string, unknown>): string {
+  const count = Number(response.count || 0);
+  const summary = response.summary && typeof response.summary === "object" ? (response.summary as Record<string, unknown>) : {};
+  const skipped = asRecordList(summary.skipped);
+  const skippedCount = Number(summary.skipped_assets || skipped.length || 0);
+  const skippedText = skipped
+    .slice(0, 3)
+    .map((item) => `${text(item.intent_id || item.asset_id)}：${generationFailureLabel(item.reason || item.message)}`)
+    .join("；");
+  if (count > 0 && skippedCount > 0) {
+    return `已生成 ${count} 条用例；${skippedCount} 条测试点未生成${skippedText ? `：${skippedText}` : "，请查看生成明细"}。`;
+  }
+  if (count > 0) {
+    return `已生成 ${count} 条已通过测试点用例，可前往用例中心查看。`;
+  }
+  if (skippedCount > 0) {
+    return `未生成用例；${skippedCount} 条测试点被跳过${skippedText ? `：${skippedText}` : "，请检查已通过测试点和页面对象配置"}。`;
+  }
+  return "未生成用例，请检查已通过测试点和页面对象配置。";
 }
 
 type SummaryBadgeTone = "ai" | "manual" | "warning" | "success" | "danger" | "neutral";
@@ -529,6 +582,11 @@ export function TestPointAssetDetailPage() {
   const sourceBadge = sourceBadgeConfig(item);
   const statusBadge = statusBadgeConfig(item);
   const assetReviewBadge = assetReviewBadgeConfig(pointReviewCounts, statusBadge);
+  const generationDiagnostics = (item.generation_diagnostics || {}) as Record<string, unknown>;
+  const missingGeneratedPoints = asRecordList(generationDiagnostics.missing);
+  const duplicateGeneratedPoints = asRecordList(generationDiagnostics.duplicates);
+  const hasGenerationIssues = missingGeneratedPoints.length > 0 || duplicateGeneratedPoints.length > 0;
+  const generationFailuresLink = `/cases/generation-failures?project=${encodeURIComponent(project)}&asset_id=${encodeURIComponent(assetId)}`;
 
   function showFloatingTooltip(target: HTMLElement, content: string) {
     const normalized = String(content || "").trim();
@@ -622,32 +680,16 @@ export function TestPointAssetDetailPage() {
       setErrorText("驳回测试点时必须填写驳回原因。");
       return;
     }
-    const reviewedAt = new Date().toISOString();
-    const reviewedRows = detailRows.map((row) => {
-      if (!normalizedIds.includes(pointIdOf(row))) {
-        return row;
-      }
-      return {
-        ...row,
-        review_status: nextStatus,
-        review_note: nextStatus === "rejected" ? normalizedNote : "",
-        reviewed_at: reviewedAt,
-        reviewed_by: "admin",
-      };
-    });
     setBusy(true);
     setErrorText("");
     setActionText("");
     try {
-      await updateTestPointAsset(assetId, {
+      await batchReviewTestPoints({
         project,
-        asset_id: assetId,
-        page: text(item.page),
-        title: text(item.title) || assetId,
-        priority: text(item.priority) || "P1",
-        requirement: requirementText || text(item.title) || assetId,
-        source_type: text(item.source_type) || "manual",
-        selected_candidates: reviewedRows.map(candidatePayloadFromRow),
+        decisions: normalizedIds.map((intentId) => ({ asset_id: assetId, intent_id: intentId })),
+        status: nextStatus,
+        note: normalizedNote,
+        reviewed_by: "admin",
       });
       const [detailPayload, matrixPayload] = await Promise.all([
         getTestPointAsset(assetId, project),
@@ -666,13 +708,46 @@ export function TestPointAssetDetailPage() {
     }
   }
 
+  async function generateApprovedCases() {
+    if (!assetId || busy) {
+      return;
+    }
+    setBusy(true);
+    setErrorText("");
+    setActionText("");
+    try {
+      const response = await batchGenerateCasesFromTestPointAssets({
+        project,
+        asset_ids: [assetId],
+        source: "ai",
+      });
+      setActionText(buildGenerationFeedback(response as Record<string, unknown>));
+      const [detailPayload, matrixPayload] = await Promise.all([
+        getTestPointAsset(assetId, project),
+        getTestPointAssetCoverageMatrix(assetId, project),
+      ]);
+      setItem((detailPayload.item || {}) as Record<string, unknown>);
+      setMatrix((matrixPayload.item || {}) as Record<string, unknown>);
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : "生成已通过用例失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <main className="page shell">
-      <header className="header panel">
-        <div>
+    <main className="page shell detail-page detail-page--asset">
+      <header className="detail-toolbar">
+        <div className="detail-toolbar-main">
           <h1>测试点资产详情</h1>
         </div>
-        <div className="header-actions">
+        <div className="detail-toolbar-actions">
+          <button type="button" className="button" onClick={() => void generateApprovedCases()} disabled={busy || pointReviewCounts.approved <= 0}>
+            生成已通过用例
+          </button>
+          <Link className="button secondary" to={`/cases?project=${encodeURIComponent(project)}`}>
+            用例中心
+          </Link>
           <Link className="button" to={`/assets/test-points/${encodeURIComponent(assetId)}/edit?project=${encodeURIComponent(project)}`}>
             编辑资产
           </Link>
@@ -687,50 +762,50 @@ export function TestPointAssetDetailPage() {
       {actionText ? <section className="panel">{actionText}</section> : null}
 
       {!loading && !errorText && !showMatrixOnly ? (
-        <section className="panel asset-detail-panel">
-          <div className="asset-summary-strip" aria-label="资产基础信息">
-            <div className="asset-summary-item asset-summary-primary">
-              <span>标题</span>
-              <strong>{text(item.title)}</strong>
+        <section className="detail-hero asset-detail-panel">
+          <div className="asset-summary-strip detail-field-grid" aria-label="资产基础信息">
+            <div className="asset-summary-item asset-summary-primary detail-field detail-field--wide">
+              <span className="detail-field-label">标题</span>
+              <strong className="detail-field-value">{text(item.title)}</strong>
             </div>
-            <div className="asset-summary-item">
-              <span>资产编码</span>
-              <strong className="mono">{text(item.asset_id)}</strong>
+            <div className="asset-summary-item detail-field detail-field--wide">
+              <span className="detail-field-label">资产编码</span>
+              <strong className="detail-field-value detail-mono">{text(item.asset_id)}</strong>
             </div>
-            <div className="asset-summary-item">
-              <span>页面</span>
-              <strong>{text(item.page)}</strong>
+            <div className="asset-summary-item detail-field">
+              <span className="detail-field-label">页面</span>
+              <strong className="detail-field-value">{text(item.page)}</strong>
             </div>
-            <div className="asset-summary-item">
-              <span>优先级</span>
-              <strong>{text(item.priority)}</strong>
+            <div className="asset-summary-item detail-field">
+              <span className="detail-field-label">优先级</span>
+              <strong className="detail-field-value">{text(item.priority)}</strong>
             </div>
-            <div className="asset-summary-item">
-              <span>来源</span>
-              <strong>
+            <div className="asset-summary-item detail-field">
+              <span className="detail-field-label">来源</span>
+              <strong className="detail-field-value">
                 <span className={`asset-state-badge asset-state-${sourceBadge.tone}`} title={sourceBadge.raw || sourceBadge.label}>
                   {sourceBadge.label}
                 </span>
               </strong>
             </div>
-            <div className="asset-summary-item">
-              <span>点位数</span>
-              <strong>{numberValue(item.point_count)}</strong>
-              <small>可维护测试点</small>
+            <div className="asset-summary-item detail-field">
+              <span className="detail-field-label">点位数</span>
+              <strong className="detail-field-value">{numberValue(item.point_count)}</strong>
+              <small className="detail-field-help">可维护测试点</small>
             </div>
-            <div className="asset-summary-item">
-              <span>置信度</span>
-              <strong>{numberValue(item.confidence)}</strong>
-              <small>AI 解析参考值</small>
+            <div className="asset-summary-item detail-field">
+              <span className="detail-field-label">置信度</span>
+              <strong className="detail-field-value">{numberValue(item.confidence)}</strong>
+              <small className="detail-field-help">AI 解析参考值</small>
             </div>
-            <div className="asset-summary-item asset-summary-muted">
-              <span>状态</span>
-              <strong>
+            <div className="asset-summary-item asset-summary-muted detail-field">
+              <span className="detail-field-label">状态</span>
+              <strong className="detail-field-value">
                 <span className={`asset-state-badge asset-state-${assetReviewBadge.tone}`} title={assetReviewBadge.raw || assetReviewBadge.label}>
                   {assetReviewBadge.label}
                 </span>
               </strong>
-              {assetReviewBadge.hint ? <small>{assetReviewBadge.hint}</small> : null}
+              {assetReviewBadge.hint ? <small className="detail-field-help">{assetReviewBadge.hint}</small> : null}
             </div>
           </div>
           <div className={`asset-review-banner asset-review-${assetReviewBadge.tone}`}>
@@ -739,6 +814,88 @@ export function TestPointAssetDetailPage() {
               共 {pointReviewCounts.total} 条测试点，已通过 {pointReviewCounts.approved} 条，已驳回 {pointReviewCounts.rejected} 条，待审核 {pointReviewCounts.pending} 条。
             </span>
           </div>
+          {hasGenerationIssues ? (
+            <div className="asset-generation-diagnostics-panel">
+              <div className="asset-generation-diagnostics-header">
+                <div>
+                  <strong>生成覆盖诊断</strong>
+                  <span>
+                    已通过 {numberValue(generationDiagnostics.approved_intent_count)} 条，已生成覆盖 {numberValue(generationDiagnostics.generated_unique_intent_count)} 条；
+                    未生成 {missingGeneratedPoints.length} 条，重复 {duplicateGeneratedPoints.length} 组。
+                  </span>
+                </div>
+                <Link className="button secondary" to={`/cases?project=${encodeURIComponent(project)}&source_asset=${encodeURIComponent(assetId)}`}>
+                  去用例中心处理
+                </Link>
+                <Link className="button secondary" to={generationFailuresLink}>
+                  查看失败明细
+                </Link>
+              </div>
+              {missingGeneratedPoints.length ? (
+                <div className="asset-generation-diagnostics-block">
+                  <h3>编译失败 / 未生成的已通过测试点</h3>
+                  <table className="detail-table detail-table--compact">
+                    <thead>
+                      <tr>
+                        <th>intent_id</th>
+                        <th>标题</th>
+                        <th>失败类型</th>
+                        <th>原因与建议</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {missingGeneratedPoints.map((row, index) => (
+                        <tr key={`missing-${String(row.intent_id || index)}`}>
+                          <td className="mono">{text(row.intent_id)}</td>
+                          <td>{text(row.title)}</td>
+                          <td>{text(row.failure_type || row.failure_stage || row.reason)}</td>
+                          <td>
+                            <strong>{text(row.message || row.reason)}</strong>
+                            {text(row.suggestion) !== "-" ? <p className="muted">{text(row.suggestion)}</p> : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+              {duplicateGeneratedPoints.length ? (
+                <div className="asset-generation-diagnostics-block">
+                  <h3>重复生成项</h3>
+                  <table className="detail-table detail-table--compact">
+                    <thead>
+                      <tr>
+                        <th>intent_id</th>
+                        <th>标题</th>
+                        <th>重复 case_id</th>
+                        <th>建议</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {duplicateGeneratedPoints.map((row, index) => {
+                        const caseIds = Array.isArray(row.case_ids)
+                          ? row.case_ids.map((caseId) => String(caseId || "").trim()).filter(Boolean)
+                          : [];
+                        return (
+                          <tr key={`duplicate-${String(row.intent_id || index)}`}>
+                            <td className="mono">{text(row.intent_id)}</td>
+                            <td>{text(row.title)}</td>
+                            <td className="mono">{caseIds.length ? caseIds.join(", ") : "-"}</td>
+                            <td>{text(row.message)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="asset-generation-diagnostics-panel asset-generation-diagnostics-panel--ok">
+              <strong>生成覆盖诊断</strong>
+              <span>当前未发现已通过测试点未生成或重复生成项。</span>
+            </div>
+          )}
           <div className="asset-requirement-panel">
             <div className="asset-requirement-header">
               <div>
@@ -769,7 +926,7 @@ export function TestPointAssetDetailPage() {
             </span>
           )}
         >
-          <table className="test-point-detail-table">
+          <table className="test-point-detail-table detail-table detail-table--asset-points">
             <thead>
               <tr>
                 <th>
@@ -937,7 +1094,7 @@ export function TestPointAssetDetailPage() {
             </span>
           )}
         >
-          <table className="coverage-matrix-table">
+          <table className="coverage-matrix-table detail-table detail-table--coverage">
             <thead>
               <tr>
                 <th>追溯状态</th>

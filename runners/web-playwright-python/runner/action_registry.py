@@ -12,6 +12,8 @@ from actions.login import login_action
 ACTION_DEFINITIONS = {
     "click": {"handler": click_action, "requires_target": True},
     "fill": {"handler": fill_action, "requires_target": True},
+    "input": {"handler": fill_action, "requires_target": True},
+    "type": {"handler": fill_action, "requires_target": True},
     "wait_for": {"handler": wait_for_action, "requires_target": True},
     "assert_visible": {"handler": assert_visible_action, "requires_target": True},
     "assert_count": {"handler": assert_count_action, "requires_target": True},

@@ -1,9 +1,12 @@
+"""Jira/缺陷单文本解析工具：提取工单号、严重级别与业务规则线索。"""
+
 from __future__ import annotations
 
 import re
 from typing import Any
 
 
+# 缺陷文本关键词 → 页面候选
 PAGE_KEYWORD_MAPPING: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("returnapply", ("returnapply", "return-apply", "refund", "return")),
     ("order", ("order",)),
@@ -24,6 +27,7 @@ def _page_candidates(text: str) -> list[str]:
 
 
 def parse_defect_ticket(defect_ticket: str = "") -> dict[str, Any]:
+    """从缺陷描述文本结构化提取字段与回归优先级信号。"""
     raw_text = str(defect_ticket or "").strip()
     ticket_match = re.search(r"\b([A-Z][A-Z0-9]+-\d+)\b", raw_text)
     severity_match = re.search(r"\b(severity|priority)\s*[:=]\s*([a-zA-Z0-9_-]+)", raw_text, flags=re.IGNORECASE)

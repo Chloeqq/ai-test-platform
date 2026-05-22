@@ -82,19 +82,19 @@ export function DashboardPage() {
             <h1>仪表盘</h1>
             <p className="hero-description">聚焦当前风险、执行趋势和待处理事项。</p>
             <div className="hero-metrics">
-              <div className="hero-metric">
+              <div className="hero-metric metric-tone-info">
                 <span>数据更新时间</span>
                 <strong>{updatedAt}</strong>
               </div>
-              <div className="hero-metric">
+              <div className={`hero-metric ${riskLevel === "高" ? "metric-tone-danger" : riskLevel === "中" ? "metric-tone-warning" : "metric-tone-success"}`}>
                 <span>当前风险级别</span>
                 <strong>{text(risk.level)}</strong>
               </div>
-              <div className="hero-metric">
+              <div className="hero-metric metric-tone-accent">
                 <span>首页职责</span>
                 <strong>总览与提醒</strong>
               </div>
-              <div className="hero-metric">
+              <div className="hero-metric metric-tone-cyan">
                 <span>刷新策略</span>
                 <strong>60s 自动刷新</strong>
               </div>
@@ -116,15 +116,15 @@ export function DashboardPage() {
               </div>
               <p className="dash-note">{text(risk.summary)}</p>
               <div className="risk-metric-strip">
-                <span>
+                <span className="metric-tone-success">
                   <strong>{numberValue(summary.pass_rate_24h)}%</strong>
                   <em>24h 通过率</em>
                 </span>
-                <span>
+                <span className="metric-tone-cyan">
                   <strong>{numberValue(summary.execution_count_24h)}</strong>
                   <em>24h 执行</em>
                 </span>
-                <span>
+                <span className="metric-tone-warning">
                   <strong>{numberValue(summary.pending_issues)}</strong>
                   <em>待处理</em>
                 </span>
@@ -150,22 +150,22 @@ export function DashboardPage() {
             </div>
           </div>
           <section className="dashboard-kpi-grid">
-            <article className="dash-card mini-card">
+            <article className="dash-card mini-card metric-tone-success">
               <h2>最近24小时通过率</h2>
               <strong>{numberValue(summary.pass_rate_24h)}%</strong>
               <p className="dash-note">用于判断当前回归健康度。</p>
             </article>
-            <article className="dash-card mini-card">
+            <article className="dash-card mini-card metric-tone-cyan">
               <h2>最近24小时执行次数</h2>
               <strong>{numberValue(summary.execution_count_24h)}</strong>
               <p className="dash-note">覆盖自动化与门禁触发任务。</p>
             </article>
-            <article className="dash-card mini-card">
+            <article className="dash-card mini-card metric-tone-warning">
               <h2>最近10次门禁拦截</h2>
               <strong>{numberValue((governanceSummary as Record<string, unknown>).gate_intercept_last_10)}</strong>
               <p className="dash-note">用于观察质量门禁压力和阻断密度。</p>
             </article>
-            <article className="dash-card mini-card">
+            <article className="dash-card mini-card metric-tone-danger">
               <h2>待确认问题数</h2>
               <strong>{numberValue(summary.pending_issues)}</strong>
               <p className="dash-note">当前需要继续跟进的执行问题。</p>

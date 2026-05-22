@@ -291,7 +291,16 @@ def test_extract_allure_test_metadata_from_parametrized_case():
                 "id": "tc-product-GEN-001",
                 "title": "验证商品搜索功能",
                 "tags": ["product", "ai-generated"],
-                "execution": {"page": "product"},
+                "version": "v2",
+                "project": "mall",
+                "priority": "P1",
+                "requirement": {
+                    "intent_id": "intent-product-01",
+                    "title": "验证商品搜索功能",
+                    "type": "functional",
+                    "source_asset_title": "商品管理测试点集",
+                },
+                "execution": {"page": "product", "page_url": "http://localhost:5174/#/product"},
             }
         }
 
@@ -306,13 +315,51 @@ def test_extract_allure_test_metadata_from_parametrized_case():
 
     assert metadata == {
         "title": "验证商品搜索功能",
-        "case_id": "tc-product-GEN-001",
-        "page": "product",
-        "tags": ["product", "ai-generated"],
-        "base_url": "http://localhost:5173/login#/login",
-        "run_mode": "ai",
-        "run_source": "regression",
-    }
+            "case_id": "tc-product-GEN-001",
+            "page": "product",
+            "feature": "product",
+            "story": "验证商品搜索功能",
+            "tags": ["product", "ai-generated"],
+            "base_url": "http://localhost:5174/#/product",
+            "run_mode": "ai",
+            "run_source": "regression",
+            "project": "mall",
+            "priority": "P1",
+            "intent_type": "functional",
+            "intent_id": "intent-product-01",
+            "source_asset_title": "商品管理测试点集",
+            "case_version": "v2",
+        }
+
+
+def test_extract_allure_test_metadata_unwraps_case_param():
+    class CaseParam:
+        payload = {
+            "id": "tc-login-001",
+            "title": "首次登录成功",
+            "project": "mall",
+            "priority": "P0",
+            "requirement": ["测试点ID：intent-01", "测试点标题：首次登录成功", "测试类型：functional"],
+            "execution": {"page": "login", "page_url": "http://localhost:5174/#/login"},
+        }
+
+    class FakeCallSpec:
+        params = {"case_param": CaseParam()}
+
+    class FakeNode:
+        callspec = FakeCallSpec()
+        name = "test_yaml_ai_generated"
+
+    class FakeRequest:
+        node = FakeNode()
+
+    metadata = MODULE.extract_allure_test_metadata(FakeRequest())
+
+    assert metadata["case_id"] == "tc-login-001"
+    assert metadata["feature"] == "登录与身份验证"
+    assert metadata["story"] == "首次登录成功"
+    assert metadata["base_url"] == "http://localhost:5174/#/login"
+    assert metadata["intent_id"] == "intent-01"
 
 
 def test_apply_allure_test_metadata_calls_dynamic_api(monkeypatch):
@@ -322,6 +369,10 @@ def test_apply_allure_test_metadata_calls_dynamic_api(monkeypatch):
         @staticmethod
         def title(value):
             calls.append(("title", value))
+
+        @staticmethod
+        def epic(value):
+            calls.append(("epic", value))
 
         @staticmethod
         def feature(value):
@@ -339,8 +390,35 @@ def test_apply_allure_test_metadata_calls_dynamic_api(monkeypatch):
         def tag(value):
             calls.append(("tag", value))
 
+        @staticmethod
+        def severity(value):
+            calls.append(("severity", value))
+
+        @staticmethod
+        def parameter(name, value, **kwargs):
+            calls.append(("parameter", name, value, kwargs))
+
+        @staticmethod
+        def parent_suite(value):
+            calls.append(("parent_suite", value))
+
+        @staticmethod
+        def suite(value):
+            calls.append(("suite", value))
+
+        @staticmethod
+        def sub_suite(value):
+            calls.append(("sub_suite", value))
+
     class FakeAllure:
         dynamic = FakeDynamic()
+        class parameter_mode:
+            HIDDEN = "hidden"
+        class severity_level:
+            BLOCKER = "blocker"
+            CRITICAL = "critical"
+            NORMAL = "normal"
+            MINOR = "minor"
 
     monkeypatch.setattr(MODULE, "allure", FakeAllure())
 
@@ -349,6 +427,11 @@ def test_apply_allure_test_metadata_calls_dynamic_api(monkeypatch):
             "title": "验证商品搜索功能",
             "case_id": "tc-product-GEN-001",
             "page": "product",
+            "feature": "商品管理",
+            "story": "验证商品搜索功能",
+            "project": "mall",
+            "priority": "P1",
+            "source_asset_title": "商品管理测试点集",
             "tags": ["product", "ai-generated"],
             "base_url": "http://localhost:5173/login#/login",
             "run_mode": "ai",
@@ -358,12 +441,17 @@ def test_apply_allure_test_metadata_calls_dynamic_api(monkeypatch):
 
     assert result is True
     assert ("title", "验证商品搜索功能") in calls
-    assert ("feature", "product") in calls
-    assert ("story", "tc-product-GEN-001") in calls
+    assert ("feature", "商品管理") in calls
+    assert ("story", "验证商品搜索功能") in calls
+    assert ("parent_suite", "商城后台 (mall)") in calls
+    assert ("suite", "商品管理") in calls
     assert ("label", "case_id", "tc-product-GEN-001") in calls
+    assert ("label", "priority", "P1") in calls
+    assert ("label", "source_asset", "商品管理测试点集") in calls
     assert ("label", "base_url", "http://localhost:5173/login#/login") in calls
     assert ("label", "run_mode", "ai") in calls
     assert ("label", "run_source", "manual") in calls
+    assert any(call[:3] == ("parameter", "case_param", "tc-product-GEN-001") for call in calls)
     assert ("tag", "product") in calls
     assert ("tag", "ai-generated") in calls
 

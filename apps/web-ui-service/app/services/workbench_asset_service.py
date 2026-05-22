@@ -119,12 +119,18 @@ def _looks_like_asset_identifier(value: Any, *, asset_id: str = "") -> bool:
 
 
 def _candidate_rows_from_plan(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for point in _list_value(plan.get("points")):
+        if not isinstance(point, dict):
+            continue
+        rows.append(point)
+    if rows:
+        return rows
     metadata = _dict_value(plan.get("metadata"))
     candidates_raw = _list_value(metadata.get("selected_candidates"))
     candidates = [item for item in candidates_raw if isinstance(item, dict)]
     if candidates:
         return candidates
-    rows: list[dict[str, Any]] = []
     for point in _list_value(plan.get("points")):
         if not isinstance(point, dict):
             continue
@@ -132,8 +138,6 @@ def _candidate_rows_from_plan(plan: dict[str, Any]) -> list[dict[str, Any]]:
         snapshot = _dict_value(point_metadata.get("candidate_snapshot"))
         if snapshot:
             rows.append(snapshot)
-            continue
-        rows.append(point)
     return rows
 
 
@@ -179,12 +183,6 @@ def _derive_requirement_list(asset: dict[str, Any]) -> list[str]:
 def _derive_intent_count(asset: dict[str, Any]) -> int:
     plan = _dict_value(asset.get("plan"))
     metadata = _dict_value(plan.get("metadata"))
-    selected_ids = _dedup_keep_order([str(item).strip() for item in _list_value(metadata.get("selected_intent_ids"))])
-    if selected_ids:
-        return len(selected_ids)
-    selected_candidates = [item for item in _list_value(metadata.get("selected_candidates")) if isinstance(item, dict)]
-    if selected_candidates:
-        return len(selected_candidates)
     point_ids = _dedup_keep_order(
         [
             str(point.get("intent_id") or point.get("key") or "").strip()
@@ -194,6 +192,12 @@ def _derive_intent_count(asset: dict[str, Any]) -> int:
     )
     if point_ids:
         return len(point_ids)
+    selected_ids = _dedup_keep_order([str(item).strip() for item in _list_value(metadata.get("selected_intent_ids"))])
+    if selected_ids:
+        return len(selected_ids)
+    selected_candidates = [item for item in _list_value(metadata.get("selected_candidates")) if isinstance(item, dict)]
+    if selected_candidates:
+        return len(selected_candidates)
     return int(asset.get("point_count", 0) or 0)
 
 
@@ -674,7 +678,7 @@ def derive_points(case_yaml: dict[str, Any]) -> dict[str, Any]:
         elif action in {"click", "goto"}:
             point_type = "navigation"
             counts["navigation_count"] += 1
-        elif action in {"fill", "type"}:
+        elif action in {"fill", "type", "input"}:
             point_type = "input"
             counts["input_count"] += 1
         elif action in {"assert_visible", "assert_url", "wait_for"}:
@@ -706,13 +710,24 @@ def save_case_state(
 ) -> dict[str, Any]:
     case_id = safe_case_id_fn(str(case_yaml.get("id", "")).strip())
     case_yaml["id"] = case_id
+    raw_requirement = case_yaml.get("requirement")
+    if isinstance(raw_requirement, list):
+        requirement_payload = raw_requirement
+    elif isinstance(raw_requirement, dict):
+        requirement_payload = [
+            str(raw_requirement.get(key, "")).strip()
+            for key in ("title", "intent_id", "type", "precondition", "source_asset_id")
+            if str(raw_requirement.get(key, "")).strip()
+        ]
+    else:
+        requirement_payload = []
     state = {
         "asset_id": case_id,
         "version": 1,
         "updated_at": now_iso_fn(),
         "title": str(case_yaml.get("title", "")).strip() or case_id,
         "page": str((case_yaml.get("execution") or {}).get("page", case_yaml.get("module", "product"))).strip() or "product",
-        "requirement": case_yaml.get("requirement") if isinstance(case_yaml.get("requirement"), list) else [],
+        "requirement": requirement_payload,
         "priority": str(case_yaml.get("priority", "P1")).strip() or "P1",
         "source_type": "yaml_case",
         "source_name": case_id,
@@ -995,15 +1010,23 @@ def load_test_point_asset_with_root(project: str, case_id: str, *, state_root: P
                     "priority": str(plan_payload.get("priority", "P1")).strip() or "P1",
                     "source_type": str(plan_payload.get("source_type", "generate_chain")).strip() or "generate_chain",
                 }
-            if not isinstance(asset.get("plan"), dict):
-                asset["plan"] = plan_payload
-            asset.setdefault("plan_path", str(plan_path.resolve()))
-            asset.setdefault("point_count", int(plan_payload.get("point_count", len(plan_payload.get("points", []) if isinstance(plan_payload.get("points"), list) else [])) or 0))
-            asset.setdefault("review_summary", plan_payload.get("review_summary", {}) if isinstance(plan_payload.get("review_summary"), dict) else {})
-            asset.setdefault("coverage", plan_payload.get("coverage", {}) if isinstance(plan_payload.get("coverage"), dict) else {})
-            asset.setdefault("involved_elements", plan_payload.get("involved_elements", []) if isinstance(plan_payload.get("involved_elements"), list) else [])
-            asset.setdefault("confidence", max(0.0, min(1.0, float(plan_payload.get("confidence", 0) or 0))))
-            asset.setdefault("requires_review", bool(plan_payload.get("requires_review", False)))
+            plan_points = plan_payload.get("points", []) if isinstance(plan_payload.get("points"), list) else []
+            # Canonical source of truth: the standalone plan file always wins over
+            # the embedded asset copy. The root asset is a derived container only.
+            asset["plan"] = plan_payload
+            asset["plan_path"] = str(plan_path.resolve())
+            if str(plan_payload.get("page", "")).strip():
+                asset["page"] = str(plan_payload.get("page", "")).strip()
+            if str(plan_payload.get("priority", "")).strip():
+                asset["priority"] = str(plan_payload.get("priority", "")).strip()
+            if str(plan_payload.get("source_type", "")).strip():
+                asset["source_type"] = str(plan_payload.get("source_type", "")).strip()
+            asset["point_count"] = int(plan_payload.get("point_count", len(plan_points)) or len(plan_points))
+            asset["review_summary"] = plan_payload.get("review_summary", {}) if isinstance(plan_payload.get("review_summary"), dict) else {}
+            asset["coverage"] = plan_payload.get("coverage", {}) if isinstance(plan_payload.get("coverage"), dict) else {}
+            asset["involved_elements"] = plan_payload.get("involved_elements", []) if isinstance(plan_payload.get("involved_elements"), list) else []
+            asset["confidence"] = max(0.0, min(1.0, float(plan_payload.get("confidence", 0) or 0)))
+            asset["requires_review"] = bool(plan_payload.get("requires_review", False))
     if isinstance(asset, dict):
         if str(asset.get("asset_id", "")).strip():
             asset["asset_id"] = _safe_case_id(str(asset.get("asset_id", "")).strip())

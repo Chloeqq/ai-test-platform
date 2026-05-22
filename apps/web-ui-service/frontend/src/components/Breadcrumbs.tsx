@@ -116,6 +116,26 @@ const ROUTE_CRUMBS: BreadcrumbRoute[] = [
     ],
   },
   {
+    path: "/assets/page-objects/new",
+    crumbs: ({ searchParams }) => [
+      domain("测试资产", "/cases"),
+      { label: "页面对象", to: withProject("/assets/page-objects", searchParams) },
+      { label: "新建页面对象" },
+    ],
+  },
+  {
+    path: "/assets/page-objects/:pageCode/edit",
+    crumbs: ({ searchParams, params }) => [
+      domain("测试资产", "/cases"),
+      { label: "页面对象", to: withProject("/assets/page-objects", searchParams) },
+      {
+        label: "元素治理",
+        to: params.pageCode ? withProject(`/assets/page-objects/${encodeURIComponent(params.pageCode)}/elements`, searchParams) : undefined,
+      },
+      { label: "编辑页面对象" },
+    ],
+  },
+  {
     path: "/assets/page-objects/:pageCode/elements/candidates/:groupKey",
     crumbs: ({ searchParams }) => [
       domain("测试资产", "/cases"),

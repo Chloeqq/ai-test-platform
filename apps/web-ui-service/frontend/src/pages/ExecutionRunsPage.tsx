@@ -1,5 +1,5 @@
 import { startTransition, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { formatDateTime } from "../lib/datetime";
 
 import {
@@ -40,6 +40,8 @@ function matchesKeyword(task: ExecutionTask, keyword: string): boolean {
     task.status,
     task.queue_status,
     task.source,
+    task.execution_record_path,
+    task.manifest_path,
   ]
     .map((item) => String(item || "").toLowerCase())
     .join(" ");
@@ -47,9 +49,13 @@ function matchesKeyword(task: ExecutionTask, keyword: string): boolean {
 }
 
 export function ExecutionRunsPage() {
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [tasks, setTasks] = useState<ExecutionTask[]>([]);
-  const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<TaskFilters>({
+    ...DEFAULT_FILTERS,
+    keyword: searchParams.get("keyword") || "",
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [errorText, setErrorText] = useState<string>("");
   const [lastUpdated, setLastUpdated] = useState<string>("");
@@ -168,6 +174,8 @@ export function ExecutionRunsPage() {
           >
             <option value="">全部</option>
             <option value="manual">manual</option>
+            <option value="case_center">case_center</option>
+            <option value="case_detail">case_detail</option>
             <option value="rerun">rerun</option>
             <option value="healed-rerun">healed-rerun</option>
           </select>

@@ -44,6 +44,8 @@ export interface ExecutionTask {
   source?: string;
   created_at?: string;
   updated_at?: string;
+  execution_record_path?: string;
+  manifest_path?: string;
   evidence_health?: {
     status?: string;
   };

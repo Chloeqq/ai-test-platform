@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FRONTEND_DIR="${ROOT_DIR}/apps/web-ui-service/frontend"
 ENV_FILE="${ROOT_DIR}/.env"
 LOG_FILE="/tmp/web-ui-frontend.log"
-FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+FRONTEND_PORT="${FRONTEND_PORT:-8014}"
 API_TARGET="${VITE_API_TARGET:-http://127.0.0.1:8014}"
 
 if [[ -f "${ENV_FILE}" ]]; then

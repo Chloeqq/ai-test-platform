@@ -1,3 +1,4 @@
+"""从 assets 加载 YAML 页面对象并与运行时 elements 合并。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,6 +39,7 @@ def _normalize_aliases(value: Any) -> list[str]:
 
 
 def load_page_object_yaml(page: str, *, root: Path | None = None) -> dict[str, Any] | None:
+    """读取 assets/page-objects/web/{page}.page-object.yaml，失败返回 None。"""
     page_slug = _normalized_page_slug(page)
     if not page_slug:
         return None
@@ -56,6 +58,7 @@ def merge_page_object_elements(
     elements: dict[str, Any] | None,
     yaml_page_object: dict[str, Any] | None,
 ) -> dict[str, dict[str, Any]]:
+    """合并内存 elements 与 YAML；YAML 仅填充空缺字段（不覆盖已有 selector）。"""
     normalized: dict[str, dict[str, Any]] = {}
     if isinstance(elements, dict):
         for raw_code, raw_meta in elements.items():
@@ -138,6 +141,7 @@ def merge_page_object_elements(
 
 
 def merge_page_object_with_yaml(page: str, page_object: dict[str, Any] | None) -> dict[str, Any]:
+    """加载 YAML 并与传入 page_object 合并 elements。"""
     normalized_page_object = page_object if isinstance(page_object, dict) else {}
     yaml_page_object = load_page_object_yaml(page)
     merged = dict(normalized_page_object)

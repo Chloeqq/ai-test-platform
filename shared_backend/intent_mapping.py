@@ -1,3 +1,4 @@
+"""将显式 steps_hint 解析为 runner 可执行的动作、目标与取值。"""
 from __future__ import annotations
 
 from typing import Any
@@ -66,6 +67,7 @@ def resolve_explicit_step(
     value: Any = None,
     page_element_alias_map: dict[str, str] | None = None,
 ) -> tuple[str, str | None, Any]:
+    """解析首条 steps_hint，返回 (runner_action, target_code|None, value)。"""
     hints = steps_hint if isinstance(steps_hint, list) else ([] if steps_hint is None else [steps_hint])
     if not hints:
         raise ValueError("missing explicit steps_hint")
@@ -90,6 +92,7 @@ def resolve_explicit_step(
                 hint_value = _normalized_text(payload)
             elif hint_action == "assert_metric":
                 payload_text = _normalized_text(payload)
+                # 支持「标签 >= 100」类 metric 文本，拆成 target 与比较表达式
                 comparator_split = None
                 for operator in (">=", "<=", "==", "!=", ">", "<"):
                     if operator in payload_text:

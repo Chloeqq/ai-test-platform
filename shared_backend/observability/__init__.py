@@ -1,3 +1,4 @@
+"""跨服务日志、子进程输出与 AI 调用追踪的共享可观测性工具。"""
 from .ai_trace import build_ai_trace_context
 from .logging import (
     configure_logging,

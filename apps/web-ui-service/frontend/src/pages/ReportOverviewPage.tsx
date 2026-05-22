@@ -62,23 +62,23 @@ export function ReportOverviewPage() {
       <ReportTabs />
 
       <section className="panel stat-grid">
-        <article className="stat-card">
+        <article className="stat-card metric-tone-info">
           <span className="label">总运行次数</span>
           <strong>{summaryValue(summary.total_runs)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-success">
           <span className="label">通过率</span>
           <strong>{summaryValue(summary.pass_rate, "%")}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-success">
           <span className="label">健康度</span>
           <strong>{summaryValue(summary.health_score)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-danger">
           <span className="label">高风险失败</span>
           <strong>{summaryValue(summary.high_risk_failures)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-warning">
           <span className="label">可行动建议</span>
           <strong>{summaryValue(summary.actionable_suggestions)}</strong>
         </article>

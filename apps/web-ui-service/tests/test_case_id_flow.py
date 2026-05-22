@@ -5,9 +5,10 @@ from pathlib import Path
 
 from fastapi import HTTPException
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.workbench.facade import _persist_runtime_run_to_case_center
 from app.core.database import Base
 import app.models.page_object as page_object_model  # noqa: F401
 import app.models.test_case as test_case_model
@@ -62,6 +63,40 @@ def test_get_detail_accepts_business_case_id(db_session: Session) -> None:
     assert detail_by_internal_id.case.id == case.id
 
 
+def test_persist_runtime_run_to_case_center_does_not_fall_back_to_other_project_case(db_session: Session) -> None:
+    test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            case_id="mall-web-login-auth-fn-ai-0001",
+            project_code="atp",
+            name="登录成功",
+            product_line="登录",
+            module="认证",
+            priority="P0",
+            test_type="ui",
+            creator="qa",
+            script_code="def test_login_success(page):\n    assert True\n",
+        ),
+    )
+
+    result = _persist_runtime_run_to_case_center(
+        db_session,
+        {
+            "run_id": "run-001",
+            "case_id": "mall-web-login-auth-fn-ai-0001",
+            "project": "mall",
+            "status": "passed",
+            "started_at": "2026-05-21T10:00:00+00:00",
+            "finished_at": "2026-05-21T10:01:00+00:00",
+            "execution_record": {"status": "passed", "finished_at": "2026-05-21T10:01:00+00:00"},
+        },
+    )
+
+    assert result is None
+    executions = db_session.execute(select(test_case_model.TestCaseExecution)).scalars().all()
+    assert executions == []
+
+
 def test_get_detail_includes_project_status(db_session: Session) -> None:
     test_project_service.create_project(
         db_session,
@@ -98,7 +133,7 @@ def test_get_detail_repairs_legacy_login_steps_and_sanitizes_script(db_session: 
         client="web",
         page_code="login",
         page_name="登录页",
-        page_url="http://localhost:5173/#/login",
+        page_url="http://localhost:5174/#/login",
         status="online",
         created_by="qa",
     )
@@ -221,13 +256,127 @@ def test_get_detail_repairs_legacy_login_steps_and_sanitizes_script(db_session: 
     assert str(step_rows[2].locator_value) == "登录"
 
 
+def test_get_detail_does_not_repair_password_input_to_remember_checkbox(db_session: Session) -> None:
+    page_object = page_object_model.PageObject(
+        project_code="mall",
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="http://localhost:5174/#/login",
+        status="online",
+        created_by="qa",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    db_session.add_all(
+        [
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="remember_password_checkbox",
+                element_name="记住密码复选框",
+                locator_type="id",
+                locator_value="remember-password",
+                business_type="checkbox",
+                role="checkbox",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="username_input",
+                element_name="用户名输入框",
+                locator_type="placeholder",
+                locator_value="请输入用户名",
+                role="username",
+                business_type="input",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="password_input",
+                element_name="密码输入框",
+                locator_type="placeholder",
+                locator_value="请输入密码",
+                role="password",
+                business_type="input",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login_button",
+                element_name="登录按钮",
+                locator_type="role",
+                locator_value="登录",
+                role="button",
+                business_type="button",
+                owner="qa",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            case_id="mall-web-login-auth-fn-ai-0100",
+            project_code="mall",
+            page_code="login",
+            name="首次登录成功",
+            product_line="商城",
+            module="login",
+            priority="P0",
+            test_type="ui",
+            creator="qa",
+            expected_result="页面跳转至平台工作台首页，顶部展示当前登录用户名 admin。",
+            script_code="def test_login_success(page):\n    assert True\n",
+            test_steps=[
+                {
+                    "action": "input",
+                    "description": "input username_input test001",
+                    "target": "element:username_input",
+                    "locator_type": "placeholder",
+                    "locator_value": "请输入用户名",
+                    "value": "test001",
+                },
+                {
+                    "action": "input",
+                    "description": "input remember_password_checkbox 123456",
+                    "target": "element:remember_password_checkbox",
+                    "locator_type": "id",
+                    "locator_value": "remember-password",
+                    "value": "123456",
+                },
+                {
+                    "action": "click",
+                    "description": "click login_button",
+                    "target": "element:login_button",
+                    "locator_type": "role",
+                    "locator_value": "登录",
+                    "expected_result": "登录失败，页面展示与当前场景匹配的错误提示",
+                },
+            ],
+        ),
+    )
+
+    detail = test_case_service.get_test_case_detail(db_session, str(case.id))
+    repaired = detail.case.test_steps if isinstance(detail.case.test_steps, list) else []
+
+    assert [str(item.get("target")) for item in repaired] == [
+        "element:username_input",
+        "element:password_input",
+        "element:login_button",
+    ]
+    assert str(repaired[1].get("target_name")) == "密码输入框"
+    assert str(repaired[1].get("locator_value")) != "remember-password"
+    assert "登录失败" not in str(repaired[2].get("expected_result"))
+
+
 def test_get_detail_repairs_login_like_steps_when_page_code_is_not_login(db_session: Session) -> None:
     page_object = page_object_model.PageObject(
         project_code="atp",
         client="web",
         page_code="login",
         page_name="登录页",
-        page_url="http://localhost:5173/#/login",
+        page_url="http://localhost:5174/#/login",
         status="online",
         created_by="qa",
     )
@@ -711,6 +860,69 @@ def test_upsert_test_case_from_workbench_creates_and_updates_case(db_session: Se
     assert version_count == 2
 
 
+def test_upsert_test_case_from_workbench_reuses_case_by_source_asset_and_intent(db_session: Session) -> None:
+    existing = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code="mall",
+            case_id="mall-web-login-auth-fn-ai-0001",
+            name="首次登录成功",
+            product_line="login",
+            module="login",
+            page_code="login",
+            priority="P0",
+            test_type="ui",
+            creator="qa",
+            test_steps=[{"action": "click", "target": "login_button", "intent_id": "intent-01"}],
+            script_code=(
+                "version: v1\n"
+                "id: mall-web-login-auth-fn-ai-0001\n"
+                "project: mall\n"
+                "module: login\n"
+                "title: 首次登录成功\n"
+                "requirement:\n"
+                "  intent_id: intent-01\n"
+                "  title: 首次登录成功\n"
+                "  source_asset_id: mall-web-login-auth-fn-ai-0021\n"
+                "execution:\n"
+                "  page: login\n"
+                "  selected_intent_ids:\n"
+                "    - intent-01\n"
+            ),
+        ),
+    )
+
+    synchronized = test_case_service.upsert_test_case_from_workbench(
+        db_session,
+        project_code="mall",
+        case_yaml={
+            "id": "mall-web-login-auth-fn-ai-0003",
+            "title": "首次登录成功-重新生成",
+            "module": "login",
+            "priority": "P0",
+            "tags": ["ai-generated"],
+            "requirement": {
+                "intent_id": "intent-01",
+                "title": "首次登录成功",
+                "type": "functional",
+                "source_asset_id": "mall-web-login-auth-fn-ai-0021",
+            },
+            "execution": {
+                "page": "login",
+                "selected_intent_ids": ["intent-01"],
+                "steps": [{"action": "click", "target": "login_button"}],
+            },
+        },
+        source_path="/tmp/mall-web-login-auth-fn-ai-0003.yaml",
+    )
+
+    assert synchronized.id == existing.id
+    assert synchronized.case_id == "mall-web-login-auth-fn-ai-0001"
+    assert synchronized.name == "首次登录成功-重新生成"
+    assert db_session.query(test_case_model.TestCase).count() == 1
+    assert "id: mall-web-login-auth-fn-ai-0001" in synchronized.script_code
+
+
 def test_update_project_updates_name_description_and_status(db_session: Session) -> None:
     test_project_service.create_project(
         db_session,
@@ -759,4 +971,3 @@ def test_update_project_is_idempotent_when_payload_same(db_session: Session) -> 
     assert unchanged.project_name == "Mall Platform"
     assert unchanged.description == "商城项目"
     assert unchanged.status == "active"
-

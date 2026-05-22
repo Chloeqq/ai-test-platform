@@ -1,3 +1,4 @@
+"""页面对象元素与别名映射，解析 involved_elements 为 element_code。"""
 from __future__ import annotations
 
 from typing import Any
@@ -30,6 +31,7 @@ def _derived_role_aliases(locator_type: str, locator_value: str, role: str) -> l
     normalized_role = _normalized_text(role).lower()
     if not normalized_value or normalized_type != "role":
         return []
+    # 按 ARIA role 生成中文别名，便于自然语言步骤命中 element_code
     suffix = ""
     if normalized_role == "button":
         suffix = "按钮"
@@ -51,6 +53,7 @@ def _derived_role_aliases(locator_type: str, locator_value: str, role: str) -> l
 
 
 def build_element_alias_map(page_object: dict[str, Any]) -> dict[str, str]:
+    """从页面对象 elements 构建规范化别名 → element_code 映射。"""
     elements = page_object.get("elements") if isinstance(page_object, dict) else {}
     if not isinstance(elements, dict):
         return {}
@@ -85,6 +88,7 @@ def build_element_alias_map(page_object: dict[str, Any]) -> dict[str, str]:
 
 
 def resolve_element_code(element_text: Any, alias_map: dict[str, str]) -> str:
+    """将展示名/别名解析为 element_code，未命中返回空串。"""
     candidate = _normalized_key(element_text)
     if not candidate or not alias_map:
         return ""
@@ -95,6 +99,7 @@ def resolve_involved_element_codes(
     involved_elements: Any,
     page_object: dict[str, Any],
 ) -> tuple[list[str], list[str]]:
+    """解析 involved_elements 列表，返回 (已识别 codes, 未识别原文)。"""
     if not isinstance(involved_elements, list):
         return [], []
     alias_map = build_element_alias_map(page_object)
@@ -117,6 +122,7 @@ def enrich_candidate_with_element_codes(
     candidate: dict[str, Any],
     page_object: dict[str, Any],
 ) -> dict[str, Any]:
+    """为候选测试点写入 involved_element_codes（若能解析）。"""
     enriched = dict(candidate) if isinstance(candidate, dict) else {}
     codes, _unknown = resolve_involved_element_codes(enriched.get("involved_elements"), page_object)
     if codes:

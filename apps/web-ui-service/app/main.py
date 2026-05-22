@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 import json
 import logging
+import stat
 import time
 import uuid
 from pathlib import Path
@@ -9,7 +10,7 @@ from urllib.request import urlopen
 
 from fastapi import Depends as _Depends, FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from app.core.config import get_settings
@@ -32,6 +33,7 @@ from app.routers.workbench_runs import router as workbench_runs_router
 from app.routers.workbench_scheduler import router as workbench_scheduler_router
 from app.routers.workbench_tasks import router as workbench_tasks_router
 from app.routers.ui import router as ui_router
+from app.services.workbench_reporting_service import inject_allure_branding
 from shared_backend.observability import configure_logging, set_request_id, summarize_http_context, summarize_log_value
 
 settings = get_settings()
@@ -39,6 +41,16 @@ configure_logging(service_name="web-ui-service")
 access_logger = logging.getLogger("web.access")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEVLIKE_APP_ENVS = {"dev", "development", "local", "test", "testing"}
+
+
+class BrandedAllureStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):  # type: ignore[no-untyped-def]
+        if str(path or "").endswith(".html"):
+            full_path, stat_result = self.lookup_path(path)
+            if stat_result is not None and stat.S_ISREG(stat_result.st_mode):
+                html = Path(full_path).read_text(encoding="utf-8")
+                return HTMLResponse(inject_allure_branding(html))
+        return await super().get_response(path, scope)
 
 
 def _preview_request_payload(body: bytes, content_type: str) -> str:
@@ -77,8 +89,8 @@ ALLURE_SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 _jwt_required = [_Depends(get_current_user)]
 
 if ALLURE_DIR.exists():
-    app.mount("/allure", StaticFiles(directory=str(ALLURE_DIR)), name="allure")
-app.mount("/allure-snapshots", StaticFiles(directory=str(ALLURE_SNAPSHOTS_DIR)), name="allure-snapshots")
+    app.mount("/allure", BrandedAllureStaticFiles(directory=str(ALLURE_DIR)), name="allure")
+app.mount("/allure-snapshots", BrandedAllureStaticFiles(directory=str(ALLURE_SNAPSHOTS_DIR)), name="allure-snapshots")
 
 app.include_router(ui_router)
 app.include_router(health_router)

@@ -11,6 +11,7 @@ from app.services import workbench_generation_service
 from app.services.workbench_generation_api import preview_store
 from app.services.workbench_generation_api.candidate_normalizer import CandidateNormalizer
 from app.services.workbench_generation_compiler.runtime import generate_pipeline as generate_pipeline_module
+from shared_backend.element_binding import resolve_involved_element_codes
 
 
 def test_allocate_case_id_skips_existing_requested_case_id(tmp_path: Path) -> None:
@@ -244,6 +245,130 @@ def test_resolve_page_object_from_db_only_exposes_qualified_formal_elements(monk
     assert set(resolved["elements"]) == {"username_input"}
     assert resolved["elements"]["username_input"]["business_type"] == "input"
     assert "dirty_button" not in resolved["elements"]
+
+
+def test_resolve_page_object_from_db_infers_login_business_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
+    page_object = SimpleNamespace(id=1)
+    elements = [
+        SimpleNamespace(
+            id=1,
+            element_code="username_input",
+            element_name="",
+            locator_type="css",
+            locator_value="#username",
+            role="",
+            status="active",
+            review_status="approved",
+            stability_level="high",
+            business_type="input",
+            business_domain="auth",
+            aliases_json=[],
+            semantic_tags_json=[],
+        ),
+        SimpleNamespace(
+            id=2,
+            element_code="password_input",
+            element_name="",
+            locator_type="css",
+            locator_value="#password",
+            role="",
+            status="active",
+            review_status="approved",
+            stability_level="high",
+            business_type="input",
+            business_domain="auth",
+            aliases_json=[],
+            semantic_tags_json=[],
+        ),
+        SimpleNamespace(
+            id=3,
+            element_code="login_button",
+            element_name="",
+            locator_type="css",
+            locator_value="#login",
+            role="",
+            status="active",
+            review_status="approved",
+            stability_level="high",
+            business_type="button",
+            business_domain="auth",
+            aliases_json=[],
+            semantic_tags_json=[],
+        ),
+    ]
+
+    class _ScalarResult:
+        def __init__(self, rows: list[object]) -> None:
+            self._rows = rows
+
+        def all(self) -> list[object]:
+            return self._rows
+
+    class _ExecuteResult:
+        def __init__(self, value: object) -> None:
+            self._value = value
+
+        def scalar_one_or_none(self) -> object:
+            return self._value
+
+        def scalars(self) -> _ScalarResult:
+            return _ScalarResult(self._value)  # type: ignore[arg-type]
+
+    class _Session:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def __enter__(self) -> "_Session":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def execute(self, _statement: object) -> _ExecuteResult:
+            self.calls += 1
+            return _ExecuteResult(page_object if self.calls == 1 else elements)
+
+    monkeypatch.setattr(generate_pipeline_module, "SessionLocal", _Session)
+
+    resolved = generate_pipeline_module._resolve_page_object_from_db("mall", "login")
+    codes, unknown = resolve_involved_element_codes(["账号输入框", "密码输入框", "登录按钮"], resolved or {})
+
+    assert unknown == []
+    assert codes == ["username_input", "password_input", "login_button"]
+
+
+def test_enrich_test_points_prefers_candidate_element_codes_for_contract_validation() -> None:
+    points = [
+        {
+            "intent_id": "intent-01",
+            "point_type": "functional",
+            "action": "candidate",
+            "description": "首次登录成功",
+            "expected_result": "登录成功",
+            "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+            "steps": [{"action": "candidate_step", "value": "点击登录按钮"}],
+        }
+    ]
+    candidates = [
+        {
+            "intent_id": "intent-01",
+            "title": "首次登录成功",
+            "intent_type": "functional",
+            "priority": "P0",
+            "expected": "登录成功",
+            "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+            "involved_element_codes": ["username_input", "password_input", "login_button"],
+        }
+    ]
+
+    enriched = generate_pipeline_module._enrich_test_points_with_candidate_snapshots(
+        points=points,
+        candidate_snapshots=candidates,
+    )
+
+    assert enriched[0]["involved_elements"] == ["username_input", "password_input", "login_button"]
+    assert enriched[0]["involved_element_aliases"] == ["账号输入框", "密码输入框", "登录按钮"]
+    assert enriched[0]["metadata"]["candidate_snapshot"]["involved_elements"] == ["账号输入框", "密码输入框", "登录按钮"]
 
 
 def test_resolve_page_object_from_db_blocks_existing_page_without_qualified_elements(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -551,3 +676,326 @@ def test_build_generated_case_payload_saves_test_point_plan_snapshot(tmp_path: P
     assert saved_plan_calls[0]["case_id"] == "atp-web-login-fn-ai-0001"
     assert saved_plan_calls[0]["plan"]["points"][0]["intent_id"] == "intent-01"
     assert result["item"]["test_points_path"]
+
+
+def test_build_generated_case_payload_directly_compiles_selected_candidate_steps_hint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = {
+        "intent_id": "intent-05",
+        "title": "账号和密码都为空点击登录",
+        "summary": "账号和密码都为空点击登录",
+        "intent_type": "negative",
+        "priority": "P1",
+        "steps": ["清空账号输入框", "清空密码输入框", "点击登录按钮"],
+        "steps_hint": ["input:账号输入框=", "input:密码输入框=", "click:登录按钮"],
+        "expected": "提示请输入账号和密码",
+        "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+        "involved_element_codes": ["username_input", "password_input", "login_button"],
+    }
+    payload = SimpleNamespace(
+        project="mall",
+        page="login",
+        requirement="登录页身份验证测试点集",
+        title="账号和密码都为空点击登录",
+        source="ai",
+        case_id="",
+        priority="P1",
+        tags=["ai-generated"],
+        input_sources=[],
+        openapi_spec={},
+        prd_text="",
+        prd_url="",
+        user_story="",
+        git_diff="",
+        git_diff_path="",
+        openapi_url="",
+        defect_ticket="",
+        runtime_logs="",
+        selected_candidates=[candidate],
+        selected_intent_ids=["intent-05"],
+        page_url="http://localhost:5174/#/login",
+    )
+    ai_cases_root = tmp_path / "ai-generated"
+    ai_cases_root.mkdir(parents=True, exist_ok=True)
+    written_payloads: list[dict[str, Any]] = []
+
+    def _unexpected_orchestrator_call(**_kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("selected candidate with steps_hint should not call orchestrator")
+
+    def _write_case_yaml(path: Path, data: dict[str, Any], **_kwargs: Any) -> str:
+        written_payloads.append(data)
+        import yaml
+
+        text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+        path.write_text(text, encoding="utf-8")
+        return text
+
+    monkeypatch.setattr(
+        generate_pipeline_module,
+        "resolve_page_object",
+        lambda _project, _page: {
+            "page": "login",
+            "page_url": "http://localhost:5174/#/login",
+            "elements": {
+                "remember_password_checkbox": {
+                    "selector": "记住密码",
+                    "type": "role",
+                    "role": "checkbox",
+                    "name": "记住密码复选框",
+                    "aliases": ["记住密码"],
+                    "business_type": "checkbox",
+                },
+                "username_input": {
+                    "selector": "请输入用户名",
+                    "type": "placeholder",
+                    "name": "用户名输入框",
+                    "aliases": ["账号输入框"],
+                    "business_type": "input",
+                },
+                "password_input": {
+                    "selector": "请输入密码",
+                    "type": "placeholder",
+                    "name": "密码输入框",
+                    "aliases": ["密码输入框"],
+                    "business_type": "input",
+                },
+                "login_button": {
+                    "selector": "登录",
+                    "type": "role",
+                    "role": "button",
+                    "name": "登录按钮",
+                    "aliases": ["登录按钮"],
+                    "business_type": "button",
+                },
+                "home_menu": {
+                    "selector": "首页",
+                    "type": "role",
+                    "role": "menuitem",
+                    "name": "首页菜单",
+                    "aliases": ["首页", "工作台首页"],
+                    "business_type": "menu",
+                },
+            },
+        },
+    )
+
+    result = workbench_generation_service.build_generated_case_payload(
+        payload=payload,
+        normalized_page="login",
+        effective_requirement="登录页身份验证测试点集",
+        multisource_enabled=False,
+        input_sources=[],
+        openapi_spec={},
+        run_orchestrator_generate=_unexpected_orchestrator_call,
+        extract_quality_gate=lambda payload: (payload or {}).get("quality_gate") if isinstance(payload, dict) else None,
+        safe_case_id=lambda value: str(value or ""),
+        infer_targets=lambda _page: ("", ""),
+        write_case_yaml=_write_case_yaml,
+        save_case_state=lambda _project, _case_yaml, _case_path: {"version": 1},
+        save_test_point_plan=lambda **_kwargs: tmp_path / "test-point-plan.json",
+        append_history=lambda _entry: None,
+        now_iso=lambda: "2026-05-08T00:00:00+00:00",
+        is_quality_gate_blocked=lambda _payload: (False, None),
+        ai_cases_root=ai_cases_root,
+        utc=None,
+        datetime_module=None,
+        http_exception_cls=HTTPException,
+        bad_gateway_status=502,
+        unprocessable_entity_status=422,
+        allocate_case_id=lambda **_kwargs: "mall-web-login-fn-ai-0001",
+        existing_case_ids=[],
+        selected_candidate=candidate,
+    )
+
+    written_case = written_payloads[0]
+    steps = written_case["execution"]["steps"]
+    non_entry_steps = [step for step in steps if step.get("action") != "goto"]
+    assert result["item"]["case_id"] == "mall-web-login-fn-ai-0001"
+    assert written_case["version"] == "v1"
+    assert written_case["requirement"] == {
+        "intent_id": "intent-05",
+        "title": "账号和密码都为空点击登录",
+        "type": "negative",
+    }
+    assert written_case["execution"]["page_url"] == "http://localhost:5174/#/login"
+    assert [step["action"] for step in non_entry_steps] == ["input", "input", "click"]
+    assert [step["target"] for step in non_entry_steps] == [
+        "element:username_input",
+        "element:password_input",
+        "element:login_button",
+    ]
+    assert non_entry_steps[0]["value"] == ""
+    assert non_entry_steps[1]["value"] == ""
+    assert non_entry_steps[0]["locator_type"] == "css"
+    assert non_entry_steps[1]["locator_type"] == "css"
+    assert non_entry_steps[-1]["expected_result"] == "提示请输入账号和密码"
+    assert "input:密码输入框" not in str(written_case["requirement"])
+
+
+def test_build_generated_case_payload_writes_product_yaml_for_login_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = "页面跳转至平台工作台首页，顶部展示当前登录用户名 admin，左侧加载对应权限导航菜单"
+    candidate = {
+        "intent_id": "intent-01",
+        "title": "首次登录成功",
+        "summary": "首次登录成功",
+        "intent_type": "functional",
+        "priority": "P0",
+        "precondition": "用户未登录，处于登录页面",
+        "steps": [
+            "在账号输入框输入 test001",
+            "在密码输入框输入 123456",
+            "点击登录按钮",
+        ],
+        "steps_hint": ["input:账号输入框=test001", "input:密码输入框=123456", "click:登录按钮"],
+        "expected": expected,
+        "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+        "involved_element_codes": ["username_input", "password_input", "login_button"],
+        "source_asset_id": "mall-web-login-auth-fn-ai-0021",
+        "source_asset_title": "登录页身份验证测试点集",
+    }
+    payload = SimpleNamespace(
+        project="mall",
+        page="login",
+        requirement="登录页身份验证测试点集",
+        title="首次登录成功",
+        source="ai",
+        case_id="",
+        priority="P0",
+        tags=["ai-generated"],
+        input_sources=[],
+        openapi_spec={},
+        prd_text="",
+        prd_url="",
+        user_story="",
+        git_diff="",
+        git_diff_path="",
+        openapi_url="",
+        defect_ticket="",
+        runtime_logs="",
+        selected_candidates=[candidate],
+        selected_intent_ids=["intent-01"],
+        page_url="http://localhost:5174/#/login",
+    )
+    ai_cases_root = tmp_path / "ai-generated"
+    ai_cases_root.mkdir(parents=True, exist_ok=True)
+    written_payloads: list[dict[str, Any]] = []
+
+    def _write_case_yaml(path: Path, data: dict[str, Any], **_kwargs: Any) -> str:
+        written_payloads.append(data)
+        import yaml
+
+        text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+        path.write_text(text, encoding="utf-8")
+        return text
+
+    monkeypatch.setattr(
+        generate_pipeline_module,
+        "resolve_page_object",
+        lambda _project, _page: {
+            "page": "login",
+            "page_url": "http://localhost:5174/#/login",
+            "elements": {
+                "username_input": {
+                    "selector": "请输入用户名",
+                    "type": "placeholder",
+                    "name": "用户名输入框",
+                    "aliases": ["账号输入框"],
+                    "business_type": "input",
+                },
+                "password_input": {
+                    "selector": "请输入密码",
+                    "type": "placeholder",
+                    "name": "密码输入框",
+                    "aliases": ["密码输入框"],
+                    "business_type": "input",
+                },
+                "remember_password_checkbox": {
+                    "selector": "记住密码",
+                    "type": "role",
+                    "role": "checkbox",
+                    "name": "记住密码复选框",
+                    "aliases": ["记住密码"],
+                    "business_type": "checkbox",
+                },
+                "login_button": {
+                    "selector": "登录",
+                    "type": "role",
+                    "role": "button",
+                    "name": "登录按钮",
+                    "aliases": ["登录按钮"],
+                    "business_type": "button",
+                },
+                "home_menu": {
+                    "selector": "首页",
+                    "type": "role",
+                    "role": "menuitem",
+                    "name": "首页菜单",
+                    "aliases": ["首页", "工作台首页"],
+                    "business_type": "menu",
+                },
+            },
+        },
+    )
+
+    workbench_generation_service.build_generated_case_payload(
+        payload=payload,
+        normalized_page="login",
+        effective_requirement="登录页身份验证测试点集",
+        multisource_enabled=False,
+        input_sources=[],
+        openapi_spec={},
+        run_orchestrator_generate=lambda **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected orchestrator call")),
+        extract_quality_gate=lambda payload: (payload or {}).get("quality_gate") if isinstance(payload, dict) else None,
+        safe_case_id=lambda value: str(value or ""),
+        infer_targets=lambda _page: ("", ""),
+        write_case_yaml=_write_case_yaml,
+        save_case_state=lambda _project, _case_yaml, _case_path: {"version": 1},
+        save_test_point_plan=lambda **_kwargs: tmp_path / "test-point-plan.json",
+        append_history=lambda _entry: None,
+        now_iso=lambda: "2026-05-08T00:00:00+00:00",
+        is_quality_gate_blocked=lambda _payload: (False, None),
+        ai_cases_root=ai_cases_root,
+        utc=None,
+        datetime_module=None,
+        http_exception_cls=HTTPException,
+        bad_gateway_status=502,
+        unprocessable_entity_status=422,
+        allocate_case_id=lambda **_kwargs: "mall-web-login-auth-fn-ai-0007",
+        existing_case_ids=[],
+        selected_candidate=candidate,
+    )
+
+    written_case = written_payloads[0]
+    steps = written_case["execution"]["steps"]
+    assert written_case["version"] == "v1"
+    assert written_case["requirement"] == {
+        "intent_id": "intent-01",
+        "title": "首次登录成功",
+        "type": "functional",
+        "precondition": "用户未登录，处于登录页面",
+        "source_asset_id": "mall-web-login-auth-fn-ai-0021",
+    }
+    assert written_case["execution"]["page_url"] == "http://localhost:5174/#/login"
+    assert steps[0]["action"] == "goto"
+    assert steps[1]["target"] == "element:username_input"
+    assert "input[placeholder*='请输入用户名']" in steps[1]["locator_value"]
+    assert steps[2]["target"] == "element:password_input"
+    assert "input[placeholder*='请输入密码']" in steps[2]["locator_value"]
+    assert steps[3]["target"] == "element:login_button"
+    assert steps[3]["expected_result"] == expected
+    assert steps[4] == {
+        "action": "assert_visible",
+        "target": "element:home_menu",
+        "locator_type": "role",
+        "locator_value": "首页",
+        "target_name": "首页菜单",
+        "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
+        "role": "menuitem",
+    }
+    assert "登录失败" not in str(written_case)
+    assert "remember_password_checkbox" not in str(written_case)

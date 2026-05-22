@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+"""需求解析支撑：调用 requirement-parser-agent 并处理多源输入与 LLM 模式。"""
 
 from __future__ import annotations
 
@@ -19,6 +20,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class RequirementParseSupport:
+    """将原始需求与多源上下文规范化为 RequirementSpecV1。"""
+
     def __init__(
         self,
         *,
@@ -53,6 +56,7 @@ class RequirementParseSupport:
         defect_ticket: str = "",
         runtime_logs: str = "",
     ) -> dict[str, Any]:
+        """解析需求规格；pytest 环境下走确定性桩数据。"""
         if str(os.getenv("PYTEST_CURRENT_TEST", "")).strip():
             return self._build_pytest_requirement_spec(
                 requirement=requirement,

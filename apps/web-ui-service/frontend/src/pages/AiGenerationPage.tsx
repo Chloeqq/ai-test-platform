@@ -896,21 +896,21 @@ export function AiGenerationPage() {
             </section>
           ) : null}
           <div className="stage-metrics">
-            <article className="metric-card">
+            <article className="metric-card metric-tone-info">
               <p>解析置信度</p>
               <strong>{Number.isFinite(parseConfidence) && parseConfidence > 0 ? `${Math.round(parseConfidence * 100)}%` : "-"}</strong>
             </article>
-            <article className="metric-card">
+            <article className="metric-card metric-tone-accent">
               <p>识别测试点</p>
               <strong>{candidates.length}</strong>
             </article>
-            <article className="metric-card">
+            <article className={`metric-card ${qualityBlocked ? "metric-tone-danger" : "metric-tone-success"}`}>
               <p>质量门禁</p>
               <strong className={qualityBlocked ? "metric-bad" : "metric-good"}>
                 {qualityDecision === "allow" ? "通过" : qualityBlocked ? "阻断" : "-"}
               </strong>
             </article>
-            <article className="metric-card">
+            <article className="metric-card metric-tone-warning">
               <p>门禁阻断项</p>
               <strong>{blockers.length}</strong>
             </article>
@@ -1019,8 +1019,6 @@ export function AiGenerationPage() {
                               gap: "12px",
                               alignItems: "flex-start",
                               minWidth: 0,
-                              fontWeight: 600,
-                              color: "var(--aiw-text-main)",
                             }}
                           >
                             <input
@@ -1046,10 +1044,6 @@ export function AiGenerationPage() {
                                     overflow: "hidden",
                                     textOverflow: "ellipsis",
                                     whiteSpace: "nowrap",
-                                    color: "var(--aiw-text-main)",
-                                    fontSize: "18px",
-                                    lineHeight: 1.35,
-                                    fontWeight: 800,
                                   }}
                                 >
                                   {candidate.title}
@@ -1071,8 +1065,6 @@ export function AiGenerationPage() {
                               minHeight: "24px",
                               padding: "0 10px",
                               borderRadius: "999px",
-                              fontSize: "12px",
-                              fontWeight: 800,
                               whiteSpace: "nowrap",
                             }}
                           >
@@ -1093,10 +1085,10 @@ export function AiGenerationPage() {
                           }}
                         >
                           <div className="candidate-precheck-flag" style={{ display: "grid", gap: "4px", minWidth: 0 }}>
-                            <span className="candidate-precheck-label" style={{ fontSize: "12px", fontWeight: 800 }}>
+                            <span className="candidate-precheck-label">
                               {precheckStatus === "block" ? "预校验阻断" : "预校验提示"}
                             </span>
-                            <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.45, fontWeight: 600 }}>
+                            <p style={{ margin: 0 }}>
                               {precheck?.reasons?.[0] || "当前候选存在需要处理的预校验问题。"}
                             </p>
                           </div>
@@ -1116,7 +1108,7 @@ export function AiGenerationPage() {
                           style={{ display: "grid", gap: "8px", padding: "12px", border: "1px solid #dfe8f5", borderRadius: "8px", background: "#f9fbff", minWidth: 0 }}
                         >
                           <span className="candidate-section-label">测试意图</span>
-                          <p className="candidate-section-text" style={{ margin: 0, fontSize: "13px", lineHeight: 1.55 }}>
+                          <p className="candidate-section-text">
                             {candidate.summary || candidate.title}
                           </p>
                         </section>
@@ -1125,7 +1117,7 @@ export function AiGenerationPage() {
                           style={{ display: "grid", gap: "8px", padding: "12px", border: "1px solid #dfe8f5", borderRadius: "8px", background: "#f9fbff", minWidth: 0 }}
                         >
                           <span className="candidate-section-label">步骤概览</span>
-                          <p className="candidate-section-text" style={{ margin: 0, fontSize: "13px", lineHeight: 1.55 }}>
+                          <p className="candidate-section-text">
                             {candidate.stepsSummary || "完整步骤已在服务端保留，生成时按测试点 ID 读取。"}
                           </p>
                         </section>
@@ -1134,7 +1126,7 @@ export function AiGenerationPage() {
                           style={{ display: "grid", gap: "8px", padding: "12px", border: "1px solid #dfe8f5", borderRadius: "8px", background: "#f9fbff", minWidth: 0 }}
                         >
                           <span className="candidate-section-label">预期结果</span>
-                          <p className="candidate-section-text" style={{ margin: 0, fontSize: "13px", lineHeight: 1.55 }}>
+                          <p className="candidate-section-text">
                             {candidate.expected || "未返回预期结果。"}
                           </p>
                         </section>

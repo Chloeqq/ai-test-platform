@@ -1,9 +1,11 @@
+"""执行 IR 步骤的结构校验（动作、target 等必填字段）。"""
 from __future__ import annotations
 
 from typing import Any, Mapping
 
 
 class IRSchemaValidationError(ValueError):
+    """IR 结构校验失败，携带 code 与 detail。"""
     def __init__(self, code: str, message: str, *, detail: Mapping[str, Any] | None = None) -> None:
         super().__init__(message)
         self.code = str(code).strip() or "ir_schema_validation_error"
@@ -17,11 +19,13 @@ class IRSchemaValidationError(ValueError):
 
 
 class IRSchemaValidator:
+    """校验 IR 与各 step 的 action/target 等字段。"""
     def __init__(self, *, allowed_actions: set[str] | None = None) -> None:
         default_actions = {"fill", "click", "wait_for", "assert_visible", "assert_text", "assert_metric"}
         self.allowed_actions = set(allowed_actions) if isinstance(allowed_actions, set) and allowed_actions else default_actions
 
     def validate_ir(self, ir: Mapping[str, Any]) -> dict[str, Any]:
+        """校验整份 IR 并返回带规范化 steps 的副本。"""
         if not isinstance(ir, Mapping):
             raise IRSchemaValidationError("invalid_ir", "ir must be an object")
         raw_steps = ir.get("steps")
@@ -33,6 +37,7 @@ class IRSchemaValidator:
         return normalized
 
     def validate_step(self, step: Mapping[str, Any], *, index: int | None = None) -> dict[str, Any]:
+        """校验单步 action/target 是否在允许集合内。"""
         if not isinstance(step, Mapping):
             raise IRSchemaValidationError("invalid_step", "step must be an object", detail={"index": index})
         action = str(step.get("action", "") or "").strip()

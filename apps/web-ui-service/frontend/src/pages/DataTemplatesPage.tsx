@@ -112,19 +112,19 @@ export function DataTemplatesPage() {
         </header>
 
         <section className="asset-kpi-grid">
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-info">
             <span>字典分组</span>
             <strong>{dictionaryEntries.length}</strong>
           </article>
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-cyan">
             <span>字典项总数</span>
             <strong>{totalDictionaryValues}</strong>
           </article>
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-accent">
             <span>可用例总数</span>
             <strong>{items.length}</strong>
           </article>
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-success">
             <span>数据模板用例</span>
             <strong>{configuredItems.length}</strong>
           </article>

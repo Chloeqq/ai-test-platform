@@ -95,7 +95,7 @@ def _default_base_url() -> str:
     if raw:
         return raw
     if _current_app_env() in DEVLIKE_APP_ENVS:
-        return "http://localhost:5173/login#/login"
+        return "http://localhost:5174/#/login"
     return ""
 
 

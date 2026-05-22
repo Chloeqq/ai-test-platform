@@ -164,7 +164,7 @@ const BUSINESS_TYPES = [
 
 const BUSINESS_DOMAINS = ["auth", "navigation", "dashboard", "search", "table", "form", "detail", "common"];
 const LOCATOR_SOURCES = ["testid", "qa", "role_name", "placeholder", "id", "name", "css", "xpath", "manual"];
-const MATCH_STRATEGIES = ["exact", "alias", "derived", "composite"];
+const MATCH_STRATEGIES = ["exact", "alias", "derived", "composite", "template"];
 const STABILITY_LEVELS = ["high", "medium", "low"];
 const REVIEW_STATUSES = ["approved", "pending", "rejected"];
 const ELEMENT_STATUSES = ["active", "inactive", "deprecated"];
@@ -308,13 +308,36 @@ function suggestElementCode(value: unknown, pageCode: string, businessType: unkn
   return /^[a-z][a-z0-9_]{2,79}$/.test(suggestion) ? suggestion : "";
 }
 
-function elementCodePolicyHint(value: unknown, pageCode: string, businessType: unknown): string {
+function isTestidCodeContext(locatorSource: unknown, locatorType: unknown, testidValue: unknown): boolean {
+  return String(locatorSource || "").trim().toLowerCase() === "testid"
+    && String(locatorType || "").trim().toLowerCase() === "data-testid"
+    && Boolean(String(testidValue || "").trim());
+}
+
+function elementCodePolicyHint(
+  value: unknown,
+  pageCode: string,
+  businessType: unknown,
+  locatorSource?: unknown,
+  locatorType?: unknown,
+  testidValue?: unknown,
+): string {
   const code = String(value || "").trim();
   if (!code) {
     return "";
   }
   const normalizedBusinessType = String(businessType || "").trim().toLowerCase();
   const errors: string[] = [];
+  if (isTestidCodeContext(locatorSource, locatorType, testidValue)) {
+    const expectedTestid = String(testidValue || "").trim();
+    if (!/^[a-z][a-z0-9-]{2,119}$/.test(code)) {
+      errors.push("data-testid 来源元素必须是 kebab-case，小写字母开头，仅包含小写字母、数字和中划线。");
+    }
+    if (code !== expectedTestid) {
+      errors.push("data-testid 来源元素编码应与 testid_value 保持一致。");
+    }
+    return errors.join(" ");
+  }
   if (!/^[a-z][a-z0-9_]{2,79}$/.test(code)) {
     errors.push("必须是 snake_case，小写字母开头，仅包含小写字母、数字和下划线。");
   }
@@ -541,8 +564,8 @@ export function PageObjectElementsPage() {
   const playbackStderr = useMemo(() => String(playbackPayload.stderr_tail || ""), [playbackPayload]);
   const elementLocators = useMemo(() => asRecordList(selectedElement.locators), [selectedElement]);
   const promoteCodeHint = useMemo(
-    () => elementCodePolicyHint(promoteForm.element_code, normalizedPageCode, promoteForm.business_type),
-    [normalizedPageCode, promoteForm.business_type, promoteForm.element_code],
+    () => elementCodePolicyHint(promoteForm.element_code, normalizedPageCode, promoteForm.business_type, promoteForm.locator_source, promoteForm.locator_type, promoteForm.testid_value),
+    [normalizedPageCode, promoteForm.business_type, promoteForm.element_code, promoteForm.locator_source, promoteForm.locator_type, promoteForm.testid_value],
   );
   const promoteSuggestedCode = useMemo(
     () => suggestElementCode(promoteForm.element_code, normalizedPageCode, promoteForm.business_type),
@@ -563,12 +586,19 @@ export function PageObjectElementsPage() {
   }, [elements, promoteCodeHint, promoteForm.element_code, promoteForm.is_key_element, promoteForm.locator_source, promoteForm.qa_value, promoteForm.testid_value]);
   const promoteHasBlockingIssue = promoteValidationItems.some((item) => !item.ok);
   const semanticCodeHint = useMemo(
-    () => elementCodePolicyHint(semanticForm.element_code, normalizedPageCode, semanticForm.business_type),
-    [normalizedPageCode, semanticForm.business_type, semanticForm.element_code],
+    () => elementCodePolicyHint(semanticForm.element_code, normalizedPageCode, semanticForm.business_type, semanticForm.locator_source, selectedElement.locator_type, semanticForm.testid_value),
+    [normalizedPageCode, selectedElement.locator_type, semanticForm.business_type, semanticForm.element_code, semanticForm.locator_source, semanticForm.testid_value],
   );
   const selectedCodeHint = useMemo(
-    () => elementCodePolicyHint(selectedElement.element_code, normalizedPageCode, selectedElement.business_type),
-    [normalizedPageCode, selectedElement.business_type, selectedElement.element_code],
+    () => elementCodePolicyHint(
+      selectedElement.element_code,
+      normalizedPageCode,
+      selectedElement.business_type,
+      selectedElement.locator_source,
+      selectedElement.locator_type,
+      selectedElement.testid_value || selectedElement.locator_value,
+    ),
+    [normalizedPageCode, selectedElement.business_type, selectedElement.element_code, selectedElement.locator_source, selectedElement.locator_type, selectedElement.locator_value, selectedElement.testid_value],
   );
   const selectedSuggestedCode = useMemo(
     () => suggestElementCode(selectedElement.element_code, normalizedPageCode, selectedElement.business_type),
@@ -642,6 +672,23 @@ export function PageObjectElementsPage() {
     }
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return `/assets/page-objects/${encodeURIComponent(normalizedPageCode)}/elements${suffix}`;
+  }, [normalizedPageCode, projectCode]);
+
+  const editPageObjectLink = useMemo(() => {
+    const query = new URLSearchParams();
+    const normalizedProject = String(projectCode || "").trim();
+    if (normalizedProject) {
+      query.set("project", normalizedProject);
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return `/assets/page-objects/${encodeURIComponent(normalizedPageCode)}/edit${suffix}`;
+  }, [normalizedPageCode, projectCode]);
+
+  const importPageElementsLink = useMemo(() => {
+    const query = new URLSearchParams();
+    query.set("project", normalizeProjectCode(projectCode));
+    query.set("page_code", normalizedPageCode);
+    return `/assets/page-objects/import?${query.toString()}`;
   }, [normalizedPageCode, projectCode]);
 
   const candidateListLink = useMemo(() => {
@@ -1382,14 +1429,14 @@ export function PageObjectElementsPage() {
   }
 
   return (
-    <main className="page shell">
-      <header className="header panel">
-        <div>
-          <h1>
+    <main className={`page shell ${isDrilldownRoute ? "detail-page detail-page--page-object" : ""}`}>
+      <header className={isDrilldownRoute ? "detail-toolbar" : "header panel"}>
+        <div className={isDrilldownRoute ? "detail-toolbar-main" : ""}>
+          <h1 className={isDrilldownRoute ? "detail-title" : undefined}>
             {isCandidateGroupRoute ? "候选分组详情" : isPlaybackRoute ? "录制回放详情" : isElementDetailRoute ? "元素详情" : pageDisplayName(pageObject) !== "-" ? pageDisplayName(pageObject) : "元素治理"}
-            <span className="page-title-code"> / {text(normalizedPageCode)}</span>
+            <span className="page-title-code detail-mono"> / {text(normalizedPageCode)}</span>
           </h1>
-          <p className="muted">
+          <p className={isDrilldownRoute ? "detail-description" : "muted"}>
             {isCandidateGroupRoute
               ? "在候选分组详情页查看明细，并完成提升、合并或拒绝。"
               : isPlaybackRoute
@@ -1400,17 +1447,25 @@ export function PageObjectElementsPage() {
           </p>
           <div className="asset-pill-strip page-meta-strip">
             <span className="asset-pill">项目：{text(projectCode)}</span>
-            <span className="asset-pill">URL：{text(pageObject.page_url || pageObject.route_pattern)}</span>
+            <span className="asset-pill">URL：{String(pageObject.page_url || pageObject.route_pattern || "").trim() ? text(pageObject.page_url || pageObject.route_pattern) : "未配置 URL"}</span>
             <span className={statusClass("page-status", pageObject.status)}>{statusText(pageObject.status, PAGE_OBJECT_STATUS_LABELS)}</span>
             <span className={statusClass("governance", pageObject.governance_status)}>{statusText(pageObject.governance_status, PAGE_OBJECT_GOVERNANCE_STATUS_LABELS)}</span>
           </div>
         </div>
-        <div className="header-actions">
+        <div className={isDrilldownRoute ? "detail-toolbar-actions" : "header-actions"}>
           {!isDrilldownRoute ? (
             <Link className="button" to={recorderLink}>
               开始录制
             </Link>
           ) : null}
+          {!isDrilldownRoute ? (
+            <Link className="button secondary" to={importPageElementsLink}>
+              导入本页面元素
+            </Link>
+          ) : null}
+          <Link className="button secondary" to={editPageObjectLink} title="编辑页面 URL 和基础信息">
+            编辑页面信息
+          </Link>
           <button type="button" className="button secondary" onClick={() => void reload()} disabled={loading || busy}>
             刷新数据
           </button>
@@ -1447,32 +1502,32 @@ export function PageObjectElementsPage() {
 
       {!loading && !errorText ? (
         <section className="governance-metrics compact">
-          <article className="governance-metric-card">
+          <article className="governance-metric-card metric-tone-info">
             <span>正式元素数</span>
             <strong>{governanceSummary.formalCount}</strong>
             <em>当前正式资产</em>
           </article>
-          <article className="governance-metric-card">
+          <article className="governance-metric-card metric-tone-success">
             <span>审核通过数</span>
             <strong className="tone-good">{governanceSummary.approvedCount}</strong>
             <em>可进入映射候选池</em>
           </article>
-          <article className="governance-metric-card">
+          <article className={`governance-metric-card ${governanceSummary.pendingCandidateCount > 0 ? "metric-tone-warning" : "metric-tone-neutral"}`}>
             <span>待审候选组</span>
             <strong className={governanceSummary.pendingCandidateCount > 0 ? "tone-warn" : ""}>{governanceSummary.pendingCandidateCount}</strong>
             <em>需要治理处理</em>
           </article>
-          <article className="governance-metric-card">
+          <article className="governance-metric-card metric-tone-accent">
             <span>关键元素数</span>
             <strong>{governanceSummary.keyCount}</strong>
             <em>已标记关键元素</em>
           </article>
-          <article className="governance-metric-card progress-card">
+          <article className={`governance-metric-card progress-card metric-tone-${scoreTone(governanceSummary.keyCoverage)}`}>
             <span>关键元素覆盖率</span>
             <strong className={`tone-${scoreTone(governanceSummary.keyCoverage)}`}>{governanceSummary.keyCoverage}%</strong>
             <div className={`mini-progress tone-${scoreTone(governanceSummary.keyCoverage)}`}><em><i style={{ width: `${governanceSummary.keyCoverage}%` }} /></em></div>
           </article>
-          <article className="governance-metric-card progress-card">
+          <article className={`governance-metric-card progress-card metric-tone-${scoreTone(governanceSummary.testabilityScore)}`}>
             <span>可测试性评分</span>
             <strong className={`tone-${scoreTone(governanceSummary.testabilityScore)}`}>{governanceSummary.testabilityScore}</strong>
             <div className={`mini-progress tone-${scoreTone(governanceSummary.testabilityScore)}`}><em><i style={{ width: `${percentValue(governanceSummary.testabilityScore)}%` }} /></em></div>
@@ -1584,11 +1639,11 @@ export function PageObjectElementsPage() {
           ) : null}
 
           {isElementDetailRoute ? (
-            <section className="panel element-detail-page">
-              <div className="table-head">
+            <section className="panel element-detail-page detail-section">
+              <div className="table-head detail-section-header">
                 <div>
-                  <h2>元素详情：{text(selectedElement.element_name)}</h2>
-                  <p className={`mono ${selectedCodeHint ? "element-code-invalid" : "muted"}`}>{text(selectedElement.element_code || routeElementCode)}</p>
+                  <h2 className="detail-section-title">元素详情：{text(selectedElement.element_name)}</h2>
+                  <p className={`detail-mono ${selectedCodeHint ? "element-code-invalid" : "muted"}`}>{text(selectedElement.element_code || routeElementCode)}</p>
                 </div>
                 <div className="header-actions">
                   <button type="button" className={`button ${elementPanelMode === "detail" ? "" : "secondary"}`} onClick={() => setDetailMode("detail")}>
@@ -1655,54 +1710,54 @@ export function PageObjectElementsPage() {
 
               {selectedElement.element_code && elementPanelMode === "detail" ? (
                 <>
-                  <div className="summary-grid">
-                    <div>
-                      <strong>主定位器</strong>
-                      <span className="mono">{text(selectedElement.locator_type)} = {text(selectedElement.locator_value)}</span>
+                  <div className="summary-grid detail-field-grid">
+                    <div className="detail-field">
+                      <strong className="detail-field-label">主定位器</strong>
+                      <span className="detail-field-value detail-locator">{text(selectedElement.locator_type)} = {text(selectedElement.locator_value)}</span>
                     </div>
-                    <div>
-                      <strong>备选定位器</strong>
-                      <span className="mono">{text(selectedElement.backup_locator)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">备选定位器</strong>
+                      <span className="detail-field-value detail-locator">{text(selectedElement.backup_locator)}</span>
                     </div>
-                    <div>
-                      <strong>业务类型</strong>
-                      <span>{text(selectedElement.business_type)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">业务类型</strong>
+                      <span className="detail-field-value">{text(selectedElement.business_type)}</span>
                     </div>
-                    <div>
-                      <strong>业务域</strong>
-                      <span>{text(selectedElement.business_domain)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">业务域</strong>
+                      <span className="detail-field-value">{text(selectedElement.business_domain)}</span>
                     </div>
-                    <div>
-                      <strong>匹配策略</strong>
-                      <span>{text(selectedElement.match_strategy)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">匹配策略</strong>
+                      <span className="detail-field-value">{text(selectedElement.match_strategy)}</span>
                     </div>
-                    <div>
-                      <strong>route_scope</strong>
-                      <span>{text(selectedElement.route_scope)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">route_scope</strong>
+                      <span className="detail-field-value detail-mono">{text(selectedElement.route_scope)}</span>
                     </div>
-                    <div>
-                      <strong>前端契约</strong>
-                      <span>testid: {text(selectedElement.testid_value)} / qa: {text(selectedElement.qa_value)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">前端契约</strong>
+                      <span className="detail-field-value detail-mono">testid: {text(selectedElement.testid_value)} / qa: {text(selectedElement.qa_value)}</span>
                     </div>
-                    <div>
-                      <strong>锚点上下文</strong>
-                      <span>{selectedElement.anchor_required ? "需要" : "不需要"}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">锚点上下文</strong>
+                      <span className="detail-field-value">{selectedElement.anchor_required ? "需要" : "不需要"}</span>
                     </div>
-                    <div>
-                      <strong>来源候选</strong>
-                      <span className="mono">{text(selectedElement.origin_candidate_key)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">来源候选</strong>
+                      <span className="detail-field-value detail-mono">{text(selectedElement.origin_candidate_key)}</span>
                     </div>
-                    <div>
-                      <strong>别名</strong>
-                      <span>{displayList(selectedElement.aliases_json)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">别名</strong>
+                      <span className="detail-field-value">{displayList(selectedElement.aliases_json)}</span>
                     </div>
-                    <div>
-                      <strong>语义标签</strong>
-                      <span>{displayList(selectedElement.semantic_tags_json)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">语义标签</strong>
+                      <span className="detail-field-value">{displayList(selectedElement.semantic_tags_json)}</span>
                     </div>
-                    <div>
-                      <strong>审核说明</strong>
-                      <span>{text(selectedElement.governance_note)}</span>
+                    <div className="detail-field">
+                      <strong className="detail-field-label">审核说明</strong>
+                      <span className="detail-field-value">{text(selectedElement.governance_note)}</span>
                     </div>
                   </div>
                 </>

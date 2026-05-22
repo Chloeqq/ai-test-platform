@@ -75,19 +75,19 @@ export function SchedulerPage() {
       </header>
 
       <section className="panel stat-grid">
-        <article className="stat-card">
+        <article className="stat-card metric-tone-info">
           <span className="label">总任务</span>
           <strong>{numberValue(summary.total_tasks)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-success">
           <span className="label">活跃任务</span>
           <strong>{numberValue(summary.active_task_count)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-warning">
           <span className="label">排队任务</span>
           <strong>{numberValue(summary.queued_task_count)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-cyan">
           <span className="label">运行中任务</span>
           <strong>{numberValue(summary.running_task_count)}</strong>
         </article>

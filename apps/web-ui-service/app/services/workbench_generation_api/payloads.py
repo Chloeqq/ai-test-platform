@@ -40,6 +40,7 @@ class FullChainRunPayload(BaseModel):
 class GenerateCasePayload(BaseModel):
     project: str = Field(default="mall")
     page: str = Field(default="")
+    page_url: str = Field(default="")
     requirement: str = Field(default="")
     title: str = Field(default="")
     case_id: str = Field(default="")

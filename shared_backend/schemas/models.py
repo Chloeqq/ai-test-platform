@@ -19,6 +19,7 @@ class TestPointStepV1(BaseModel):
 
 
 class DependencyReviewEntryV1(BaseModel):
+    """单条低置信度依赖的评审项。"""
     key: str = ""
     label: str = ""
     confidence: float = 0.0
@@ -26,6 +27,7 @@ class DependencyReviewEntryV1(BaseModel):
 
 
 class DependencyReviewV1(BaseModel):
+    """测试点依赖元素传播与缺失/低置信度统计。"""
     mode: str = "none"
     propagated: bool = False
     involved_elements: list[str] = Field(default_factory=list)

@@ -26,6 +26,8 @@ services:
       LOG_FORMAT: json
       LOG_FILE_PATH: /var/log/ai-test-platform/web-ui-service.log
       BASE_URL: ${BASE_URL:?BASE_URL must be set}
+      RUNNER_LOOPBACK_HOST: ${RUNNER_LOOPBACK_HOST:-}
+      RUNNER_URL_REWRITE_MAP: ${RUNNER_URL_REWRITE_MAP:-}
       TEST_USERNAME: ${TEST_USERNAME:?TEST_USERNAME must be set}
       TEST_PASSWORD: ${TEST_PASSWORD:?TEST_PASSWORD must be set}
       RECORDER_DESKTOP_ENABLED: ${RECORDER_DESKTOP_ENABLED:-true}

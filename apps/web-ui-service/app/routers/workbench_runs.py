@@ -5,10 +5,11 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.api.workbench import constants
 from app.api.workbench.facade import build_workbench_facade
 from app.api.workbench.schemas import RunCasePayload
 from app.core.database import get_db
@@ -31,6 +32,28 @@ def list_runs(limit: int = Query(default=30, ge=1, le=200), db: Session = Depend
 @router.get("/api/workbench/runs/{run_id}")
 def get_run(run_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     return facade.get_run(run_id=run_id, db=db)
+
+
+@router.get("/api/workbench/runs/{run_id}/video")
+def get_run_video(run_id: str) -> FileResponse:
+    normalized_run_id = str(run_id or "").strip()
+    if not normalized_run_id or "/" in normalized_run_id or "\\" in normalized_run_id or ".." in normalized_run_id:
+        raise HTTPException(status_code=404, detail="run video not found")
+    videos_dir = (constants.WEB_UI_RUNS_DIR / f"{normalized_run_id}-videos").resolve()
+    try:
+        videos_dir.relative_to(constants.WEB_UI_RUNS_DIR.resolve())
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="run video not found") from exc
+    if not videos_dir.exists():
+        raise HTTPException(status_code=404, detail="run video not found")
+    videos = sorted(videos_dir.rglob("*.webm"), key=lambda item: item.stat().st_mtime, reverse=True)
+    if not videos:
+        raise HTTPException(status_code=404, detail="run video not found")
+    return FileResponse(
+        str(videos[0]),
+        media_type="video/webm",
+        filename=f"{normalized_run_id}.webm",
+    )
 
 
 @router.post("/api/workbench/runs/{run_id}/rerun")

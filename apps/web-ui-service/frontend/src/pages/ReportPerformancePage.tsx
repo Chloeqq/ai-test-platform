@@ -58,19 +58,19 @@ export function ReportPerformancePage() {
       <ReportTabs />
 
       <section className="panel stat-grid">
-        <article className="stat-card">
+        <article className="stat-card metric-tone-info">
           <span className="label">平均耗时</span>
           <strong>{summaryValue(summary.average_duration_seconds, "s")}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-warning">
           <span className="label">最大耗时</span>
           <strong>{summaryValue(summary.max_duration_seconds, "s")}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-accent">
           <span className="label">最新差值</span>
           <strong>{summaryValue(summary.latest_delta_seconds, "s")}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-cyan">
           <span className="label">样本数</span>
           <strong>{summaryValue(summary.sample_count)}</strong>
         </article>

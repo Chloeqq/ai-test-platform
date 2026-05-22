@@ -1,0 +1,51 @@
+version: v1
+id: mall-web-login-auth-fn-ai-0007
+project: mall
+module: login
+title: 输入正确账号、错误密码登录
+priority: P1
+tags:
+- ai-generated
+owner: qa-team
+status: automated
+description: 输入正确账号、错误密码登录 — 弹出提示框，显示“账号或密码错误”，错误次数累计
+requirement:
+  intent_id: intent-08
+  title: 输入正确账号、错误密码登录
+  type: negative
+  source_asset_id: mall-web-login-auth-fn-ai-0021
+data: {}
+execution:
+  runner: playwright
+  page: login
+  page_url: http://localhost:5174/#/login
+  variables: {}
+  steps:
+  - action: goto
+    value: http://localhost:5174/#/login
+    expected_result: 登录页面加载完成，显示账号输入框、密码输入框、登录按钮
+  - action: input
+    target: element:username_input
+    locator_type: css
+    locator_value: 'input[name=''username''], #username, #username-input, input[placeholder*=''请输入用户名''],
+      input[placeholder*=''用户名'']'
+    target_name: 用户名输入框
+    value: test001
+    expected_result: 用户名输入框内容显示为 test001
+  - action: input
+    target: element:password_input
+    locator_type: css
+    locator_value: 'input[type=''password''], input[name=''password''], #password,
+      #password-input, input[placeholder*=''请输入密码''], input[placeholder*=''密码'']'
+    target_name: 密码输入框
+    value: 错误密码 654321
+    expected_result: 密码输入框内容以掩码形式显示
+  - action: click
+    target: element:login_button
+    locator_type: role
+    locator_value: 登录
+    target_name: 登录按钮
+    expected_result: 弹出提示框，显示“账号或密码错误”，错误次数累计
+  selected_intent_ids:
+  - intent-08
+expected_result: 弹出提示框，显示“账号或密码错误”，错误次数累计

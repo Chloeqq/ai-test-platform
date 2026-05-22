@@ -4,6 +4,7 @@ import { GlobalNavLayout } from "./components/GlobalNavLayout";
 import { AiGenerationHistoryPage } from "./pages/AiGenerationHistoryPage";
 import { AiGenerationPage } from "./pages/AiGenerationPage";
 import { CaseDetailPage } from "./pages/CaseDetailPage";
+import { CaseGenerationFailuresPage } from "./pages/CaseGenerationFailuresPage";
 import { CasesPage } from "./pages/CasesPage";
 import { CasesReviewPage } from "./pages/CasesReviewPage";
 import { CaseTagsPage } from "./pages/CaseTagsPage";
@@ -19,6 +20,8 @@ import { LoginPage } from "./pages/LoginPage";
 import { ManagementConsolePage } from "./pages/ManagementConsolePage";
 import { PageObjectRecorderPage } from "./pages/PageObjectRecorderPage";
 import { PageObjectElementsPage } from "./pages/PageObjectElementsPage";
+import { PageObjectEditPage } from "./pages/PageObjectEditPage";
+import { PageObjectImportPage } from "./pages/PageObjectImportPage";
 import { PageObjectsPage } from "./pages/PageObjectsPage";
 import { PromptManagementPage } from "./pages/PromptManagementPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
@@ -61,6 +64,7 @@ export function App() {
         <Route path="/ai-generation/history" element={<AiGenerationHistoryPage />} />
         <Route path="/ai-generation/prompts" element={<PromptManagementPage />} />
         <Route path="/cases" element={<CasesPage />} />
+        <Route path="/cases/generation-failures" element={<CaseGenerationFailuresPage />} />
         <Route path="/cases/:caseId" element={<CaseDetailPage />} />
         <Route path="/cases/review" element={<CasesReviewPage />} />
         <Route path="/cases/versions" element={<CaseVersionsPage />} />
@@ -70,6 +74,9 @@ export function App() {
         <Route path="/assets/test-points/:assetId" element={<TestPointAssetDetailPage />} />
         <Route path="/assets/test-points/:assetId/matrix" element={<TestPointAssetDetailPage />} />
         <Route path="/assets/page-objects" element={<PageObjectsPage />} />
+        <Route path="/assets/page-objects/import" element={<PageObjectImportPage />} />
+        <Route path="/assets/page-objects/new" element={<PageObjectEditPage mode="create" />} />
+        <Route path="/assets/page-objects/:pageCode/edit" element={<PageObjectEditPage mode="edit" />} />
         <Route path="/assets/page-objects/:pageCode/elements" element={<PageObjectElementsPage />} />
         <Route path="/assets/page-objects/:pageCode/elements/candidates/:groupKey" element={<PageObjectElementsPage />} />
         <Route path="/assets/page-objects/:pageCode/elements/history/:sessionId" element={<PageObjectElementsPage />} />

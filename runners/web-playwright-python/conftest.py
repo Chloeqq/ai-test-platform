@@ -23,6 +23,8 @@ except ImportError:  # pragma: no cover - optional dependency
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(ROOT_ENV)
 PAGE_OBJECTS_ROOT = Path(__file__).resolve().parents[2] / "assets" / "page-objects" / "web"
+TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
+FALSY_ENV_VALUES = {"0", "false", "no", "off"}
 
 try:
     from shared_backend.schemas import normalize_evidence_manifest_v1, normalize_execution_record_v1
@@ -58,6 +60,15 @@ def resolve_video_dir() -> Path:
         path = Path(__file__).resolve().parent / "test-results" / "videos"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def env_flag(name: str, *, default: bool = False) -> bool:
+    raw_value = os.getenv(name, "").strip().lower()
+    if raw_value in TRUTHY_ENV_VALUES:
+        return True
+    if raw_value in FALSY_ENV_VALUES:
+        return False
+    return default
 
 
 def sanitize_artifact_name(nodeid: str) -> str:
@@ -196,7 +207,7 @@ def normalize_failure_context(value: dict | None) -> dict:
 
 def resolve_project_code_from_request(request) -> str:
     node = getattr(request, "node", request)
-    test_case = getattr(getattr(node, "callspec", None), "params", {}).get("test_case")
+    test_case = extract_test_case_from_node(node)
     if isinstance(test_case, dict):
         for key in ("project_code", "project"):
             value = str(test_case.get(key, "")).strip()
@@ -209,6 +220,20 @@ def resolve_project_code_from_request(request) -> str:
                 if value:
                     return value
     return str(os.getenv("TEST_PROJECT", "mall") or "mall").strip() or "mall"
+
+
+def extract_test_case_from_node(node) -> dict:
+    params = getattr(getattr(node, "callspec", None), "params", {})
+    if not isinstance(params, dict):
+        return {}
+    for key in ("test_case", "case_param"):
+        candidate = params.get(key)
+        if isinstance(candidate, dict):
+            return candidate
+        payload = getattr(candidate, "payload", None)
+        if isinstance(payload, dict):
+            return payload
+    return {}
 
 
 def extract_failure_context_from_page(page: Page | None, *, project_code: str = "") -> dict:
@@ -257,7 +282,7 @@ def run_failure_analysis(payload: dict) -> dict:
 
 def resolve_page_name_from_request(request) -> str:
     node = getattr(request, "node", request)
-    test_case = getattr(getattr(node, "callspec", None), "params", {}).get("test_case")
+    test_case = extract_test_case_from_node(node)
     if not isinstance(test_case, dict):
         return ""
     execution = test_case.get("execution", {})
@@ -268,7 +293,7 @@ def resolve_page_name_from_request(request) -> str:
 
 def resolve_case_id_from_request(request) -> str:
     node = getattr(request, "node", request)
-    test_case = getattr(getattr(node, "callspec", None), "params", {}).get("test_case")
+    test_case = extract_test_case_from_node(node)
     if not isinstance(test_case, dict):
         return ""
     return str(test_case.get("id", "")).strip()
@@ -286,7 +311,7 @@ def build_execution_record(
     phase: str = "call",
 ) -> dict:
     node = getattr(request, "node", request)
-    test_case = getattr(getattr(node, "callspec", None), "params", {}).get("test_case")
+    test_case = extract_test_case_from_node(node)
     execution = test_case.get("execution", {}) if isinstance(test_case, dict) else {}
     requirement = test_case.get("requirement", []) if isinstance(test_case, dict) else []
     if isinstance(requirement, str):
@@ -511,7 +536,7 @@ def resolve_case_yaml_path(request) -> Path | None:
     if env_case_path:
         return Path(env_case_path).expanduser().resolve()
 
-    test_case = getattr(getattr(request.node, "callspec", None), "params", {}).get("test_case")
+    test_case = extract_test_case_from_node(request.node)
     if not isinstance(test_case, dict):
         return None
     case_id = str(test_case.get("id", "")).strip()
@@ -705,28 +730,100 @@ def attach_allure_video_artifact(video_path: Path | None) -> bool:
         return False
 
 
+def _normalize_requirement_metadata(requirement) -> dict[str, str]:
+    if isinstance(requirement, dict):
+        return {str(key): str(value).strip() for key, value in requirement.items() if str(value).strip()}
+    lines: list[str] = []
+    if isinstance(requirement, str):
+        lines = requirement.splitlines()
+    elif isinstance(requirement, list):
+        for item in requirement:
+            lines.extend(str(item or "").splitlines())
+    output: dict[str, str] = {}
+    mapping = {
+        "测试点ID": "intent_id",
+        "测试点标题": "title",
+        "测试意图": "title",
+        "测试类型": "type",
+        "前置条件": "precondition",
+        "来源资产": "source_asset_title",
+        "来源资产ID": "source_asset_id",
+    }
+    for raw_line in lines:
+        if "：" in raw_line:
+            key, value = raw_line.split("：", 1)
+        elif ": " in raw_line:
+            key, value = raw_line.split(": ", 1)
+        else:
+            continue
+        normalized_key = mapping.get(key.strip())
+        if normalized_key and str(value).strip() and normalized_key not in output:
+            output[normalized_key] = str(value).strip()
+    return output
+
+
 def extract_allure_test_metadata(request) -> dict[str, object]:
-    test_case = getattr(getattr(request.node, "callspec", None), "params", {}).get("test_case")
+    test_case = extract_test_case_from_node(request.node)
     if not isinstance(test_case, dict):
         return {}
 
     execution = test_case.get("execution", {})
     title = str(test_case.get("title", "")).strip()
     case_id = str(test_case.get("id", "")).strip()
+    project = str(test_case.get("project") or test_case.get("project_code") or os.getenv("TEST_PROJECT", "")).strip()
+    priority = str(test_case.get("priority", "")).strip()
+    requirement = _normalize_requirement_metadata(test_case.get("requirement"))
     page_name = str(execution.get("page", "")).strip()
+    story_name = str(requirement.get("title") or title or case_id or request.node.name).strip()
+    feature_name = _resolve_allure_feature_name(
+        page_name=page_name,
+        title=title,
+        explicit=str(
+            test_case.get("business_domain")
+            or test_case.get("feature")
+            or requirement.get("business_domain")
+            or requirement.get("feature")
+            or ""
+        ).strip(),
+    )
     tags = test_case.get("tags", [])
     if not isinstance(tags, list):
         tags = []
+    selected_intents = execution.get("selected_intent_ids")
+    if not isinstance(selected_intents, list):
+        selected_intents = []
 
     metadata: dict[str, object] = {
         "title": title or case_id or request.node.name,
         "case_id": case_id,
         "page": page_name,
+        "feature": feature_name,
+        "story": story_name,
         "tags": [str(tag).strip() for tag in tags if str(tag).strip()],
-        "base_url": os.getenv("BASE_URL", "http://localhost:5173/login#/login"),
+        "base_url": str(execution.get("page_url") or os.getenv("BASE_URL", "http://localhost:5173/login#/login")).strip(),
         "run_mode": os.getenv("RUN_MODE", "unspecified").strip() or "unspecified",
         "run_source": os.getenv("RUN_SOURCE", "manual").strip() or "manual",
     }
+    optional_metadata = {
+        "project": project,
+        "priority": priority,
+        "intent_type": str(requirement.get("type", "")).strip(),
+        "intent_id": str(requirement.get("intent_id", "")).strip(),
+        "source_asset_id": str(requirement.get("source_asset_id", "")).strip(),
+        "source_asset_title": str(
+            requirement.get("source_asset_title")
+            or test_case.get("source_asset_title")
+            or test_case.get("asset_title")
+            or ""
+        ).strip(),
+        "case_version": str(test_case.get("case_version") or test_case.get("version") or "").strip(),
+    }
+    for key, value in optional_metadata.items():
+        if value:
+            metadata[key] = value
+    selected_intent_values = [str(item).strip() for item in selected_intents if str(item).strip()]
+    if selected_intent_values:
+        metadata["selected_intent_ids"] = selected_intent_values
     return metadata
 
 
@@ -737,34 +834,156 @@ def apply_allure_test_metadata(metadata: dict[str, object]) -> bool:
         title = str(metadata.get("title", "")).strip()
         case_title = str(metadata.get("case_title", "") or title).strip()
         case_id = str(metadata.get("case_id", "")).strip()
+        project = str(metadata.get("project", "")).strip()
         page_name = str(metadata.get("page", "")).strip()
+        feature_name = str(metadata.get("feature", "") or page_name).strip()
+        story_name = str(metadata.get("story", "") or case_title or case_id).strip()
+        priority = str(metadata.get("priority", "")).strip()
+        intent_type = str(metadata.get("intent_type", "")).strip()
+        intent_id = str(metadata.get("intent_id", "")).strip()
+        source_asset_id = str(metadata.get("source_asset_id", "")).strip()
+        source_asset_title = str(metadata.get("source_asset_title", "")).strip()
+        case_version = str(metadata.get("case_version", "")).strip()
         base_url = str(metadata.get("base_url", "")).strip()
         run_mode = str(metadata.get("run_mode", "")).strip()
         run_source = str(metadata.get("run_source", "")).strip()
         tags = metadata.get("tags", [])
+        selected_intent_ids = metadata.get("selected_intent_ids", [])
 
         if title:
             allure.dynamic.title(title)
+        if project:
+            allure.dynamic.epic(_project_display_name(project))
+            allure.dynamic.label("project", project)
+        if feature_name:
+            allure.dynamic.feature(feature_name)
         if page_name:
-            allure.dynamic.feature(page_name)
+            allure.dynamic.label("page", page_name)
+        if story_name:
+            allure.dynamic.story(story_name)
+        _apply_allure_suite_labels(
+            project=project,
+            feature_name=feature_name,
+            story_name=story_name,
+        )
         if case_id:
-            allure.dynamic.story(case_id)
             allure.dynamic.label("case_id", case_id)
         if case_title:
             allure.dynamic.label("case_title", case_title)
+        if case_version:
+            allure.dynamic.label("case_version", case_version)
+        if priority:
+            allure.dynamic.label("priority", priority)
+            _apply_allure_severity(priority)
+        if intent_type:
+            allure.dynamic.label("intent_type", intent_type)
+        if intent_id:
+            allure.dynamic.label("intent_id", intent_id)
+        if source_asset_id:
+            allure.dynamic.label("source_asset_id", source_asset_id)
+        if source_asset_title:
+            allure.dynamic.label("source_asset", source_asset_title)
         if base_url:
             allure.dynamic.label("base_url", base_url)
         if run_mode:
             allure.dynamic.label("run_mode", run_mode)
         if run_source:
             allure.dynamic.label("run_source", run_source)
+        if isinstance(selected_intent_ids, list):
+            for intent in selected_intent_ids:
+                if str(intent).strip():
+                    allure.dynamic.label("selected_intent_id", str(intent).strip())
         if isinstance(tags, list):
             for tag in tags:
                 if str(tag).strip():
                     allure.dynamic.tag(str(tag).strip())
+        _apply_allure_safe_parameters(metadata)
         return True
     except Exception:
         return False
+
+
+def _resolve_allure_feature_name(*, page_name: str, title: str = "", explicit: str = "") -> str:
+    if explicit:
+        return explicit
+    normalized_page = str(page_name or "").strip().lower()
+    if normalized_page in {"login", "auth", "authentication"}:
+        return "登录与身份验证"
+    return str(page_name or title or "").strip()
+
+
+def _project_display_name(project: str) -> str:
+    normalized = str(project or "").strip()
+    display_names = {
+        "mall": "商城后台 (mall)",
+    }
+    return display_names.get(normalized, normalized)
+
+
+def _apply_allure_suite_labels(*, project: str, feature_name: str, story_name: str) -> None:
+    dynamic = getattr(allure, "dynamic", None) if allure is not None else None
+    if dynamic is None:
+        return
+    suite_calls = [
+        ("parent_suite", _project_display_name(project) if project else ""),
+        ("suite", feature_name),
+        ("sub_suite", story_name),
+    ]
+    for method_name, value in suite_calls:
+        if not value:
+            continue
+        method = getattr(dynamic, method_name, None)
+        if callable(method):
+            method(value)
+
+
+def _apply_allure_safe_parameters(metadata: dict[str, object]) -> None:
+    dynamic = getattr(allure, "dynamic", None) if allure is not None else None
+    parameter = getattr(dynamic, "parameter", None)
+    if not callable(parameter):
+        return
+    safe_value = str(metadata.get("case_id") or metadata.get("title") or "case").strip()
+    if not safe_value:
+        return
+    hidden_mode = getattr(getattr(allure, "parameter_mode", None), "HIDDEN", None)
+    for raw_name in ("test_case", "case_param"):
+        try:
+            parameter(raw_name, safe_value, excluded=True, mode=hidden_mode)
+        except TypeError:
+            try:
+                parameter(raw_name, safe_value)
+            except Exception:
+                pass
+        except Exception:
+            pass
+    for display_name, key in (
+        ("用例编码", "case_id"),
+        ("用例标题", "title"),
+        ("页面", "page"),
+        ("优先级", "priority"),
+        ("来源资产", "source_asset_title"),
+    ):
+        value = str(metadata.get(key, "")).strip()
+        if not value:
+            continue
+        try:
+            parameter(display_name, value)
+        except Exception:
+            pass
+
+
+def _apply_allure_severity(priority: str) -> None:
+    if allure is None:
+        return
+    normalized = str(priority or "").strip().upper()
+    severity = {
+        "P0": allure.severity_level.BLOCKER,
+        "P1": allure.severity_level.CRITICAL,
+        "P2": allure.severity_level.NORMAL,
+        "P3": allure.severity_level.MINOR,
+    }.get(normalized)
+    if severity is not None:
+        allure.dynamic.severity(severity)
 
 
 def attach_allure_failure_artifacts(case_dir: Path) -> dict[str, bool]:
@@ -845,6 +1064,47 @@ def attach_allure_failure_artifacts(case_dir: Path) -> dict[str, bool]:
 ARTIFACTS_DIR = resolve_artifacts_dir()
 
 from check_base_url import check_base_url_reachable  # noqa: E402
+from runner.url_utils import normalize_url_for_runner  # noqa: E402
+
+
+def _extract_ai_case_preflight_url() -> str:
+    case_path = os.getenv("TEST_CASE_PATH", "").strip()
+    if not case_path:
+        return ""
+    path = Path(case_path).expanduser()
+    if not path.exists() or not path.is_file():
+        return ""
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    execution = payload.get("execution")
+    if not isinstance(execution, dict):
+        return ""
+    page_url = str(execution.get("page_url") or "").strip()
+    if page_url:
+        return page_url
+    steps = execution.get("steps")
+    if not isinstance(steps, list):
+        return ""
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        if str(step.get("action") or "").strip().lower() != "goto":
+            continue
+        for key in ("url", "value", "target_url"):
+            candidate = str(step.get(key) or "").strip()
+            if candidate:
+                return candidate
+    return ""
+
+
+def resolve_e2e_preflight_url(default_base_url: str) -> str:
+    ai_case_url = _extract_ai_case_preflight_url()
+    raw_url = ai_case_url or default_base_url
+    return normalize_url_for_runner(raw_url, base_url=default_base_url)
 
 
 @pytest.fixture(scope="session")
@@ -872,22 +1132,46 @@ def test_password() -> str:
 
 
 @pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args):
+    """
+    Docker 默认 /dev/shm 通常只有 64MB，Chromium 容易在 page.goto 时崩溃。
+    这些参数只影响浏览器启动稳定性，不改变用例业务行为。
+    """
+    existing_args = list(browser_type_launch_args.get("args", []))
+    docker_safe_args = [
+        "--disable-dev-shm-usage",
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-gpu",
+    ]
+    return {
+        **browser_type_launch_args,
+        "args": [*existing_args, *[arg for arg in docker_safe_args if arg not in existing_args]],
+    }
+
+
+@pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
     """
     给 Python 版补齐更接近 TS 版的运行能力：
-    - 录制视频
+    - 可选录制视频
     - 固定视口
     - 忽略 HTTPS 错误（可选）
     """
-    video_dir = resolve_video_dir()
-
-    return {
+    context_args = {
         **browser_context_args,
         "viewport": {"width": 1440, "height": 900},
         "ignore_https_errors": True,
-        "record_video_dir": str(video_dir),
-        "record_video_size": {"width": 1440, "height": 900},
     }
+    if env_flag("WORKBENCH_RECORD_VIDEO", default=True):
+        video_dir = resolve_video_dir()
+        context_args.update(
+            {
+                "record_video_dir": str(video_dir),
+                "record_video_size": {"width": 1440, "height": 900},
+            }
+        )
+    return context_args
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -895,15 +1179,19 @@ def ensure_e2e_base_url_reachable(request, base_url: str):
     if not any(item.get_closest_marker("e2e") for item in request.session.items):
         return
 
+    preflight_url = resolve_e2e_preflight_url(base_url)
     try:
-        check_base_url_reachable(base_url)
+        check_base_url_reachable(preflight_url)
     except RuntimeError as exc:
-        parsed = urlsplit(base_url)
+        parsed = urlsplit(preflight_url)
         host = parsed.hostname or "unknown-host"
         port = parsed.port or ("443" if parsed.scheme == "https" else "80")
+        source_hint = "TEST_CASE_PATH execution.page_url" if preflight_url != base_url else "BASE_URL"
         raise pytest.UsageError(
             f"E2E preflight failed: {exc}\n"
-            f"Hint: check whether the target app is running on {host}:{port} or override BASE_URL."
+            f"Hint: check whether the target app is running on {host}:{port}; "
+            f"preflight source={source_hint}. For Docker runs, set RUNNER_URL_REWRITE_MAP "
+            "when the YAML target uses localhost on the host machine."
         ) from exc
 
 
@@ -923,6 +1211,9 @@ def clear_auth_state(request):
     base_url: str = request.getfixturevalue("base_url")
 
     context.clear_cookies()
+    if os.getenv("RUN_MODE", "").strip().lower() == "ai" and os.getenv("TEST_CASE_PATH", "").strip():
+        page.goto("about:blank")
+        return
     page.goto(base_url, wait_until="domcontentloaded", timeout=15000)
     page.evaluate(
         """
@@ -981,7 +1272,7 @@ def capture_failure_artifacts(request):
         request.node._failure_context = failure_context
 
         try:
-            page.screenshot(path=str(screenshot_path), full_page=True)
+            page.screenshot(path=str(screenshot_path), full_page=True, timeout=3000)
         except Exception as e:
             print(f"[artifact] screenshot failed: {e}")
 

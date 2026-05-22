@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+"""需求测试点支撑：质量门、测试点预览/生成与 RequirementSpec Markdown 渲染。"""
 
 from __future__ import annotations
 
@@ -90,6 +91,8 @@ def _validate_raw_points_against_contract(points: list[dict[str, Any]]) -> None:
 
 
 class RequirementTestPointSupport:
+    """需求质量门、测试点构建与 Markdown 人类可读渲染。"""
+
     def __init__(
         self,
         *,

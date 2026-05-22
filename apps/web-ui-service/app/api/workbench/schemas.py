@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class GenerateCasePayload(BaseModel):
     project: str = Field(default="mall")
     page: str = Field(default="")
+    page_url: str = Field(default="")
     requirement: str = Field(default="")
     title: str = Field(default="")
     case_id: str = Field(default="")
@@ -51,7 +52,28 @@ class BatchTestPointAssetIdsPayload(BaseModel):
 class BatchGenerateFromTestPointAssetsPayload(BaseModel):
     project: str = Field(default="mall")
     asset_ids: list[str] = Field(default_factory=list, min_length=1, max_length=200)
+    intent_ids: list[str] = Field(default_factory=list, max_length=500)
     source: str = Field(default="manual")
+
+
+class BatchWorkbenchTestCaseDeletePayload(BaseModel):
+    project: str = Field(default="mall")
+    case_ids: list[str] = Field(default_factory=list, max_length=2000)
+    delete_all: bool = Field(default=False)
+    confirm_text: str = Field(default="")
+
+
+class TestPointReviewDecisionPayload(BaseModel):
+    asset_id: str = Field(min_length=1)
+    intent_id: str = Field(min_length=1)
+
+
+class BatchTestPointReviewPayload(BaseModel):
+    project: str = Field(default="mall")
+    decisions: list[TestPointReviewDecisionPayload] = Field(default_factory=list, min_length=1, max_length=500)
+    status: str = Field(min_length=1)
+    note: str = Field(default="")
+    reviewed_by: str = Field(default="admin")
 
 
 class RunCasePayload(BaseModel):

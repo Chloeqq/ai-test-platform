@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.core.security import get_current_user
 from app.services import ui_shell_service
 
 router = APIRouter(tags=["ui"])
@@ -23,6 +22,8 @@ def react_console_page(request: Request, subpath: str = "") -> HTMLResponse:
         current_key = "case_versions"
     elif normalized_subpath.startswith("cases/tags"):
         current_key = "tag_management"
+    elif normalized_subpath.startswith("cases/generation-failures"):
+        current_key = "cases"
     elif normalized_subpath.startswith("cases/"):
         current_key = "cases"
     elif normalized_subpath.startswith("cases"):
@@ -179,8 +180,11 @@ def report_allure_page(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/react/execution/results/allure{suffix}", status_code=307)
 
 
-@router.get("/execution/results/{execution_id}", response_class=RedirectResponse, dependencies=[Depends(get_current_user)])
+@router.get("/execution/results/{execution_id}", response_class=RedirectResponse)
 def execution_report_page(
     execution_id: int,
+    request: Request,
 ) -> RedirectResponse:
-    return RedirectResponse(url=f"/react/execution/results/{execution_id}", status_code=307)
+    query = str(request.url.query or "").strip()
+    suffix = f"?{query}" if query else ""
+    return RedirectResponse(url=f"/react/execution/results/{execution_id}{suffix}", status_code=307)

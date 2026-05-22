@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+"""多源需求支撑：OpenAPI、Git diff、Jira 等输入的归一化与页面对象推断。"""
 
 from __future__ import annotations
 
@@ -13,6 +14,8 @@ DedupStrings = Callable[[list[Any]], list[str]]
 
 
 class MultisourceSupport:
+    """合并多源上下文，生成 source_inputs、覆盖矩阵与变更影响摘要。"""
+
     def __init__(
         self,
         *,
@@ -42,6 +45,7 @@ class MultisourceSupport:
         git_diff_path: str = "",
         defect_ticket: str = "",
     ) -> dict[str, Any]:
+        """在无 LLM 解析结果时，从各原始输入构建多源上下文字典。"""
         source_inputs: list[dict[str, Any]] = []
         page_candidates: list[str] = []
         page_candidate_signals: list[dict[str, Any]] = []

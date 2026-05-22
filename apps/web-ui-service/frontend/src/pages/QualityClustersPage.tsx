@@ -73,11 +73,11 @@ export function QualityClustersPage() {
       </header>
 
       <section className="panel stat-grid">
-        <article className="stat-card">
+        <article className="stat-card metric-tone-danger">
           <span className="label">失败总数</span>
           <strong>{numberValue(payload.total_failed_reports)}</strong>
         </article>
-        <article className="stat-card">
+        <article className="stat-card metric-tone-accent">
           <span className="label">聚类数</span>
           <strong>{numberValue(payload.total_clusters)}</strong>
         </article>

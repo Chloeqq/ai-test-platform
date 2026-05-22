@@ -1,3 +1,5 @@
+"""AI 编排器 HTTP API：Flask 路由、鉴权、可观测性与控制台静态资源。"""
+
 import json
 import logging
 import os
@@ -14,12 +16,14 @@ from shared_backend.observability import configure_logging, set_request_id, summ
 from orchestrator_service import OrchestratorError, OrchestratorService, OrchestratorValidationError  # type: ignore[import-not-found]
 from wsgi_asgi import WSGIToASGIAdapter  # type: ignore[import-not-found]
 
+# 可选 API Key；未配置时跳过鉴权（便于本地开发）
 _ORCHESTRATOR_API_KEY = os.environ.get("ORCHESTRATOR_API_KEY", "").strip()
 _AUTH_EXEMPT_PATHS = frozenset({"/health"})
 _AUTH_EXEMPT_PREFIXES = ("/console",)
 
 
 def _require_api_key(f):
+    """装饰器：校验 Bearer 或 X-Api-Key 头（未配置密钥时直通）。"""
     @wraps(f)
     def decorated(*args, **kwargs):
         if not _ORCHESTRATOR_API_KEY:
@@ -78,6 +82,7 @@ access_logger = logging.getLogger("orchestrator.access")
 
 
 def _preview_request_payload() -> str:
+    """为访问日志生成 JSON 请求体的脱敏摘要。"""
     if request.method not in {"POST", "PUT", "PATCH"}:
         return ""
     if not request.is_json:
@@ -90,6 +95,7 @@ def _render_requirement_analysis_markdown(
     service: OrchestratorService,
     requirement_spec: dict[str, object],
 ) -> str:
+    """将需求规格渲染为 Markdown；失败时回退为简易列表。"""
     renderer = getattr(service, "render_requirement_spec_markdown", None)
     if callable(renderer):
         try:
@@ -109,12 +115,14 @@ def create_app(
     service: OrchestratorService | None = None,
     asset_service: AssetService | None = None,
 ) -> Flask:
+    """创建并注册编排器 REST 路由、中间件与错误处理器。"""
     app = Flask(__name__, static_folder=None)
     orchestrator_service = service or OrchestratorService()
     asset_tool_service = asset_service or AssetService()
 
     @app.before_request
     def _attach_request_id():
+        """为每个请求注入 trace id 并记录请求开始日志。"""
         request_id = str(request.headers.get("x-request-id", "")).strip() or str(uuid.uuid4())
         g.request_id = request_id
         g.request_started_at = time.perf_counter()
@@ -133,6 +141,7 @@ def create_app(
 
     @app.before_request
     def _check_api_key():
+        """全局 before_request：对健康检查与控制台路径豁免鉴权。"""
         if not _ORCHESTRATOR_API_KEY:
             return None
         if request.path in _AUTH_EXEMPT_PATHS:
@@ -148,6 +157,7 @@ def create_app(
 
     @app.after_request
     def _write_request_id_header(response: Response):
+        """回写 X-Request-Id 并记录请求耗时。"""
         request_id = str(getattr(g, "request_id", "")).strip()
         if request_id:
             response.headers["X-Request-Id"] = request_id
@@ -524,11 +534,13 @@ def create_server(
     service: OrchestratorService | None = None,
     asset_service: AssetService | None = None,
 ):
+    """创建 werkzeug 多线程 HTTP 服务器（CLI serve 子命令使用）。"""
     app = create_app(service=service, asset_service=asset_service)
     return make_server(host, port, app, threaded=True)
 
 
 def _resolve_mode(payload: dict) -> str:
+    """从请求体解析编排模式：generate_only 或 generate_and_run。"""
     mode = payload.get("mode")
     if mode is None:
         return "generate_and_run" if bool(payload.get("execute", False)) else "generate_only"
@@ -540,10 +552,12 @@ def _resolve_mode(payload: dict) -> str:
 
 
 def _resolve_execute_flag(payload: dict, mode: str) -> bool:
+    """根据 mode 推断是否执行生成的用例。"""
     if payload.get("mode") is None:
         return bool(payload.get("execute", False))
     return mode == "generate_and_run"
 
 
+# 模块级应用：WSGI 用 flask_app，ASGI 用 app 适配器
 flask_app = create_app()
 app = WSGIToASGIAdapter(flask_app)

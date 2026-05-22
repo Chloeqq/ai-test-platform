@@ -127,6 +127,10 @@ class CandidateNormalizer:
                         steps_hint.append(hint)
             scene_type = self._normalize_candidate_text(str(raw_candidate.get("scene_type", "")).strip())
             test_data_type = self._normalize_candidate_text(str(raw_candidate.get("test_data_type", "")).strip())
+            source_asset_id = self._normalize_candidate_text(str(raw_candidate.get("source_asset_id") or raw_candidate.get("asset_id") or "").strip())
+            source_asset_title = self._normalize_candidate_text(
+                str(raw_candidate.get("source_asset_title") or raw_candidate.get("asset_title") or "").strip()
+            )
             raw_elements = raw_candidate.get("involved_elements")
             involved_elements: list[str] = []
             if isinstance(raw_elements, list):
@@ -175,6 +179,8 @@ class CandidateNormalizer:
                     "expected": expected,
                     "scene_type": scene_type,
                     "test_data_type": test_data_type,
+                    "source_asset_id": source_asset_id,
+                    "source_asset_title": source_asset_title,
                     "involved_elements": involved_elements,
                     "involved_element_codes": involved_element_codes,
                 }

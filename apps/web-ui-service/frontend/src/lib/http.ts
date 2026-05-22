@@ -178,6 +178,24 @@ export async function postJson<T>(url: string, payload: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
+export async function postFormData<T>(url: string, payload: FormData): Promise<T> {
+  const response = await authFetch(url, {
+    method: "POST",
+    body: payload,
+  });
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      const data = await response.json();
+      detail = readErrorDetail(data, response.statusText);
+    } catch {
+      // Keep response status text.
+    }
+    throw new Error(`请求失败(${response.status}): ${detail}`);
+  }
+  return (await response.json()) as T;
+}
+
 export async function putJson<T>(url: string, payload: unknown): Promise<T> {
   const response = await authFetch(url, {
     method: "PUT",

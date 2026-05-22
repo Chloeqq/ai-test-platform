@@ -19,4 +19,16 @@ def goto_action(page, locator, step, context, **kwargs):
         resolved_url,
         base_url=str(kwargs.get("base_url", "")),
     )
-    page.goto(normalized_url, wait_until="networkidle")
+    page.goto(normalized_url, wait_until="commit", timeout=30000)
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=3000)
+    except Exception:
+        # In headed noVNC runs, Vite/Vue dev overlays can keep lifecycle events
+        # flaky. Concrete element actions below are the reliable readiness gate.
+        pass
+    try:
+        page.wait_for_load_state("load", timeout=3000)
+    except Exception:
+        # SPA/dev-server pages can keep requests open; element actions below
+        # will still wait for the concrete target controls.
+        pass

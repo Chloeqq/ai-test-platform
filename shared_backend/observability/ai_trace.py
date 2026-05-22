@@ -1,3 +1,4 @@
+"""根据页面、模型与 prompt 版本生成稳定的 AI 调用 trace_id。"""
 from __future__ import annotations
 
 import hashlib
@@ -16,6 +17,7 @@ def build_ai_trace_context(
     source: str = "",
     instructions_version: str = "",
 ) -> dict[str, Any]:
+    """由页面与模型等维度生成确定性 trace_id（SHA1 前 16 位）。"""
     normalized_page = _text(page) or "common"
     normalized_prompt_version = _text(prompt_version) or "unknown"
     normalized_model = _text(model) or "rule-engine"
@@ -42,6 +44,7 @@ def build_ai_trace_context(
 
 
 def attach_ai_trace_context(payload: dict[str, Any], *, context: dict[str, Any]) -> dict[str, Any]:
+    """将 context 合并进 payload.ai_trace（已有字段优先保留）。"""
     raw = dict(payload if isinstance(payload, dict) else {})
     trace_value = raw.get("ai_trace")
     trace_payload = trace_value if isinstance(trace_value, dict) else {}

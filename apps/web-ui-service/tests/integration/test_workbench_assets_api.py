@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import create_engine
@@ -12,9 +12,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 import app.models.test_case  # noqa: F401
+import app.models.page_object  # noqa: F401
 import app.models.test_project  # noqa: F401
 import app.models.workbench_state  # noqa: F401
 from app.api.workbench import constants as workbench_constants
+from app.api.workbench import facade as workbench_facade
+from app.models.page_object import PageElement, PageObject
+from app.models.test_case import TestCase, TestCaseStep, TestCaseVersion
 from app.routers.workbench_assets import router as workbench_assets_router
 import app.schemas.test_case as test_case_schema
 import app.schemas.test_project as test_project_schema
@@ -78,7 +82,7 @@ def test_workbench_case_save_blocked_when_project_inactive(
             project_name="Mall Platform",
         ),
     )
-    test_case_service.create_test_case(
+    created_case = test_case_service.create_test_case(
         db_session,
         test_case_schema.TestCaseCreate(
             project_code="mall",
@@ -144,7 +148,7 @@ def test_test_point_assets_follow_generation_plan_snapshot(
             project_name="Demo",
         ),
     )
-    test_case_service.create_test_case(
+    created_case = test_case_service.create_test_case(
         db_session,
         test_case_schema.TestCaseCreate(
             project_code=project_code,
@@ -364,6 +368,868 @@ def test_update_test_point_asset_preserves_multiple_selected_candidates(
     assert len(item["plan"]["points"]) == 2
     assert len(item["plan"]["metadata"]["selected_candidates"]) == 2
     assert [row["intent_id"] for row in item["plan"]["metadata"]["selected_candidates"]] == ["intent-01", "intent-20"]
+
+
+def test_test_point_reviews_flatten_assets_and_batch_review_updates_plan(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0022"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+
+    response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页身份验证测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求",
+            "source_type": "selection_save",
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "首次登录成功",
+                    "intent_type": "functional",
+                    "priority": "P0",
+                    "steps": ["输入账号", "输入密码", "点击登录按钮"],
+                    "expected": "跳转至工作台首页",
+                    "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+                },
+                {
+                    "intent_id": "intent-02",
+                    "title": "账号为空点击登录",
+                    "intent_type": "negative",
+                    "priority": "P1",
+                    "steps": ["清空账号", "点击登录按钮"],
+                    "expected": "提示请输入账号",
+                    "involved_elements": ["账号输入框", "登录按钮"],
+                },
+            ],
+        },
+    )
+    assert response.status_code == 200
+
+    reviews = client.get(f"/api/workbench/test-point-reviews?project={project_code}&status=pending&page_size=50")
+    assert reviews.status_code == 200
+    payload = reviews.json()
+    assert int(payload["summary"]["pending_count"]) == 2
+    assert [item["review_status"] for item in payload["items"]] == ["pending", "pending"]
+    assert all(item["can_generate"] is False for item in payload["items"])
+
+    update = client.post(
+        "/api/workbench/test-point-reviews/batch",
+        json={
+            "project": project_code,
+            "status": "approved",
+            "reviewed_by": "qa",
+            "decisions": [{"asset_id": asset_id, "intent_id": "intent-02"}],
+        },
+    )
+    assert update.status_code == 200
+    assert int(update.json()["updated_count"]) == 1
+
+    approved_reviews = client.get(f"/api/workbench/test-point-reviews?project={project_code}&status=approved&page_size=50")
+    assert approved_reviews.status_code == 200
+    approved_items = approved_reviews.json()["items"]
+    assert len(approved_items) == 1
+    assert approved_items[0]["intent_id"] == "intent-02"
+
+    detail = client.get(f"/api/workbench/test-point-assets/{asset_id}?project={project_code}")
+    assert detail.status_code == 200
+    points = detail.json()["item"]["plan"]["points"]
+    point = next(row for row in points if row["intent_id"] == "intent-02")
+    assert point["review_status"] == "approved"
+    assert point["metadata"]["candidate_snapshot"]["review_status"] == "approved"
+
+
+def test_generate_cases_from_test_point_assets_blocks_when_page_url_empty(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0023"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+    page_object = PageObject(
+        project_code=project_code,
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="",
+        status="published",
+        governance_status="approved",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    db_session.add(
+        PageElement(
+            page_object_id=page_object.id,
+            element_code="login_button",
+            element_name="登录按钮",
+            locator_type="css",
+            locator_value="[data-testid='login-button']",
+            aliases_json=["登录按钮"],
+            business_type="button",
+            status="active",
+            review_status="approved",
+            stability_level="medium",
+        )
+    )
+    db_session.commit()
+
+    response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求",
+            "source_type": "selection_save",
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "首次登录成功",
+                    "intent_type": "functional",
+                    "priority": "P0",
+                    "steps": ["点击登录按钮"],
+                    "expected": "跳转至工作台首页",
+                    "involved_elements": ["登录按钮"],
+                    "review_status": "approved",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+
+    generate = client.post(
+        "/api/workbench/test-point-assets/batch/generate-cases",
+        json={
+            "project": project_code,
+            "asset_ids": [asset_id],
+            "source": "asset_detail",
+        },
+    )
+    assert generate.status_code == 422
+    detail = generate.json()["detail"]
+    assert detail["code"] == "page_object_url_missing"
+    assert detail["message"] == "请到页面对象管理补齐页面 URL"
+
+
+def test_preview_script_uses_page_object_locators_for_single_reviewed_intent(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0024"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+    page_object = PageObject(
+        project_code=project_code,
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="https://example.test/login",
+        status="published",
+        governance_status="approved",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    for element_code, element_name, locator_type, locator, role in [
+        ("username_input", "账号输入框", "placeholder", "请输入用户名", ""),
+        ("password_input", "密码输入框", "placeholder", "请输入密码", ""),
+        ("login_button", "登录按钮", "role", "登录", "button"),
+    ]:
+        db_session.add(
+            PageElement(
+                page_object_id=page_object.id,
+                element_code=element_code,
+                element_name=element_name,
+                locator_type=locator_type,
+                locator_value=locator,
+                role=role,
+                aliases_json=[element_name],
+                business_type="input" if element_code.endswith("_input") else "button",
+                status="active",
+                review_status="approved",
+                stability_level="medium",
+            )
+        )
+    db_session.commit()
+
+    response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求",
+            "source_type": "selection_save",
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "首次登录成功",
+                    "intent_type": "functional",
+                    "priority": "P0",
+                    "steps": ["输入账号", "输入密码", "点击登录按钮"],
+                    "steps_hint": [
+                        "input:账号输入框=test001",
+                        "input:密码输入框=123456",
+                        "click:登录按钮",
+                    ],
+                    "expected": "跳转至工作台首页",
+                    "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+                    "review_status": "approved",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+
+    preview = client.get(
+        f"/api/workbench/preview-script?project={project_code}&asset_id={asset_id}&intent_id=intent-01"
+    )
+    assert preview.status_code == 200
+    script_code = preview.json()["item"]["script_code"]
+    assert 'driver.get("https://example.test/login")' in script_code
+    assert "By.CSS_SELECTOR" in script_code
+    assert 'input[placeholder*=\\"请输入用户名\\"]' in script_code
+    assert 'input[placeholder*=\\"请输入密码\\"]' in script_code
+    assert "By.XPATH" in script_code
+    assert "send_keys(\"test001\")" in script_code
+
+
+def test_generate_cases_from_test_point_assets_normalizes_page_trigger_source_to_ai(
+    workbench_assets_client: tuple[TestClient, Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0027"
+    seen_sources: list[str] = []
+
+    class _FakeGenerateUsecase:
+        def execute(self, payload):
+            seen_sources.append(str(payload.source))
+            return {"item": {"case_id": "demo-web-login-fn-ai-0001", "source": payload.source}}
+
+    monkeypatch.setattr(workbench_facade, "build_generate_case_usecase", lambda _db: _FakeGenerateUsecase())
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+    page_object = PageObject(
+        project_code=project_code,
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="https://example.test/login",
+        status="published",
+        governance_status="approved",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    db_session.add(
+        PageElement(
+            page_object_id=page_object.id,
+            element_code="login_button",
+            element_name="登录按钮",
+            locator_type="css",
+            locator_value="[data-testid='login-button']",
+            aliases_json=["登录按钮"],
+            business_type="button",
+            status="active",
+            review_status="approved",
+            stability_level="medium",
+        )
+    )
+    db_session.commit()
+
+    response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求",
+            "source_type": "selection_save",
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "首次登录成功",
+                    "intent_type": "functional",
+                    "priority": "P0",
+                    "steps": ["点击登录按钮"],
+                    "expected": "跳转至工作台首页",
+                    "involved_elements": ["登录按钮"],
+                    "review_status": "approved",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+
+    generate = client.post(
+        "/api/workbench/test-point-assets/batch/generate-cases",
+        json={
+            "project": project_code,
+            "asset_ids": [asset_id],
+            "source": "asset_detail",
+        },
+    )
+    assert generate.status_code == 200
+    assert generate.json()["count"] == 1
+    assert seen_sources == ["ai"]
+
+
+def test_generate_cases_from_test_point_assets_keeps_partial_success_when_one_intent_fails(
+    workbench_assets_client: tuple[TestClient, Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0028"
+    seen_intents: list[str] = []
+
+    class _FakeGenerateUsecase:
+        def execute(self, payload):
+            intent_id = str((payload.selected_intent_ids or [""])[0])
+            seen_intents.append(intent_id)
+            if intent_id == "intent-02":
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "execution_compiler_intent_coverage_failed",
+                        "message": "compiled steps do not strictly match selected intents",
+                    },
+                )
+            return {"item": {"case_id": f"demo-web-login-fn-ai-{len(seen_intents):04d}", "intent_id": intent_id}}
+
+    monkeypatch.setattr(workbench_facade, "build_generate_case_usecase", lambda _db: _FakeGenerateUsecase())
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+    page_object = PageObject(
+        project_code=project_code,
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="https://example.test/login",
+        status="published",
+        governance_status="approved",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    db_session.add(
+        PageElement(
+            page_object_id=page_object.id,
+            element_code="login_button",
+            element_name="登录按钮",
+            locator_type="css",
+            locator_value="[data-testid='login-button']",
+            aliases_json=["登录按钮"],
+            business_type="button",
+            status="active",
+            review_status="approved",
+            stability_level="medium",
+        )
+    )
+    db_session.commit()
+
+    response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求",
+            "source_type": "selection_save",
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "首次登录成功",
+                    "intent_type": "functional",
+                    "priority": "P0",
+                    "steps": ["点击登录按钮"],
+                    "expected": "跳转至工作台首页",
+                    "involved_elements": ["登录按钮"],
+                    "review_status": "approved",
+                },
+                {
+                    "intent_id": "intent-02",
+                    "title": "账号为空点击登录",
+                    "intent_type": "negative",
+                    "priority": "P1",
+                    "steps": ["点击登录按钮"],
+                    "expected": "提示请输入账号",
+                    "involved_elements": ["登录按钮"],
+                    "review_status": "approved",
+                },
+                {
+                    "intent_id": "intent-03",
+                    "title": "密码为空点击登录",
+                    "intent_type": "negative",
+                    "priority": "P1",
+                    "steps": ["点击登录按钮"],
+                    "expected": "提示请输入密码",
+                    "involved_elements": ["登录按钮"],
+                    "review_status": "approved",
+                },
+            ],
+        },
+    )
+    assert response.status_code == 200
+
+    generate = client.post(
+        "/api/workbench/test-point-assets/batch/generate-cases",
+        json={
+            "project": project_code,
+            "asset_ids": [asset_id],
+            "source": "asset_detail",
+        },
+    )
+
+    assert generate.status_code == 200
+    payload = generate.json()
+    assert payload["count"] == 2
+    assert seen_intents == ["intent-01", "intent-02", "intent-03"]
+    assert payload["summary"]["skipped_assets"] == 1
+    assert payload["summary"]["skipped"][0]["intent_id"] == "intent-02"
+    assert "execution_compiler_intent_coverage_failed" in payload["summary"]["skipped"][0]["reason"]
+
+
+def test_generate_cases_from_test_point_assets_reuses_existing_case_for_same_source_intent(
+    workbench_assets_client: tuple[TestClient, Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0029"
+    existing_case_id = "demo-web-login-fn-ai-0007"
+    seen_case_ids: list[str] = []
+
+    class _FakeGenerateUsecase:
+        def execute(self, payload):
+            seen_case_ids.append(str(payload.case_id))
+            return {"item": {"case_id": payload.case_id or "demo-web-login-fn-ai-0008"}}
+
+    monkeypatch.setattr(workbench_facade, "build_generate_case_usecase", lambda _db: _FakeGenerateUsecase())
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+    page_object = PageObject(
+        project_code=project_code,
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="https://example.test/login",
+        status="published",
+        governance_status="approved",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    db_session.add(
+        PageElement(
+            page_object_id=page_object.id,
+            element_code="login_button",
+            element_name="登录按钮",
+            locator_type="css",
+            locator_value="[data-testid='login-button']",
+            aliases_json=["登录按钮"],
+            business_type="button",
+            status="active",
+            review_status="approved",
+            stability_level="medium",
+        )
+    )
+    db_session.add(
+        TestCase(
+            case_id=existing_case_id,
+            project_code=project_code,
+            client="web",
+            page_code="login",
+            page_name="登录页",
+            module_code="login",
+            module_name="登录",
+            case_type="fn",
+            source="ai",
+            name="首次登录成功",
+            product_line="登录页",
+            module="登录",
+            priority="P0",
+            test_type="ui",
+            status="active",
+            automation_status="automated",
+            script_code=(
+                "version: v1\n"
+                f"id: {existing_case_id}\n"
+                "project: demo\n"
+                "module: login\n"
+                "title: 首次登录成功\n"
+                "requirement:\n"
+                "  intent_id: intent-01\n"
+                "  title: 首次登录成功\n"
+                "  source_asset_id: mall-web-login-auth-fn-ai-0029\n"
+                "execution:\n"
+                "  page: login\n"
+                "  selected_intent_ids:\n"
+                "    - intent-01\n"
+            ),
+        )
+    )
+    db_session.commit()
+
+    response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求",
+            "source_type": "selection_save",
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "首次登录成功",
+                    "intent_type": "functional",
+                    "priority": "P0",
+                    "steps": ["点击登录按钮"],
+                    "expected": "跳转至工作台首页",
+                    "involved_elements": ["登录按钮"],
+                    "review_status": "approved",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+
+    generate = client.post(
+        "/api/workbench/test-point-assets/batch/generate-cases",
+        json={
+            "project": project_code,
+            "asset_ids": [asset_id],
+            "source": "asset_detail",
+        },
+    )
+
+    assert generate.status_code == 200
+    assert seen_case_ids == [existing_case_id]
+
+
+def test_generate_cases_from_test_point_assets_filters_selected_intents_before_generation(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0025"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+    page_object = PageObject(
+        project_code=project_code,
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="https://example.test/login",
+        status="published",
+        governance_status="approved",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    db_session.add(
+        PageElement(
+            page_object_id=page_object.id,
+            element_code="login_button",
+            element_name="登录按钮",
+            locator_type="css",
+            locator_value="[data-testid='login-button']",
+            aliases_json=["登录按钮"],
+            business_type="button",
+            status="active",
+            review_status="approved",
+            stability_level="medium",
+        )
+    )
+    db_session.commit()
+
+    response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求",
+            "source_type": "selection_save",
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "首次登录成功",
+                    "intent_type": "functional",
+                    "priority": "P0",
+                    "steps": ["点击登录按钮"],
+                    "expected": "跳转至工作台首页",
+                    "involved_elements": ["登录按钮"],
+                    "review_status": "approved",
+                },
+                {
+                    "intent_id": "intent-02",
+                    "title": "账号为空点击登录",
+                    "intent_type": "negative",
+                    "priority": "P1",
+                    "steps": ["点击登录按钮"],
+                    "expected": "提示请输入账号",
+                    "involved_elements": ["登录按钮"],
+                    "review_status": "pending",
+                },
+            ],
+        },
+    )
+    assert response.status_code == 200
+
+    generate = client.post(
+        "/api/workbench/test-point-assets/batch/generate-cases",
+        json={
+            "project": project_code,
+            "asset_ids": [asset_id],
+            "intent_ids": ["intent-02"],
+            "source": "review_detail",
+        },
+    )
+    assert generate.status_code == 422
+    detail = generate.json()["detail"]
+    assert detail["code"] == "selected_intents_not_approved_or_missing"
+    assert detail["message"] == "所选测试点未通过审核或不存在，无法生成"
+
+
+def test_workbench_test_cases_links_generated_case_to_source_asset_by_selected_intents(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0026"
+    case_id = "demo-web-login-fn-ai-0001"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+    project_dir = workbench_constants.TEST_POINTS_ROOT / project_code
+    (project_dir / "plans").mkdir(parents=True, exist_ok=True)
+    (project_dir / f"{asset_id}.json").write_text(
+        json.dumps(
+            {
+                "asset_id": asset_id,
+                "title": "登录页测试点集",
+                "page": "login",
+                "source_type": "selection_save",
+                "updated_at": "2026-04-24T12:33:30+00:00",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (project_dir / "plans" / f"{asset_id}.json").write_text(
+        json.dumps(
+            {
+                "case_id": asset_id,
+                "page": "login",
+                "points": [
+                    {
+                        "key": "intent-01",
+                        "intent_id": "intent-01",
+                        "description": "首次登录成功",
+                        "metadata": {
+                            "candidate_snapshot": {
+                                "intent_id": "intent-01",
+                                "title": "首次登录成功",
+                                "intent_type": "functional",
+                            }
+                        },
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    created_case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code=project_code,
+            case_id=case_id,
+            name="首次登录成功",
+            product_line="login",
+            module="login",
+            page_code="login",
+            priority="P0",
+            test_type="ui",
+            creator="qa",
+            test_steps=[{"action": "click", "target": "login_button"}],
+            script_code=(
+                "id: demo-web-login-fn-ai-0001\n"
+                "title: 首次登录成功\n"
+                "execution:\n"
+                "  page: login\n"
+                "  selected_intent_ids:\n"
+                "    - intent-01\n"
+                "  steps:\n"
+                "    - action: click\n"
+                "      target: login_button\n"
+            ),
+        ),
+    )
+
+    response = client.get(f"/api/workbench/test-cases?project={project_code}&source_asset={asset_id}")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["case_id"] == created_case.case_id
+    assert items[0]["source_asset_id"] == asset_id
+    assert items[0]["source_asset_title"] == "登录页测试点集"
+
+
+def test_workbench_test_cases_can_be_physically_deleted(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "delproj"
+    other_project_code = "keepproj"
+
+    for code in (project_code, other_project_code):
+        test_project_service.create_project(
+            db_session,
+            test_project_schema.TestProjectCreate(
+                project_code=code,
+                project_name=code,
+            ),
+        )
+
+    first_case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code=project_code,
+            case_id="delproj-web-login-auth-fn-ai-0001",
+            name="首次登录成功",
+            product_line="login",
+            module="login",
+            page_code="login",
+            priority="P0",
+            test_type="ui",
+            creator="qa",
+            test_steps=[{"action": "click", "target": "login_button"}],
+            script_code="def test_login_success():\n    assert True\n",
+        ),
+    )
+    second_case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code=project_code,
+            case_id="delproj-web-login-auth-fn-ai-0002",
+            name="账号为空登录",
+            product_line="login",
+            module="login",
+            page_code="login",
+            priority="P1",
+            test_type="ui",
+            creator="qa",
+            test_steps=[{"action": "click", "target": "login_button"}],
+            script_code="def test_login_empty_account():\n    assert True\n",
+        ),
+    )
+    keep_case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code=other_project_code,
+            case_id="keepproj-web-login-auth-fn-ai-0001",
+            name="其他项目用例",
+            product_line="login",
+            module="login",
+            page_code="login",
+            priority="P1",
+            test_type="ui",
+            creator="qa",
+            test_steps=[{"action": "click", "target": "login_button"}],
+            script_code="def test_other_project():\n    assert True\n",
+        ),
+    )
+    first_db_id = int(first_case.id)
+    first_case_id = str(first_case.case_id)
+    second_case_id = str(second_case.case_id)
+    keep_case_id = str(keep_case.case_id)
+
+    response = client.delete(f"/api/workbench/test-cases/{first_case_id}?project={project_code}")
+    assert response.status_code == 200
+    assert response.json()["deleted_count"] == 1
+    assert db_session.query(TestCase).filter(TestCase.case_id == first_case_id).one_or_none() is None
+    assert db_session.query(TestCaseStep).filter(TestCaseStep.case_id == first_db_id).count() == 0
+    assert db_session.query(TestCaseVersion).filter(TestCaseVersion.case_id == first_db_id).count() == 0
+
+    response = client.post(
+        "/api/workbench/test-cases/batch/delete",
+        json={"project": project_code, "delete_all": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["deleted_count"] == 1
+    assert response.json()["deleted_case_ids"] == [second_case_id]
+    assert db_session.query(TestCase).filter(TestCase.project_code == project_code).count() == 0
+    assert db_session.query(TestCase).filter(TestCase.case_id == keep_case_id).count() == 1
 
 
 def test_test_point_asset_coverage_matrix_groups_derived_points_into_one_row(

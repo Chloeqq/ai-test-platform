@@ -260,43 +260,33 @@ def _build_execution_task_summary(
     filter_snapshot: dict[str, Any],
     execution_meta: dict[str, Any],
 ) -> dict[str, Any]:
-    summary_fn = _shim_callable(
-        "_build_execution_task_summary",
-        lambda: workbench_task_service.build_execution_task_summary(
-            items=items,
-            filter_snapshot=filter_snapshot,
-            execution_meta=execution_meta,
-            build_task_governance_risk_fn=workbench_task_service.build_task_governance_risk,
-        ),
-        current=_build_execution_task_summary,
+    return workbench_task_service.build_execution_task_summary(
+        items=items,
+        filter_snapshot=filter_snapshot,
+        execution_meta=execution_meta,
+        build_task_governance_risk_fn=workbench_task_service.build_task_governance_risk,
     )
-    return summary_fn(items=items, filter_snapshot=filter_snapshot, execution_meta=execution_meta)
 
 
 def _collect_execution_records_with_meta(*, limit: int = 1000) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    collect_fn = _shim_callable(
-        "_collect_execution_records_with_meta",
-        lambda: workbench_task_service.collect_execution_records_with_meta(
-            limit=limit,
-            compat_scan_enabled=bool(get_settings().evidence_manifest_compat_scan_enabled),
-            artifact_roots=[constants.RUNNER_ROOT / "artifacts", *sorted(constants.WEB_UI_RUNS_DIR.glob("*-artifacts"))],
-            logger=None,
-            normalize_evidence_manifest_payload=lambda payload: payload if isinstance(payload, dict) else {},
-            resolve_manifest_entries=lambda entries, root: workbench_runtime_service.resolve_manifest_entries(entries, root=root),
-            load_execution_record_payload=lambda path: workbench_runtime_service.load_execution_record_payload(
-                path,
-                normalize_execution_record_payload=_normalize_execution_record_payload,
-            ),
-            execution_record_time_value=workbench_task_service.execution_record_time_value,
-            runtime_jobs=store.list_run_jobs(),
-            runtime_runs_file=store.RUNTIME_RUNS_FILE,
-            runtime_view_from_entry=_runtime_view_from_entry,
-            read_json_list=store.read_json_list,
+    return workbench_task_service.collect_execution_records_with_meta(
+        limit=limit,
+        compat_scan_enabled=bool(get_settings().evidence_manifest_compat_scan_enabled),
+        artifact_roots=[constants.RUNNER_ROOT / "artifacts", *sorted(constants.WEB_UI_RUNS_DIR.glob("*-artifacts"))],
+        logger=None,
+        normalize_evidence_manifest_payload=lambda payload: payload if isinstance(payload, dict) else {},
+        resolve_manifest_entries=lambda entries, root: workbench_runtime_service.resolve_manifest_entries(entries, root=root),
+        load_execution_record_payload=lambda path: workbench_runtime_service.load_execution_record_payload(
+            path,
             normalize_execution_record_payload=_normalize_execution_record_payload,
         ),
-        current=_collect_execution_records_with_meta,
+        execution_record_time_value=workbench_task_service.execution_record_time_value,
+        runtime_jobs=store.list_run_jobs(),
+        runtime_runs_file=store.RUNTIME_RUNS_FILE,
+        runtime_view_from_entry=_runtime_view_from_entry,
+        read_json_list=store.read_json_list,
+        normalize_execution_record_payload=_normalize_execution_record_payload,
     )
-    return collect_fn(limit=limit)
 
 
 def _sync_stage_a_workbench_state(*args: Any, **kwargs: Any) -> None:
@@ -1133,6 +1123,14 @@ class WorkbenchService:
             run_command=subprocess.run,
             read_allure_summary=partial(
                 workbench_reporting_service.read_allure_summary,
+                allure_report_root=constants.ALLURE_REPORT_ROOT,
+            ),
+            read_allure_environment=partial(
+                workbench_reporting_service.read_allure_environment,
+                allure_report_root=constants.ALLURE_REPORT_ROOT,
+            ),
+            read_allure_executors=partial(
+                workbench_reporting_service.read_allure_executors,
                 allure_report_root=constants.ALLURE_REPORT_ROOT,
             ),
             ensure_allure_snapshot=partial(

@@ -101,19 +101,19 @@ export function ApiContractsPage() {
         </header>
 
         <section className="asset-kpi-grid">
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-info">
             <span>契约资产数</span>
             <strong>{assetItems.length}</strong>
           </article>
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-success">
             <span>就绪</span>
             <strong>{numberValue(assetSummary.ready_count)}</strong>
           </article>
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-warning">
             <span>待审核</span>
             <strong>{numberValue(assetSummary.needs_review_count)}</strong>
           </article>
-          <article className="asset-kpi-card">
+          <article className="asset-kpi-card metric-tone-accent">
             <span>API 用例数</span>
             <strong>{apiCases.length}</strong>
           </article>

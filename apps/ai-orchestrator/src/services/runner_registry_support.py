@@ -1,3 +1,5 @@
+"""Runner 注册表：列举与解析 Playwright/API/Mobile 等执行配置。"""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -6,6 +8,8 @@ from typing import Any
 
 
 class RunnerRegistrySupport:
+    """维护内置 Runner 目录及默认 runner 解析。"""
+
     def __init__(self, *, repo_root: Path) -> None:
         self._runner_catalog = [
             {
@@ -47,12 +51,14 @@ class RunnerRegistrySupport:
         ]
 
     def list_runners(self) -> dict[str, Any]:
+        """返回 Runner 目录副本及默认 runner 名称。"""
         return {
             "items": [deepcopy(item) for item in self._runner_catalog],
             "default_runner": "playwright",
         }
 
     def resolve_runner_profile(self, runner: str) -> dict[str, Any]:
+        """按名称解析 Runner 配置；未知 runner 抛出 ValueError。"""
         normalized = str(runner or "").strip().lower() or "playwright"
         for item in self._runner_catalog:
             if str(item.get("runner", "")).strip().lower() == normalized:

@@ -1,0 +1,2 @@
+"Status","Start Time","Stop Time","Duration in ms","Parent Suite","Suite","Sub Suite","Test Class","Test Method","Name","Description"
+"passed","Tue May 19 04:43:40 UTC 2026","Tue May 19 04:43:47 UTC 2026","6561","商城后台 (mall)","登录与身份验证","首次登录成功","","","test_yaml_ai_generated[chromium-mall-web-login-auth-fn-ai-0001]",""

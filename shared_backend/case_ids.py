@@ -1,3 +1,7 @@
+"""测试用例 ID 的生成、解析、规范化与元数据推断。
+
+命名格式：{project}-{client}-{page}-{module}-{case_type}-{source}-{sequence}。
+"""
 from __future__ import annotations
 
 import re
@@ -24,6 +28,7 @@ MODULE_NAME_MAP = {code.upper(): name for code, name in get_code_name_map("modul
 CASE_TYPE_NAME_MAP = {code.upper(): name for code, name in get_code_name_map("case_type").items()}
 SOURCE_NAME_MAP = {code.upper(): name for code, name in get_code_name_map("source").items()}
 
+# 平台标准 case_id：project-client-page-module-type-source-sequence
 _CASE_ID_PATTERN = re.compile(
     r"^(?P<project>[a-z0-9]{2,10})-"
     r"(?P<client>web|app|api|admin|h5)-"
@@ -37,6 +42,7 @@ _CASE_ID_PATTERN = re.compile(
 
 
 def slugify_case_part(value: str, *, fallback: str = "general") -> str:
+    """将任意文本转为用例 ID 片段可用的 slug（小写、连字符分隔）。"""
     text = unicodedata.normalize("NFKD", str(value or "").strip()).encode("ascii", "ignore").decode("ascii")
     normalized = re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
     return normalized or fallback
@@ -82,6 +88,7 @@ def build_case_prefix(
     case_type: str = DEFAULT_CASE_TYPE,
     source: str = DEFAULT_SOURCE,
 ) -> str:
+    """生成不含序号后缀的用例 ID 前缀（六段连字符格式）。"""
     normalized_project = _to_code(project, fallback=DEFAULT_PROJECT, min_len=2, max_len=10).lower()
     normalized_client = normalize_client_code(client)
     normalized_page = normalize_page_code(page_code)
@@ -112,6 +119,7 @@ def build_case_id(
     case_type: str = DEFAULT_CASE_TYPE,
     source: str = DEFAULT_SOURCE,
 ) -> str:
+    """根据页面/模块与序号生成完整平台标准 case_id。"""
     resolved_page_code = page_code or infer_page_code(page)
     resolved_module_code = module_code or infer_module_code(page=page, module=module)
     prefix = build_case_prefix(
@@ -127,10 +135,12 @@ def build_case_id(
 
 
 def match_case_id(value: str) -> re.Match[str] | None:
+    """若 value 符合标准 case_id 正则则返回 Match，否则 None。"""
     return _CASE_ID_PATTERN.match(str(value or "").strip())
 
 
 def split_run_id(value: str) -> tuple[str, str]:
+    """将 run_id（case_id:started_at）拆为 (case_id, started_at)。"""
     text = str(value or "").strip()
     if ":" not in text:
         return text, ""
@@ -139,11 +149,13 @@ def split_run_id(value: str) -> tuple[str, str]:
 
 
 def normalize_client_code(value: str, *, fallback: str = DEFAULT_CLIENT) -> str:
+    """规范化客户端编码（web/app/api 等），非法则回退 fallback。"""
     code = _to_code(value, fallback=fallback, min_len=2, max_len=5).lower()
     return code if code in CLIENT_CODES else fallback
 
 
 def infer_client_code(value: str = "", *, runner: str = "") -> str:
+    """从文案或 runner 名称推断 client（如 mobile→app）。"""
     corpus = " ".join([str(value or "").strip(), str(runner or "").strip()]).lower()
     if "mobile" in corpus or "app" in corpus:
         return "app"
@@ -157,16 +169,19 @@ def infer_client_code(value: str = "", *, runner: str = "") -> str:
 
 
 def normalize_case_type(value: str, *, fallback: str = DEFAULT_CASE_TYPE) -> str:
+    """规范化用例类型（fn/sm/rg 等）。"""
     code = _to_code(value, fallback=fallback, min_len=2, max_len=3).lower()
     return code if code in CASE_TYPE_CODES else fallback
 
 
 def normalize_source_code(value: str, *, fallback: str = DEFAULT_SOURCE) -> str:
+    """规范化来源编码（ai/mn/cv 等）。"""
     code = _to_code(value, fallback=fallback, min_len=2, max_len=3).lower()
     return code if code in SOURCE_CODES else fallback
 
 
 def normalize_page_code(value: str, *, fallback: str = "COMMON") -> str:
+    """字典优先，否则将 value 编码为 page_code。"""
     resolved = resolve_dictionary_code("page", value, fallback="")
     if resolved:
         return resolved.lower()
@@ -174,6 +189,7 @@ def normalize_page_code(value: str, *, fallback: str = "COMMON") -> str:
 
 
 def normalize_module_code(value: str, *, fallback: str = "CORE") -> str:
+    """字典优先，否则将 value 编码为 module_code。"""
     resolved = resolve_dictionary_code("module", value, fallback="")
     if resolved:
         return resolved.lower()
@@ -181,6 +197,7 @@ def normalize_module_code(value: str, *, fallback: str = "CORE") -> str:
 
 
 def infer_page_code(page: str, *, title: str = "", tags: Any = None) -> str:
+    """优先字典解析，否则按关键词从 page/title/tags 推断 page_code。"""
     resolved = resolve_dictionary_code("page", page, fallback="")
     if resolved:
         return resolved
@@ -206,6 +223,7 @@ def infer_module_code(
     tags: Any = None,
     steps: Any = None,
 ) -> str:
+    """从 module、步骤文案等推断 module_code（auth/query/list 等）。"""
     resolved = resolve_dictionary_code("module", module, fallback="")
     if resolved:
         return resolved
@@ -242,6 +260,7 @@ def infer_case_type(
     description: str = "",
     tags: Any = None,
 ) -> str:
+    """从标题/描述/标签关键词推断 case_type（ex/rg/int/e2e/sm，默认 fn）。"""
     corpus = " ".join([title, description, *(_as_text_list(tags))]).lower()
     if any(token in corpus for token in ["exception", "error", "invalid", "security", "sql", "异常"]):
         return "ex"
@@ -257,6 +276,7 @@ def infer_case_type(
 
 
 def infer_source_code(*, tags: Any = None, source_hint: str = "", legacy: bool = False) -> str:
+    """从标签与 source_hint 推断来源（ai/cv/fb/imp/mn）。"""
     corpus = " ".join([source_hint, *(_as_text_list(tags))]).lower()
     if legacy:
         return "imp"
@@ -270,6 +290,7 @@ def infer_source_code(*, tags: Any = None, source_hint: str = "", legacy: bool =
 
 
 def normalize_case_id(value: str, *, fallback: str = DEFAULT_CASE_ID) -> str:
+    """将各类遗留 ID 形态规范为标准 case_id，无法识别则返回 fallback。"""
     raw = str(value or "").strip()
     if not raw:
         return fallback
@@ -313,6 +334,7 @@ def next_case_sequence(
     case_type: str = DEFAULT_CASE_TYPE,
     source: str = DEFAULT_SOURCE,
 ) -> int:
+    """在同前缀已有 ID 中取最大序号并返回 next（至少为 1）。"""
     prefix = build_case_prefix(
         project=project,
         client=client,
@@ -354,6 +376,7 @@ def build_case_metadata(
     source_hint: str = "",
     legacy: bool = False,
 ) -> dict[str, str]:
+    """汇总 project/client/page/module/type/source 及对应显示名。"""
     page_code = infer_page_code(page, title=title, tags=tags)
     module_code = infer_module_code(page=page, module=module, title=title, tags=tags)
     case_type = infer_case_type(title=title, description=description, tags=tags)

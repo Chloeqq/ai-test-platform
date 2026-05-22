@@ -1,3 +1,4 @@
+"""结构化 JSON 日志、request_id 上下文与敏感字段脱敏。"""
 from __future__ import annotations
 
 import contextvars
@@ -29,10 +30,12 @@ _SENSITIVE_KEYS = {
 
 
 def set_request_id(request_id: str) -> None:
+    """在当前异步上下文中设置 request_id，供日志 Filter 注入。"""
     _REQUEST_ID_CTX.set(str(request_id or "").strip())
 
 
 def get_request_id() -> str:
+    """读取当前上下文的 request_id。"""
     return str(_REQUEST_ID_CTX.get("") or "").strip()
 
 
@@ -42,6 +45,7 @@ def _is_sensitive_key(key: str) -> bool:
 
 
 def redact_sensitive_payload(value: Any, *, max_depth: int = 4) -> Any:
+    """递归脱敏 dict 中含 password/token 等键的值。"""
     if max_depth <= 0:
         return "…"
     if isinstance(value, dict):
@@ -62,6 +66,7 @@ def redact_sensitive_payload(value: Any, *, max_depth: int = 4) -> Any:
 
 
 def summarize_log_value(value: Any, *, max_length: int = 4000) -> str:
+    """将任意值转为可写日志的短字符串（JSON + 截断）。"""
     if value is None:
         return ""
     if isinstance(value, bytes):
@@ -94,6 +99,7 @@ def summarize_http_context(
     payload: Any = None,
     error: Any = None,
 ) -> str:
+    """拼装 HTTP 请求/响应的结构化日志摘要行。"""
     parts: list[str] = [
         f"method={str(method or '-').strip() or '-'}",
         f"path={str(path or '-').strip() or '-'}",
@@ -158,6 +164,7 @@ class _JsonFormatter(logging.Formatter):
 
 
 def configure_logging(*, service_name: str) -> None:
+    """按服务名配置根 logger（JSON/文本、轮转文件、request_id 字段）。"""
     normalized_service = str(service_name or "").strip() or "unknown-service"
     if normalized_service in _CONFIGURED_SERVICES:
         return

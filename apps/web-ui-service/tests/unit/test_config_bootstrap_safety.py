@@ -77,7 +77,7 @@ def test_non_dev_bootstrap_config_must_be_explicit(monkeypatch) -> None:
             default_admin_password="",
             default_admin_role="",
             database_auto_create_tables=True,
-            page_surface_login_url="http://localhost:5173/login#/login",
+            page_surface_login_url="http://localhost:5174/#/login",
         ),
     )
 

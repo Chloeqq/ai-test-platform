@@ -19,6 +19,27 @@ def test_policy_accepts_business_snake_case_code() -> None:
     assert result.errors == ()
 
 
+def test_policy_accepts_real_data_testid_kebab_case_with_testid_context() -> None:
+    result = validate_element_code_policy(
+        "login-submit-btn",
+        page_code="login",
+        business_type="button",
+        locator_source="testid",
+        locator_type="data-testid",
+        testid_value="login-submit-btn",
+    )
+
+    assert result.valid is True
+    assert result.errors == ()
+
+
+def test_policy_rejects_kebab_case_without_testid_context() -> None:
+    result = validate_element_code_policy("login-submit-btn", page_code="login", business_type="button")
+
+    assert result.valid is False
+    assert result.errors
+
+
 @pytest.mark.parametrize(
     ("code", "page_code", "business_type"),
     [

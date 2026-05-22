@@ -1,4 +1,5 @@
 # mypy: ignore-errors
+"""执行报告支撑：构建 ExecutionRecord、证据清单与 Markdown/JSON 报告。"""
 
 from __future__ import annotations
 
@@ -14,6 +15,8 @@ from shared_backend.state_machines import get_run_status_name, normalize_run_sta
 
 
 class ExecutionReportSupport:
+    """将 Runner 输出与 Agent 产物组装为可持久化的报告载荷。"""
+
     def __init__(
         self,
         *,

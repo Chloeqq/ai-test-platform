@@ -45,6 +45,13 @@ def asset_tags_page(request: Request) -> RedirectResponse:
     return RedirectResponse(url=f"/react/cases/tags{suffix}", status_code=307)
 
 
+@router.get("/cases/generation-failures", response_class=RedirectResponse)
+def case_generation_failures_page(request: Request) -> RedirectResponse:
+    query = str(request.url.query or "").strip()
+    suffix = f"?{query}" if query else ""
+    return RedirectResponse(url=f"/react/cases/generation-failures{suffix}", status_code=307)
+
+
 @router.get("/cases/{case_id}", response_class=RedirectResponse)
 @router.get("/assets/cases/{case_id}", include_in_schema=False, response_class=RedirectResponse)
 def asset_case_detail_page(request: Request, case_id: str) -> RedirectResponse:
