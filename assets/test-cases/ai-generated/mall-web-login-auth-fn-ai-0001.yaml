@@ -14,12 +14,18 @@ requirement:
   title: 首次登录成功
   type: functional
   source_asset_id: mall-web-login-auth-fn-ai-0021
-data: {}
+data:
+  username:
+  - admin
+  password:
+  - macro
 execution:
   runner: playwright
   page: login
   page_url: http://localhost:5174/#/login
-  variables: {}
+  variables:
+    login_username: '{{username}}'
+    login_password: '{{password}}'
   steps:
   - action: goto
     value: http://localhost:5174/#/login
@@ -30,22 +36,30 @@ execution:
     locator_value: 'input[name=''username''], #username, #username-input, input[placeholder*=''请输入用户名''],
       input[placeholder*=''用户名'']'
     target_name: 用户名输入框
-    value: test001
-    expected_result: 用户名输入框内容显示为 test001
+    value: '{{login_username}}'
+    expected_result: 用户名输入框内容显示为 admin
   - action: input
     target: element:password_input
     locator_type: css
     locator_value: 'input[type=''password''], input[name=''password''], #password,
       #password-input, input[placeholder*=''请输入密码''], input[placeholder*=''密码'']'
     target_name: 密码输入框
-    value: '123456'
+    value: '{{login_password}}'
     expected_result: 密码输入框内容以掩码形式显示
   - action: click
     target: element:login_button
     locator_type: role
     locator_value: 登录
     target_name: 登录按钮
-    expected_result: 页面跳转至平台工作台首页，顶部展示当前登录用户名 test001，左侧加载对应权限导航菜单
+    expected_result: 页面跳转至平台工作台首页，顶部展示当前登录用户名 admin，左侧加载对应权限导航菜单
   selected_intent_ids:
   - intent-01
-expected_result: 页面跳转至平台工作台首页，顶部展示当前登录用户名 test001，左侧加载对应权限导航菜单
+assertions:
+- action: assert_visible
+  target: element:home_menu
+  locator_type: role
+  locator_value: 首页
+  role: menuitem
+  target_name: 首页菜单
+  expected_result: 登录后首页菜单可见，确认已离开登录页并进入工作台
+expected_result: 页面跳转至平台工作台首页，顶部展示当前登录用户名 admin，左侧加载对应权限导航菜单

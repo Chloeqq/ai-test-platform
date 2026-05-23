@@ -95,9 +95,141 @@
       "type": "string"
     },
     "requirement": {
-      "type": "array",
+      "type": ["array", "object", "string"],
       "items": {
         "type": "string"
+      },
+      "additionalProperties": true
+    },
+    "precondition_state": {
+      "type": "string"
+    },
+    "expected_result": {
+      "type": "string"
+    },
+    "assertions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action"],
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["assert_visible", "assert_count", "assert_metric", "assert_url"]
+          },
+          "target": {
+            "type": ["string", "null"]
+          },
+          "target_name": {
+            "type": ["string", "null"]
+          },
+          "selector": {
+            "type": ["string", "null"]
+          },
+          "locator_type": {
+            "type": ["string", "null"]
+          },
+          "locator_value": {
+            "type": ["string", "null"]
+          },
+          "role": {
+            "type": ["string", "null"]
+          },
+          "intent_id": {
+            "type": ["string", "null"]
+          },
+          "element_code": {
+            "type": ["string", "null"]
+          },
+          "count": {
+            "type": ["integer", "number", "string", "null"]
+          },
+          "metric_rule": {
+            "type": ["string", "number", "null"]
+          },
+          "rule": {
+            "type": ["string", "number", "null"]
+          },
+          "extract_regex": {
+            "type": ["string", "null"]
+          },
+          "metric_label": {
+            "type": ["string", "null"]
+          },
+          "page": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "value": {
+            "type": ["string", "number", "boolean", "object", "array", "null"]
+          },
+          "source_point_key": {
+            "type": ["string", "null"]
+          },
+          "traceability": {
+            "type": ["object", "null"],
+            "additionalProperties": true
+          },
+          "expected_result": {
+            "type": ["string", "null"]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "enum": ["assert_visible", "assert_count", "assert_metric"]
+                }
+              }
+            },
+            "then": {
+              "anyOf": [
+                {
+                  "required": ["target"]
+                },
+                {
+                  "required": ["element_code"]
+                }
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "enum": ["assert_metric"]
+                }
+              }
+            },
+            "then": {
+              "anyOf": [
+                {
+                  "required": ["value"]
+                },
+                {
+                  "required": ["metric_rule"]
+                },
+                {
+                  "required": ["rule"]
+                }
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "enum": ["assert_url"]
+                }
+              }
+            },
+            "then": {
+              "required": ["value"]
+            }
+          }
+        ]
       }
     },
     "data": {
@@ -123,6 +255,15 @@
           "type": "object",
           "additionalProperties": true
         },
+        "page_url": {
+          "type": "string"
+        },
+        "selected_intent_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "steps": {
           "type": "array",
           "minItems": 1,
@@ -133,15 +274,24 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": ["login", "click", "fill", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_url", "goto"]
+                "enum": ["login", "click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_url", "goto"]
               },
               "target": {
+                "type": ["string", "null"]
+              },
+              "target_name": {
                 "type": ["string", "null"]
               },
               "selector": {
                 "type": ["string", "null"]
               },
               "locator_type": {
+                "type": ["string", "null"]
+              },
+              "locator_value": {
+                "type": ["string", "null"]
+              },
+              "role": {
                 "type": ["string", "null"]
               },
               "intent_id": {
@@ -178,6 +328,9 @@
               "traceability": {
                 "type": ["object", "null"],
                 "additionalProperties": true
+              },
+              "expected_result": {
+                "type": ["string", "null"]
               }
             },
             "allOf": [
@@ -185,7 +338,7 @@
                 "if": {
                   "properties": {
                     "action": {
-                      "enum": ["click", "fill", "wait_for", "assert_visible", "assert_count", "assert_metric"]
+                      "enum": ["click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric"]
                     }
                   }
                 },
@@ -226,7 +379,7 @@
                 "if": {
                   "properties": {
                     "action": {
-                      "enum": ["fill", "assert_url", "goto"]
+                      "enum": ["fill", "input", "assert_url", "goto"]
                     }
                   }
                 },

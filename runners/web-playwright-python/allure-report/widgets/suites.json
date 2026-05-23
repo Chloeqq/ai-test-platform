@@ -1,1 +1,1 @@
-{"total":1,"items":[{"uid":"ea80d103dc7ec7bbc2acc2e82b5de2de","name":"商城后台 (mall)","statistic":{"failed":0,"broken":0,"skipped":0,"passed":1,"unknown":0,"total":1}}]}
+{"total":1,"items":[{"uid":"53598258b4a74d01122d811b601e06a0","name":"runners.web-playwright-python.tests","statistic":{"failed":0,"broken":1,"skipped":0,"passed":0,"unknown":0,"total":1}}]}

@@ -910,6 +910,27 @@ def _source_identity_from_case(case: TestCase) -> tuple[str, list[str]]:
     return source_asset_id, intent_ids
 
 
+def _structured_requirement_metadata_from_case(case: TestCase) -> dict[str, str]:
+    """从 `script_code.requirement` 结构化对象中读取业务追踪元数据。"""
+    try:
+        script_payload = yaml.safe_load(_text(case.script_code)) or {}
+    except Exception:
+        return {}
+    if not isinstance(script_payload, dict):
+        return {}
+    raw_requirement = script_payload.get("requirement")
+    if not isinstance(raw_requirement, dict):
+        return {}
+    metadata = {
+        "intent_id": _text(raw_requirement.get("intent_id")),
+        "intent_type": _text(raw_requirement.get("type") or raw_requirement.get("intent_type")),
+        "precondition": _text(raw_requirement.get("precondition")),
+        "source_asset_id": _text(raw_requirement.get("source_asset_id")),
+        "source_asset_title": _text(raw_requirement.get("source_asset_title")),
+    }
+    return {key: value for key, value in metadata.items() if value}
+
+
 def _existing_case_id_for_source_intent(
     db: Session,
     *,
@@ -1211,10 +1232,20 @@ def _source_asset_index(project: str) -> dict[str, dict[str, str]]:
 def _source_asset_for_case(case: TestCase, asset_index: dict[str, dict[str, str]]) -> dict[str, str]:
     """根据用例来源信息反查对应测试点资产摘要。"""
     page_code = workbench_gate_service.normalize_page_slug(_text(getattr(case, "page_code", ""))) if _text(getattr(case, "page_code", "")) else ""
-    for intent_id in _intent_ids_from_case_steps(case):
+    metadata = _structured_requirement_metadata_from_case(case)
+    source_asset_id, intent_ids = _source_identity_from_case(case)
+    for intent_id in intent_ids:
         hit = asset_index.get(f"{page_code}::{intent_id}")
         if hit:
             return hit
+    if source_asset_id:
+        return {
+            "asset_id": source_asset_id,
+            "asset_title": metadata.get("source_asset_title", "") or source_asset_id,
+            "page": page_code,
+            "intent_id": intent_ids[0] if intent_ids else metadata.get("intent_id", ""),
+            "intent_type": metadata.get("intent_type", ""),
+        }
     return {}
 
 
@@ -2391,6 +2422,7 @@ class WorkbenchFacade:
             .all()
         )
         latest_execution = executions[0] if executions else None
+        requirement_metadata = _structured_requirement_metadata_from_case(case)
         item = _workbench_test_case_list_item(
             case,
             source_asset=source_asset_hit,
@@ -2399,7 +2431,7 @@ class WorkbenchFacade:
         )
         item.update(
             {
-                "precondition": _text(case.precondition_state),
+                "precondition": _text(case.precondition_state) or requirement_metadata.get("precondition", ""),
                 "steps": case.test_steps if isinstance(case.test_steps, list) else [],
                 "steps_text": _text(case.test_steps_text),
                 "expected_result": _text(case.expected_result),
@@ -3106,13 +3138,54 @@ class WorkbenchFacade:
             case_center_case_ids=workbench_case_consistency_service.load_case_center_case_ids(db),
         ):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="case_id not found in case center")
-        if _text(getattr(payload, "case_path", "")):
-            source_case_path = Path(_text(getattr(payload, "case_path", ""))).expanduser()
-            if not source_case_path.is_absolute():
-                source_case_path = constants.REPO_ROOT / source_case_path
-            source_case_path = source_case_path.resolve()
-        else:
-            source_case_path = workbench_asset_service.resolve_case_yaml_path(
+
+        case_for_run = db.execute(
+            select(TestCase).where(
+                TestCase.case_id == normalized_case_id,
+                TestCase.project_code == normalized_project,
+            )
+        ).scalar_one_or_none()
+        if case_for_run is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="case_id not found in project case center")
+        case_for_run = test_case_service.get_test_case_detail(db, str(case_for_run.id)).case
+        runtime_case_script = _text(case_for_run.script_code)
+
+        def _safe_source_case_path() -> Path:
+            """返回展示/历史记录用路径，但不把源 YAML 变成执行前置条件。
+
+            `script_code` 是执行唯一事实源。只要它存在，这个路径只作为
+            `start_run()` 的元数据传入，随后会被运行态 YAML 替换，因此源
+            YAML 缺失不能阻断执行。这里仍尽量把路径收敛到
+            `assets/test-cases` 下，避免运行记录落入任意用户传入路径。
+            """
+            source_ref = _text(getattr(case_for_run, "source_ref", ""))
+            if source_ref:
+                source_ref_path = Path(source_ref).expanduser()
+                if not source_ref_path.is_absolute():
+                    source_ref_path = constants.REPO_ROOT / source_ref_path
+                source_ref_path = source_ref_path.resolve()
+                if _is_within(source_ref_path, constants.ASSETS_CASES_ROOT):
+                    return source_ref_path
+            return (constants.AI_CASES_ROOT / f"{normalized_case_id}.yaml").resolve()
+
+        def _resolve_fallback_case_path() -> Path:
+            """仅在 DB `script_code` 为空时解析旧 YAML 兜底路径。
+
+            这里刻意保留旧文件路径规则，但只有确认 DB 脚本缺失后才会调用。
+            这样源 YAML 只是兼容兜底，而不会再次成为和 `script_code` 竞争
+            的事实源。
+            """
+            if _text(getattr(payload, "case_path", "")):
+                requested_case_path = Path(_text(getattr(payload, "case_path", ""))).expanduser()
+                if not requested_case_path.is_absolute():
+                    requested_case_path = constants.REPO_ROOT / requested_case_path
+                return requested_case_path.resolve()
+            if _text(getattr(case_for_run, "source_ref", "")):
+                source_ref_path = Path(_text(getattr(case_for_run, "source_ref", ""))).expanduser()
+                if not source_ref_path.is_absolute():
+                    source_ref_path = constants.REPO_ROOT / source_ref_path
+                return source_ref_path.resolve()
+            return workbench_asset_service.resolve_case_yaml_path(
                 normalized_project,
                 normalized_case_id,
                 state_case_file_fn=lambda project_value, case_value: workbench_asset_service.state_case_file(
@@ -3125,22 +3198,16 @@ class WorkbenchFacade:
                 ai_cases_root=constants.AI_CASES_ROOT,
                 is_within_fn=_is_within,
             )
-        if not _is_within(source_case_path, constants.ASSETS_CASES_ROOT):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="case_path must stay under assets/test-cases")
-        if not source_case_path.exists():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"case file not found: {source_case_path}")
 
-        case_for_run = db.execute(
-            select(TestCase).where(
-                TestCase.case_id == normalized_case_id,
-                TestCase.project_code == normalized_project,
-            )
-        ).scalar_one_or_none()
-        if case_for_run is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="case_id not found in project case center")
-        case_for_run = test_case_service.get_test_case_detail(db, str(case_for_run.id)).case
-        runtime_case_script = _text(case_for_run.script_code)
+        source_case_path = _safe_source_case_path()
         if not runtime_case_script:
+            # 旧链路兜底：只有 DB 脚本为空时才允许读取源 YAML，
+            # 且路径必须仍位于受治理的测试用例资产根目录下。
+            source_case_path = _resolve_fallback_case_path()
+            if not _is_within(source_case_path, constants.ASSETS_CASES_ROOT):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="case_path must stay under assets/test-cases")
+            if not source_case_path.exists():
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"case file not found: {source_case_path}")
             runtime_case_script = source_case_path.read_text(encoding="utf-8")
         if not runtime_case_script.strip():
             raise HTTPException(

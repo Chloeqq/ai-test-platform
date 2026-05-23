@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Superpowers Brainstorming"
+  short_description: "Brainstorm sharper Codex skill ideas"
+  default_prompt: "Use $skill-superpowers-brainstorming to brainstorm a focused Codex skill from my rough idea."

@@ -16,6 +16,9 @@ except ImportError:  # pragma: no cover - Allure is optional for local runner us
     allure = None
 
 
+ASSERTION_ACTION_PREFIX = "assert_"
+
+
 class YamlExecutor:
     def __init__(self, page: Page, username: str, password: str, base_url: str):
         self.page = page
@@ -32,11 +35,13 @@ class YamlExecutor:
 
         page_name = execution.get("page")
         steps = execution.get("steps", [])
+        assertions = test_case.get("assertions", [])
         variables = execution.get("variables", {})
         data_context = test_case.get("_data", {})
         case_base_url = str(execution.get("page_url") or self.base_url or "").strip()
 
         resolved_context = self._build_context(variables, data_context)
+        executed_assertion_count = 0
 
         for index, step in enumerate(steps, start=1):
             self._pause_for_observation("before-step")
@@ -47,7 +52,26 @@ class YamlExecutor:
                 context=resolved_context,
                 base_url=case_base_url,
             )
+            if self._is_assertion_step(step):
+                executed_assertion_count += 1
             self._pause_for_observation("after-step")
+        for assertion_index, assertion in enumerate(assertions, start=len(steps) + 1):
+            self._pause_for_observation("before-assertion")
+            # 顶层 assertions 是 DSL V1.1 的可执行断言区，执行语义与步骤中的 assert_* 保持一致。
+            self._execute_step(
+                assertion,
+                step_index=assertion_index,
+                default_page_name=page_name,
+                context=resolved_context,
+                base_url=case_base_url,
+            )
+            executed_assertion_count += 1
+            self._pause_for_observation("after-assertion")
+        if self._requires_executable_assertion(test_case) and executed_assertion_count <= 0:
+            raise AssertionError(
+                "Executable assertion is required for ai-generated automated UI cases; "
+                "expected_result is documentation only and cannot determine pass/fail."
+            )
         self._hold_final_state_for_observation()
 
     def _build_context(self, variables: dict, data_context: dict) -> dict:
@@ -75,6 +99,28 @@ class YamlExecutor:
                 context[key] = value
 
         return context
+
+    def _is_assertion_step(self, step: dict) -> bool:
+        """判断一个 DSL 节点是否是真正会影响通过/失败的可执行断言。"""
+        action = str(step.get("action") or "").strip().lower()
+        return action.startswith(ASSERTION_ACTION_PREFIX)
+
+    def _requires_executable_assertion(self, test_case: dict) -> bool:
+        """AI 自动化用例必须有真实断言，避免只有动作链却被误判为成功。"""
+        status = str(test_case.get("status") or "").strip().lower()
+        tags = {
+            str(tag or "").strip().lower()
+            for tag in test_case.get("tags", [])
+            if str(tag or "").strip()
+        } if isinstance(test_case.get("tags"), list) else set()
+        source = str(test_case.get("source") or "").strip().lower()
+        case_id = str(test_case.get("id") or "").strip().lower()
+        is_ai_generated = (
+            "ai-generated" in tags
+            or source in {"ai", "ai-generated"}
+            or "-ai-" in case_id
+        )
+        return status == "automated" and is_ai_generated
 
     def _resolve_step_page_name(self, default_page_name: str, step: dict, step_index: int) -> str:
         page_name = str(step.get("page") or default_page_name or "").strip()

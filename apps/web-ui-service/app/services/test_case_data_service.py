@@ -66,15 +66,31 @@ def normalize_test_steps(steps: Sequence[Any] | None) -> list[dict[str, Any]]:
         return passthrough
 
     normalized: list[dict[str, Any]] = []
+    # 这份白名单需要和 `yaml_testcase.schema.json` 的步骤字段保持一致。
+    # `test_steps` 只是 `script_code` 的派生投影，但详情页、步骤表和失败分析
+    # 都会读取它；如果这里过滤掉 DSL 字段，下游展示就会和唯一事实源不一致。
     allowed_keys = (
         "action",
         "target",
+        "target_name",
         "value",
         "expected",
         "expected_result",
         "description",
+        "page",
+        "selector",
         "locator_type",
         "locator_value",
+        "role",
+        "intent_id",
+        "element_code",
+        "count",
+        "metric_rule",
+        "rule",
+        "extract_regex",
+        "metric_label",
+        "source_point_key",
+        "traceability",
     )
     for step in steps or []:
         if not isinstance(step, dict):

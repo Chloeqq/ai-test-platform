@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import selectors
 import threading
 import time
@@ -46,6 +47,23 @@ GetPythonBin = Callable[[], str]
 NormalizeEvidenceManifestPayload = Callable[[dict[str, Any]], dict[str, Any]]
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _runtime_cases_root_for_path(case_path: Path) -> Path | None:
+    """返回运行态 YAML 所属的受治理 runtime-cases 根目录。
+
+    `TEST_CASE_ALLOWED_ROOTS` 不能被扩展成任意 `case_path.parent`。只有形如
+    `.../runtime-cases/{run_id}/{case_id}.yaml` 的路径，才允许贡献稳定的
+    `runtime-cases` 根目录。
+    """
+    resolved_path = case_path.resolve()
+    parents = list(resolved_path.parents)
+    if len(parents) < 2:
+        return None
+    runtime_cases_root = parents[1]
+    if runtime_cases_root.name != "runtime-cases":
+        return None
+    return runtime_cases_root
 
 
 def runtime_run_id(item: dict[str, Any]) -> str:
@@ -156,6 +174,18 @@ def build_run_command(
     env["RUN_MODE"] = "ai"
     env["RUN_SOURCE"] = "web-ui"
     env["TEST_CASE_PATH"] = str(case_path.resolve())
+    # 只允许长期存在的 AI 生成用例根目录，以及运行态物化脚本所在的稳定
+    # `runtime-cases` 根目录。不要盲目加入 `case_path.parent`，否则未来
+    # 任意调用方都可能把任意目录扩大成 runner 允许读取的输入根。
+    allowed_roots = [
+        (repo_root / "assets" / "test-cases" / "ai-generated").resolve(),
+    ]
+    runtime_cases_root = _runtime_cases_root_for_path(case_path)
+    if runtime_cases_root is not None:
+        allowed_roots.append(runtime_cases_root)
+    env["TEST_CASE_ALLOWED_ROOTS"] = os.pathsep.join(
+        str(root) for root in dict.fromkeys(allowed_roots)
+    )
     env["SELF_HEALING_ENABLED"] = "0"
     env.setdefault("BASE_URL", "http://localhost:5174/#/login")
     return command, env

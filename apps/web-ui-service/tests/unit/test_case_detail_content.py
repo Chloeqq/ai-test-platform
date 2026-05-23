@@ -138,3 +138,49 @@ def test_detail_content_filters_requirement_blob_from_expected_result(tmp_path: 
     detail = test_case_mapper._build_detail_content(case)
 
     assert detail["overall_expected"] == []
+
+
+def test_detail_content_reads_structured_requirement_from_script_code(tmp_path: Path) -> None:
+    case = _build_case(
+        tmp_path / "missing-source.yaml",
+        case_id="mall-web-login-auth-fn-ai-0001",
+        name="首次登录成功",
+    )
+    case.script_code = (
+        "id: mall-web-login-auth-fn-ai-0001\n"
+        "title: 首次登录成功\n"
+        "requirement:\n"
+        "  intent_id: intent-01\n"
+        "  title: 首次登录成功\n"
+        "  type: functional\n"
+        "  precondition: 用户未登录，处于登录页面\n"
+        "  source_asset_id: mall-web-login-auth-fn-ai-0021\n"
+        "  source_asset_title: 登录页身份验证测试点集\n"
+        "execution:\n"
+        "  page: login\n"
+        "  steps:\n"
+        "    - action: input\n"
+        "      target: username_input\n"
+        "      target_name: 用户名输入框\n"
+        "      value: admin\n"
+    )
+    case.test_steps = [
+        {
+            "action": "input",
+            "target": "username_input",
+            "target_name": "用户名输入框",
+            "value": "admin",
+        }
+    ]
+    case.expected_result = "登录成功后进入首页"
+
+    detail = test_case_mapper._build_detail_content(case)
+
+    assert detail["test_intent"] == "首次登录成功"
+    assert detail["test_type"] == "functional"
+    assert detail["intent_id"] == "intent-01"
+    assert detail["source_asset_id"] == "mall-web-login-auth-fn-ai-0021"
+    assert detail["source_asset_title"] == "登录页身份验证测试点集"
+    assert detail["precondition"] == ["用户未登录", "处于登录页面"]
+    assert detail["operation_steps"] == ["1. input / username_input / admin"]
+    assert detail["overall_expected"] == ["登录成功后进入首页"]

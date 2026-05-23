@@ -1145,6 +1145,65 @@ def test_workbench_test_cases_links_generated_case_to_source_asset_by_selected_i
     assert items[0]["source_asset_title"] == "登录页测试点集"
 
 
+def test_workbench_test_case_detail_uses_structured_requirement_metadata(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    case_id = "demo-web-login-fn-ai-0002"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+    created_case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code=project_code,
+            case_id=case_id,
+            name="首次登录成功",
+            product_line="login",
+            module="login",
+            page_code="login",
+            priority="P0",
+            test_type="ui",
+            creator="qa",
+            script_code=(
+                "id: demo-web-login-fn-ai-0002\n"
+                "title: 首次登录成功\n"
+                "requirement:\n"
+                "  intent_id: intent-01\n"
+                "  title: 首次登录成功\n"
+                "  type: functional\n"
+                "  precondition: 用户未登录，处于登录页面\n"
+                "  source_asset_id: mall-web-login-auth-fn-ai-0021\n"
+                "  source_asset_title: 登录页身份验证测试点集\n"
+                "execution:\n"
+                "  page: login\n"
+                "  selected_intent_ids:\n"
+                "    - intent-01\n"
+                "  steps:\n"
+                "    - action: click\n"
+                "      target: login_button\n"
+                "      intent_id: intent-01\n"
+            ),
+        ),
+    )
+
+    response = client.get(f"/api/workbench/test-cases/{created_case.case_id}?project={project_code}")
+
+    assert response.status_code == 200
+    item = response.json()["item"]
+    assert item["precondition"] == "用户未登录，处于登录页面"
+    assert item["source_asset_id"] == "mall-web-login-auth-fn-ai-0021"
+    assert item["source_asset_title"] == "登录页身份验证测试点集"
+    assert item["intent_type"] == "functional"
+    assert item["intent_ids"] == ["intent-01"]
+
+
 def test_workbench_test_cases_can_be_physically_deleted(
     workbench_assets_client: tuple[TestClient, Session],
 ) -> None:

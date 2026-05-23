@@ -40,6 +40,14 @@ def _list_value(value: object) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
+def _string_list_value(value: object) -> list[str]:
+    """将 DSL 中可能是字符串或数组的字段统一成可展示文本列表。"""
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value or "").strip()
+    return [text] if text else []
+
+
 def _text(value: object) -> str:
     return str(value or "").strip()
 
@@ -80,13 +88,21 @@ def _looks_generic_expected(value: str) -> bool:
 
 def _load_case_yaml(case: TestCase) -> tuple[dict[str, Any], str]:
     source_ref = _text(case.source_ref)
+    script_code = _text(case.script_code)
+    if script_code:
+        try:
+            payload = yaml.safe_load(script_code) or {}
+            if isinstance(payload, dict):
+                return payload, source_ref
+        except yaml.YAMLError:
+            pass
+
     candidates: list[Path] = []
     if source_ref:
         source_path = Path(source_ref).expanduser()
         if not source_path.is_absolute():
             source_path = (REPO_ROOT / source_path).resolve()
         candidates.append(source_path)
-    script_code = _text(case.script_code)
     for candidate in candidates:
         try:
             if candidate.exists():
@@ -95,13 +111,6 @@ def _load_case_yaml(case: TestCase) -> tuple[dict[str, Any], str]:
                     return payload, str(candidate)
         except (OSError, yaml.YAMLError):
             continue
-    if script_code:
-        try:
-            payload = yaml.safe_load(script_code) or {}
-            if isinstance(payload, dict):
-                return payload, source_ref
-        except yaml.YAMLError:
-            return {}, source_ref
     return {}, source_ref
 
 
@@ -178,6 +187,50 @@ def _dedupe_keep_order(items: list[str]) -> list[str]:
     return ordered
 
 
+def _requirement_rows_from_yaml(case_yaml: dict[str, Any]) -> tuple[list[str], dict[str, str]]:
+    """同时兼容旧版文本 requirement 和结构化 requirement。
+
+    详情页当前仍通过既有文本块解析器渲染需求信息。DSL V1.1 可能把
+    `requirement` 存成对象，因此这里先把结构化字段转换成同样的中文标签
+    行，避免退回使用可能过时的 `test_steps_text`。
+    """
+    raw_requirement = case_yaml.get("requirement")
+    if not isinstance(raw_requirement, dict):
+        return _list_value(raw_requirement), {}
+
+    title = (
+        _text(raw_requirement.get("title"))
+        or _text(raw_requirement.get("summary"))
+        or _text(case_yaml.get("title"))
+    )
+    intent_type = _text(raw_requirement.get("type") or raw_requirement.get("intent_type"))
+    preconditions = _string_list_value(raw_requirement.get("precondition"))
+    expected_results = _string_list_value(raw_requirement.get("expected_result"))
+    involved_elements = _string_list_value(raw_requirement.get("involved_elements"))
+
+    lines: list[str] = []
+    if title:
+        lines.append(f"测试意图：{title}")
+    if intent_type:
+        lines.append(f"测试类型：{intent_type}")
+    if preconditions:
+        lines.append(f"前置条件：{'，'.join(preconditions)}")
+    if involved_elements:
+        lines.append(f"涉及元素：{'、'.join(involved_elements)}")
+    if expected_results:
+        lines.append(f"整体预期结果：{'；'.join(expected_results)}")
+
+    # 追踪元数据和展示文本分开返回，调用方无需再从自然语言中反解析
+    # source asset 或 intent ID。
+    metadata = {
+        "intent_id": _text(raw_requirement.get("intent_id")),
+        "source_asset_id": _text(raw_requirement.get("source_asset_id")),
+        "source_asset_title": _text(raw_requirement.get("source_asset_title")),
+    }
+    rows = ["\n".join(lines)] if lines else []
+    return rows, {key: value for key, value in metadata.items() if value}
+
+
 def _steps_from_case_payload(case: TestCase) -> list[str]:
     raw_steps = case.test_steps if isinstance(case.test_steps, list) else []
     normalized: list[str] = []
@@ -200,7 +253,7 @@ def _steps_from_case_payload(case: TestCase) -> list[str]:
 
 def _build_detail_content(case: TestCase) -> dict[str, Any]:
     case_yaml, source_path = _load_case_yaml(case)
-    requirement_rows = _list_value(case_yaml.get("requirement"))
+    requirement_rows, requirement_metadata = _requirement_rows_from_yaml(case_yaml)
     if not requirement_rows and _text(case.test_steps_text):
         requirement_rows = [_text(case.test_steps_text)]
     primary_requirement = requirement_rows[0] if requirement_rows else ""
@@ -236,6 +289,9 @@ def _build_detail_content(case: TestCase) -> dict[str, Any]:
         "raw_requirement_block": _text(primary_requirement),
         "test_intent": _text(parsed.get("test_intent")) or _text(case.name),
         "test_type": _text(parsed.get("test_type")) or _text(case.case_type),
+        "intent_id": requirement_metadata.get("intent_id", ""),
+        "source_asset_id": requirement_metadata.get("source_asset_id", ""),
+        "source_asset_title": requirement_metadata.get("source_asset_title", ""),
         "precondition": precondition,
         "operation_steps": operation_steps,
         "involved_elements": involved_elements,

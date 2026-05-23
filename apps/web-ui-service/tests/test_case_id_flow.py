@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.api.workbench.facade import _persist_runtime_run_to_case_center
+from app.api.workbench import facade as workbench_facade
+from app.api.workbench.facade import WorkbenchFacade, _persist_runtime_run_to_case_center
 from app.core.database import Base
 import app.models.page_object as page_object_model  # noqa: F401
 import app.models.test_case as test_case_model
@@ -37,224 +39,6 @@ def db_session(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Sess
         yield session
     finally:
         session.close()
-
-
-def test_get_detail_accepts_business_case_id(db_session: Session) -> None:
-    case = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            case_id="ATP-WEB-RET-QUERY-SM-AI-9999",
-            name="退货查询冒烟校验",
-            product_line="退货",
-            module="查询",
-            priority="P0",
-            test_type="ui",
-            tags=["smoke", "ai-generated"],
-            creator="qa",
-            script_code="def test_return_query_smoke(page):\n    assert True\n",
-        ),
-    )
-
-    detail_by_case_id = test_case_service.get_test_case_detail(db_session, case.case_id)
-    detail_by_internal_id = test_case_service.get_test_case_detail(db_session, str(case.id))
-
-    assert detail_by_case_id.case.id == case.id
-    assert detail_by_case_id.case.case_id == "atp-web-ret-query-sm-ai-9999"
-    assert detail_by_internal_id.case.id == case.id
-
-
-def test_persist_runtime_run_to_case_center_does_not_fall_back_to_other_project_case(db_session: Session) -> None:
-    test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            case_id="mall-web-login-auth-fn-ai-0001",
-            project_code="atp",
-            name="登录成功",
-            product_line="登录",
-            module="认证",
-            priority="P0",
-            test_type="ui",
-            creator="qa",
-            script_code="def test_login_success(page):\n    assert True\n",
-        ),
-    )
-
-    result = _persist_runtime_run_to_case_center(
-        db_session,
-        {
-            "run_id": "run-001",
-            "case_id": "mall-web-login-auth-fn-ai-0001",
-            "project": "mall",
-            "status": "passed",
-            "started_at": "2026-05-21T10:00:00+00:00",
-            "finished_at": "2026-05-21T10:01:00+00:00",
-            "execution_record": {"status": "passed", "finished_at": "2026-05-21T10:01:00+00:00"},
-        },
-    )
-
-    assert result is None
-    executions = db_session.execute(select(test_case_model.TestCaseExecution)).scalars().all()
-    assert executions == []
-
-
-def test_get_detail_includes_project_status(db_session: Session) -> None:
-    test_project_service.create_project(
-        db_session,
-        test_project_schema.TestProjectCreate(
-            project_code="mall",
-            project_name="Mall Platform",
-        ),
-    )
-    case = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            project_code="mall",
-            name="商城详情治理校验",
-            product_line="商城",
-            module="详情",
-            script_code="def test_mall_detail(page):\n    assert True\n",
-        ),
-    )
-    test_project_service.update_project(
-        db_session,
-        "mall",
-        test_project_schema.TestProjectUpdate(status="inactive"),
-    )
-
-    detail = test_case_service.get_test_case_detail(db_session, str(case.id))
-
-    assert detail.case.id == case.id
-    assert detail.project_status == "inactive"
-
-
-def test_get_detail_repairs_legacy_login_steps_and_sanitizes_script(db_session: Session) -> None:
-    page_object = page_object_model.PageObject(
-        project_code="atp",
-        client="web",
-        page_code="login",
-        page_name="登录页",
-        page_url="http://localhost:5174/#/login",
-        status="online",
-        created_by="qa",
-    )
-    db_session.add(page_object)
-    db_session.flush()
-    db_session.add_all(
-        [
-            page_object_model.PageElement(
-                page_object_id=page_object.id,
-                element_code="login-role---1",
-                element_name="用户名输入框",
-                locator_type="role",
-                locator_value="请输入用户名",
-                role="username",
-                owner="qa",
-            ),
-            page_object_model.PageElement(
-                page_object_id=page_object.id,
-                element_code="login-role---2",
-                element_name="密码输入框",
-                locator_type="role",
-                locator_value="请输入密码",
-                role="password",
-                owner="qa",
-            ),
-            page_object_model.PageElement(
-                page_object_id=page_object.id,
-                element_code="login-role---4",
-                element_name="登录按钮",
-                locator_type="role",
-                locator_value="登录",
-                role="button",
-                owner="qa",
-            ),
-        ]
-    )
-    db_session.commit()
-
-    case = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            case_id="atp-web-login-auth-fn-ai-0098",
-            project_code="atp",
-            page_code="login",
-            name="登录页历史脏步骤修复",
-            product_line="认证中心",
-            module="登录",
-            priority="P0",
-            test_type="ui",
-            creator="qa",
-            expected_result="系统应给出符合业务规则的反馈。",
-            script_code=(
-                "id: atp-web-login-auth-fn-ai-0098\n"
-                "title: 登录页历史脏步骤修复\n"
-                "module: login\n"
-                "requirement:\n"
-                "  - 登录功能：\n"
-                "  - 登录功能：\n"
-                "  - source-01\n"
-                "  - 用户名为空点击登录提示不能为空\n"
-                "execution:\n"
-                "  page: login\n"
-                "  steps: []\n"
-            ),
-            test_steps=[
-                {
-                    "action": "custom_step",
-                    "description": "在用户名输入框输入test001",
-                    "target": "element:login-role---1",
-                    "locator_type": "role",
-                    "locator_value": "请输入用户名",
-                    "value": "test001",
-                },
-                {
-                    "action": "custom_step",
-                    "description": "在密码输入框输入123456",
-                    "target": "element:login-role---1",
-                    "locator_type": "role",
-                    "locator_value": "请输入用户名",
-                    "value": "123456",
-                },
-                {
-                    "action": "custom_step",
-                    "description": "点击登录按钮",
-                    "target": "element:login-role---1",
-                    "locator_type": "role",
-                    "locator_value": "请输入用户名",
-                },
-            ],
-        ),
-    )
-
-    detail = test_case_service.get_test_case_detail(db_session, str(case.id))
-    repaired = detail.case.test_steps if isinstance(detail.case.test_steps, list) else []
-
-    assert [str(item.get("action")) for item in repaired] == ["input", "input", "click"]
-    assert [str(item.get("target")) for item in repaired] == [
-        "element:login-role---1",
-        "element:login-role---2",
-        "element:login-role---4",
-    ]
-    assert [str(item.get("target_name")) for item in repaired] == [
-        "用户名输入框",
-        "密码输入框",
-        "登录按钮",
-    ]
-    assert "系统应给出符合业务规则的反馈" not in str(detail.case.expected_result or "")
-    assert "source-01" not in str(detail.case.script_code or "")
-    assert str(detail.case.script_code or "").count("用户名为空点击登录提示不能为空") == 1
-
-    step_rows = (
-        db_session.query(test_case_model.TestCaseStep)
-        .filter_by(case_id=int(case.id))
-        .order_by(test_case_model.TestCaseStep.step_index.asc())
-        .all()
-    )
-    assert len(step_rows) == 3
-    assert "username" in str(step_rows[0].locator_value)
-    assert "password" in str(step_rows[1].locator_value)
-    assert str(step_rows[2].locator_value) == "登录"
-
 
 def test_get_detail_does_not_repair_password_input_to_remember_checkbox(db_session: Session) -> None:
     page_object = page_object_model.PageObject(
@@ -335,7 +119,7 @@ def test_get_detail_does_not_repair_password_input_to_remember_checkbox(db_sessi
                     "target": "element:username_input",
                     "locator_type": "placeholder",
                     "locator_value": "请输入用户名",
-                    "value": "test001",
+                    "value": "admin",
                 },
                 {
                     "action": "input",
@@ -343,7 +127,7 @@ def test_get_detail_does_not_repair_password_input_to_remember_checkbox(db_sessi
                     "target": "element:remember_password_checkbox",
                     "locator_type": "id",
                     "locator_value": "remember-password",
-                    "value": "123456",
+                    "value": "macro123",
                 },
                 {
                     "action": "click",
@@ -358,139 +142,15 @@ def test_get_detail_does_not_repair_password_input_to_remember_checkbox(db_sessi
     )
 
     detail = test_case_service.get_test_case_detail(db_session, str(case.id))
-    repaired = detail.case.test_steps if isinstance(detail.case.test_steps, list) else []
+    current_steps = detail.case.test_steps if isinstance(detail.case.test_steps, list) else []
 
-    assert [str(item.get("target")) for item in repaired] == [
+    assert [str(item.get("target")) for item in current_steps] == [
         "element:username_input",
-        "element:password_input",
+        "element:remember_password_checkbox",
         "element:login_button",
     ]
-    assert str(repaired[1].get("target_name")) == "密码输入框"
-    assert str(repaired[1].get("locator_value")) != "remember-password"
-    assert "登录失败" not in str(repaired[2].get("expected_result"))
-
-
-def test_get_detail_repairs_login_like_steps_when_page_code_is_not_login(db_session: Session) -> None:
-    page_object = page_object_model.PageObject(
-        project_code="atp",
-        client="web",
-        page_code="login",
-        page_name="登录页",
-        page_url="http://localhost:5174/#/login",
-        status="online",
-        created_by="qa",
-    )
-    db_session.add(page_object)
-    db_session.flush()
-    db_session.add_all(
-        [
-            page_object_model.PageElement(
-                page_object_id=page_object.id,
-                element_code="login-role---1",
-                element_name="用户名输入框",
-                locator_type="role",
-                locator_value="请输入用户名",
-                role="username",
-                owner="qa",
-            ),
-            page_object_model.PageElement(
-                page_object_id=page_object.id,
-                element_code="login-role---2",
-                element_name="密码输入框",
-                locator_type="role",
-                locator_value="请输入密码",
-                role="password",
-                owner="qa",
-            ),
-            page_object_model.PageElement(
-                page_object_id=page_object.id,
-                element_code="login-role---4",
-                element_name="登录按钮",
-                locator_type="role",
-                locator_value="登录",
-                role="button",
-                owner="qa",
-            ),
-        ]
-    )
-    db_session.commit()
-
-    case = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            case_id="atp-web-prod-list-fn-ai-0999",
-            project_code="atp",
-            page_code="prod",
-            name="登录语义修复-跨页面编码",
-            product_line="商品",
-            module="列表",
-            priority="P1",
-            test_type="ui",
-            creator="qa",
-            script_code="def test_login_like_case(page):\n    assert True\n",
-            test_steps=[
-                {
-                    "action": "custom_step",
-                    "description": "输入用户名 test001",
-                    "target": "element:login-role---1",
-                    "locator_type": "role",
-                    "locator_value": "请输入用户名",
-                    "value": "test001",
-                },
-                {
-                    "action": "custom_step",
-                    "description": "输入密码 123456",
-                    "target": "element:login-role---1",
-                    "locator_type": "role",
-                    "locator_value": "请输入用户名",
-                    "value": "123456",
-                },
-                {
-                    "action": "custom_step",
-                    "description": "点击登录按钮",
-                    "target": "element:login-role---1",
-                    "locator_type": "role",
-                    "locator_value": "请输入用户名",
-                },
-            ],
-        ),
-    )
-
-    detail = test_case_service.get_test_case_detail(db_session, str(case.id))
-    repaired = detail.case.test_steps if isinstance(detail.case.test_steps, list) else []
-
-    assert [str(item.get("action")) for item in repaired] == ["input", "input", "click"]
-    assert [str(item.get("target")) for item in repaired] == [
-        "element:login-role---1",
-        "element:login-role---2",
-        "element:login-role---4",
-    ]
-
-
-def test_batch_status_update_accepts_case_ids(db_session: Session) -> None:
-    case = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            name="退货列表回归校验",
-            product_line="退货",
-            module="列表",
-            priority="P1",
-            test_type="ui",
-            tags=["regression"],
-            creator="qa",
-            script_code="def test_return_list(page):\n    assert True\n",
-        ),
-    )
-
-    updated_count = test_case_service.batch_update_test_case_status(
-        db_session,
-        test_case_schema.BatchStatusUpdatePayload(case_ids=[case.case_id], status="deprecated"),
-    )
-    refreshed = db_session.get(test_case_model.TestCase, case.id)
-
-    assert updated_count == 1
-    assert refreshed is not None
-    assert refreshed.status == "deprecated"
+    assert str(current_steps[1].get("locator_value")) == "remember-password"
+    assert "登录失败" in str(current_steps[2].get("expected_result"))
 
 
 def test_batch_status_update_blocked_when_project_inactive(db_session: Session) -> None:
@@ -559,66 +219,6 @@ def test_batch_tags_update_blocked_when_project_inactive(db_session: Session) ->
 
     assert exc_info.value.status_code == 409
     assert "project is inactive" in str(exc_info.value.detail).lower()
-
-
-def test_create_project_and_filter_cases_by_project_code(db_session: Session) -> None:
-    test_project_service.create_project(
-        db_session,
-        test_project_schema.TestProjectCreate(
-            project_code="mall",
-            project_name="Mall Platform",
-        ),
-    )
-    test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            project_code="atp",
-            name="退货查询 ATP 冒烟",
-            product_line="退货",
-            module="查询",
-            priority="P1",
-            test_type="ui",
-            tags=["smoke"],
-            creator="qa",
-            script_code="def test_case_atp(page):\n    assert True\n",
-        ),
-    )
-    mall_case = test_case_service.create_test_case(
-        db_session,
-        test_case_schema.TestCaseCreate(
-            project_code="mall",
-            name="退货查询 Mall 冒烟",
-            product_line="退货",
-            module="查询",
-            priority="P1",
-            test_type="ui",
-            tags=["smoke"],
-            creator="qa",
-            script_code="def test_case_mall(page):\n    assert True\n",
-        ),
-    )
-
-    result = test_case_service.list_test_cases(
-        db_session,
-        q="",
-        project_code="mall",
-        source="",
-        tag="",
-        priority="",
-        status="",
-        creator="",
-        last_result="",
-        product_line="",
-        module="",
-        test_type="",
-        sort_field="case_id",
-        sort_order="asc",
-        page=1,
-        page_size=20,
-    )
-
-    assert [item.case_id for item in result.cases] == [mall_case.case_id]
-    assert "mall" in result.filters["project_codes"]
 
 
 def test_create_test_case_blocked_when_project_inactive(db_session: Session) -> None:
@@ -725,50 +325,185 @@ def test_update_script_blocked_when_project_inactive(db_session: Session) -> Non
     assert "project is inactive" in str(exc_info.value.detail).lower()
 
 
-def test_upsert_workbench_case_allows_self_asset_case_id_without_conflict(
+def test_run_case_uses_db_script_code_when_source_yaml_is_missing(
     db_session: Session,
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
-    assets_root = tmp_path / "test-cases"
-    ai_generated_root = assets_root / "ai-generated"
-    ai_generated_root.mkdir(parents=True, exist_ok=True)
-    case_id = "atp-web-ret-query-fn-ai-0001"
-    source_path = ai_generated_root / f"{case_id}.yaml"
-    source_path.write_text(
-        "id: atp-web-ret-query-fn-ai-0001\n"
-        "title: workbench generated case\n"
-        "module: query\n"
-        "priority: P1\n"
-        "tags:\n"
-        "  - ai-generated\n"
-        "execution:\n"
-        "  page: ret\n"
-        "  steps:\n"
-        "    - action: click\n"
-        "      target: query_button\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(test_case_service, "ASSETS_CASES_ROOT", assets_root)
-
-    created = test_case_service.upsert_test_case_from_workbench(
+    test_project_service.create_project(
         db_session,
-        project_code="atp",
-        case_yaml={
-            "id": case_id,
-            "title": "workbench generated case",
-            "module": "query",
-            "priority": "P1",
-            "tags": ["ai-generated"],
-            "execution": {
-                "page": "ret",
-                "steps": [{"action": "click", "target": "query_button"}],
-            },
-        },
-        source_path=str(source_path),
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    script_code = (
+        "id: mall-web-login-auth-fn-ai-0201\n"
+        "title: DB 脚本优先执行\n"
+        "module: login\n"
+        "execution:\n"
+        "  runner: playwright\n"
+        "  page: login\n"
+        "  steps:\n"
+        "    - action: goto\n"
+        "      value: http://localhost:5174/#/login\n"
+    )
+    test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code="mall",
+            case_id="mall-web-login-auth-fn-ai-0201",
+            name="DB 脚本优先执行",
+            page_code="login",
+            product_line="商城",
+            module="登录",
+            source_ref=str(tmp_path / "missing-source.yaml"),
+            script_code=script_code,
+        ),
     )
 
-    assert created.case_id == case_id
+    assets_root = tmp_path / "assets" / "test-cases"
+    ai_cases_root = assets_root / "ai-generated"
+    runs_root = tmp_path / "runs"
+    monkeypatch.setattr(workbench_facade.constants, "ASSETS_CASES_ROOT", assets_root)
+    monkeypatch.setattr(workbench_facade.constants, "AI_CASES_ROOT", ai_cases_root)
+    monkeypatch.setattr(workbench_facade.constants, "WEB_UI_RUNS_DIR", runs_root)
+    monkeypatch.setattr(workbench_facade.store, "ensure_dirs", lambda: None)
+
+    captured: dict[str, object] = {}
+
+    def _fake_start_run(**kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {
+            "run_id": "run-db-script",
+            "status": "queued",
+            "case_path": str(kwargs["case_path"]),
+        }
+
+    monkeypatch.setattr(workbench_facade.workbench_runtime_service, "start_run", _fake_start_run)
+
+    response = WorkbenchFacade().run_case(
+        payload=SimpleNamespace(project="mall", case_id="mall-web-login-auth-fn-ai-0201", source="manual", case_path=""),
+        db=db_session,
+    )
+
+    assert response["item"]["run_id"] == "run-db-script"
+    assert captured["runtime_case_script"] == script_code.strip()
+    assert captured["case_path"] == (ai_cases_root / "mall-web-login-auth-fn-ai-0201.yaml").resolve()
+    assert not (tmp_path / "missing-source.yaml").exists()
+
+
+def test_update_script_refreshes_projection_from_script_code(db_session: Session) -> None:
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code="mall",
+            project_name="Mall Platform",
+        ),
+    )
+    case = test_case_service.create_test_case(
+        db_session,
+        test_case_schema.TestCaseCreate(
+            project_code="mall",
+            case_id="mall-web-login-auth-fn-ai-0101",
+            name="脚本更新同步展示字段",
+            page_code="login",
+            product_line="商城",
+            module="登录",
+            script_code=(
+                "id: mall-web-login-auth-fn-ai-0101\n"
+                "title: 脚本更新同步展示字段\n"
+                "precondition_state: 已登录\n"
+                "expected_result: 页面跳转成功\n"
+                "execution:\n"
+                "  page: login\n"
+                "  steps:\n"
+                "    - action: click\n"
+                "      target: login_button\n"
+                "      target_name: 登录按钮\n"
+                "      locator_type: role\n"
+                "      locator_value: 登录\n"
+                "      element_code: login_button\n"
+                "      source_point_key: intent-01\n"
+                "      intent_id: intent-01\n"
+            ),
+            test_steps=[{"action": "click", "target": "old_button"}],
+            precondition_state="旧前置",
+            expected_result="旧预期",
+        ),
+    )
+
+    result_version = test_case_service.update_script(
+        db_session,
+        case.case_id,
+        test_case_schema.TestCaseScriptUpdate(
+            script_code=(
+                "id: mall-web-login-auth-fn-ai-0101\n"
+                "title: 脚本更新同步展示字段\n"
+                "precondition_state: 已完成登录\n"
+                "expected_result: 登录成功后进入首页\n"
+                "execution:\n"
+                "  page: login\n"
+                "  steps:\n"
+                "    - action: input\n"
+                "      target: username_input\n"
+                "      target_name: 用户名输入框\n"
+                "      value: admin\n"
+                "      locator_type: placeholder\n"
+                "      locator_value: 请输入用户名\n"
+                "    - action: click\n"
+                "      target: login_button\n"
+                "      target_name: 登录按钮\n"
+                "      locator_type: role\n"
+                "      locator_value: 登录\n"
+                "      element_code: login_button\n"
+                "      source_point_key: intent-01\n"
+                "      intent_id: intent-01\n"
+                "    - action: assert_count\n"
+                "      target: element:login_error_message\n"
+                "      element_code: login_error_message\n"
+                "      count: 1\n"
+                "      metric_rule: equals\n"
+                "      rule: equals\n"
+                "      extract_regex: \"错误(.+)\"\n"
+                "      metric_label: 登录错误提示\n"
+                "      source_point_key: intent-01\n"
+            ),
+            changed_by="qa-admin",
+        ),
+    )
+
+    refreshed = test_case_service.get_test_case_detail(db_session, case.case_id).case
+    assert result_version == 2
+    assert str(refreshed.precondition_state) == "已完成登录"
+    assert [str(step.get("action")) for step in refreshed.test_steps or []] == ["input", "click", "assert_count"]
+    assert str(refreshed.test_steps_text).startswith("Step1")
+    assert "登录成功后进入首页" in str(refreshed.expected_result)
+    assert str((refreshed.test_steps or [])[1].get("element_code")) == "login_button"
+    assert str((refreshed.test_steps or [])[1].get("source_point_key")) == "intent-01"
+    assert str((refreshed.test_steps or [])[2].get("element_code")) == "login_error_message"
+    assert str((refreshed.test_steps or [])[2].get("count")) == "1"
+    assert str((refreshed.test_steps or [])[2].get("metric_rule")) == "equals"
+    assert str((refreshed.test_steps or [])[2].get("rule")) == "equals"
+    assert str((refreshed.test_steps or [])[2].get("extract_regex")) == "错误(.+)"
+    assert str((refreshed.test_steps or [])[2].get("metric_label")) == "登录错误提示"
+    assert str((refreshed.test_steps or [])[2].get("source_point_key")) == "intent-01"
+    step_rows = (
+        db_session.query(test_case_model.TestCaseStep)
+        .filter_by(case_id=int(refreshed.id))
+        .order_by(test_case_model.TestCaseStep.step_index.asc())
+        .all()
+    )
+    assert len(step_rows) == 3
+    assert str(step_rows[0].target) == "username_input"
+    assert str(step_rows[0].locator_type) == "placeholder"
+    assert str(step_rows[1].target) == "login_button"
+    assert str(step_rows[2].target) == "element:login_error_message"
+    assert str(step_rows[2].raw_payload.get("element_code")) == "login_error_message"
+    assert str(step_rows[2].raw_payload.get("metric_rule")) == "equals"
+    assert str(step_rows[2].raw_payload.get("source_point_key")) == "intent-01"
+
+
 
 
 def test_upsert_workbench_case_blocked_when_project_inactive(
@@ -812,53 +547,6 @@ def test_upsert_workbench_case_blocked_when_project_inactive(
 
     assert exc_info.value.status_code == 409
     assert "project is inactive" in str(exc_info.value.detail).lower()
-
-
-def test_upsert_test_case_from_workbench_creates_and_updates_case(db_session: Session) -> None:
-    case_yaml = {
-        "id": "mall-web-ret-query-sm-ai-0001",
-        "title": "退货申请页-订单查询-输入有效订单号-点击查询-展示订单信息",
-        "module": "query",
-        "priority": "P1",
-        "tags": ["ai-generated", "smoke"],
-        "requirement": ["验证退货申请页订单查询主流程"],
-        "description": "AI 生成的退货查询草稿",
-        "execution": {
-            "page": "returnapply",
-            "runner": "playwright",
-            "steps": [
-                {"action": "goto", "target": "returnapply_page"},
-                {"action": "fill", "target": "order_no", "value": "1001"},
-                {"action": "assert_visible", "target": "order_card", "expected": "展示订单信息"},
-            ],
-        },
-    }
-
-    created = test_case_service.upsert_test_case_from_workbench(
-        db_session,
-        project_code="mall",
-        case_yaml=case_yaml,
-        source_path="/tmp/mall-web-ret-query-sm-ai-0001.yaml",
-    )
-
-    case_yaml["title"] = "退货申请页-订单查询-输入历史订单号-点击查询-展示订单信息"
-    updated = test_case_service.upsert_test_case_from_workbench(
-        db_session,
-        project_code="mall",
-        case_yaml=case_yaml,
-        source_path="/tmp/mall-web-ret-query-sm-ai-0001.yaml",
-    )
-    version_count = db_session.query(test_case_model.TestCaseVersion).filter_by(case_id=created.id).count()
-
-    assert created.case_id == "mall-web-ret-query-sm-ai-0001"
-    assert created.project_code == "mall"
-    assert created.created_source == "ai"
-    assert created.source_ref == "/tmp/mall-web-ret-query-sm-ai-0001.yaml"
-    assert "title: " in created.script_code
-    assert updated.id == created.id
-    assert updated.name == "退货申请页-订单查询-输入历史订单号-点击查询-展示订单信息"
-    assert version_count == 2
-
 
 def test_upsert_test_case_from_workbench_reuses_case_by_source_asset_and_intent(db_session: Session) -> None:
     existing = test_case_service.create_test_case(

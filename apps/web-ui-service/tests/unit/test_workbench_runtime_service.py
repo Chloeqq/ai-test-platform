@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from app.services import workbench_runtime_service
@@ -67,6 +68,38 @@ def test_build_run_command_uses_mall_admin_login_default_base_url() -> None:
     )
 
     assert env["BASE_URL"] == "http://localhost:5174/#/login"
+
+
+def test_build_run_command_allows_runtime_cases_root() -> None:
+    case_path = Path("/tmp/web-ui/runs/runtime-cases/run-001/case.yaml")
+
+    _command, env = workbench_runtime_service.build_run_command(
+        case_path,
+        get_python_bin_fn=lambda: "python",
+        repo_root=Path("/repo"),
+        allure_results_root=Path("/tmp/allure-results"),
+        environ={},
+    )
+
+    allowed_roots = env["TEST_CASE_ALLOWED_ROOTS"].split(os.pathsep)
+    assert str(case_path.resolve().parent.parent) in allowed_roots
+    assert str(case_path.resolve().parent) not in allowed_roots
+
+
+def test_build_run_command_does_not_allow_arbitrary_case_parent() -> None:
+    case_path = Path("/tmp/outside/case.yaml")
+
+    _command, env = workbench_runtime_service.build_run_command(
+        case_path,
+        get_python_bin_fn=lambda: "python",
+        repo_root=Path("/repo"),
+        allure_results_root=Path("/tmp/allure-results"),
+        environ={},
+    )
+
+    allowed_roots = env["TEST_CASE_ALLOWED_ROOTS"].split(os.pathsep)
+    assert str(case_path.resolve().parent) not in allowed_roots
+    assert allowed_roots == [str((Path("/repo") / "assets" / "test-cases" / "ai-generated").resolve())]
 
 
 def test_materialize_runtime_case_yaml_writes_isolated_runtime_file(tmp_path: Path) -> None:

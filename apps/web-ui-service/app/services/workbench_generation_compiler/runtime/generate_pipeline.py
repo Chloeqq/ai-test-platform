@@ -58,11 +58,38 @@ _COMPILER_ERROR_CODES = {
     "execution_compiler_invalid_dsl_action",
     "execution_compiler_intent_coverage_failed",
     "execution_ir_empty_steps",
+    "dsl_v1_1_missing_source_identity",
+    "dsl_v1_1_missing_input_data",
+    "dsl_v1_1_missing_executable_assertion",
     "page_object_not_found",
     "page_object_empty_elements",
     "target_binding_failed",
     "execution_render_failed",
 }
+
+_SUPPORTED_TOP_LEVEL_ASSERTIONS = {"assert_visible", "assert_count", "assert_metric", "assert_url"}
+_TOP_LEVEL_ASSERTION_KEYS = {
+    "action",
+    "target",
+    "target_name",
+    "selector",
+    "locator_type",
+    "locator_value",
+    "role",
+    "intent_id",
+    "element_code",
+    "count",
+    "metric_rule",
+    "rule",
+    "extract_regex",
+    "metric_label",
+    "page",
+    "value",
+    "source_point_key",
+    "traceability",
+    "expected_result",
+}
+_VARIABLE_TEMPLATE_RE = re.compile(r"^\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}$")
 
 
 def _log_generation_failure(
@@ -876,6 +903,207 @@ def _append_login_success_assertion(
     product_steps.append(assertion_step)
 
 
+def _step_element_code(step: dict[str, Any]) -> str:
+    target = _normalized_text(step.get("target") or step.get("element_code"))
+    if target.startswith("element:"):
+        target = target.removeprefix("element:").strip()
+    return target
+
+
+def _is_variable_template(value: Any) -> bool:
+    return isinstance(value, str) and bool(_VARIABLE_TEMPLATE_RE.fullmatch(value.strip()))
+
+
+def _data_key_for_input(*, page: str, element_code: str) -> str:
+    normalized_page = _normalized_text(page).lower()
+    normalized_code = _normalized_text(element_code).lower()
+    if normalized_page == "login" and normalized_code == "username_input":
+        return "username"
+    if normalized_page == "login" and normalized_code == "password_input":
+        return "password"
+    if normalized_code.endswith("_input"):
+        normalized_code = normalized_code[: -len("_input")]
+    data_key = re.sub(r"[^a-z0-9_]+", "_", normalized_code).strip("_")
+    return data_key or "input_value"
+
+
+def _variable_name_for_input(*, page: str, element_code: str, data_key: str) -> str:
+    normalized_page = re.sub(r"[^a-z0-9_]+", "_", _normalized_text(page).lower()).strip("_")
+    normalized_code = _normalized_text(element_code).lower()
+    if normalized_page == "login" and normalized_code == "username_input":
+        return "login_username"
+    if normalized_page == "login" and normalized_code == "password_input":
+        return "login_password"
+    return f"{normalized_page}_{data_key}" if normalized_page else data_key
+
+
+def _reserve_data_key(data: dict[str, Any], base_key: str, value: Any) -> str:
+    key = base_key
+    suffix = 2
+    while key in data and data.get(key) != [value]:
+        key = f"{base_key}_{suffix}"
+        suffix += 1
+    return key
+
+
+def _reserve_variable_name(variables: dict[str, Any], base_name: str, template: str) -> str:
+    name = base_name
+    suffix = 2
+    while name in variables and variables.get(name) != template:
+        name = f"{base_name}_{suffix}"
+        suffix += 1
+    return name
+
+
+def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -> None:
+    """把步骤里已有的输入值提升为 DSL V1.1 data/variables，不在代码层猜测默认值。"""
+    execution_payload = product_yaml.get("execution") if isinstance(product_yaml.get("execution"), dict) else {}
+    steps = execution_payload.get("steps") if isinstance(execution_payload.get("steps"), list) else []
+    data = product_yaml.get("data") if isinstance(product_yaml.get("data"), dict) else {}
+    variables = execution_payload.get("variables") if isinstance(execution_payload.get("variables"), dict) else {}
+    product_yaml["data"] = data
+    execution_payload["variables"] = variables
+
+    input_count = 0
+    for index, step in enumerate(steps, start=1):
+        if not isinstance(step, dict):
+            continue
+        action = _normalized_text(step.get("action")).lower()
+        if action not in {"input", "fill"}:
+            continue
+        input_count += 1
+        if "value" not in step:
+            raise ExecutionCompilerError(
+                code="dsl_v1_1_missing_input_data",
+                message="DSL V1.1 input step requires explicit data value",
+                reason=f"input step {index} missing value",
+                stage="dsl_v1_1_enrichment",
+            )
+        raw_value = step.get("value")
+        if _is_variable_template(raw_value):
+            continue
+
+        element_code = _step_element_code(step)
+        base_data_key = _data_key_for_input(page=page, element_code=element_code)
+        data_key = _reserve_data_key(data, base_data_key, raw_value)
+        data[data_key] = [raw_value]
+        variable_template = f"{{{{{data_key}}}}}"
+        base_variable_name = _variable_name_for_input(page=page, element_code=element_code, data_key=data_key)
+        variable_name = _reserve_variable_name(variables, base_variable_name, variable_template)
+        variables[variable_name] = variable_template
+        step["value"] = f"{{{{{variable_name}}}}}"
+
+    if input_count and not data:
+        raise ExecutionCompilerError(
+            code="dsl_v1_1_missing_input_data",
+            message="DSL V1.1 input steps require structured data",
+            reason="input steps were found but no data bindings were generated",
+            stage="dsl_v1_1_enrichment",
+        )
+
+
+def _normalize_top_level_assertion(step: dict[str, Any]) -> dict[str, Any]:
+    assertion = {
+        key: value
+        for key, value in step.items()
+        if key in _TOP_LEVEL_ASSERTION_KEYS and value is not None
+    }
+    if not _normalized_text(assertion.get("locator_value")) and _normalized_text(step.get("selector")):
+        assertion["locator_value"] = _normalized_text(step.get("selector"))
+    if not _normalized_text(assertion.get("target")) and _normalized_text(step.get("element_code")):
+        assertion["target"] = f"element:{_normalized_text(step.get('element_code'))}"
+    return assertion
+
+
+def _assertion_signature(assertion: dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        _normalized_text(assertion.get("action")).lower(),
+        _normalized_text(assertion.get("target") or assertion.get("element_code")),
+        _normalized_text(assertion.get("locator_type")),
+        _normalized_text(assertion.get("locator_value") or assertion.get("selector")),
+    )
+
+
+def _promote_dsl_v1_1_assertions(product_yaml: dict[str, Any]) -> None:
+    """将步骤中的可执行断言收口到顶层 assertions，避免 expected_result 被当作通过依据。"""
+    execution_payload = product_yaml.get("execution") if isinstance(product_yaml.get("execution"), dict) else {}
+    steps = execution_payload.get("steps") if isinstance(execution_payload.get("steps"), list) else []
+    assertions_raw = product_yaml.get("assertions") if isinstance(product_yaml.get("assertions"), list) else []
+    assertions: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+
+    def add_assertion(raw: Any) -> None:
+        if not isinstance(raw, dict):
+            return
+        action = _normalized_text(raw.get("action")).lower()
+        if action not in _SUPPORTED_TOP_LEVEL_ASSERTIONS:
+            return
+        normalized = _normalize_top_level_assertion({**raw, "action": action})
+        signature = _assertion_signature(normalized)
+        if signature in seen:
+            return
+        seen.add(signature)
+        assertions.append(normalized)
+
+    for raw in assertions_raw:
+        add_assertion(raw)
+
+    action_steps: list[dict[str, Any]] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        action = _normalized_text(step.get("action")).lower()
+        if action in _SUPPORTED_TOP_LEVEL_ASSERTIONS:
+            add_assertion(step)
+            continue
+        action_steps.append(step)
+
+    execution_payload["steps"] = action_steps
+    product_yaml["assertions"] = assertions
+
+
+def _is_ai_automated_case(product_yaml: dict[str, Any]) -> bool:
+    status = _normalized_text(product_yaml.get("status")).lower()
+    tags = product_yaml.get("tags") if isinstance(product_yaml.get("tags"), list) else []
+    normalized_tags = {_normalized_text(tag).lower() for tag in tags if _normalized_text(tag)}
+    case_id = _normalized_text(product_yaml.get("id")).lower()
+    return status == "automated" and ("ai-generated" in normalized_tags or "-ai-" in case_id)
+
+
+def _validate_dsl_v1_1_minimum_contract(product_yaml: dict[str, Any]) -> None:
+    """校验 V1.1 最小契约：来源身份完整，AI 自动化用例必须有真实断言。"""
+    requirement = product_yaml.get("requirement") if isinstance(product_yaml.get("requirement"), dict) else {}
+    execution_payload = product_yaml.get("execution") if isinstance(product_yaml.get("execution"), dict) else {}
+    intent_id = _normalized_text(requirement.get("intent_id"))
+    source_asset_id = _normalized_text(requirement.get("source_asset_id"))
+    selected_ids = execution_payload.get("selected_intent_ids") if isinstance(execution_payload.get("selected_intent_ids"), list) else []
+    if not intent_id or not source_asset_id or intent_id not in {_normalized_text(item) for item in selected_ids}:
+        raise ExecutionCompilerError(
+            code="dsl_v1_1_missing_source_identity",
+            message="DSL V1.1 case requires source_asset_id, intent_id and selected_intent_ids",
+            reason="source identity is incomplete",
+            stage="dsl_v1_1_enrichment",
+        )
+    if _is_ai_automated_case(product_yaml):
+        assertions = product_yaml.get("assertions") if isinstance(product_yaml.get("assertions"), list) else []
+        if not assertions:
+            raise ExecutionCompilerError(
+                code="dsl_v1_1_missing_executable_assertion",
+                message="DSL V1.1 AI automated case requires executable assertions",
+                reason="expected_result is documentation only",
+                stage="dsl_v1_1_enrichment",
+            )
+
+
+def _enrich_product_case_yaml_v1_1(product_yaml: dict[str, Any], *, page: str) -> dict[str, Any]:
+    """生成器统一出口：写入 DB 的 script_code 必须先满足 DSL V1.1 契约。"""
+    product_yaml["version"] = "v1.1"
+    _enrich_dsl_v1_1_data_bindings(product_yaml, page=page)
+    _promote_dsl_v1_1_assertions(product_yaml)
+    _validate_dsl_v1_1_minimum_contract(product_yaml)
+    return product_yaml
+
+
 def _format_product_case_yaml(
     *,
     case_yaml: dict[str, Any],
@@ -964,6 +1192,7 @@ def _format_product_case_yaml(
         },
         "expected_result": expected,
     }
+    product_yaml = _enrich_product_case_yaml_v1_1(product_yaml, page=page)
     if not product_yaml["requirement"]["source_asset_id"]:
         product_yaml["requirement"].pop("source_asset_id", None)
     if not product_yaml["requirement"]["precondition"]:
@@ -1908,18 +2137,34 @@ def run_generate_pipeline(
     )
     if final_page_url:
         execution_payload["page_url"] = final_page_url
-    case_yaml = _format_product_case_yaml(
-        case_yaml=case_yaml,
-        payload=payload,
-        page=execution_payload["page"],
-        page_url=final_page_url,
-        page_object=page_object,
-        test_points=test_points if isinstance(test_points, list) else [],
-        candidate_snapshots=candidate_snapshots,
-        requirement_spec=requirement_spec,
-        selected_intent_ids=selected_intent_ids_list,
-        effective_requirement=effective_requirement,
-    )
+    try:
+        case_yaml = _format_product_case_yaml(
+            case_yaml=case_yaml,
+            payload=payload,
+            page=execution_payload["page"],
+            page_url=final_page_url,
+            page_object=page_object,
+            test_points=test_points if isinstance(test_points, list) else [],
+            candidate_snapshots=candidate_snapshots,
+            requirement_spec=requirement_spec,
+            selected_intent_ids=selected_intent_ids_list,
+            effective_requirement=effective_requirement,
+        )
+    except ExecutionCompilerError as exc:
+        _log_generation_failure(
+            level=logging.WARNING,
+            stage="dsl_v1_1_enrichment",
+            trace_id=trace_id,
+            error=exc.to_detail(),
+            payload={
+                "selected_intent_ids": selected_intent_ids_list,
+                "mode": mode,
+            },
+        )
+        raise http_exception_cls(
+            status_code=unprocessable_entity_status,
+            detail=exc.to_detail(),
+        ) from exc
     execution_payload = case_yaml.get("execution") if isinstance(case_yaml.get("execution"), dict) else {}
 
     case_path = ai_cases_root / f"{case_id}.yaml"

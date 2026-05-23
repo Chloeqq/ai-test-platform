@@ -79,35 +79,11 @@ export interface GenerateCasePayload {
   selected_intent_ids?: string[];
 }
 
-export interface GenerateCaseResponse {
-  message?: string;
-  count?: number;
-  item?: Record<string, unknown>;
-  items?: Array<Record<string, unknown>>;
-}
-
 export interface SaveTestPointAssetsResponse {
   message?: string;
   count?: number;
   item?: Record<string, unknown>;
   items?: Array<Record<string, unknown>>;
-}
-
-export interface FullChainRunPayload {
-  project: string;
-  page: string;
-  requirement: string;
-  source?: string;
-  max_cases?: number;
-  run_after_generate?: boolean;
-  wait_seconds?: number;
-  preview_id?: string;
-}
-
-export interface FullChainRunResponse {
-  summary?: Record<string, unknown>;
-  stages?: Record<string, unknown>;
-  generated?: Record<string, unknown>;
 }
 
 export interface PreviewTestPointsPayload {
@@ -271,10 +247,6 @@ export async function listExecutionTasks(params: TaskQuery): Promise<ListExecuti
   return getJson<ListExecutionTasksResponse>(path);
 }
 
-export async function generateCase(payload: GenerateCasePayload): Promise<GenerateCaseResponse> {
-  return postJson<GenerateCaseResponse>("/api/workbench/generate", payload);
-}
-
 export async function saveTestPointAssets(payload: GenerateCasePayload): Promise<SaveTestPointAssetsResponse> {
   return postJson<SaveTestPointAssetsResponse>("/api/workbench/test-point-assets/save", payload);
 }
@@ -291,10 +263,6 @@ export async function precheckSelectedIntents(
   payload: PrecheckSelectedIntentsPayload,
 ): Promise<PrecheckSelectedIntentsResponse> {
   return postJson<PrecheckSelectedIntentsResponse>("/api/workbench/precheck-selected-intents", payload);
-}
-
-export async function runFullChain(payload: FullChainRunPayload): Promise<FullChainRunResponse> {
-  return postJson<FullChainRunResponse>("/api/workbench/full-chain/run", payload);
 }
 
 export async function listWorkbenchHistory(params: HistoryQuery): Promise<WorkbenchHistoryResponse> {

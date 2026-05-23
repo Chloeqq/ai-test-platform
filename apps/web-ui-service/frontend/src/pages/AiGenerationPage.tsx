@@ -2,12 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import {
-  generateCase,
   getPreviewTestPointDiagnostics,
   listProjects,
   precheckSelectedIntents,
   saveTestPointAssets,
-  type GenerateCaseResponse,
   type PrecheckSelectedIntentsItem,
   previewTestPoints,
   type PreviewTestPointsResponse,
@@ -93,18 +91,6 @@ function normalizeSteps(value: unknown): string[] {
     }
   });
   return rows;
-}
-
-function readCaseIds(response: GenerateCaseResponse): string[] {
-  const items = Array.isArray(response.items) ? response.items : [];
-  const fromItems = items
-    .map((item) => String((item as Record<string, unknown>).case_id || "").trim())
-    .filter(Boolean);
-  if (fromItems.length) {
-    return fromItems;
-  }
-  const one = String((response.item as Record<string, unknown> | undefined)?.case_id || "").trim();
-  return one ? [one] : [];
 }
 
 function readPreviewItem(payload: PreviewTestPointsResponse): Record<string, unknown> {
@@ -288,13 +274,10 @@ export function AiGenerationPage() {
   const [loadingProjects, setLoadingProjects] = useState<boolean>(true);
   const [activeStep, setActiveStep] = useState<StepId>(1);
   const [extracting, setExtracting] = useState<boolean>(false);
-  const [generating, setGenerating] = useState<boolean>(false);
   const [previewPayload, setPreviewPayload] = useState<PreviewTestPointsResponse | null>(null);
   const [candidates, setCandidates] = useState<PipelineCandidate[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
-  const [generatePayload, setGeneratePayload] = useState<GenerateCaseResponse | null>(null);
   const [extractErrorText, setExtractErrorText] = useState<string>("");
-  const [generateErrorText, setGenerateErrorText] = useState<string>("");
   const [resultText, setResultText] = useState<string>("");
   const [events, setEvents] = useState<PipelineEvent[]>([]);
   const [candidateView, setCandidateView] = useState<"card" | "table">("table");
@@ -370,33 +353,32 @@ export function AiGenerationPage() {
     .map((candidate) => precheckByIntentId[candidate.intentId])
     .filter(Boolean);
   const hasPrecheckBlock = selectedPrecheckStates.some((item) => item.status === "block");
-  const canGenerate = Boolean(
-    selectedCandidates.length
-      && previewPayload
+  const canOpenAssetGovernance = Boolean(
+    previewPayload
+      && candidates.length
       && !qualityBlocked
       && !hasPrecheckBlock
       && !extracting
-      && !generating
       && !prechecking,
   );
 
   const stageInput: StageState = canExtract ? "success" : "pending";
   const stageExtract: StageState = extracting ? "running" : (extractErrorText ? "error" : (previewPayload ? "success" : "pending"));
   const stageCandidate: StageState = qualityBlocked ? "block" : (candidates.length ? "success" : "pending");
-  const stageGenerate: StageState = qualityBlocked || hasPrecheckBlock
+  const stageAssetGovernance: StageState = qualityBlocked || hasPrecheckBlock
     ? "block"
-    : (generating ? "running" : (generateErrorText ? "error" : (generatePayload ? "success" : "pending")));
+    : (canOpenAssetGovernance ? "success" : "pending");
 
   const stepStates = useMemo(
     () => ({
       1: stageInput,
       2: stageExtract,
       3: stageCandidate,
-      4: stageGenerate,
+      4: stageAssetGovernance,
     }),
-    [stageCandidate, stageExtract, stageGenerate, stageInput],
+    [stageAssetGovernance, stageCandidate, stageExtract, stageInput],
   );
-  const completedStages = [stageInput, stageExtract, stageCandidate, stageGenerate].filter((item) => item === "success").length;
+  const completedStages = [stageInput, stageExtract, stageCandidate, stageAssetGovernance].filter((item) => item === "success").length;
   const progressPercent = Math.round((completedStages / 4) * 100);
   const selectedSignature = selectedIntentIds.slice().sort().join("|");
   const syncSignature = useMemo(
@@ -508,7 +490,6 @@ export function AiGenerationPage() {
   useEffect(() => {
     if (
       extracting
-      || generating
       || !previewPayload
       || !candidates.length
       || !form.project.trim()
@@ -569,14 +550,11 @@ export function AiGenerationPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [extracting, generating, previewPayload, previewId, candidates, form.project, form.page, form.requirement, form.title, form.priority, form.source, syncSignature, lastSyncedSignature]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [extracting, previewPayload, previewId, candidates, form.project, form.page, form.requirement, form.title, form.priority, form.source, syncSignature, lastSyncedSignature]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function getExtractDisabledReason(): string {
     if (extracting) {
       return "系统正在提取测试点，请稍候。";
-    }
-    if (generating) {
-      return "系统正在生成用例，暂不可重复提取。";
     }
     if (!form.project.trim()) {
       return "请先选择项目。";
@@ -590,12 +568,9 @@ export function AiGenerationPage() {
     return "";
   }
 
-  function getGenerateDisabledReason(): string {
+  function getAssetGovernanceDisabledReason(): string {
     if (extracting) {
       return "请等待测试点提取完成。";
-    }
-    if (generating) {
-      return "系统正在生成中，请稍候。";
     }
     if (prechecking) {
       return "候选预校验中，请稍候。";
@@ -607,24 +582,23 @@ export function AiGenerationPage() {
       return "质量门禁阻断，请先修复阻断项后再生成。";
     }
     if (hasPrecheckBlock) {
-      return "候选预校验存在阻断项，请先修复后再生成。";
+      return "候选预校验存在阻断项，请先修复后再进入资产生成。";
     }
-    if (!selectedCandidates.length) {
-      return "请至少勾选 1 个候选测试点。";
+    if (!candidates.length) {
+      return "请先提取候选测试点。";
     }
     return "";
   }
 
   const extractDisabledReason = getExtractDisabledReason();
-  const generateDisabledReason = getGenerateDisabledReason();
+  const assetGovernanceDisabledReason = getAssetGovernanceDisabledReason();
 
   async function handleExtractPoints() {
-    if (!canExtract || extracting || generating) {
+    if (!canExtract || extracting) {
       return;
     }
     setExtracting(true);
     setExtractErrorText("");
-    setGenerateErrorText("");
     setPrecheckErrorText("");
     setPrecheckByIntentId({});
     setPreviewDiagnostics(null);
@@ -644,19 +618,18 @@ export function AiGenerationPage() {
       setPreviewPayload(response);
       setCandidates(normalized);
       setSelectedKeys(limited.map((item) => item.key));
-      setGeneratePayload(null);
       setLastSyncedSignature("");
       if (gateDecision === "block") {
-        setResultText(`提取完成：识别 ${normalized.length} 个测试点，但质量门禁阻断，需先处理后再生成。`);
+        setResultText(`提取完成：识别 ${normalized.length} 个测试点，但质量门禁阻断，需先处理后再进入资产治理。`);
       } else {
-        setResultText(`提取完成：识别 ${normalized.length} 个测试点，已全部同步到测试点资产；默认选择 ${limited.length} 个用于生成用例。`);
+        setResultText(`提取完成：识别 ${normalized.length} 个测试点，已全部同步到测试点资产；请到资产中心审核后生成用例。`);
       }
       appendEvent({ stage: "extract", level: "success", message: `测试点提取完成，识别 ${normalized.length} 项。` });
       if (normalized.length > MAX_GENERATE_SELECTED) {
         appendEvent({
           stage: "candidate",
           level: "info",
-          message: `生成用例默认限制为前 ${MAX_GENERATE_SELECTED} 个候选；测试点资产会保存全部 ${normalized.length} 条。`,
+          message: `当前页面仅保留候选预校验；测试点资产会保存全部 ${normalized.length} 条。`,
         });
       }
       setActiveStep(3);
@@ -695,55 +668,6 @@ export function AiGenerationPage() {
     setSelectedKeys([]);
   }
 
-  async function handleGenerateFromSelected() {
-    if (!canGenerate) {
-      return;
-    }
-    setGenerating(true);
-    setGenerateErrorText("");
-    setResultText("正在根据已选测试点生成测试用例...");
-    appendEvent({ stage: "generate", level: "info", message: `开始生成 ${selectedCandidates.length} 条候选用例。` });
-    setActiveStep(4);
-    try {
-      const response = await generateCase({
-        project: form.project.trim(),
-        page: form.page.trim(),
-        requirement: form.requirement.trim(),
-        title: form.title.trim(),
-        priority: form.priority.trim() || "P1",
-        source: form.source.trim() || "manual",
-        preview_id: previewId,
-        selected_intent_ids: selectedIntentIds,
-        selected_candidates: previewId
-          ? []
-          : selectedCandidates.map((candidate) => ({
-            intent_id: candidate.intentId,
-            title: candidate.title,
-            summary: candidate.summary,
-            intent_type: candidate.intentType,
-            priority: candidate.priority,
-            steps: candidate.stepsSummary ? [candidate.stepsSummary] : [],
-            expected: candidate.expected,
-          })),
-      });
-      const caseIds = readCaseIds(response);
-      setGeneratePayload(response);
-      setResultText(caseIds.length ? `生成完成：${caseIds.join("、")}` : "生成完成。");
-      appendEvent({
-        stage: "generate",
-        level: "success",
-        message: caseIds.length ? `成功生成 ${caseIds.length} 条用例。` : "生成请求成功返回。",
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "生成测试用例失败";
-      setGenerateErrorText(message);
-      setResultText("");
-      appendEvent({ stage: "generate", level: "error", message });
-    } finally {
-      setGenerating(false);
-    }
-  }
-
   function handleResetAll() {
     const firstProject = String(projects[0]?.project_code || DEFAULT_PROJECT_CODE).trim();
     setForm({ ...DEFAULT_FORM, project: firstProject });
@@ -752,9 +676,7 @@ export function AiGenerationPage() {
     setPreviewDiagnostics(null);
     setCandidates([]);
     setSelectedKeys([]);
-    setGeneratePayload(null);
     setExtractErrorText("");
-    setGenerateErrorText("");
     setResultText("");
     setLastSyncedSignature("");
     setEvents([]);
@@ -776,18 +698,18 @@ export function AiGenerationPage() {
     ? {
       label: extracting ? "提取中..." : "提取测试点",
       onClick: handleExtractPoints,
-      disabled: !canExtract || extracting || generating,
+      disabled: !canExtract || extracting,
     }
     : {
-      label: generating ? "生成中..." : "生成用例",
-      onClick: handleGenerateFromSelected,
-      disabled: !canGenerate,
+      label: "进入资产治理",
+      onClick: () => setActiveStep(4),
+      disabled: !canOpenAssetGovernance,
     };
 
   const nextDisabled = activeStep === 4
     || (activeStep === 1 && !canExtract)
     || (activeStep === 2 && (!previewPayload || extracting))
-    || (activeStep === 3 && (!selectedCandidates.length || qualityBlocked));
+    || (activeStep === 3 && (!candidates.length || qualityBlocked));
 
   function renderStepMain() {
     if (activeStep === 1) {
@@ -803,7 +725,7 @@ export function AiGenerationPage() {
               <select
                 value={form.project}
                 onChange={(event) => setForm((prev) => ({ ...prev, project: event.target.value }))}
-                disabled={loadingProjects || extracting || generating}
+                disabled={loadingProjects || extracting}
               >
                 <option value="">请选择项目</option>
                 {projects.map((project) => {
@@ -821,7 +743,7 @@ export function AiGenerationPage() {
               <select
                 value={form.source}
                 onChange={(event) => setForm((prev) => ({ ...prev, source: event.target.value }))}
-                disabled={extracting || generating}
+                disabled={extracting}
               >
                 <option value="manual">{sourceLabel("manual")}</option>
                 <option value="prd_text">{sourceLabel("prd_text")}</option>
@@ -835,7 +757,7 @@ export function AiGenerationPage() {
                 value={form.page}
                 placeholder="例如 登录页"
                 onChange={(event) => setForm((prev) => ({ ...prev, page: event.target.value }))}
-                disabled={extracting || generating}
+                disabled={extracting}
               />
             </label>
             <label>
@@ -843,7 +765,7 @@ export function AiGenerationPage() {
               <select
                 value={form.priority}
                 onChange={(event) => setForm((prev) => ({ ...prev, priority: event.target.value }))}
-                disabled={extracting || generating}
+                disabled={extracting}
               >
                 <option value="P0">P0</option>
                 <option value="P1">P1</option>
@@ -856,7 +778,7 @@ export function AiGenerationPage() {
                 value={form.title}
                 placeholder="例如 登录基础校验"
                 onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-                disabled={extracting || generating}
+                disabled={extracting}
               />
             </label>
             <label className="span-3">
@@ -866,7 +788,7 @@ export function AiGenerationPage() {
                 rows={8}
                 placeholder="输入需求文本，至少包含业务目标、关键流程与验收点。"
                 onChange={(event) => setForm((prev) => ({ ...prev, requirement: event.target.value }))}
-                disabled={extracting || generating}
+                disabled={extracting}
               />
             </label>
           </div>
@@ -883,7 +805,7 @@ export function AiGenerationPage() {
             <p className="muted">调用解析能力生成需求规格与候选测试点。</p>
           </header>
           <div className="aiw-action-row">
-            <button type="button" className="button" onClick={handleExtractPoints} disabled={!canExtract || extracting || generating}>
+            <button type="button" className="button" onClick={handleExtractPoints} disabled={!canExtract || extracting}>
               {extracting ? "提取中..." : "提取测试点"}
             </button>
             <p className="muted">{extractDisabledReason || "输入完整后可执行提取。"}</p>
@@ -958,7 +880,7 @@ export function AiGenerationPage() {
                 表格视图
               </button>
               <button type="button" className="button secondary" onClick={selectAllCandidates} disabled={!candidates.length}>
-                选择前 20 条生成
+                选择前 20 条预校验
               </button>
               <button type="button" className="button secondary" onClick={clearAllCandidates} disabled={!selectedCandidates.length}>
                 清空
@@ -966,7 +888,7 @@ export function AiGenerationPage() {
             </div>
           </header>
 
-          <p className="muted">当前已选用于生成：{selectedCandidates.length}/{MAX_GENERATE_SELECTED}；测试点资产会保存全部 {candidates.length} 条。</p>
+          <p className="muted">当前已选用于预校验：{selectedCandidates.length}/{MAX_GENERATE_SELECTED}；测试点资产会保存全部 {candidates.length} 条。</p>
           {selectedCandidates.length ? (
             precheckErrorText ? (
               <section className="aiw-error-box aiw-step-error">
@@ -1024,7 +946,7 @@ export function AiGenerationPage() {
                             <input
                               type="checkbox"
                               checked={selected}
-                              disabled={disabled || generating || extracting}
+                              disabled={disabled || extracting}
                               onChange={() => toggleCandidate(candidate.key)}
                               style={{
                                 width: "20px",
@@ -1179,7 +1101,7 @@ export function AiGenerationPage() {
                             <input
                               type="checkbox"
                               checked={selected}
-                              disabled={disabled || extracting || generating}
+                              disabled={disabled || extracting}
                               onChange={() => toggleCandidate(candidate.key)}
                             />
                           </td>
@@ -1217,59 +1139,37 @@ export function AiGenerationPage() {
     return (
       <section className="panel aiw-panel">
         <header className="aiw-panel-header">
-          <h2>步骤 4：生成用例</h2>
-          <p className="muted">生成完成后请继续进入审核与执行闭环。</p>
+          <h2>步骤 4：进入资产治理</h2>
+          <p className="muted">直接生成入口已下线。正式用例必须从测试点资产中心的已通过测试点生成。</p>
         </header>
         <div className="aiw-action-row">
-          <button type="button" className="button" onClick={handleGenerateFromSelected} disabled={!canGenerate}>
-            {generating ? "生成中..." : "生成用例"}
-          </button>
-          <p className="muted">{generateDisabledReason || "候选准备完成后可执行生成。"}</p>
+          <Link className="button" to={`/assets/test-points?project=${encodeURIComponent(normalizeProjectCode(form.project))}`}>
+            打开测试点资产中心
+          </Link>
+          <p className="muted">{assetGovernanceDisabledReason || "请在资产中心完成审核，再使用“生成已通过用例”。"}</p>
         </div>
 
         {resultText ? <p>{resultText}</p> : null}
-        {extractErrorText || generateErrorText ? (
+        {extractErrorText ? (
           <section className="aiw-error-box aiw-step-error">
-            <strong>{generateErrorText ? "生成失败" : "提取失败"}</strong>
-            <p className="error">{extractErrorText || generateErrorText}</p>
+            <strong>提取失败</strong>
+            <p className="error">{extractErrorText}</p>
             <p className="muted">请根据失败原因修正输入后重试。</p>
           </section>
         ) : null}
 
-        {generatePayload ? (
-          <div className="generation-next-actions">
-            <Link className="button secondary" to={`/assets/test-points?project=${encodeURIComponent(normalizeProjectCode(form.project))}`}>
-              查看测试资产
-            </Link>
-            <Link className="button secondary" to="/cases">查看用例资产</Link>
-            <Link className="button secondary" to="/cases/review">进入审核队列</Link>
-            <Link className="button secondary" to="/execution/plans">打开执行计划</Link>
-          </div>
-        ) : null}
+        <div className="generation-next-actions">
+          <Link className="button secondary" to={`/assets/test-points?project=${encodeURIComponent(normalizeProjectCode(form.project))}`}>
+            查看测试点资产
+          </Link>
+          <Link className="button secondary" to="/cases/review">进入审核队列</Link>
+          <Link className="button secondary" to="/cases">查看用例中心</Link>
+        </div>
 
-        {generatePayload && Array.isArray(generatePayload.items) && generatePayload.items.length ? (
-          <div className="generated-list">
-            {generatePayload.items.map((item, index) => {
-              const row = item as Record<string, unknown>;
-              const caseId = toText(row.case_id) || `case-${index + 1}`;
-              const path = toText(row.path);
-              return (
-                <article key={`${caseId}-${index}`} className="generated-card">
-                  <h3>{caseId}</h3>
-                  <p className="muted">{path || "未返回路径"}</p>
-                  <Link className="button secondary" to={`/cases/${encodeURIComponent(caseId)}`}>
-                    查看用例详情
-                  </Link>
-                </article>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="aiw-empty-state">
-            <strong>暂无生成结果</strong>
-            <p>先执行测试点提取并完成候选选择，再生成可执行用例。</p>
-          </div>
-        )}
+        <div className="aiw-empty-state">
+          <strong>生成入口已收口</strong>
+          <p>当前页面只负责需求解析和测试点资产同步；用例生成统一在测试点资产中心完成。</p>
+        </div>
       </section>
     );
   }
@@ -1279,7 +1179,7 @@ export function AiGenerationPage() {
       <header className="panel aiw-top-header unified-topbar">
         <div>
           <h1>需求到用例单链工作台</h1>
-          <p className="muted">主链路：输入需求 → 提取测试点 → 筛选候选 → 生成用例</p>
+          <p className="muted">主链路：输入需求 → 提取测试点 → 同步测试点资产 → 审核后生成用例</p>
         </div>
         <div className="header-actions unified-topbar-actions">
           <button type="button" className="button" onClick={stickyPrimaryAction.onClick} disabled={stickyPrimaryAction.disabled}>
@@ -1291,7 +1191,7 @@ export function AiGenerationPage() {
           <button type="button" className="button secondary" onClick={() => setDiagnosticsOpen((prev) => !prev)}>
             {diagnosticsOpen ? "收起诊断面板" : "打开诊断面板"}
           </button>
-          <button type="button" className="button secondary" onClick={handleResetAll} disabled={extracting || generating}>
+          <button type="button" className="button secondary" onClick={handleResetAll} disabled={extracting}>
             重置全部
           </button>
         </div>
@@ -1336,10 +1236,6 @@ export function AiGenerationPage() {
                     : JSON.stringify(previewDiagnostics || { message: previewId ? "暂无诊断信息" : "请先提取测试点" }, null, 2)}
                 </pre>
               </details>
-              <details>
-                <summary>查看步骤 4 原始响应（诊断）</summary>
-                <pre className="json-block">{JSON.stringify(generatePayload || {}, null, 2)}</pre>
-              </details>
             </section>
           </div>
         </section>
@@ -1355,7 +1251,7 @@ export function AiGenerationPage() {
                 1: "输入需求",
                 2: "提取测试点",
                 3: "筛选候选",
-                4: "生成用例",
+                4: "资产治理",
               };
               const state = stepStates[stepId];
                 return (
@@ -1406,7 +1302,7 @@ export function AiGenerationPage() {
                 <strong>{candidates.length}</strong>
               </li>
               <li className="simple-list-item">
-                <span>生成已选</span>
+                <span>预校验已选</span>
                 <strong>{selectedCandidates.length}/{MAX_GENERATE_SELECTED}</strong>
               </li>
             </ul>
@@ -1417,7 +1313,7 @@ export function AiGenerationPage() {
 
       <section className="aiw-sticky-bar">
         <div className="aiw-sticky-inner">
-          <span className="muted">步骤进度 {completedStages}/4 · 已选用于生成 {selectedCandidates.length}/{MAX_GENERATE_SELECTED}</span>
+          <span className="muted">步骤进度 {completedStages}/4 · 已选用于预校验 {selectedCandidates.length}/{MAX_GENERATE_SELECTED}</span>
           <div className="header-actions">
             <button type="button" className="button secondary" onClick={goStepPrev} disabled={activeStep === 1}>
               上一步

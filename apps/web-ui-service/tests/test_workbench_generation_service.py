@@ -12,6 +12,7 @@ from app.services.workbench_generation_api import preview_store
 from app.services.workbench_generation_api.candidate_normalizer import CandidateNormalizer
 from app.services.workbench_generation_compiler.runtime import generate_pipeline as generate_pipeline_module
 from shared_backend.element_binding import resolve_involved_element_codes
+from shared_backend.execution_compiler import ExecutionCompilerError
 
 
 def test_allocate_case_id_skips_existing_requested_case_id(tmp_path: Path) -> None:
@@ -565,7 +566,7 @@ def test_build_generated_case_payload_saves_test_point_plan_snapshot(tmp_path: P
         openapi_url="",
         defect_ticket="",
         runtime_logs="",
-        selected_candidates=[{"intent_id": "intent-01"}],
+        selected_candidates=[{"intent_id": "intent-01", "source_asset_id": "atp-web-login-fn-ai-0001"}],
         selected_intent_ids=["intent-01"],
         page_url="",
     )
@@ -587,7 +588,10 @@ def test_build_generated_case_payload_saves_test_point_plan_snapshot(tmp_path: P
                         "priority": "P1",
                         "expected_result": "登录成功",
                         "involved_elements": ["login_button"],
-                        "steps": [{"action": "click", "target": "login_button", "raw_text": "点击登录按钮"}],
+                        "steps": [
+                            {"action": "click", "target": "login_button", "raw_text": "点击登录按钮"},
+                            {"action": "assert_visible", "target": "login_button", "raw_text": "校验登录按钮可见"},
+                        ],
                         "quality_gate": {"decision": "allow", "blockers": []},
                     }
                 ],
@@ -615,7 +619,10 @@ def test_build_generated_case_payload_saves_test_point_plan_snapshot(tmp_path: P
                         "target": "login_button",
                         "expected_result": "登录成功",
                         "involved_elements": ["login_button"],
-                        "steps": [{"action": "click", "target": "login_button", "raw_text": "点击登录按钮"}],
+                        "steps": [
+                            {"action": "click", "target": "login_button", "raw_text": "点击登录按钮"},
+                            {"action": "assert_visible", "target": "login_button", "raw_text": "校验登录按钮可见"},
+                        ],
                     }
                 ],
             },
@@ -667,7 +674,7 @@ def test_build_generated_case_payload_saves_test_point_plan_snapshot(tmp_path: P
         unprocessable_entity_status=422,
         allocate_case_id=lambda **_kwargs: "atp-web-login-fn-ai-0001",
         existing_case_ids=[],
-        selected_candidate={"intent_id": "intent-01"},
+        selected_candidate={"intent_id": "intent-01", "source_asset_id": "atp-web-login-fn-ai-0001"},
     )
 
     assert written_paths
@@ -689,10 +696,11 @@ def test_build_generated_case_payload_directly_compiles_selected_candidate_steps
         "intent_type": "negative",
         "priority": "P1",
         "steps": ["清空账号输入框", "清空密码输入框", "点击登录按钮"],
-        "steps_hint": ["input:账号输入框=", "input:密码输入框=", "click:登录按钮"],
+        "steps_hint": ["input:账号输入框=", "input:密码输入框=", "click:登录按钮", "assert:错误提示"],
         "expected": "提示请输入账号和密码",
         "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
-        "involved_element_codes": ["username_input", "password_input", "login_button"],
+        "involved_element_codes": ["username_input", "password_input", "login_button", "error_message"],
+        "source_asset_id": "mall-web-login-auth-fn-ai-0021",
     }
     payload = SimpleNamespace(
         project="mall",
@@ -769,6 +777,13 @@ def test_build_generated_case_payload_directly_compiles_selected_candidate_steps
                     "aliases": ["登录按钮"],
                     "business_type": "button",
                 },
+                "error_message": {
+                    "selector": ".el-message--error",
+                    "type": "css",
+                    "name": "错误提示",
+                    "aliases": ["错误提示"],
+                    "business_type": "message",
+                },
                 "home_menu": {
                     "selector": "首页",
                     "type": "role",
@@ -813,11 +828,12 @@ def test_build_generated_case_payload_directly_compiles_selected_candidate_steps
     steps = written_case["execution"]["steps"]
     non_entry_steps = [step for step in steps if step.get("action") != "goto"]
     assert result["item"]["case_id"] == "mall-web-login-fn-ai-0001"
-    assert written_case["version"] == "v1"
+    assert written_case["version"] == "v1.1"
     assert written_case["requirement"] == {
         "intent_id": "intent-05",
         "title": "账号和密码都为空点击登录",
         "type": "negative",
+        "source_asset_id": "mall-web-login-auth-fn-ai-0021",
     }
     assert written_case["execution"]["page_url"] == "http://localhost:5174/#/login"
     assert [step["action"] for step in non_entry_steps] == ["input", "input", "click"]
@@ -826,11 +842,26 @@ def test_build_generated_case_payload_directly_compiles_selected_candidate_steps
         "element:password_input",
         "element:login_button",
     ]
-    assert non_entry_steps[0]["value"] == ""
-    assert non_entry_steps[1]["value"] == ""
+    assert written_case["data"] == {"username": [""], "password": [""]}
+    assert written_case["execution"]["variables"] == {
+        "login_username": "{{username}}",
+        "login_password": "{{password}}",
+    }
+    assert non_entry_steps[0]["value"] == "{{login_username}}"
+    assert non_entry_steps[1]["value"] == "{{login_password}}"
     assert non_entry_steps[0]["locator_type"] == "css"
     assert non_entry_steps[1]["locator_type"] == "css"
-    assert non_entry_steps[-1]["expected_result"] == "提示请输入账号和密码"
+    assert non_entry_steps[-1]["expected_result"] == "已点击登录按钮"
+    assert written_case["assertions"] == [
+        {
+            "action": "assert_visible",
+            "target": "element:error_message",
+            "locator_type": "css",
+            "locator_value": ".el-message--error",
+            "target_name": "错误提示",
+            "expected_result": "提示请输入账号和密码",
+        }
+    ]
     assert "input:密码输入框" not in str(written_case["requirement"])
 
 
@@ -972,7 +1003,7 @@ def test_build_generated_case_payload_writes_product_yaml_for_login_success(
 
     written_case = written_payloads[0]
     steps = written_case["execution"]["steps"]
-    assert written_case["version"] == "v1"
+    assert written_case["version"] == "v1.1"
     assert written_case["requirement"] == {
         "intent_id": "intent-01",
         "title": "首次登录成功",
@@ -981,21 +1012,81 @@ def test_build_generated_case_payload_writes_product_yaml_for_login_success(
         "source_asset_id": "mall-web-login-auth-fn-ai-0021",
     }
     assert written_case["execution"]["page_url"] == "http://localhost:5174/#/login"
+    assert written_case["data"] == {"username": ["test001"], "password": ["123456"]}
+    assert written_case["execution"]["variables"] == {
+        "login_username": "{{username}}",
+        "login_password": "{{password}}",
+    }
     assert steps[0]["action"] == "goto"
     assert steps[1]["target"] == "element:username_input"
     assert "input[placeholder*='请输入用户名']" in steps[1]["locator_value"]
+    assert steps[1]["value"] == "{{login_username}}"
     assert steps[2]["target"] == "element:password_input"
     assert "input[placeholder*='请输入密码']" in steps[2]["locator_value"]
+    assert steps[2]["value"] == "{{login_password}}"
     assert steps[3]["target"] == "element:login_button"
     assert steps[3]["expected_result"] == expected
-    assert steps[4] == {
-        "action": "assert_visible",
-        "target": "element:home_menu",
-        "locator_type": "role",
-        "locator_value": "首页",
-        "target_name": "首页菜单",
-        "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
-        "role": "menuitem",
-    }
+    assert written_case["assertions"] == [
+        {
+            "action": "assert_visible",
+            "target": "element:home_menu",
+            "locator_type": "role",
+            "locator_value": "首页",
+            "target_name": "首页菜单",
+            "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
+            "role": "menuitem",
+        }
+    ]
     assert "登录失败" not in str(written_case)
     assert "remember_password_checkbox" not in str(written_case)
+
+
+def test_dsl_v1_1_enrichment_rejects_input_without_value() -> None:
+    product_yaml = {
+        "version": "v1",
+        "id": "mall-web-login-auth-fn-ai-0001",
+        "tags": ["ai-generated"],
+        "status": "automated",
+        "requirement": {
+            "intent_id": "intent-01",
+            "source_asset_id": "mall-web-login-auth-fn-ai-0021",
+        },
+        "execution": {
+            "selected_intent_ids": ["intent-01"],
+            "steps": [{"action": "input", "target": "element:username_input"}],
+        },
+        "assertions": [{"action": "assert_visible", "target": "element:home_menu"}],
+    }
+
+    with pytest.raises(ExecutionCompilerError) as exc_info:
+        generate_pipeline_module._enrich_product_case_yaml_v1_1(product_yaml, page="login")
+
+    assert exc_info.value.code == "dsl_v1_1_missing_input_data"
+
+
+def test_dsl_v1_1_enrichment_rejects_ai_case_without_executable_assertion() -> None:
+    product_yaml = {
+        "version": "v1",
+        "id": "mall-web-login-auth-fn-ai-0001",
+        "tags": ["ai-generated"],
+        "status": "automated",
+        "requirement": {
+            "intent_id": "intent-01",
+            "source_asset_id": "mall-web-login-auth-fn-ai-0021",
+        },
+        "execution": {
+            "selected_intent_ids": ["intent-01"],
+            "steps": [
+                {
+                    "action": "input",
+                    "target": "element:username_input",
+                    "value": "asset-maintained-user",
+                }
+            ],
+        },
+    }
+
+    with pytest.raises(ExecutionCompilerError) as exc_info:
+        generate_pipeline_module._enrich_product_case_yaml_v1_1(product_yaml, page="login")
+
+    assert exc_info.value.code == "dsl_v1_1_missing_executable_assertion"

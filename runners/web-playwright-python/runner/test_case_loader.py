@@ -5,7 +5,16 @@ from pathlib import Path
 
 from runner.data_expander import expand_test_case
 from runner.paths import AI_GENERATED_CASES_ROOT, SMOKE_TEST_CASES_ROOT
-from runner.yaml_loader import load_yaml_file, load_yaml_files
+from runner.yaml_loader import load_validated_yaml_file, load_yaml_files
+
+
+def _extra_allowed_roots() -> list[Path]:
+    roots: list[Path] = []
+    for raw_root in os.getenv("TEST_CASE_ALLOWED_ROOTS", "").split(os.pathsep):
+        value = raw_root.strip()
+        if value:
+            roots.append(Path(value).expanduser().resolve())
+    return roots
 
 
 def load_ai_generated_test_cases(
@@ -20,22 +29,27 @@ def _ensure_case_path_allowed(selected_mode: str, selected_case_path: str) -> No
         return
 
     resolved_path = Path(selected_case_path).resolve()
-    allowed_root = None
+    allowed_roots: list[Path] = []
 
     if selected_mode == "ai":
-        allowed_root = AI_GENERATED_CASES_ROOT.resolve()
+        allowed_roots.append(AI_GENERATED_CASES_ROOT.resolve())
     elif selected_mode == "smoke":
-        allowed_root = SMOKE_TEST_CASES_ROOT.resolve()
+        allowed_roots.append(SMOKE_TEST_CASES_ROOT.resolve())
+    allowed_roots.extend(_extra_allowed_roots())
 
-    if allowed_root is None:
+    if not allowed_roots:
         return
 
-    try:
-        resolved_path.relative_to(allowed_root)
-    except ValueError as exc:
-        raise ValueError(
-            f"TEST_CASE_PATH must stay under {allowed_root} when RUN_MODE={selected_mode}: {resolved_path}"
-        ) from exc
+    for allowed_root in allowed_roots:
+        try:
+            resolved_path.relative_to(allowed_root)
+            return
+        except ValueError:
+            continue
+    allowed_text = ", ".join(str(root) for root in allowed_roots)
+    raise ValueError(
+        f"TEST_CASE_PATH must stay under one of [{allowed_text}] when RUN_MODE={selected_mode}: {resolved_path}"
+    )
 
 
 def load_expanded_test_cases(
@@ -51,10 +65,7 @@ def load_expanded_test_cases(
     _ensure_case_path_allowed(selected_mode, selected_case_path)
 
     if selected_case_path:
-        raw_case = load_yaml_file(selected_case_path)
-        if raw_case is None:
-            raise ValueError(f"Test case file is empty: {selected_case_path}")
-        raw_cases.append(raw_case)
+        raw_cases.append(load_validated_yaml_file(Path(selected_case_path)))
     elif selected_mode == "smoke":
         raw_cases.extend(load_yaml_files(SMOKE_TEST_CASES_ROOT))
     elif selected_mode == "ai":

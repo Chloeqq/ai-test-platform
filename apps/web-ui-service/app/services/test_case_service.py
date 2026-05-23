@@ -655,30 +655,6 @@ def _default_expected_for_login_step(role: str, action: str, scenario_context: d
     return ""
 
 
-def _default_login_input_value(role: str, action: str, scenario_context: dict[str, bool]) -> str:
-    if action not in {"input", "fill", "type"}:
-        return ""
-    if role == "username":
-        if scenario_context.get("lock"):
-            return "locked_user"
-        if scenario_context.get("empty_username"):
-            return ""
-        if scenario_context.get("wrong_username"):
-            return "wrong_user"
-        if scenario_context.get("over_limit_username"):
-            return "username_over_20_chars_123456"
-        return "test001"
-    if role == "password":
-        if scenario_context.get("empty_password"):
-            return ""
-        if scenario_context.get("wrong_password"):
-            return "wrong_password"
-        if scenario_context.get("over_limit_password"):
-            return "password_over_20_chars_123456"
-        return "123456"
-    return ""
-
-
 def _is_positive_login_expected(value: str) -> bool:
     normalized = _normalize_match_text(value)
     return any(token in normalized for token in ["跳转", "首页", "已登录", "token", "会话状态正常", "登录成功"])
@@ -831,8 +807,8 @@ def _repair_execution_steps_for_storage(
                 step["locator_value"] = fixed_locator_value
                 step["target_name"] = _friendly_target_name_for_login(role, element)
             if auto_fill_locator_enabled and action in {"input", "fill", "type"} and _normalize_step_text(step.get("value")) == "":
-                default_value = _default_login_input_value(role, action, scenario_context)
-                step["value"] = default_value
+                # 账号密码必须来自测试资产或用例脚本；自动修复只补定位器，不生成测试数据。
+                step.pop("value", None)
             if auto_fix_expected_enabled:
                 current_expected = _normalize_step_text(step.get("expected_result"))
                 if (
@@ -1142,6 +1118,26 @@ def _load_case_yaml_from_script(script_code: Any) -> dict[str, Any]:
     except Exception:
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _derive_case_projection_from_script(script_code: Any) -> dict[str, Any]:
+    """Derive display-only case fields from the canonical YAML script."""
+    case_yaml = _load_case_yaml_from_script(script_code)
+    if not case_yaml:
+        return {}
+    steps = _workbench_steps(case_yaml)
+    requirement_lines = _workbench_requirement(case_yaml)
+    expected_result = (
+        normalize_optional_text(case_yaml.get("expected_result"))
+        or "\n".join(requirement_lines)
+        or normalize_optional_text(case_yaml.get("description"))
+    )
+    return {
+        "precondition_state": normalize_optional_text(case_yaml.get("precondition_state")),
+        "test_steps": steps,
+        "test_steps_text": render_test_steps_text(steps),
+        "expected_result": expected_result,
+    }
 
 
 def _find_existing_workbench_case_by_source_identity(
@@ -2298,7 +2294,6 @@ def upsert_test_case_from_workbench(
 def get_test_case_detail(db: Session, case_id: int | str) -> TestCaseDetailResult:
     ensure_seed_data(db)
     case = case_or_404(db, case_id)
-    _repair_case_detail_payload_in_storage(db, case=case)
     defects = db.execute(
         select(TestCaseDefect)
         .where(TestCaseDefect.case_id == case.id)
@@ -2503,6 +2498,12 @@ def update_test_case(db: Session, case_id: int | str, payload: TestCaseUpdate) -
 
     if payload.script_code is not None:
         case.script_code = payload.script_code
+        projection = _derive_case_projection_from_script(payload.script_code)
+        if projection:
+            case.precondition_state = projection["precondition_state"]
+            case.test_steps = projection["test_steps"]
+            case.test_steps_text = projection["test_steps_text"]
+            case.expected_result = projection["expected_result"]
         changed = True
 
     if payload.automation_status is None and (
@@ -2648,8 +2649,15 @@ def update_script(db: Session, case_id: int | str, payload: TestCaseScriptUpdate
     new_lines = len(payload.script_code.splitlines())
     delta = new_lines - old_lines
     case.script_code = payload.script_code
+    projection = _derive_case_projection_from_script(payload.script_code)
+    if projection:
+        case.precondition_state = projection["precondition_state"]
+        case.test_steps = projection["test_steps"]
+        case.test_steps_text = projection["test_steps_text"]
+        case.expected_result = projection["expected_result"]
     case.updated_at = datetime.now(UTC)
     db.add(case)
+    _sync_test_case_steps(db, case)
     next_version = _next_version_no(db, case.id)
     db.add(
         TestCaseVersion(
