@@ -80,9 +80,13 @@ frontend-build:
 
 db-bootstrap:
 	cd apps/web-ui-service && ../../.venv/bin/python scripts/bootstrap_database.py
+	# workbench_state 表由 create_all() 创建,不在 alembic 迁移中
+	cd apps/web-ui-service && PYTHONPATH=.. ../../.venv/bin/python -c "from app.core.database import engine, Base; import app.models.workbench_state; Base.metadata.create_all(bind=engine)"
 
 db-upgrade:
 	cd apps/web-ui-service && ../../.venv/bin/alembic upgrade head
+	# workbench_state 表不在 alembic 迁移中,补创建
+	cd apps/web-ui-service && PYTHONPATH=.. ../../.venv/bin/python -c "from app.core.database import engine, Base; import app.models.workbench_state; Base.metadata.create_all(bind=engine)"
 
 db-revision:
 	cd apps/web-ui-service && ../../.venv/bin/alembic revision -m "$(MSG)"

@@ -69,9 +69,8 @@ Router → Facade → Service → Repository → DB
 
 ## 已知问题（接手时注意）
 
-### WorkbenchState 表无 Alembic 迁移
-6 张表（workbench_history_events / review_decisions / runtime_runs / execution_gate_decisions / defect_links / failure_source_calibrations）由 `main.py` 的 `Base.metadata.create_all()` 自动创建，**不在 Alembic 迁移中**。只跑 `alembic upgrade head` 不会创建它们。生产环境部署前需确认。
-测试环境：这些表在临时 SQLite 中可能不存在，需要 `Base.metadata.create_all(bind=engine)`。
+### WorkbenchState 表无 Alembic 迁移 ✅ 已处理
+`make db-upgrade` 和 `make db-bootstrap` 现在会在 alembic 之后自动调用 `Base.metadata.create_all()` 创建 6 张 workbench_state 表。正式迁移待补。
 
 ### 启动后页面为空
 `make dev` 启动服务后，DB 里没有 seed 数据，页面显示空白。需手动运行 `make db-bootstrap` 创建示例项目和用例。`make dev` 没有自动执行这一步。
