@@ -48,7 +48,8 @@ help:
 
 # 一键启动本地开发环境（postgres + redis + orchestrator + web + seed 数据）
 # 需要 .env 文件（参考 .env.example）和 Docker
-dev:
+# 首次运行会自动 npm install + build 前端
+dev: frontend-build
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
 	@sleep 3
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d orchestrator
@@ -71,7 +72,7 @@ dev-down:
 venv:
 	python3 -m venv .venv
 
-install-dev: venv
+install-dev: venv frontend-build
 	$(VENV_PYTHON) -m pip install --upgrade pip
 	$(VENV_PYTHON) -m pip install -r requirements-dev.txt -r apps/web-ui-service/requirements.txt -r apps/ai-orchestrator/requirements.txt -r runners/web-playwright-python/requirements.txt -r agents/test-design-agent/requirements.txt
 
@@ -85,6 +86,9 @@ frontend-dev:
 	cd apps/web-ui-service/frontend && npm run dev
 
 frontend-build:
+	@if [ ! -f apps/web-ui-service/frontend/node_modules/.package-lock.json ]; then \
+		cd apps/web-ui-service/frontend && npm install --cache ../../../.npm-cache; \
+	fi
 	cd apps/web-ui-service/frontend && npm run build
 
 db-bootstrap:

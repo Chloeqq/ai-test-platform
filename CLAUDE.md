@@ -75,8 +75,8 @@ Router → Facade → Service → Repository → DB
 ### 启动后页面为空 ✅ 已处理
 `make dev` 现在自动运行 `db-bootstrap` 创建 seed 数据。如果仍为空，检查 `.env` 中 `DATABASE_URL` 是否正确指向 Docker PostgreSQL。
 
-### 前端本地开发需手动 build
-React 源码在 `frontend/src/`，构建产物在 `app/static/react/`（gitignored）。Docker 部署自动 build，但本地开发需 `make frontend-build`。本地不 build 看到的是旧页面或空白页。
+### 前端本地开发需手动 build ✅ 已处理
+`make install-dev` 和 `make dev` 现在自动 `npm install && npm run build`。`frontend-build` 也内置了 `npm install` 检查。
 
 ### `app.py` 和 `app/` 包冲突
 orchestrator 的 `apps/ai-orchestrator/src/app.py` 和 web-ui 的 `apps/web-ui-service/app/` 包在同一个 PYTHONPATH 中会冲突（`.py` 先于 package/）。`verify_core_chain.py` 已 workaround。CI 和本地开发应通过 `docker compose` 隔离两个服务，不要混在同一个 PYTHONPATH。
