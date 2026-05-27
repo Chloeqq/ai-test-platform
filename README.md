@@ -649,6 +649,8 @@ FastAPI 后端本地启动：
 ./.venv/bin/python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 127.0.0.1 --port 8013 --reload
 ```
 
+Swagger 文档：启动后访问 `http://127.0.0.1:8013/docs`
+
 React 前端开发：
 
 ```bash
@@ -666,12 +668,14 @@ make frontend-build
 
 ### 7.3 AI Orchestrator
 
-HTTP 服务：
+HTTP 服务（FastAPI，2026-05 从 Flask 迁移）：
 
 ```bash
 cd apps/ai-orchestrator
-PYTHONPATH=src flask --app src/wsgi:app run --host 127.0.0.1 --port 8000
+PYTHONPATH=src:. uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+
+Swagger 文档：启动后访问 `http://127.0.0.1:8000/docs`
 
 CLI 编排：
 
@@ -693,12 +697,10 @@ docker compose up -d --build
 
 默认端口：
 
-- Web UI / Nginx：`http://127.0.0.1:8013`
-- Web 容器直连端口：`http://127.0.0.1:8015`
-- Orchestrator：`http://127.0.0.1:8000`
-- PostgreSQL：`127.0.0.1:5432`，来自 dev override
-- Redis：`127.0.0.1:6379`，来自 dev override
-- Kibana：`http://127.0.0.1:15601`，来自 dev override
+- Web UI：`http://127.0.0.1:8013`（Swagger: `/docs`）
+- Orchestrator：`http://127.0.0.1:8000`（Swagger: `/docs`）
+- PostgreSQL：`127.0.0.1:5432`
+- Redis：`127.0.0.1:6379`
 
 ---
 
