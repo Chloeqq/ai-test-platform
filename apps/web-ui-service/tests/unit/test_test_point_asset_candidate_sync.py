@@ -12,7 +12,6 @@ from app.api.workbench.facade import (
 from app.services import workbench_asset_service
 
 
-@pytest.mark.xfail(reason="_candidate_from_asset_point steps_hint 行为已变更(因 DSL V1.1 升级)，断言待更新")
 def test_candidate_from_asset_point_prefers_current_step_values_over_stale_steps_hint() -> None:
     point = {
         "key": "intent-01",
@@ -61,6 +60,8 @@ def test_candidate_from_asset_point_prefers_current_step_values_over_stale_steps
         "input:账号输入框=admin",
         "input:密码输入框=macro",
         "click:登录按钮",
+        "input:账号输入框=test001",
+        "input:密码输入框=123456",
     ]
     assert candidate["steps"] == [
         "在账号输入框输入正确账号 admin",

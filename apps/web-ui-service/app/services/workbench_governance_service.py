@@ -13,16 +13,10 @@ from sqlalchemy.orm import Session
 from app.api.workbench._helpers import default_overview, to_utc
 from app.models.test_case import TestCase, TestCaseExecution
 from app.services import test_case_service
-from shared_backend.type_utils import dict_value as _dict_value, int_value as _int_value, list_value as _list_value
+from shared_backend.type_utils import dict_value as _dict_value, float_value as _float_value, int_value as _int_value, list_value as _list_value
 
 LOGGER = logging.getLogger(__name__)
 
-
-def _float_value(value: Any) -> float:
-    try:
-        return float(value or 0.0)
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _risk_level(score: int) -> str:
