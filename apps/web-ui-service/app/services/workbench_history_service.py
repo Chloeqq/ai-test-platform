@@ -276,41 +276,6 @@ def list_history(
     }
 
 
-def build_workbench_history_payload(
-    *,
-    history_items: list[dict[str, Any]],
-    resolve_governance_snapshot: SnapshotResolver | None = None,
-    resolve_failure_snapshot: SnapshotResolver | None = None,
-    normalize_page_slug: PageNormalizer | None = None,
-    limit: int = 500,
-    page: int = 1,
-    page_size: int = 50,
-    keyword: str = "",
-    sort: str = "timestamp_desc",
-    action: str = "",
-    actor: str = "",
-    status: str = "",
-    risk_gate_decision: str = "",
-    self_healing_status: str = "",
-) -> dict[str, Any]:
-    return list_history(
-        history_items,
-        resolve_governance_snapshot=resolve_governance_snapshot,
-        resolve_failure_snapshot=resolve_failure_snapshot,
-        normalize_page_slug=normalize_page_slug,
-        limit=limit,
-        page=page,
-        page_size=page_size,
-        keyword=keyword,
-        sort=sort,
-        action=action,
-        actor=actor,
-        status=status,
-        risk_gate_decision=risk_gate_decision,
-        self_healing_status=self_healing_status,
-    )
-
-
 def summarize_quality_gate_events(
     history_items: list[dict[str, Any]],
     *,

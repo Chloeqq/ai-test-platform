@@ -7,7 +7,6 @@ import subprocess
 import sys
 import json
 import logging
-import sqlite3
 
 _logger = logging.getLogger(__name__)
 import importlib.util
@@ -789,7 +788,7 @@ class OrchestratorService:
         for report_path in report_files[: max(1, limit)]:
             try:
                 payload = json.loads(report_path.read_text(encoding="utf-8"))
-            except Exception:
+            except (json.JSONDecodeError, ValueError):
                 _logger.debug("skipping unreadable report file: %s", report_path, exc_info=True)
                 continue
             if isinstance(payload, dict):
@@ -835,7 +834,7 @@ class OrchestratorService:
             return {}
         try:
             parsed = json.loads(text)
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             return {}
         return parsed if isinstance(parsed, dict) else {}
 
@@ -1039,22 +1038,17 @@ class OrchestratorService:
                     if elements:
                         return {"page": normalized_page, "elements": elements}
         try:
-            db_url = str(os.getenv("DATABASE_URL", "")).strip()
-            if db_url.startswith("sqlite:///"):
-                db_path = db_url.removeprefix("sqlite:///")
-            else:
-                db_path = str(self.repo_root / "apps" / "web-ui-service" / "dev.db")
-            with sqlite3.connect(db_path) as db:
-                cursor = db.cursor()
-                cursor.execute(
-                    """
-                    select id
-                    from page_objects
-                    where project_code = ? and client = ? and page_code = ?
-                    """,
-                    (normalized_project, "web", normalized_page),
-                )
-                page_object_row = cursor.fetchone()
+            from shared_backend.db import get_db_session
+            from sqlalchemy import text
+
+            with get_db_session() as db:
+                page_object_row = db.execute(
+                    text(
+                        "select id from page_objects "
+                        "where project_code = :project and client = :client and page_code = :page"
+                    ),
+                    {"project": normalized_project, "client": "web", "page": normalized_page},
+                ).fetchone()
                 if page_object_row is None:
                     raise OrchestratorValidationError(
                         "page object not found",
@@ -1064,16 +1058,13 @@ class OrchestratorService:
                             "page": normalized_page,
                         },
                     )
-                cursor.execute(
-                    """
-                    select element_code, locator_type, locator_value, role
-                    from page_elements
-                    where page_object_id = ?
-                    order by id asc
-                    """,
-                    (int(page_object_row[0]),),
-                )
-                element_rows = cursor.fetchall()
+                element_rows = db.execute(
+                    text(
+                        "select element_code, locator_type, locator_value, role "
+                        "from page_elements where page_object_id = :po_id order by id asc"
+                    ),
+                    {"po_id": int(page_object_row[0])},
+                ).fetchall()
             if not element_rows:
                 raise OrchestratorValidationError(
                     "page object has no elements",

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
+from shared_backend.datetime_compat import UTC
 import hashlib
 import importlib.util
 import os
@@ -18,10 +19,12 @@ from urllib.parse import unquote, urlsplit
 
 from fastapi import HTTPException, status
 from shared_backend.case_ids import normalize_client_code
+from shared_backend.type_utils import normalize_project_code_strict as _normalize_project_code_strict
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.page_object import PageObject, PageObjectCandidateElement, PageObjectCandidateGroup, PageObjectRecorderSession
+from app.repositories.recorder_repository import RecorderRepository
 from app.models.test_project import TestProject
 from app.schemas.page_object import PageObjectCreate, PageObjectRefCreate
 from app.schemas.page_object_recorder import (
@@ -137,13 +140,10 @@ class _ParsedStep:
 
 
 def _normalize_project_code(value: str) -> str:
-    normalized = re.sub(r"[^a-zA-Z0-9]+", "", str(value or "").strip()).lower()
-    if len(normalized) < 2 or len(normalized) > 20:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="project_code must be 2-20 letters or digits",
-        )
-    return normalized
+    try:
+        return _normalize_project_code_strict(value, max_len=20)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 def _normalize_page_code(value: str) -> str:
@@ -360,9 +360,7 @@ def _serialize_session_summary(
 
 def _get_session_or_404(db: Session, session_id: str) -> PageObjectRecorderSession:
     normalized_session_id = _normalize_session_id(session_id)
-    item = db.execute(
-        select(PageObjectRecorderSession).where(PageObjectRecorderSession.session_id == normalized_session_id)
-    ).scalar_one_or_none()
+    item = RecorderRepository(db).get_session_by_id(normalized_session_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"recorder session not found: {session_id}")
     return item
@@ -1052,31 +1050,15 @@ def _candidate_summary_from_rows(rows: list[PageObjectCandidateElement]) -> dict
 
 
 def _candidate_summary_for_session(db: Session, session: PageObjectRecorderSession) -> dict[str, object]:
-    rows = (
-        db.execute(
-            select(PageObjectCandidateElement).where(
-                PageObjectCandidateElement.session_id == session.session_id,
-            )
-        )
-        .scalars()
-        .all()
-    )
-    return _candidate_summary_from_rows(list(rows))
+    rows = RecorderRepository(db).list_candidates_by_session(session.session_id)
+    return _candidate_summary_from_rows(rows)
 
 
 def _candidate_summaries_for_sessions(db: Session, session_ids: list[str]) -> dict[str, dict[str, object]]:
     normalized_ids = [str(session_id or "").strip() for session_id in session_ids if str(session_id or "").strip()]
     if not normalized_ids:
         return {}
-    rows = (
-        db.execute(
-            select(PageObjectCandidateElement).where(
-                PageObjectCandidateElement.session_id.in_(normalized_ids),
-            )
-        )
-        .scalars()
-        .all()
-    )
+    rows = RecorderRepository(db).list_candidates_by_sessions(normalized_ids)
     rows_by_session: dict[str, list[PageObjectCandidateElement]] = {session_id: [] for session_id in normalized_ids}
     for row in rows:
         rows_by_session.setdefault(str(row.session_id or ""), []).append(row)
@@ -1148,15 +1130,7 @@ def _serialize_candidate_element(row: PageObjectCandidateElement) -> dict[str, o
 
 
 def _candidate_elements_for_session(db: Session, session: PageObjectRecorderSession) -> list[dict[str, object]]:
-    rows = (
-        db.execute(
-            select(PageObjectCandidateElement)
-            .where(PageObjectCandidateElement.session_id == session.session_id)
-            .order_by(PageObjectCandidateElement.id.asc())
-        )
-        .scalars()
-        .all()
-    )
+    rows = RecorderRepository(db).list_candidates_by_session(session.session_id)
     return [_serialize_candidate_element(row) for row in rows]
 
 
@@ -1203,14 +1177,7 @@ def _sync_candidate_group(
         if sample and sample not in sample_texts:
             sample_texts.append(sample)
 
-    group = db.execute(
-        select(PageObjectCandidateGroup).where(
-            PageObjectCandidateGroup.project_code == project_code,
-            PageObjectCandidateGroup.client == client,
-            PageObjectCandidateGroup.page_code == page_code,
-            PageObjectCandidateGroup.group_key == group_key,
-        )
-    ).scalar_one_or_none()
+    group = RecorderRepository(db).get_group(project_code, client, page_code, group_key)
     if group is None:
         group = PageObjectCandidateGroup(
             project_code=project_code,
@@ -1275,13 +1242,7 @@ def _persist_candidate_elements(
     touched_group_keys: set[str] = set()
     existing_rows = {
         str(row.candidate_key or ""): row
-        for row in db.execute(
-            select(PageObjectCandidateElement).where(
-                PageObjectCandidateElement.session_id == session.session_id,
-            )
-        )
-        .scalars()
-        .all()
+        for row in RecorderRepository(db).list_candidates_by_session(session.session_id)
     }
     for item in element_candidates:
         locator = _ParsedLocator(
@@ -1716,11 +1677,12 @@ def list_recorder_sessions(
         conditions.append(PageObjectRecorderSession.status == normalized_status)
 
     total = int(
-        db.execute(
-            select(func.count())
-            .select_from(PageObjectRecorderSession)
-            .where(*conditions)
-        ).scalar_one()
+        RecorderRepository(db).count_sessions(
+            project_code=normalized_project_code,
+            client=normalized_client,
+            page_code=normalized_page_code or None,
+            status=normalized_status or None,
+        )
         or 0
     )
     rows = (
@@ -1863,19 +1825,11 @@ def batch_delete_recorder_sessions(
         if str(row.page_code or "").strip() and str(row.group_key or "").strip()
     }
     if deleted_session_ids:
-        db.execute(
-            delete(PageObjectCandidateElement).where(
-                PageObjectCandidateElement.project_code == normalized_project_code,
-                PageObjectCandidateElement.client == normalized_client,
-                PageObjectCandidateElement.session_id.in_(deleted_session_ids),
-            )
+        RecorderRepository(db).delete_candidates_by_sessions(
+            normalized_project_code, normalized_client, deleted_session_ids
         )
-        db.execute(
-            delete(PageObjectRecorderSession).where(
-                PageObjectRecorderSession.project_code == normalized_project_code,
-                PageObjectRecorderSession.client == normalized_client,
-                PageObjectRecorderSession.session_id.in_(deleted_session_ids),
-            )
+        RecorderRepository(db).delete_sessions(
+            normalized_project_code, normalized_client, deleted_session_ids
         )
         db.flush()
 
@@ -1965,11 +1919,7 @@ def replay_recorder_session(db: Session, *, session_id: str, timeout_seconds: in
 
 def cleanup_orphan_recorder_artifacts(db: Session) -> dict[str, object]:
     _RECORDER_ROOT.mkdir(parents=True, exist_ok=True)
-    active_session_ids = {
-        str(value or "").strip()
-        for value in db.execute(select(PageObjectRecorderSession.session_id)).scalars().all()
-        if str(value or "").strip()
-    }
+    active_session_ids = set(RecorderRepository(db).list_all_session_ids())
     orphan_files: list[str] = []
     cleaned_files: list[str] = []
     scanned_files = 0

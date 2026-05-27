@@ -13,6 +13,7 @@ from shared_backend.case_ids import normalize_case_id
 
 from app.core import page_analysis_rules
 from app.core.config import get_settings
+from app.core.database import SessionLocal
 from app.services import (
     workbench_analysis_service,
     workbench_asset_service,
@@ -23,6 +24,7 @@ from app.services import (
     workbench_review_service,
     workbench_task_service,
     workbench_runtime_service,
+    test_data_pool_service,
 )
 
 from app.api.workbench import constants, store
@@ -298,12 +300,15 @@ def _sync_stage_b_workbench_gate(*args: Any, **kwargs: Any) -> None:
 
 
 def _build_run_command(case_path: Path) -> tuple[list[str], dict[str, str]]:
+    runner_environ = os.environ.copy()
+    with SessionLocal() as db:
+        runner_environ["DSL_DATA_POOL_JSON"] = test_data_pool_service.serialize_runner_data_pool_snapshot(db)
     return workbench_runtime_service.build_run_command(
         case_path,
         get_python_bin_fn=_get_python_bin,
         repo_root=constants.REPO_ROOT,
         allure_results_root=constants.ALLURE_RESULTS_ROOT,
-        environ=os.environ.copy(),
+        environ=runner_environ,
     )
 
 

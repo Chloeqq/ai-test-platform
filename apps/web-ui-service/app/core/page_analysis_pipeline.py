@@ -11,16 +11,9 @@ from shared_backend.schemas import (
     normalize_test_point_plan_v1,
 )
 from app.core.page_analysis_rules import build_page_semantic_model
+from shared_backend.type_utils import dict_value as _dict_value, list_value as _list_value
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _list_value(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _dedup_keep_order(items: list[str]) -> list[str]:

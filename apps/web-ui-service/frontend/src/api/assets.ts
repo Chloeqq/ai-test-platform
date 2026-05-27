@@ -133,6 +133,7 @@ export interface UpsertTestPointAssetPayload {
   priority?: string;
   requirement?: string;
   source_type?: string;
+  points?: Array<Record<string, unknown>>;
   selected_candidates?: Array<Record<string, unknown>>;
 }
 

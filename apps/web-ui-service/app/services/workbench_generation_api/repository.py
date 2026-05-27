@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any, Callable
 
@@ -9,23 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 import yaml
 
-from app.models.page_object import PageElement, PageObject, PageObjectRef
 from app.models.test_case import TestCase, TestCaseStep
-
-
-class WorkbenchGenerationUnitOfWork(AbstractContextManager["WorkbenchGenerationUnitOfWork"]):
-    def __init__(self, db: Session) -> None:
-        self.db = db
-
-    def __enter__(self) -> "WorkbenchGenerationUnitOfWork":
-        return self
-
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> bool:
-        if exc_type is None:
-            self.db.commit()
-        else:
-            self.db.rollback()
-        return False
 
 
 class WorkbenchGenerationRepository:
@@ -205,68 +188,3 @@ class WorkbenchGenerationRepository:
     def count_case_step_rows(self, *, case_db_id: int) -> int:
         count = self.db.execute(select(func.count(TestCaseStep.id)).where(TestCaseStep.case_id == int(case_db_id))).scalar_one()
         return int(count or 0)
-
-    def _extract_case_element_targets(self, case: TestCase) -> list[str]:
-        steps = case.test_steps if isinstance(case.test_steps, list) else []
-        targets: list[str] = []
-        for raw in steps:
-            step = raw if isinstance(raw, dict) else {}
-            target = str(step.get("target") or "").strip()
-            if target.startswith("element:"):
-                target = str(target.removeprefix("element:")).strip()
-            if not target:
-                continue
-            if target.startswith(("http://", "https://", "/", "#")):
-                continue
-            if ":" in target:
-                prefix = str(target.split(":", 1)[0]).strip().lower()
-                if prefix in {"css", "xpath", "text", "role", "id", "name", "url"}:
-                    continue
-            if target not in targets:
-                targets.append(target)
-        return targets
-
-    def bind_case_page_object_refs(self, case: TestCase) -> dict[str, int]:
-        case_business_id = str(case.case_id or "").strip()
-        if not case_business_id:
-            return {"linked_ref_count": 0, "skipped_ref_count": 0}
-        page_object = self.db.execute(
-            select(PageObject).where(
-                PageObject.project_code == str(case.project_code or "").strip(),
-                PageObject.client == str(case.client or "").strip(),
-                PageObject.page_code == str(case.page_code or "").strip(),
-            )
-        ).scalar_one_or_none()
-        if page_object is None:
-            return {"linked_ref_count": 0, "skipped_ref_count": 0}
-        elements = self.db.execute(select(PageElement).where(PageElement.page_object_id == int(page_object.id))).scalars().all()
-        element_by_code = {str(item.element_code or "").strip(): item for item in elements if str(item.element_code or "").strip()}
-        linked = 0
-        skipped = 0
-        with WorkbenchGenerationUnitOfWork(self.db):
-            for target in self._extract_case_element_targets(case):
-                element = element_by_code.get(target)
-                if element is None:
-                    skipped += 1
-                    continue
-                existing = self.db.execute(
-                    select(PageObjectRef).where(
-                        PageObjectRef.page_element_id == int(element.id),
-                        PageObjectRef.reference_type == "test_case",
-                        PageObjectRef.reference_key == case_business_id,
-                    )
-                ).scalar_one_or_none()
-                if existing is not None:
-                    skipped += 1
-                    continue
-                self.db.add(
-                    PageObjectRef(
-                        page_element_id=int(element.id),
-                        reference_type="test_case",
-                        reference_key=case_business_id,
-                        source="full-chain",
-                        created_by="full-chain",
-                    )
-                )
-                linked += 1
-        return {"linked_ref_count": linked, "skipped_ref_count": skipped}

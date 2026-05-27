@@ -5,21 +5,20 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Protocol
 import yaml
-
-from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
-from app.core.database import SessionLocal
+from shared_backend.db import get_db_session as SessionLocal
 from app.models.page_object import PageElement, PageObject
+from app.repositories.page_object_repository import PageObjectRepository
 
 from ..debug import debug_enabled, log_debug_event
 from shared_backend.observability import summarize_http_context
 from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
 from shared_backend.element_binding import build_element_alias_map
 from shared_backend.intent_mapping import resolve_explicit_step
-from shared_backend.page_object_assets import merge_page_object_with_yaml
 from shared_backend.schemas.contracts import normalize_test_point_plan_v1
 from shared_backend.schemas.validator import ContractValidator
+from shared_backend.type_utils import str_value as _normalized_text
 
 _YAML_PAGE_OBJECT_ROOT = Path(__file__).resolve().parents[6] / "assets" / "page-objects" / "web"
 
@@ -40,8 +39,6 @@ class AllocateCaseId(Protocol):
     def __call__(self, prefix: str, **kwargs: Any) -> str: ...
 
 
-SafeCaseId = Callable[[str], str]
-InferTargets = Callable[[str], tuple[str, str]]
 SaveCaseState = Callable[[str, dict[str, Any], Any], dict[str, Any]]
 AppendHistory = Callable[[dict[str, Any]], None]
 NowIso = Callable[[], str]
@@ -59,15 +56,18 @@ _COMPILER_ERROR_CODES = {
     "execution_compiler_intent_coverage_failed",
     "execution_ir_empty_steps",
     "dsl_v1_1_missing_source_identity",
-    "dsl_v1_1_missing_input_data",
+    "dsl_v1_1_invalid_data_source",
+    "dsl_v1_1_missing_input_data_source",
     "dsl_v1_1_missing_executable_assertion",
+    "dsl_v1_1_page_url_mismatch",
+    "dsl_v1_1_selected_intent_count_invalid",
     "page_object_not_found",
     "page_object_empty_elements",
     "target_binding_failed",
     "execution_render_failed",
 }
 
-_SUPPORTED_TOP_LEVEL_ASSERTIONS = {"assert_visible", "assert_count", "assert_metric", "assert_url"}
+_SUPPORTED_TOP_LEVEL_ASSERTIONS = {"assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url"}
 _TOP_LEVEL_ASSERTION_KEYS = {
     "action",
     "target",
@@ -90,6 +90,7 @@ _TOP_LEVEL_ASSERTION_KEYS = {
     "expected_result",
 }
 _VARIABLE_TEMPLATE_RE = re.compile(r"^\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}$")
+_DSL_DATA_SOURCE_TYPES = {"inline", "pool", "env"}
 
 
 def _log_generation_failure(
@@ -114,12 +115,37 @@ def _log_generation_failure(
     _LOGGER.log(level, "runtime.generate.failed %s", message)
 
 
-def _normalized_text(value: Any) -> str:
-    return str(value or "").strip()
-
-
 def _normalized_key(value: Any) -> str:
     return re.sub(r"[^a-z0-9\u4e00-\u9fa5]+", "", _normalized_text(value).lower())
+
+
+def _is_sensitive_key(value: Any) -> bool:
+    normalized = _normalized_text(value).lower()
+    return any(token in normalized for token in ("password", "passwd", "pwd", "secret", "token", "credential"))
+
+
+def _redact_generation_payload(value: Any) -> Any:
+    """
+    生成负载脱敏函数，用于在记录日志、存储快照、返回调试信息之前，自动把敏感数据隐藏掉
+    :param value:
+    :return:
+    """
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = _normalized_text(key)
+            if _is_sensitive_key(key_text):
+                redacted[key] = "***"
+            elif key_text in {"value", "data", "content"}:
+                redacted[key] = "***" if item not in (None, "", [], {}) else item
+            elif key_text in {"steps", "steps_hint"} and isinstance(item, list):
+                redacted[key] = [f"<{len(item)} item(s)>"]
+            else:
+                redacted[key] = _redact_generation_payload(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_generation_payload(item) for item in value]
+    return value
 
 
 def _looks_like_generic_recorded_name(value: str) -> bool:
@@ -728,6 +754,10 @@ def _product_locator(
     locator_type: str,
     locator_value: str,
 ) -> tuple[str, str]:
+    normalized_locator_type = _normalized_text(locator_type)
+    normalized_locator_value = _normalized_text(locator_value)
+    if normalized_locator_type and normalized_locator_value:
+        return normalized_locator_type, normalized_locator_value
     normalized_page = _normalized_text(page).lower()
     normalized_code = _normalized_text(target_code)
     if normalized_page == "login":
@@ -743,7 +773,45 @@ def _product_locator(
                 "input[type='password'], input[name='password'], #password, #password-input, "
                 "input[placeholder*='请输入密码'], input[placeholder*='密码']",
             )
-    return _normalized_text(locator_type), _normalized_text(locator_value)
+    return normalized_locator_type, normalized_locator_value
+
+
+_LOGIN_DATA_TESTID_ELEMENT_CODES = {
+    "username_input": "login-username-input",
+    "password_input": "login-password-input",
+    "login_button": "login-submit-btn",
+    "home_menu": "home-page",
+}
+
+
+def _product_element_meta(
+    *,
+    page: str,
+    target_code: str,
+    elements: dict[str, Any],
+) -> dict[str, Any]:
+    """按语义 target 取页面对象元素；登录页优先桥接到真实 data-testid 元素。"""
+    normalized_page = _normalized_text(page).lower()
+    normalized_code = _normalized_text(target_code)
+    if normalized_page == "login":
+        testid_code = _LOGIN_DATA_TESTID_ELEMENT_CODES.get(normalized_code, "")
+        testid_meta = elements.get(testid_code) if testid_code and isinstance(elements.get(testid_code), dict) else {}
+        if _normalized_text(testid_meta.get("type") or testid_meta.get("locator_type")) == "data-testid":
+            return testid_meta
+    return elements.get(normalized_code) if isinstance(elements.get(normalized_code), dict) else {}
+
+
+def _trusted_page_url(*, payload_page_url: Any, page_object: dict[str, Any]) -> str:
+    governed_url = _normalized_text(page_object.get("page_url")) if isinstance(page_object, dict) else ""
+    requested_url = _normalized_text(payload_page_url)
+    if governed_url and requested_url and governed_url != requested_url:
+        raise ExecutionCompilerError(
+            code="dsl_v1_1_page_url_mismatch",
+            message="DSL V1.1 page_url must match governed page object",
+            reason=f"payload.page_url `{requested_url}` does not match page_object.page_url `{governed_url}`",
+            stage="dsl_v1_1_enrichment",
+        )
+    return governed_url or requested_url
 
 
 def _product_step_expected(
@@ -756,10 +824,10 @@ def _product_step_expected(
     is_last_intent_step: bool,
     existing_expected: str,
 ) -> str:
-    if is_last_intent_step and intent_expected:
-        return intent_expected
     if existing_expected:
         return existing_expected
+    if is_last_intent_step and intent_expected:
+        return intent_expected
     normalized_action = _normalized_text(action).lower()
     value_text = _normalized_text(value)
     target_name = _normalized_text(target_name) or _normalized_text(target_code)
@@ -817,9 +885,11 @@ def _format_product_execution_steps(
         target_code = _normalized_text(raw_step.get("target"))
         if target_code.startswith("element:"):
             target_code = target_code.removeprefix("element:").strip()
-        element_meta = elements.get(target_code) if isinstance(elements.get(target_code), dict) else {}
-        locator_type = _normalized_text(raw_step.get("locator_type") or element_meta.get("type") or element_meta.get("locator_type"))
-        locator_value = _normalized_text(raw_step.get("locator_value") or raw_step.get("selector") or element_meta.get("selector") or element_meta.get("locator_value"))
+        element_meta = _product_element_meta(page=page, target_code=target_code, elements=elements)
+        # 页面对象库是正式 locator 的事实源。旧编译步骤里可能携带 CSS/role 兜底，
+        # 只能在页面对象缺少 locator 时使用，不能覆盖已治理的 data-testid/qa 定位。
+        locator_type = _normalized_text(element_meta.get("type") or element_meta.get("locator_type") or raw_step.get("locator_type"))
+        locator_value = _normalized_text(element_meta.get("selector") or element_meta.get("locator_value") or raw_step.get("locator_value") or raw_step.get("selector"))
         locator_type, locator_value = _product_locator(
             page=page,
             target_code=target_code,
@@ -884,7 +954,7 @@ def _append_login_success_assertion(
         return
 
     elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
-    home_meta = elements.get("home_menu") if isinstance(elements.get("home_menu"), dict) else {}
+    home_meta = _product_element_meta(page="login", target_code="home_menu", elements=elements)
     locator_type = _normalized_text(home_meta.get("type") or home_meta.get("locator_type"))
     locator_value = _normalized_text(home_meta.get("selector") or home_meta.get("locator_value"))
     if not locator_type or not locator_value:
@@ -914,6 +984,15 @@ def _is_variable_template(value: Any) -> bool:
     return isinstance(value, str) and bool(_VARIABLE_TEMPLATE_RE.fullmatch(value.strip()))
 
 
+def _variable_template_key(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    match = _VARIABLE_TEMPLATE_RE.fullmatch(value.strip())
+    if not match:
+        return ""
+    return _normalized_text(match.group(1))
+
+
 def _data_key_for_input(*, page: str, element_code: str) -> str:
     normalized_page = _normalized_text(page).lower()
     normalized_code = _normalized_text(element_code).lower()
@@ -938,9 +1017,19 @@ def _variable_name_for_input(*, page: str, element_code: str, data_key: str) -> 
 
 
 def _reserve_data_key(data: dict[str, Any], base_key: str, value: Any) -> str:
+    def _existing_value_matches(raw_entry: Any) -> bool:
+        if isinstance(raw_entry, dict):
+            source_type = _normalized_data_source_type(raw_entry.get("source_type") or "inline")
+            if source_type != "inline":
+                return False
+            return raw_entry.get("value") == value
+        if isinstance(raw_entry, list):
+            return raw_entry == [value]
+        return raw_entry == value
+
     key = base_key
     suffix = 2
-    while key in data and data.get(key) != [value]:
+    while key in data and not _existing_value_matches(data.get(key)):
         key = f"{base_key}_{suffix}"
         suffix += 1
     return key
@@ -955,11 +1044,89 @@ def _reserve_variable_name(variables: dict[str, Any], base_name: str, template: 
     return name
 
 
+def _normalized_data_source_type(value: Any) -> str:
+    return _normalized_text(value).lower()
+
+
+def _normalize_data_source_entry(*, key: str, raw_value: Any) -> dict[str, Any]:
+    if isinstance(raw_value, dict):
+        source_type = _normalized_data_source_type(raw_value.get("source_type") or "inline")
+        if source_type not in _DSL_DATA_SOURCE_TYPES:
+            raise ExecutionCompilerError(
+                code="dsl_v1_1_invalid_data_source",
+                message=f"DSL V1.1 data source_type is invalid for key `{key}`",
+                reason=f"unsupported source_type `{source_type}`",
+                stage="dsl_v1_1_enrichment",
+            )
+        if source_type == "inline":
+            if "value" not in raw_value:
+                raise ExecutionCompilerError(
+                    code="dsl_v1_1_invalid_data_source",
+                    message=f"DSL V1.1 inline data requires value for key `{key}`",
+                    reason="inline source missing value",
+                    stage="dsl_v1_1_enrichment",
+                )
+            return {"source_type": "inline", "value": raw_value.get("value")}
+        if source_type == "pool":
+            pool_name = _normalized_text(raw_value.get("pool_name"))
+            pool_key = _normalized_text(raw_value.get("key"))
+            if not pool_name or not pool_key:
+                raise ExecutionCompilerError(
+                    code="dsl_v1_1_invalid_data_source",
+                    message=f"DSL V1.1 pool data requires pool_name and key for `{key}`",
+                    reason="pool source missing pool_name/key",
+                    stage="dsl_v1_1_enrichment",
+                )
+            return {"source_type": "pool", "pool_name": pool_name, "key": pool_key}
+        env_key = _normalized_text(raw_value.get("key"))
+        if not env_key:
+            raise ExecutionCompilerError(
+                code="dsl_v1_1_invalid_data_source",
+                message=f"DSL V1.1 env data requires key for `{key}`",
+                reason="env source missing key",
+                stage="dsl_v1_1_enrichment",
+            )
+        return {"source_type": "env", "key": env_key}
+    if isinstance(raw_value, list):
+        if not raw_value:
+            raise ExecutionCompilerError(
+                code="dsl_v1_1_invalid_data_source",
+                message=f"DSL V1.1 inline data list for `{key}` must not be empty",
+                reason="legacy list source is empty",
+                stage="dsl_v1_1_enrichment",
+            )
+        return {"source_type": "inline", "value": raw_value}
+    return {"source_type": "inline", "value": raw_value}
+
+
+def _normalize_dsl_data_sources(product_yaml: dict[str, Any]) -> dict[str, Any]:
+    raw_data = product_yaml.get("data")
+    if raw_data is None:
+        normalized: dict[str, Any] = {}
+        product_yaml["data"] = normalized
+        return normalized
+    if not isinstance(raw_data, dict):
+        raise ExecutionCompilerError(
+            code="dsl_v1_1_invalid_data_source",
+            message="DSL V1.1 data must be an object",
+            reason="data section is not object",
+            stage="dsl_v1_1_enrichment",
+        )
+    normalized: dict[str, Any] = {}
+    for raw_key, raw_value in raw_data.items():
+        key = _normalized_text(raw_key)
+        if not key:
+            continue
+        normalized[key] = _normalize_data_source_entry(key=key, raw_value=raw_value)
+    product_yaml["data"] = normalized
+    return normalized
+
+
 def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -> None:
     """把步骤里已有的输入值提升为 DSL V1.1 data/variables，不在代码层猜测默认值。"""
     execution_payload = product_yaml.get("execution") if isinstance(product_yaml.get("execution"), dict) else {}
     steps = execution_payload.get("steps") if isinstance(execution_payload.get("steps"), list) else []
-    data = product_yaml.get("data") if isinstance(product_yaml.get("data"), dict) else {}
+    data = _normalize_dsl_data_sources(product_yaml)
     variables = execution_payload.get("variables") if isinstance(execution_payload.get("variables"), dict) else {}
     product_yaml["data"] = data
     execution_payload["variables"] = variables
@@ -974,19 +1141,38 @@ def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -
         input_count += 1
         if "value" not in step:
             raise ExecutionCompilerError(
-                code="dsl_v1_1_missing_input_data",
-                message="DSL V1.1 input step requires explicit data value",
-                reason=f"input step {index} missing value",
+                code="dsl_v1_1_missing_input_data_source",
+                message="DSL V1.1 input step requires declared data source",
+                reason=f"input step {index} missing value or data reference",
                 stage="dsl_v1_1_enrichment",
             )
         raw_value = step.get("value")
         if _is_variable_template(raw_value):
+            referenced_key = _variable_template_key(raw_value)
+            if not referenced_key:
+                raise ExecutionCompilerError(
+                    code="dsl_v1_1_missing_input_data_source",
+                    message="DSL V1.1 input step variable reference is invalid",
+                    reason=f"input step {index} has invalid variable template",
+                    stage="dsl_v1_1_enrichment",
+                )
+            # 允许直接引用 data key，也允许先引用 execution.variables 再转到 data key。
+            if referenced_key not in data:
+                variable_mapping = variables.get(referenced_key)
+                data_key = _variable_template_key(variable_mapping) if variable_mapping is not None else ""
+                if not data_key or data_key not in data:
+                    raise ExecutionCompilerError(
+                        code="dsl_v1_1_missing_input_data_source",
+                        message="DSL V1.1 input step requires declared data source",
+                        reason=f"input step {index} references variable `{referenced_key}` without declared data source",
+                        stage="dsl_v1_1_enrichment",
+                    )
             continue
 
         element_code = _step_element_code(step)
         base_data_key = _data_key_for_input(page=page, element_code=element_code)
         data_key = _reserve_data_key(data, base_data_key, raw_value)
-        data[data_key] = [raw_value]
+        data[data_key] = {"source_type": "inline", "value": raw_value}
         variable_template = f"{{{{{data_key}}}}}"
         base_variable_name = _variable_name_for_input(page=page, element_code=element_code, data_key=data_key)
         variable_name = _reserve_variable_name(variables, base_variable_name, variable_template)
@@ -995,8 +1181,8 @@ def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -
 
     if input_count and not data:
         raise ExecutionCompilerError(
-            code="dsl_v1_1_missing_input_data",
-            message="DSL V1.1 input steps require structured data",
+            code="dsl_v1_1_missing_input_data_source",
+            message="DSL V1.1 input steps require declared data source",
             reason="input steps were found but no data bindings were generated",
             stage="dsl_v1_1_enrichment",
         )
@@ -1015,22 +1201,36 @@ def _normalize_top_level_assertion(step: dict[str, Any]) -> dict[str, Any]:
     return assertion
 
 
-def _assertion_signature(assertion: dict[str, Any]) -> tuple[str, str, str, str]:
+def _assertion_signature(assertion: dict[str, Any]) -> tuple[str, ...]:
     return (
         _normalized_text(assertion.get("action")).lower(),
         _normalized_text(assertion.get("target") or assertion.get("element_code")),
         _normalized_text(assertion.get("locator_type")),
         _normalized_text(assertion.get("locator_value") or assertion.get("selector")),
+        _normalized_text(assertion.get("value")),
+        _normalized_text(assertion.get("count")),
+        _normalized_text(assertion.get("metric_rule") or assertion.get("rule")),
+        _normalized_text(assertion.get("extract_regex")),
     )
 
 
-def _promote_dsl_v1_1_assertions(product_yaml: dict[str, Any]) -> None:
-    """将步骤中的可执行断言收口到顶层 assertions，避免 expected_result 被当作通过依据。"""
+def _normalize_dsl_v1_1_assertions(product_yaml: dict[str, Any]) -> None:
+    """标准化顶层断言：保留步骤内断言时序，只做顶层补充与去重。"""
     execution_payload = product_yaml.get("execution") if isinstance(product_yaml.get("execution"), dict) else {}
     steps = execution_payload.get("steps") if isinstance(execution_payload.get("steps"), list) else []
     assertions_raw = product_yaml.get("assertions") if isinstance(product_yaml.get("assertions"), list) else []
     assertions: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str]] = set()
+    seen: set[tuple[str, ...]] = set()
+    step_assertion_signatures: set[tuple[str, ...]] = set()
+
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        action = _normalized_text(step.get("action")).lower()
+        if action not in _SUPPORTED_TOP_LEVEL_ASSERTIONS:
+            continue
+        normalized_step_assertion = _normalize_top_level_assertion({**step, "action": action})
+        step_assertion_signatures.add(_assertion_signature(normalized_step_assertion))
 
     def add_assertion(raw: Any) -> None:
         if not isinstance(raw, dict):
@@ -1040,6 +1240,8 @@ def _promote_dsl_v1_1_assertions(product_yaml: dict[str, Any]) -> None:
             return
         normalized = _normalize_top_level_assertion({**raw, "action": action})
         signature = _assertion_signature(normalized)
+        if signature in step_assertion_signatures:
+            return
         if signature in seen:
             return
         seen.add(signature)
@@ -1047,18 +1249,6 @@ def _promote_dsl_v1_1_assertions(product_yaml: dict[str, Any]) -> None:
 
     for raw in assertions_raw:
         add_assertion(raw)
-
-    action_steps: list[dict[str, Any]] = []
-    for step in steps:
-        if not isinstance(step, dict):
-            continue
-        action = _normalized_text(step.get("action")).lower()
-        if action in _SUPPORTED_TOP_LEVEL_ASSERTIONS:
-            add_assertion(step)
-            continue
-        action_steps.append(step)
-
-    execution_payload["steps"] = action_steps
     product_yaml["assertions"] = assertions
 
 
@@ -1077,16 +1267,25 @@ def _validate_dsl_v1_1_minimum_contract(product_yaml: dict[str, Any]) -> None:
     intent_id = _normalized_text(requirement.get("intent_id"))
     source_asset_id = _normalized_text(requirement.get("source_asset_id"))
     selected_ids = execution_payload.get("selected_intent_ids") if isinstance(execution_payload.get("selected_intent_ids"), list) else []
-    if not intent_id or not source_asset_id or intent_id not in {_normalized_text(item) for item in selected_ids}:
+    normalized_selected_ids = {_normalized_text(item) for item in selected_ids if _normalized_text(item)}
+    if not intent_id or not source_asset_id or normalized_selected_ids != {intent_id}:
         raise ExecutionCompilerError(
             code="dsl_v1_1_missing_source_identity",
-            message="DSL V1.1 case requires source_asset_id, intent_id and selected_intent_ids",
+            message="DSL V1.1 case requires source_asset_id and exactly one selected intent_id",
             reason="source identity is incomplete",
             stage="dsl_v1_1_enrichment",
         )
     if _is_ai_automated_case(product_yaml):
+        steps = execution_payload.get("steps") if isinstance(execution_payload.get("steps"), list) else []
+        step_assertion_count = 0
+        for raw_step in steps:
+            if not isinstance(raw_step, dict):
+                continue
+            action = _normalized_text(raw_step.get("action")).lower()
+            if action in _SUPPORTED_TOP_LEVEL_ASSERTIONS:
+                step_assertion_count += 1
         assertions = product_yaml.get("assertions") if isinstance(product_yaml.get("assertions"), list) else []
-        if not assertions:
+        if not assertions and step_assertion_count <= 0:
             raise ExecutionCompilerError(
                 code="dsl_v1_1_missing_executable_assertion",
                 message="DSL V1.1 AI automated case requires executable assertions",
@@ -1099,7 +1298,7 @@ def _enrich_product_case_yaml_v1_1(product_yaml: dict[str, Any], *, page: str) -
     """生成器统一出口：写入 DB 的 script_code 必须先满足 DSL V1.1 契约。"""
     product_yaml["version"] = "v1.1"
     _enrich_dsl_v1_1_data_bindings(product_yaml, page=page)
-    _promote_dsl_v1_1_assertions(product_yaml)
+    _normalize_dsl_v1_1_assertions(product_yaml)
     _validate_dsl_v1_1_minimum_contract(product_yaml)
     return product_yaml
 
@@ -1193,8 +1392,6 @@ def _format_product_case_yaml(
         "expected_result": expected,
     }
     product_yaml = _enrich_product_case_yaml_v1_1(product_yaml, page=page)
-    if not product_yaml["requirement"]["source_asset_id"]:
-        product_yaml["requirement"].pop("source_asset_id", None)
     if not product_yaml["requirement"]["precondition"]:
         product_yaml["requirement"].pop("precondition", None)
     return product_yaml
@@ -1225,8 +1422,8 @@ def _attach_point_expected_results(compiled_steps: list[dict[str, Any]], test_po
 
     for intent_id, index in last_step_index_by_intent.items():
         step = compiled_steps[index]
-        # 修改：直接强制覆盖，不再判断是否为空
-        step["expected_result"] = expected_by_intent[intent_id]
+        if not _normalized_text(step.get("expected_result") or step.get("expected")):
+            step["expected_result"] = expected_by_intent[intent_id]
     return compiled_steps
 
 
@@ -1546,6 +1743,14 @@ def _resolve_page_object_from_db(project: str, page: str) -> dict[str, Any] | No
             "stability_level": _normalized_text(getattr(element, "stability_level", "")).lower(),
             "status": _normalized_text(getattr(element, "status", "")).lower() or "active",
         }
+    if page == "login":
+        success_element = _load_cross_page_data_testid_element(
+            project=project,
+            element_code="home-page",
+            preferred_pages=("home", "layout"),
+        )
+        if success_element is not None and "home-page" not in mapping:
+            mapping["home-page"] = success_element
     if not mapping:
         raise ExecutionCompilerError(
             code="page_object_empty_elements",
@@ -1561,27 +1766,67 @@ def _resolve_page_object_from_db(project: str, page: str) -> dict[str, Any] | No
     return {"page": page, "page_url": _normalized_text(getattr(page_object, "page_url", "")), "elements": mapping}
 
 
+def _load_cross_page_data_testid_element(
+    *,
+    project: str,
+    element_code: str,
+    preferred_pages: tuple[str, ...],
+) -> dict[str, Any] | None:
+    """登录成功后会跳到首页，成功态断言允许引用首页的已治理 data-testid。"""
+    normalized_code = _normalized_text(element_code)
+    if not normalized_code:
+        return None
+    try:
+        with SessionLocal() as db:
+            repo = PageObjectRepository(db)
+            row = repo.find_element_by_testid_across_pages(
+                project, list(preferred_pages), normalized_code
+            )
+    except Exception:
+        _LOGGER.debug("cross-page data-testid lookup failed for %s/%s", project, normalized_code, exc_info=True)
+        return None
+    if row is None or not _is_qualified_formal_element(row):
+        return None
+    selector = _normalized_text(getattr(row, "locator_value", ""))
+    if not selector:
+        return None
+    return {
+        "selector": selector,
+        "type": "data-testid",
+        "role": _normalized_text(getattr(row, "role", "")),
+        "name": _element_display_name(
+            page="home",
+            element_code=normalized_code,
+            element_name=_normalized_text(getattr(row, "element_name", "")),
+            locator_value=selector,
+            role=_normalized_text(getattr(row, "role", "")),
+        ),
+        "aliases": _infer_element_aliases(
+            page="home",
+            element_code=normalized_code,
+            element_name=_normalized_text(getattr(row, "element_name", "")),
+            locator_value=selector,
+            role=_normalized_text(getattr(row, "role", "")),
+            business_type=_normalized_text(getattr(row, "business_type", "")).lower(),
+            aliases=_normalize_json_list(getattr(row, "aliases_json", [])),
+        ),
+        "business_type": _normalized_text(getattr(row, "business_type", "")).lower(),
+        "business_domain": _normalized_text(getattr(row, "business_domain", "")).lower(),
+        "semantic_tags": _normalize_json_list(getattr(row, "semantic_tags_json", [])),
+        "review_status": _normalized_text(getattr(row, "review_status", "")).lower(),
+        "stability_level": _normalized_text(getattr(row, "stability_level", "")).lower(),
+        "status": _normalized_text(getattr(row, "status", "")).lower() or "active",
+    }
+
+
 def _load_page_object_from_db(project: str, page: str) -> tuple[PageObject | None, list[PageElement]]:
     with SessionLocal() as db:
-        page_object = db.execute(
-            select(PageObject).where(
-                PageObject.project_code == project,
-                PageObject.client == "web",
-                PageObject.page_code == page,
-            )
-        ).scalar_one_or_none()
+        repo = PageObjectRepository(db)
+        page_object = repo.get_by_identity(project, "web", page)
         if page_object is None:
             return None, []
-        elements = (
-            db.execute(
-                select(PageElement)
-                .where(PageElement.page_object_id == int(page_object.id))
-                .order_by(PageElement.id.asc())
-            )
-            .scalars()
-            .all()
-        )
-        return page_object, list(elements)
+        elements = repo.list_elements_by_page_object_id(int(page_object.id), order_by_id=True)
+        return page_object, elements
 
 
 def _resolve_page_object_from_assets(page: str) -> dict[str, Any] | None:
@@ -1688,427 +1933,405 @@ def resolve_page_object(project: str, page: str, *, strict_governance: bool = Tr
     )
 
 
-def run_generate_pipeline(
+def _handle_generation_exception(
+    *,
+    exc: Exception,
+    trace_id: str,
+    selected_intent_ids_list: list[str],
+    mode: str,
+    http_exception_cls: Any,
+    unprocessable_entity_status: int,
+    is_quality_gate_blocked: Any,
+    payload: Any,
+    normalized_page: str,
+    multisource_enabled: bool,
+    append_history: Any,
+    now_iso: Any,
+) -> None:
+    """处理生成管线异常：分类记录日志并重新抛出对应的 HTTPException。"""
+    if isinstance(exc, ExecutionCompilerError):
+        _log_generation_failure(
+            level=logging.WARNING, stage="execution_compiler", trace_id=trace_id,
+            error=exc.to_detail(),
+            payload={"selected_intent_ids": selected_intent_ids_list, "mode": mode},
+        )
+        raise http_exception_cls(status_code=unprocessable_entity_status, detail=exc.to_detail()) from exc
+    if isinstance(exc, http_exception_cls):
+        is_gate_blocked, blocked_gate = is_quality_gate_blocked(getattr(exc, "detail", ""))
+        if is_gate_blocked and isinstance(blocked_gate, dict):
+            _log_generation_failure(
+                level=logging.WARNING, stage="quality_gate", trace_id=trace_id,
+                error=getattr(exc, "detail", ""),
+                payload={"selected_intent_ids": selected_intent_ids_list, "mode": mode},
+                extra={"blocked_gate": blocked_gate},
+            )
+            append_history({
+                "timestamp": now_iso(),
+                "action": "generate_case_blocked_by_quality_gate",
+                "case_id": payload.case_id.strip(), "page": normalized_page,
+                "source": payload.source, "multi_source_enabled": multisource_enabled,
+                "quality_gate": blocked_gate, "orchestrator_error_reason": getattr(exc, "detail", ""),
+            })
+            raise http_exception_cls(
+                status_code=getattr(exc, "status_code", unprocessable_entity_status)
+                if isinstance(getattr(exc, "status_code", None), int) else unprocessable_entity_status,
+                detail={"code": "requirement_quality_gate_blocked",
+                         "message": "requirement quality gate blocked orchestration",
+                         "quality_gate": blocked_gate, "upstream_error": getattr(exc, "detail", "")},
+            ) from exc
+        upstream_status_code = getattr(exc, "status_code", None)
+        upstream_detail = getattr(exc, "detail", "")
+        detail_payload = upstream_detail if isinstance(upstream_detail, dict) else {}
+        detail_code = str(detail_payload.get("code", "")).strip().lower()
+        detail_reason_code = str(detail_payload.get("reason_code", "")).strip().lower()
+        if (isinstance(upstream_status_code, int) and upstream_status_code == unprocessable_entity_status
+                and detail_code in _COMPILER_ERROR_CODES):
+            _log_generation_failure(
+                level=logging.WARNING, stage="compiler_upstream", trace_id=trace_id,
+                error=detail_payload or upstream_detail,
+                payload={"selected_intent_ids": selected_intent_ids_list, "mode": mode,
+                         "upstream_status_code": upstream_status_code},
+            )
+            raise http_exception_cls(
+                status_code=unprocessable_entity_status,
+                detail=detail_payload or {"code": "execution_compiler_failed",
+                                            "message": "execution compiler failed",
+                                            "reason": str(upstream_detail)[:500],
+                                            "stage": "run_generate_pipeline"},
+            ) from exc
+        if (isinstance(upstream_status_code, int) and upstream_status_code == unprocessable_entity_status
+                and (detail_code == "validation_error" or detail_reason_code == "test_design_invalid_output")):
+            _log_generation_failure(
+                level=logging.WARNING, stage="validation_upstream", trace_id=trace_id,
+                error=detail_payload or upstream_detail,
+                payload={"selected_intent_ids": selected_intent_ids_list, "mode": mode,
+                         "upstream_status_code": upstream_status_code},
+            )
+            raise http_exception_cls(
+                status_code=unprocessable_entity_status,
+                detail=detail_payload or {"code": "validation_error", "message": str(upstream_detail)[:500]},
+            ) from exc
+        _log_generation_failure(
+            level=logging.ERROR, stage="orchestrator_generate_failed", trace_id=trace_id,
+            error=upstream_detail,
+            payload={"selected_intent_ids": selected_intent_ids_list, "mode": mode,
+                     "upstream_status_code": upstream_status_code, "detail_code": detail_code,
+                     "detail_reason_code": detail_reason_code},
+        )
+        raise http_exception_cls(
+            status_code=unprocessable_entity_status,
+            detail={"code": "orchestrator_generate_failed", "message": "orchestrator generate failed",
+                    "upstream_error": str(upstream_detail)[:500]},
+        ) from exc
+    upstream_error = str(exc)
+    _log_generation_failure(
+        level=logging.ERROR, stage="unexpected_exception", trace_id=trace_id,
+        error=upstream_error[:500],
+        payload={"selected_intent_ids": selected_intent_ids_list, "mode": mode, "is_http_exception": False},
+    )
+    raise http_exception_cls(
+        status_code=unprocessable_entity_status,
+        detail={"code": "orchestrator_generate_failed", "message": "orchestrator generate failed",
+                "upstream_error": upstream_error[:500]},
+    ) from exc
+
+
+def _call_orchestrator_and_parse(
     *,
     payload: Any,
     normalized_page: str,
     effective_requirement: str,
-    multisource_enabled: bool,
-    input_sources: list[dict[str, Any]],
-    openapi_spec: dict[str, Any],
+    candidate_snapshots: list[dict[str, Any]],
+    selected_candidate: dict[str, Any] | None,
     run_orchestrator_generate: RunOrchestratorGenerate,
     extract_quality_gate: ExtractQualityGate,
-    safe_case_id: SafeCaseId,
-    infer_targets: InferTargets,
-    write_case_yaml: WriteCaseYaml,
-    save_case_state: SaveCaseState,
-    save_test_point_plan: Callable[..., Any] | None,
-    append_history: AppendHistory,
-    now_iso: NowIso,
-    is_quality_gate_blocked: IsQualityGateBlocked,
-    ai_cases_root: Any,
-    utc: Any,
-    datetime_module: Any,
     http_exception_cls: Any,
     bad_gateway_status: int,
     unprocessable_entity_status: int,
-    existing_case_ids: list[str] | None = None,
-    selected_candidate: dict[str, Any] | None = None,
-    allocate_case_id: AllocateCaseId,
-    trace_id: str = "",
-    mode: str = "generate",
+    input_sources: list[dict[str, Any]],
+    openapi_spec: dict[str, Any],
 ) -> dict[str, Any]:
-    _ = safe_case_id, infer_targets, utc, datetime_module
-    log_debug_event(
-        logger=_LOGGER,
-        event="runtime.generate.input",
-        trace_id=trace_id,
-        payload={
-            "project": str(getattr(payload, "project", "") or ""),
-            "page": normalized_page,
-            "requirement": effective_requirement,
-            "multisource_enabled": multisource_enabled,
-            "input_sources": input_sources,
-            "openapi_spec": openapi_spec,
-            "existing_case_ids": existing_case_ids or [],
-            "selected_candidate": selected_candidate if isinstance(selected_candidate, dict) else {},
-        },
-        extra={"compare_with_event": "service.generate.input"},
+    """Step 1: call orchestrator and parse response."""
+    direct_orchestrator_result = _build_direct_candidate_orchestrator_result(
+        payload=payload,
+        normalized_page=normalized_page,
+        effective_requirement=effective_requirement,
+        candidate_snapshots=candidate_snapshots,
+        selected_candidate=selected_candidate,
     )
-    orchestrator_result: dict[str, Any] = {}
-    case_yaml: dict[str, Any] = {}
-    resolved_page = normalized_page
-    quality_gate: dict[str, Any] | None = None
-    requirement_spec: dict[str, Any] | None = None
-    test_points: list[dict[str, Any]] = []
-    page_object: dict[str, Any] = {}
-    selected_intent_ids_list = _extract_selected_intent_ids(payload=payload, selected_candidate=selected_candidate)
-    selected_intent_ids = set(selected_intent_ids_list)
-    candidate_snapshots = _extract_candidate_snapshots(payload=payload, selected_candidate=selected_candidate)
+    if direct_orchestrator_result is not None:
+        orchestrator_result = direct_orchestrator_result
+    else:
+        orchestrator_result = run_orchestrator_generate(
+            requirement=effective_requirement,
+            page=normalized_page,
+            source=payload.source,
+            input_sources=input_sources,
+            openapi_spec=openapi_spec,
+            prd_text=payload.prd_text,
+            prd_url=payload.prd_url,
+            user_story=payload.user_story,
+            git_diff=payload.git_diff,
+            git_diff_path=payload.git_diff_path,
+            openapi_url=payload.openapi_url,
+            defect_ticket=payload.defect_ticket,
+            runtime_logs=payload.runtime_logs,
+        )
+    quality_gate = extract_quality_gate(orchestrator_result.get("requirement_spec"))
+    generated_case = orchestrator_result.get("case") or {}
+    if not isinstance(generated_case, dict) or not generated_case:
+        raise http_exception_cls(status_code=bad_gateway_status, detail="orchestrator returned invalid case payload")
+    case_yaml = generated_case
+    execution_payload = case_yaml.get("execution")
+    if not isinstance(execution_payload, dict):
+        execution_payload = {}
+        case_yaml["execution"] = execution_payload
+    resolved_page = (
+        str(execution_payload.get("page", "")).strip()
+        or str(orchestrator_result.get("requirement_spec", {}).get("page", "")).strip()
+        or normalized_page
+        or "product"
+    )
+    execution_payload["page"] = resolved_page
+    case_yaml["module"] = str(case_yaml.get("module", "")).strip() or resolved_page
+    case_yaml["description"] = (
+        str(case_yaml.get("description", "")).strip()
+        or f"AI generated from requirement: {effective_requirement or 'multi-source'}"
+    )
+    test_points_payload = orchestrator_result.get("test_points")
+    if not isinstance(test_points_payload, dict):
+        test_points_payload = {}
+        orchestrator_result["test_points"] = test_points_payload
+    test_points = test_points_payload.get("points")
+    if not isinstance(test_points, list) or not test_points:
+        raise http_exception_cls(
+            status_code=unprocessable_entity_status,
+            detail={
+                "code": "execution_compiler_missing_test_points",
+                "message": "orchestrator returned no test points",
+                "reason": "test_points.points is empty",
+                "stage": "run_generate_pipeline",
+            },
+        )
+    return {
+        "orchestrator_result": orchestrator_result,
+        "case_yaml": case_yaml,
+        "execution_payload": execution_payload,
+        "resolved_page": resolved_page,
+        "quality_gate": quality_gate,
+        "test_points": test_points,
+        "test_points_payload": test_points_payload,
+    }
+
+
+def _normalize_and_scope_test_points(
+    *,
+    payload: Any,
+    resolved_page: str,
+    test_points: list[dict[str, Any]],
+    test_points_payload: dict[str, Any],
+    orchestrator_result: dict[str, Any],
+    selected_intent_ids: set[str],
+    candidate_snapshots: list[dict[str, Any]],
+    requirement_spec: dict[str, Any] | None,
+    http_exception_cls: Any,
+    unprocessable_entity_status: int,
+) -> dict[str, Any]:
+    """Step 2: normalize, scope test points to selected intents, and enrich with candidate snapshots."""
     try:
-        direct_orchestrator_result = _build_direct_candidate_orchestrator_result(
-            payload=payload,
-            normalized_page=normalized_page,
-            effective_requirement=effective_requirement,
-            candidate_snapshots=candidate_snapshots,
-            selected_candidate=selected_candidate,
+        plan_wrapper = {
+            "version": "TestPointPlanV1",
+            "project": str(getattr(payload, "project", "mall") or "mall"),
+            "case_id": str(getattr(payload, "case_id", "") or ""),
+            "page": resolved_page,
+            "points": test_points,
+        }
+        normalized_plan, _contract_warnings = normalize_test_point_plan_v1(plan_wrapper)
+        test_points = normalized_plan.get("points", test_points)
+    except Exception:
+        raise http_exception_cls(
+            status_code=unprocessable_entity_status,
+            detail={
+                "code": "execution_compiler_contract_normalization_failed",
+                "message": "test point normalization failed",
+                "reason": "normalize_test_point_plan_v1 raised an exception",
+                "stage": "run_generate_pipeline",
+            },
         )
-        if direct_orchestrator_result is not None:
-            orchestrator_result = direct_orchestrator_result
-        else:
-            orchestrator_result = run_orchestrator_generate(
-                requirement=effective_requirement,
-                page=normalized_page,
-                source=payload.source,
-                input_sources=input_sources,
-                openapi_spec=openapi_spec,
-                prd_text=payload.prd_text,
-                prd_url=payload.prd_url,
-                user_story=payload.user_story,
-                git_diff=payload.git_diff,
-                git_diff_path=payload.git_diff_path,
-                openapi_url=payload.openapi_url,
-                defect_ticket=payload.defect_ticket,
-                runtime_logs=payload.runtime_logs,
-            )
-        quality_gate = extract_quality_gate(orchestrator_result.get("requirement_spec"))
-        generated_case = orchestrator_result.get("case") or {}
-        if not isinstance(generated_case, dict) or not generated_case:
-            raise http_exception_cls(status_code=bad_gateway_status, detail="orchestrator returned invalid case payload")
-        case_yaml = generated_case
-        execution_payload = case_yaml.get("execution")
-        if not isinstance(execution_payload, dict):
-            execution_payload = {}
-            case_yaml["execution"] = execution_payload
-        resolved_page = (
-            str(execution_payload.get("page", "")).strip()
-            or str(orchestrator_result.get("requirement_spec", {}).get("page", "")).strip()
-            or normalized_page
-            or "product"
-        )
-        execution_payload["page"] = resolved_page
-        case_yaml["module"] = str(case_yaml.get("module", "")).strip() or resolved_page
-        case_yaml["description"] = (
-            str(case_yaml.get("description", "")).strip()
-            or f"AI generated from requirement: {effective_requirement or 'multi-source'}"
-        )
-        test_points_payload = orchestrator_result.get("test_points")
-        if not isinstance(test_points_payload, dict):
-            test_points_payload = {}
-            orchestrator_result["test_points"] = test_points_payload
-        test_points = test_points_payload.get("points")
-        if not isinstance(test_points, list) or not test_points:
-            raise http_exception_cls(
-                status_code=unprocessable_entity_status,
-                detail={
-                    "code": "execution_compiler_missing_test_points",
-                    "message": "orchestrator returned no test points",
-                    "reason": "test_points.points is empty",
-                    "stage": "run_generate_pipeline",
-                },
-            )
-        try:
-            plan_wrapper = {
-                "version": "TestPointPlanV1",
-                "project": str(getattr(payload, "project", "mall") or "mall"),
-                "case_id": str(getattr(payload, "case_id", "") or ""),
-                "page": resolved_page,
-                "points": test_points,
-            }
-            normalized_plan, _contract_warnings = normalize_test_point_plan_v1(plan_wrapper)
-            test_points = normalized_plan.get("points", test_points)
-        except Exception:
-            raise http_exception_cls(
-                status_code=unprocessable_entity_status,
-                detail={
-                    "code": "execution_compiler_contract_normalization_failed",
-                    "message": "test point normalization failed",
-                    "reason": "normalize_test_point_plan_v1 raised an exception",
-                    "stage": "run_generate_pipeline",
-                },
-            )
 
-        requirement_spec = (
-            orchestrator_result.get("requirement_spec")
-            if isinstance(orchestrator_result.get("requirement_spec"), dict)
-            else None
+    requirement_spec = (
+        orchestrator_result.get("requirement_spec")
+        if isinstance(orchestrator_result.get("requirement_spec"), dict)
+        else None
+    )
+    if selected_intent_ids:
+        scoped_points, resolved_selected_intent_ids, missing_selected_intent_ids = _scope_points_to_selected_intents(
+            test_points if isinstance(test_points, list) else [],
+            selected_intent_ids,
         )
-        if selected_intent_ids:
-            scoped_points, resolved_selected_intent_ids, missing_selected_intent_ids = _scope_points_to_selected_intents(
-                test_points if isinstance(test_points, list) else [],
-                selected_intent_ids,
+        if missing_selected_intent_ids:
+            raise http_exception_cls(
+                status_code=unprocessable_entity_status,
+                detail={
+                    "code": "execution_compiler_intent_coverage_failed",
+                    "message": "selected intents are missing in normalized test points",
+                    "reason": "selected_intent_ids were not fully materialized into test_points.points",
+                    "stage": "run_generate_pipeline",
+                    "selected_intent_ids": sorted(selected_intent_ids),
+                    "resolved_intent_ids": sorted(resolved_selected_intent_ids),
+                    "missing_intent_ids": missing_selected_intent_ids,
+                },
             )
-            if missing_selected_intent_ids:
-                raise http_exception_cls(
-                    status_code=unprocessable_entity_status,
-                    detail={
-                        "code": "execution_compiler_intent_coverage_failed",
-                        "message": "selected intents are missing in normalized test points",
-                        "reason": "selected_intent_ids were not fully materialized into test_points.points",
-                        "stage": "run_generate_pipeline",
-                        "selected_intent_ids": sorted(selected_intent_ids),
-                        "resolved_intent_ids": sorted(resolved_selected_intent_ids),
-                        "missing_intent_ids": missing_selected_intent_ids,
-                    },
-                )
-            test_points = scoped_points
-            requirement_spec = _filter_requirement_spec_by_selected_intents(requirement_spec or {}, selected_intent_ids)
-            orchestrator_result["requirement_spec"] = requirement_spec
-            test_points_payload["points"] = test_points
-        test_points = _enrich_test_points_with_candidate_snapshots(
-            points=test_points if isinstance(test_points, list) else [],
-            candidate_snapshots=candidate_snapshots,
-        )
+        test_points = scoped_points
+        requirement_spec = _filter_requirement_spec_by_selected_intents(requirement_spec or {}, selected_intent_ids)
+        orchestrator_result["requirement_spec"] = requirement_spec
         test_points_payload["points"] = test_points
+    test_points = _enrich_test_points_with_candidate_snapshots(
+        points=test_points if isinstance(test_points, list) else [],
+        candidate_snapshots=candidate_snapshots,
+    )
+    test_points_payload["points"] = test_points
+    return {
+        "test_points": test_points,
+        "test_points_payload": test_points_payload,
+        "requirement_spec": requirement_spec,
+        "orchestrator_result": orchestrator_result,
+    }
 
-        try:
-            page_object = resolve_page_object(str(payload.project or ""), resolved_page)
-        except ExecutionCompilerError as page_object_exc:
-            raise http_exception_cls(
-                status_code=unprocessable_entity_status,
-                detail=page_object_exc.to_detail(),
-            ) from page_object_exc
 
-        validator = ContractValidator()
-        validation_result = validator.validate_full(
-            requirement_spec if isinstance(requirement_spec, dict) else None,
-            test_points if isinstance(test_points, list) else [],
-            page_object,
-            strict=True,
+def _validate_and_compile_steps(
+    *,
+    payload: Any,
+    resolved_page: str,
+    requirement_spec: dict[str, Any] | None,
+    test_points: list[dict[str, Any]],
+    page_object: dict[str, Any],
+    http_exception_cls: Any,
+    unprocessable_entity_status: int,
+    selected_intent_ids: set[str],
+    selected_intent_ids_list: list[str],
+    execution_payload: dict[str, Any],
+    test_points_payload: dict[str, Any],
+    orchestrator_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Step 3: resolve page object, validate contracts, and compile execution steps."""
+    try:
+        page_object = resolve_page_object(str(payload.project or ""), resolved_page)
+    except ExecutionCompilerError as page_object_exc:
+        raise http_exception_cls(
+            status_code=unprocessable_entity_status,
+            detail=page_object_exc.to_detail(),
+        ) from page_object_exc
+    try:
+        trusted_page_url = _trusted_page_url(
+            payload_page_url=getattr(payload, "page_url", ""),
+            page_object=page_object,
         )
-        if not validation_result.valid:
+    except ExecutionCompilerError as page_url_exc:
+        raise http_exception_cls(
+            status_code=unprocessable_entity_status,
+            detail=page_url_exc.to_detail(),
+        ) from page_url_exc
+
+    validator = ContractValidator()
+    validation_result = validator.validate_full(
+        requirement_spec if isinstance(requirement_spec, dict) else None,
+        test_points if isinstance(test_points, list) else [],
+        page_object,
+        strict=True,
+    )
+    if not validation_result.valid:
+        raise http_exception_cls(
+            status_code=unprocessable_entity_status,
+            detail={
+                "code": "test_point_contract_validation_failed",
+                "message": "test point contract validation failed",
+                "errors": validation_result.errors,
+                "warnings": validation_result.warnings,
+                "stage": "run_generate_pipeline",
+            },
+        )
+
+    compiled_steps = _attach_point_expected_results(
+        compile_execution_steps(test_points, page_object),
+        test_points if isinstance(test_points, list) else [],
+    )
+    page_entry_url = trusted_page_url
+    if page_entry_url:
+        first_step = compiled_steps[0] if compiled_steps and isinstance(compiled_steps[0], dict) else {}
+        first_action = _normalized_text(first_step.get("action")).lower()
+        first_value = _normalized_text(first_step.get("value") or first_step.get("target"))
+        if first_action != "goto" or first_value != page_entry_url:
+            compiled_steps = [
+                {
+                    "action": "goto",
+                    "target": "",
+                    "selector": "",
+                    "locator_type": "",
+                    "role": "",
+                    "intent_id": "__page_entry__",
+                    "confidence": 1.0,
+                    "value": page_entry_url,
+                    "traceability": {
+                        "source": "page_object.page_url",
+                        "page": resolved_page,
+                    },
+                },
+                *compiled_steps,
+            ]
+    if selected_intent_ids:
+        compiled_intent_ids = {
+            _normalized_text(step.get("intent_id"))
+            for step in compiled_steps
+            if isinstance(step, dict)
+            and _normalized_text(step.get("intent_id"))
+            and _normalized_text(step.get("intent_id")) != "__page_entry__"
+            and _normalized_text(step.get("action")).lower() != "login"
+            and _normalized_text(step.get("action")).lower() != "goto"
+        }
+        missing_intent_ids = sorted(selected_intent_ids - compiled_intent_ids)
+        unexpected_intent_ids = sorted(compiled_intent_ids - selected_intent_ids)
+        if missing_intent_ids or unexpected_intent_ids:
             raise http_exception_cls(
                 status_code=unprocessable_entity_status,
                 detail={
-                    "code": "test_point_contract_validation_failed",
-                    "message": "test point contract validation failed",
-                    "errors": validation_result.errors,
-                    "warnings": validation_result.warnings,
+                    "code": "execution_compiler_intent_coverage_failed",
+                    "message": "compiled steps do not strictly match selected intents",
+                    "reason": "selected intent ids and compiled intent ids are inconsistent",
                     "stage": "run_generate_pipeline",
+                    "selected_intent_ids": sorted(selected_intent_ids),
+                    "compiled_intent_ids": sorted(compiled_intent_ids),
+                    "missing_intent_ids": missing_intent_ids,
+                    "unexpected_intent_ids": unexpected_intent_ids,
                 },
             )
+    execution_payload["steps"] = compiled_steps
+    if selected_intent_ids_list:
+        execution_payload["selected_intent_ids"] = selected_intent_ids_list
+    orchestrator_result["execution_requested"] = True
+    return {
+        "page_object": page_object,
+        "trusted_page_url": trusted_page_url,
+        "compiled_steps": compiled_steps,
+        "execution_payload": execution_payload,
+        "orchestrator_result": orchestrator_result,
+        "test_points_payload": test_points_payload,
+    }
 
-        compiled_steps = _attach_point_expected_results(
-            compile_execution_steps(test_points, page_object),
-            test_points if isinstance(test_points, list) else [],
-        )
-        page_entry_url = _normalized_text(getattr(payload, "page_url", "") or page_object.get("page_url"))
-        if page_entry_url:
-            first_step = compiled_steps[0] if compiled_steps and isinstance(compiled_steps[0], dict) else {}
-            first_action = _normalized_text(first_step.get("action")).lower()
-            first_value = _normalized_text(first_step.get("value") or first_step.get("target"))
-            if first_action != "goto" or first_value != page_entry_url:
-                compiled_steps = [
-                    {
-                        "action": "goto",
-                        "target": "",
-                        "selector": "",
-                        "locator_type": "",
-                        "role": "",
-                        "intent_id": "__page_entry__",
-                        "confidence": 1.0,
-                        "value": page_entry_url,
-                        "traceability": {
-                            "source": "page_object.page_url",
-                            "page": resolved_page,
-                        },
-                    },
-                    *compiled_steps,
-                ]
-        if selected_intent_ids:
-            compiled_intent_ids = {
-                _normalized_text(step.get("intent_id"))
-                for step in compiled_steps
-                if isinstance(step, dict)
-                and _normalized_text(step.get("intent_id"))
-                and _normalized_text(step.get("intent_id")) != "__page_entry__"
-                and _normalized_text(step.get("action")).lower() != "login"
-                and _normalized_text(step.get("action")).lower() != "goto"
-            }
-            missing_intent_ids = sorted(selected_intent_ids - compiled_intent_ids)
-            unexpected_intent_ids = sorted(compiled_intent_ids - selected_intent_ids)
-            if missing_intent_ids or unexpected_intent_ids:
-                raise http_exception_cls(
-                    status_code=unprocessable_entity_status,
-                    detail={
-                        "code": "execution_compiler_intent_coverage_failed",
-                        "message": "compiled steps do not strictly match selected intents",
-                        "reason": "selected intent ids and compiled intent ids are inconsistent",
-                        "stage": "run_generate_pipeline",
-                        "selected_intent_ids": sorted(selected_intent_ids),
-                        "compiled_intent_ids": sorted(compiled_intent_ids),
-                        "missing_intent_ids": missing_intent_ids,
-                        "unexpected_intent_ids": unexpected_intent_ids,
-                    },
-                )
-        execution_payload["steps"] = compiled_steps
-        if selected_intent_ids_list:
-            execution_payload["selected_intent_ids"] = selected_intent_ids_list
-        orchestrator_result["execution_requested"] = True
-        review_summary = test_points_payload.get("review_summary")
-        if isinstance(review_summary, dict):
-            review_summary["intent_coverage_status"] = "covered"
-            review_summary["status"] = "covered"
-            review_summary["orphan_point_count"] = 0
-            review_summary["orphan_step_count"] = 0
-        log_debug_event(
-            logger=_LOGGER,
-            event="runtime.generate.orchestrator_output",
-            trace_id=trace_id,
-            payload=orchestrator_result,
-        )
-    except Exception as exc:
-        if isinstance(exc, ExecutionCompilerError):
-            _log_generation_failure(
-                level=logging.WARNING,
-                stage="execution_compiler",
-                trace_id=trace_id,
-                error=exc.to_detail(),
-                payload={
-                    "selected_intent_ids": selected_intent_ids_list,
-                    "mode": mode,
-                },
-            )
-            raise http_exception_cls(
-                status_code=unprocessable_entity_status,
-                detail=exc.to_detail(),
-            ) from exc
-        if isinstance(exc, http_exception_cls):
-            is_gate_blocked, blocked_gate = is_quality_gate_blocked(getattr(exc, "detail", ""))
-            if is_gate_blocked and isinstance(blocked_gate, dict):
-                _log_generation_failure(
-                    level=logging.WARNING,
-                    stage="quality_gate",
-                    trace_id=trace_id,
-                    error=getattr(exc, "detail", ""),
-                    payload={
-                        "selected_intent_ids": selected_intent_ids_list,
-                        "mode": mode,
-                    },
-                    extra={"blocked_gate": blocked_gate},
-                )
-                append_history(
-                    {
-                        "timestamp": now_iso(),
-                        "action": "generate_case_blocked_by_quality_gate",
-                        "case_id": payload.case_id.strip(),
-                        "page": normalized_page,
-                        "source": payload.source,
-                        "multi_source_enabled": multisource_enabled,
-                        "quality_gate": blocked_gate,
-                        "orchestrator_error_reason": getattr(exc, "detail", ""),
-                    }
-                )
-                raise http_exception_cls(
-                    status_code=getattr(exc, "status_code", unprocessable_entity_status)
-                    if isinstance(getattr(exc, "status_code", None), int)
-                    else unprocessable_entity_status,
-                    detail={
-                        "code": "requirement_quality_gate_blocked",
-                        "message": "requirement quality gate blocked orchestration",
-                        "quality_gate": blocked_gate,
-                        "upstream_error": getattr(exc, "detail", ""),
-                    },
-                ) from exc
-            upstream_status_code = getattr(exc, "status_code", None)
-            upstream_detail = getattr(exc, "detail", "")
-            detail_payload = upstream_detail if isinstance(upstream_detail, dict) else {}
-            detail_code = str(detail_payload.get("code", "")).strip().lower()
-            detail_reason_code = str(detail_payload.get("reason_code", "")).strip().lower()
-            if (
-                isinstance(upstream_status_code, int)
-                and upstream_status_code == unprocessable_entity_status
-                and detail_code in _COMPILER_ERROR_CODES
-            ):
-                _log_generation_failure(
-                    level=logging.WARNING,
-                    stage="compiler_upstream",
-                    trace_id=trace_id,
-                    error=detail_payload or upstream_detail,
-                    payload={
-                        "selected_intent_ids": selected_intent_ids_list,
-                        "mode": mode,
-                        "upstream_status_code": upstream_status_code,
-                    },
-                )
-                raise http_exception_cls(
-                    status_code=unprocessable_entity_status,
-                    detail=detail_payload or {
-                        "code": "execution_compiler_failed",
-                        "message": "execution compiler failed",
-                        "reason": str(upstream_detail)[:500],
-                        "stage": "run_generate_pipeline",
-                    },
-                ) from exc
-            if (
-                isinstance(upstream_status_code, int)
-                and upstream_status_code == unprocessable_entity_status
-                and (
-                    detail_code == "validation_error"
-                    or detail_reason_code == "test_design_invalid_output"
-                )
-            ):
-                _log_generation_failure(
-                    level=logging.WARNING,
-                    stage="validation_upstream",
-                    trace_id=trace_id,
-                    error=detail_payload or upstream_detail,
-                    payload={
-                        "selected_intent_ids": selected_intent_ids_list,
-                        "mode": mode,
-                        "upstream_status_code": upstream_status_code,
-                    },
-                )
-                raise http_exception_cls(
-                    status_code=unprocessable_entity_status,
-                    detail=detail_payload or {
-                        "code": "validation_error",
-                        "message": str(upstream_detail)[:500],
-                    },
-                ) from exc
-            _log_generation_failure(
-                level=logging.ERROR,
-                stage="orchestrator_generate_failed",
-                trace_id=trace_id,
-                error=upstream_detail,
-                payload={
-                    "selected_intent_ids": selected_intent_ids_list,
-                    "mode": mode,
-                    "upstream_status_code": upstream_status_code,
-                    "detail_code": detail_code,
-                    "detail_reason_code": detail_reason_code,
-                },
-            )
-            raise http_exception_cls(
-                status_code=unprocessable_entity_status,
-                detail={
-                    "code": "orchestrator_generate_failed",
-                    "message": "orchestrator generate failed",
-                    "upstream_error": str(upstream_detail)[:500],
-                },
-            ) from exc
-        else:
-            upstream_error = str(exc)
-            _log_generation_failure(
-                level=logging.ERROR,
-                stage="unexpected_exception",
-                trace_id=trace_id,
-                error=upstream_error[:500],
-                payload={
-                    "selected_intent_ids": selected_intent_ids_list,
-                    "mode": mode,
-                    "is_http_exception": False,
-                },
-            )
-            raise http_exception_cls(
-                status_code=unprocessable_entity_status,
-                detail={
-                    "code": "orchestrator_generate_failed",
-                    "message": "orchestrator generate failed",
-                    "upstream_error": upstream_error[:500],
-                },
-            ) from exc
 
+def _allocate_and_format_case_id(
+    *,
+    payload: Any,
+    case_yaml: dict[str, Any],
+    resolved_page: str,
+    normalized_page: str,
+    allocate_case_id: AllocateCaseId,
+    ai_cases_root: Any,
+    existing_case_ids: list[str] | None,
+    page_object: dict[str, Any],
+    execution_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Step 4: allocate case ID and set title/priority/tags/module/pages."""
     case_id = allocate_case_id(
         requested_case_id=payload.case_id or case_yaml.get("id", ""),
         project=payload.project,
@@ -2130,18 +2353,55 @@ def run_generate_pipeline(
         case_yaml["execution"] = execution_payload
     execution_payload["page"] = resolved_page or "product"
     case_yaml["module"] = str(case_yaml.get("module", "")).strip() or execution_payload["page"]
-    final_page_url = _normalized_text(
-        getattr(payload, "page_url", "")
-        or page_object.get("page_url")
-        or execution_payload.get("page_url")
-    )
+    final_page_url = _normalized_text(page_object.get("page_url") or execution_payload.get("page_url"))
     if final_page_url:
         execution_payload["page_url"] = final_page_url
+    return {
+        "case_id": case_id,
+        "case_yaml": case_yaml,
+        "execution_payload": execution_payload,
+        "final_page_url": final_page_url,
+    }
+
+
+def _persist_and_build_response(
+    *,
+    payload: Any,
+    case_yaml: dict[str, Any],
+    resolved_page: str,
+    final_page_url: str,
+    case_id: str,
+    page_object: dict[str, Any],
+    test_points: list[dict[str, Any]],
+    candidate_snapshots: list[dict[str, Any]],
+    requirement_spec: dict[str, Any] | None,
+    selected_intent_ids_list: list[str],
+    selected_intent_ids: set[str],
+    effective_requirement: str,
+    write_case_yaml: WriteCaseYaml,
+    save_case_state: SaveCaseState,
+    save_test_point_plan: Callable[..., Any] | None,
+    now_iso: NowIso,
+    append_history: AppendHistory,
+    multisource_enabled: bool,
+    quality_gate: dict[str, Any] | None,
+    orchestrator_result: dict[str, Any],
+    trace_id: str,
+    http_exception_cls: Any,
+    unprocessable_entity_status: int,
+    mode: str,
+    ai_cases_root: Any,
+) -> dict[str, Any]:
+    """Step 5: format product YAML, write files, save state, append history, build result."""
+    _execution_payload = case_yaml.get("execution")
+    if not isinstance(_execution_payload, dict):
+        _execution_payload = {}
+        case_yaml["execution"] = _execution_payload
     try:
         case_yaml = _format_product_case_yaml(
             case_yaml=case_yaml,
             payload=payload,
-            page=execution_payload["page"],
+            page=_execution_payload["page"],
             page_url=final_page_url,
             page_object=page_object,
             test_points=test_points if isinstance(test_points, list) else [],
@@ -2192,7 +2452,7 @@ def run_generate_pipeline(
                 "metadata": {
                     "origin": "generate_chain",
                     "selected_intent_ids": sorted(selected_intent_ids),
-                    "selected_candidates": candidate_snapshots,
+                    "selected_candidates": _redact_generation_payload(candidate_snapshots),
                 },
             },
         )
@@ -2240,7 +2500,122 @@ def run_generate_pipeline(
         logger=_LOGGER,
         event="runtime.generate.output",
         trace_id=trace_id,
-        payload=result,
+        payload=_redact_generation_payload(result),
         extra={"compare_with_event": "runtime.generate.orchestrator_output"},
     )
     return result
+
+
+def run_generate_pipeline(
+    *, payload: Any, normalized_page: str, effective_requirement: str,
+    multisource_enabled: bool, input_sources: list[dict[str, Any]], openapi_spec: dict[str, Any],
+    run_orchestrator_generate: RunOrchestratorGenerate, extract_quality_gate: ExtractQualityGate,
+    write_case_yaml: WriteCaseYaml, save_case_state: SaveCaseState,
+    save_test_point_plan: Callable[..., Any] | None,
+    append_history: AppendHistory, now_iso: NowIso, is_quality_gate_blocked: IsQualityGateBlocked,
+    ai_cases_root: Any, http_exception_cls: Any, bad_gateway_status: int,
+    unprocessable_entity_status: int, existing_case_ids: list[str] | None = None,
+    selected_candidate: dict[str, Any] | None = None,
+    allocate_case_id: AllocateCaseId, trace_id: str = "", mode: str = "generate",
+) -> dict[str, Any]:
+    log_debug_event(logger=_LOGGER, event="runtime.generate.input", trace_id=trace_id, payload={
+        "project": str(getattr(payload, "project", "") or ""), "page": normalized_page,
+        "requirement": effective_requirement, "multisource_enabled": multisource_enabled,
+        "input_sources": _redact_generation_payload(input_sources), "openapi_spec": openapi_spec,
+        "existing_case_ids": existing_case_ids or [],
+        "selected_candidate": _redact_generation_payload(selected_candidate) if isinstance(selected_candidate, dict) else {},
+    }, extra={"compare_with_event": "service.generate.input"})
+    orchestrator_result: dict[str, Any] = {}
+    case_yaml: dict[str, Any] = {}
+    resolved_page = normalized_page
+    quality_gate: dict[str, Any] | None = None
+    requirement_spec: dict[str, Any] | None = None
+    test_points: list[dict[str, Any]] = []
+    page_object: dict[str, Any] = {}
+    selected_intent_ids_list = _extract_selected_intent_ids(payload=payload, selected_candidate=selected_candidate)
+    selected_intent_ids = set(selected_intent_ids_list)
+    candidate_snapshots = _extract_candidate_snapshots(payload=payload, selected_candidate=selected_candidate)
+    if candidate_snapshots and len(selected_intent_ids_list) != 1:
+        raise http_exception_cls(status_code=unprocessable_entity_status, detail={
+            "code": "dsl_v1_1_selected_intent_count_invalid",
+            "message": "DSL V1.1 formal generation requires exactly one selected intent",
+            "selected_intent_ids": selected_intent_ids_list,
+            "stage": "run_generate_pipeline",
+        })
+    try:
+        step1 = _call_orchestrator_and_parse(
+            payload=payload, normalized_page=normalized_page,
+            effective_requirement=effective_requirement,
+            candidate_snapshots=candidate_snapshots, selected_candidate=selected_candidate,
+            run_orchestrator_generate=run_orchestrator_generate,
+            extract_quality_gate=extract_quality_gate,
+            http_exception_cls=http_exception_cls, bad_gateway_status=bad_gateway_status,
+            unprocessable_entity_status=unprocessable_entity_status,
+            input_sources=input_sources, openapi_spec=openapi_spec,
+        )
+        step2 = _normalize_and_scope_test_points(
+            payload=payload, resolved_page=step1["resolved_page"],
+            test_points=step1["test_points"], test_points_payload=step1["test_points_payload"],
+            orchestrator_result=step1["orchestrator_result"],
+            selected_intent_ids=selected_intent_ids, candidate_snapshots=candidate_snapshots,
+            requirement_spec=requirement_spec,
+            http_exception_cls=http_exception_cls,
+            unprocessable_entity_status=unprocessable_entity_status,
+        )
+        step3 = _validate_and_compile_steps(
+            payload=payload, resolved_page=step1["resolved_page"],
+            requirement_spec=step2["requirement_spec"], test_points=step2["test_points"],
+            page_object=page_object, http_exception_cls=http_exception_cls,
+            unprocessable_entity_status=unprocessable_entity_status,
+            selected_intent_ids=selected_intent_ids,
+            selected_intent_ids_list=selected_intent_ids_list,
+            execution_payload=step1["execution_payload"],
+            test_points_payload=step2["test_points_payload"],
+            orchestrator_result=step2["orchestrator_result"],
+        )
+        review_summary = step3["test_points_payload"].get("review_summary")
+        if isinstance(review_summary, dict):
+            review_summary["intent_coverage_status"] = "covered"
+            review_summary["status"] = "covered"
+            review_summary["orphan_point_count"] = 0
+            review_summary["orphan_step_count"] = 0
+        log_debug_event(logger=_LOGGER, event="runtime.generate.orchestrator_output",
+                        trace_id=trace_id,
+                        payload=_redact_generation_payload(step3["orchestrator_result"]))
+        orchestrator_result = step3["orchestrator_result"]
+        case_yaml = step1["case_yaml"]
+        resolved_page = step1["resolved_page"]
+        page_object = step3["page_object"]
+        test_points = step2["test_points"]
+        quality_gate = step1["quality_gate"]
+        requirement_spec = step2["requirement_spec"]
+    except Exception as exc:
+        _handle_generation_exception(
+            exc=exc, trace_id=trace_id, selected_intent_ids_list=selected_intent_ids_list,
+            mode=mode, http_exception_cls=http_exception_cls,
+            unprocessable_entity_status=unprocessable_entity_status,
+            is_quality_gate_blocked=is_quality_gate_blocked, payload=payload,
+            normalized_page=normalized_page, multisource_enabled=multisource_enabled,
+            append_history=append_history, now_iso=now_iso)
+
+    step4 = _allocate_and_format_case_id(
+        payload=payload, case_yaml=case_yaml, resolved_page=resolved_page,
+        normalized_page=normalized_page, allocate_case_id=allocate_case_id,
+        ai_cases_root=ai_cases_root, existing_case_ids=existing_case_ids,
+        page_object=page_object, execution_payload=case_yaml.get("execution", {}),
+    )
+    return _persist_and_build_response(
+        payload=payload, case_yaml=step4["case_yaml"],
+        resolved_page=resolved_page, final_page_url=step4["final_page_url"],
+        case_id=step4["case_id"], page_object=page_object, test_points=test_points,
+        candidate_snapshots=candidate_snapshots, requirement_spec=requirement_spec,
+        selected_intent_ids_list=selected_intent_ids_list,
+        selected_intent_ids=selected_intent_ids, effective_requirement=effective_requirement,
+        write_case_yaml=write_case_yaml, save_case_state=save_case_state,
+        save_test_point_plan=save_test_point_plan, now_iso=now_iso,
+        append_history=append_history, multisource_enabled=multisource_enabled,
+        quality_gate=quality_gate, orchestrator_result=orchestrator_result,
+        trace_id=trace_id, http_exception_cls=http_exception_cls,
+        unprocessable_entity_status=unprocessable_entity_status,
+        mode=mode, ai_cases_root=ai_cases_root,
+    )

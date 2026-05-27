@@ -1,21 +1,14 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
+from shared_backend.type_utils import normalize_project_code_strict as _normalize_project_code
 from sqlalchemy.orm import Session
 
 import app.schemas.test_project as test_project_schema
 from app.services import test_project_service
 
 DEFAULT_PROJECT_CODE = "mall"
-
-
-def _normalize_project_code(value: str) -> str:
-    normalized = re.sub(r"[^a-zA-Z0-9]+", "", str(value or "").strip()).lower()
-    if len(normalized) < 2 or len(normalized) > 10:
-        raise ValueError("invalid project_code")
-    return normalized
 
 
 def list_project_items(db: Session, *, state_root: Path | None = None) -> list[dict[str, object]]:
@@ -56,10 +49,6 @@ def list_project_items(db: Session, *, state_root: Path | None = None) -> list[d
     if not items:
         add(DEFAULT_PROJECT_CODE, project_name="Mall", status="active", source="default")
     return items
-
-
-def list_project_codes(db: Session, *, state_root: Path | None = None) -> list[str]:
-    return [str(item["project_code"]) for item in list_project_items(db, state_root=state_root)]
 
 
 def ensure_project_writable(db: Session, project_code: str) -> str:

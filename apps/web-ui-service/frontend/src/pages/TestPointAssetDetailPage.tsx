@@ -281,20 +281,29 @@ function pointIdOf(row: Record<string, unknown>): string {
   return String(row.intent_id || row.key || "").trim();
 }
 
-function candidatePayloadFromRow(row: Record<string, unknown>): Record<string, unknown> {
+function candidatePayloadFromRow(row: Record<string, unknown>, page: unknown): Record<string, unknown> {
   const expected = String(row.expected || row.expected_result || "").trim();
+  const intentId = pointIdOf(row);
   return {
     ...row,
-    intent_id: pointIdOf(row),
+    key: String(row.key || intentId).trim(),
+    intent_id: intentId,
     title: String(row.title || row.summary || row.intent_id || "").trim(),
     summary: String(row.summary || row.title || "").trim(),
-    intent_type: String(row.intent_type || "functional").trim(),
+    description: String(row.summary || row.title || "").trim(),
+    point_type: String(row.point_type || row.intent_type || "functional").trim(),
+    intent_type: String(row.intent_type || row.point_type || "functional").trim(),
     priority: String(row.priority || "P1").trim(),
     precondition: String(row.precondition || "").trim(),
-    steps: stepTextList(row.steps),
+    steps: stepTextList(row.steps).map((step) => ({
+      action: "candidate_step",
+      target: "",
+      value: step,
+      raw_text: step,
+    })),
     expected,
     expected_result: expected,
-    involved_elements: listText(row.involved_elements),
+    involved_elements: normalizeInvolvedElements(row.involved_elements, page),
     review_status: reviewStatusValue(row),
     review_note: String(row.review_note || "").trim(),
     reviewed_at: String(row.reviewed_at || "").trim(),
@@ -343,6 +352,35 @@ function listText(value: unknown): string[] {
     return [];
   }
   return value.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+const LOGIN_INVOLVED_ELEMENT_ALIASES: Record<string, string> = {
+  "用户名输入框": "username_input",
+  "账号输入框": "username_input",
+  "用户名": "username_input",
+  "账号": "username_input",
+  "密码输入框": "password_input",
+  "密码": "password_input",
+  "登录按钮": "login_button",
+  "登录": "login_button",
+  "首页菜单": "home_menu",
+  "首页": "home_menu",
+  "工作台首页": "home_menu",
+};
+
+function normalizeInvolvedElements(value: unknown, page: unknown): string[] {
+  const rows = listText(value);
+  if (String(page || "").trim() !== "login") {
+    return Array.from(new Set(rows));
+  }
+  const normalized: string[] = [];
+  rows.forEach((row) => {
+    const elementCode = LOGIN_INVOLVED_ELEMENT_ALIASES[row] || row;
+    if (elementCode && !normalized.includes(elementCode)) {
+      normalized.push(elementCode);
+    }
+  });
+  return normalized;
 }
 
 function stepTextList(value: unknown): string[] {
@@ -426,34 +464,41 @@ function requirementLineNode(line: string, index: number) {
 
 function pointRows(item: Record<string, unknown>): Array<Record<string, unknown>> {
   const plan = (item.plan || {}) as Record<string, unknown>;
+  const page = item.page || plan.page;
+  const points = Array.isArray(plan.points) ? plan.points : [];
+  if (points.length) {
+    return points
+      .filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"))
+      .map((point) => {
+        const snapshot = ((point.metadata as Record<string, unknown> | undefined)?.candidate_snapshot || {}) as Record<string, unknown>;
+        const pointSteps = stepTextList(point.steps);
+        const pointElements = normalizeInvolvedElements(point.involved_elements, page);
+        // 详情页必须以 plan.points 为唯一事实源，旧 snapshot 只在字段缺失时兜底展示。
+        return {
+          key: String(point.key || snapshot.key || point.intent_id || snapshot.intent_id || "").trim(),
+          intent_id: String(point.intent_id || point.key || snapshot.intent_id || "").trim(),
+          title: String(point.title || point.summary || point.description || snapshot.title || snapshot.summary || point.intent_id || "").trim(),
+          summary: String(point.summary || point.description || snapshot.summary || snapshot.title || "").trim(),
+          intent_type: String(point.intent_type || point.point_type || snapshot.intent_type || "functional").trim(),
+          point_type: String(point.point_type || point.intent_type || snapshot.intent_type || "functional").trim(),
+          priority: String(point.priority || snapshot.priority || "P1").trim(),
+          precondition: String(point.precondition || snapshot.precondition || "").trim(),
+          steps: pointSteps.length ? pointSteps : stepTextList(snapshot.steps),
+          expected: String(point.expected || point.expected_result || snapshot.expected || "").trim(),
+          expected_result: String(point.expected_result || point.expected || snapshot.expected || "").trim(),
+          involved_elements: pointElements.length ? pointElements : normalizeInvolvedElements(snapshot.involved_elements, page),
+          review_status: String(point.review_status || snapshot.review_status || "").trim(),
+          review_note: String(point.review_note || snapshot.review_note || "").trim(),
+          reviewed_at: String(point.reviewed_at || snapshot.reviewed_at || "").trim(),
+          reviewed_by: String(point.reviewed_by || snapshot.reviewed_by || "").trim(),
+        };
+      });
+  }
   const metadata = (plan.metadata || {}) as Record<string, unknown>;
   const candidates = Array.isArray(metadata.selected_candidates) ? metadata.selected_candidates : [];
-  if (candidates.length) {
-    return candidates.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"));
-  }
-  const points = Array.isArray(plan.points) ? plan.points : [];
-  return points
+  return candidates
     .filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"))
-    .map((point) => {
-      const snapshot = ((point.metadata as Record<string, unknown> | undefined)?.candidate_snapshot || {}) as Record<string, unknown>;
-      return {
-        intent_id: String(snapshot.intent_id || point.intent_id || point.key || "").trim(),
-        title: String(snapshot.title || snapshot.summary || point.description || point.intent_id || "").trim(),
-        summary: String(snapshot.summary || point.description || "").trim(),
-        intent_type: String(snapshot.intent_type || point.point_type || "functional").trim(),
-        priority: String(snapshot.priority || point.priority || "P1").trim(),
-        precondition: String(snapshot.precondition || point.precondition || "").trim(),
-        steps: Array.isArray(snapshot.steps) && snapshot.steps.length ? snapshot.steps : stepTextList(point.steps),
-        expected: String(snapshot.expected || point.expected_result || "").trim(),
-        involved_elements: Array.isArray(snapshot.involved_elements) && snapshot.involved_elements.length
-          ? snapshot.involved_elements
-          : listText(point.involved_elements),
-        review_status: String(snapshot.review_status || point.review_status || "").trim(),
-        review_note: String(snapshot.review_note || point.review_note || "").trim(),
-        reviewed_at: String(snapshot.reviewed_at || point.reviewed_at || "").trim(),
-        reviewed_by: String(snapshot.reviewed_by || point.reviewed_by || "").trim(),
-      };
-    });
+    .map((row) => ({ ...row, involved_elements: normalizeInvolvedElements(row.involved_elements, page) }));
 }
 
 export function TestPointAssetDetailPage() {
@@ -651,7 +696,7 @@ export function TestPointAssetDetailPage() {
         priority: text(item.priority) || "P1",
         requirement: requirementText || text(item.title) || assetId,
         source_type: text(item.source_type) || "manual",
-        selected_candidates: remainingRows.map(candidatePayloadFromRow),
+        points: remainingRows.map((row) => candidatePayloadFromRow(row, item.page)),
       });
       const [detailPayload, matrixPayload] = await Promise.all([
         getTestPointAsset(assetId, project),

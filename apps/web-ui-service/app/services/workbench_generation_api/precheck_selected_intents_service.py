@@ -4,14 +4,11 @@ from typing import Any
 
 from shared_backend import ExecutionCompilerError
 from shared_backend.element_binding import resolve_involved_element_codes
+from shared_backend.type_utils import str_value as _normalized_text
 
 from .context import WorkbenchContext
 from . import preview_store
 from ..workbench_generation_compiler.runtime.generate_pipeline import resolve_page_object
-
-
-def _normalized_text(value: Any) -> str:
-    return str(value or "").strip()
 
 
 _NON_DOM_INVOLVED_ELEMENTS = {

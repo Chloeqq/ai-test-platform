@@ -3,12 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-
-def _int_value(value: Any) -> int:
-    try:
-        return int(value or 0)
-    except (TypeError, ValueError):
-        return 0
+from shared_backend.type_utils import int_value as _int_value
 
 
 def _environment_pool_for_task(item: dict[str, Any]) -> str:

@@ -66,6 +66,35 @@ function listText(value: unknown): string[] {
   return value.map((item) => text(item)).filter(Boolean);
 }
 
+const LOGIN_INVOLVED_ELEMENT_ALIASES: Record<string, string> = {
+  "用户名输入框": "username_input",
+  "账号输入框": "username_input",
+  "用户名": "username_input",
+  "账号": "username_input",
+  "密码输入框": "password_input",
+  "密码": "password_input",
+  "登录按钮": "login_button",
+  "登录": "login_button",
+  "首页菜单": "home_menu",
+  "首页": "home_menu",
+  "工作台首页": "home_menu",
+};
+
+function normalizeInvolvedElements(value: unknown, page: unknown): string[] {
+  const rows = Array.isArray(value) ? listText(value) : splitElements(String(value || ""));
+  if (String(page || "").trim() !== "login") {
+    return Array.from(new Set(rows));
+  }
+  const normalized: string[] = [];
+  rows.forEach((row) => {
+    const elementCode = LOGIN_INVOLVED_ELEMENT_ALIASES[row] || row;
+    if (elementCode && !normalized.includes(elementCode)) {
+      normalized.push(elementCode);
+    }
+  });
+  return normalized;
+}
+
 function stepTextList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -127,19 +156,19 @@ function snapshotFromPoint(point: Record<string, unknown>): Record<string, unkno
   const snapshot = (metadata.candidate_snapshot || {}) as Record<string, unknown>;
   if (snapshot && typeof snapshot === "object" && Object.keys(snapshot).length) {
     return {
-      ...point,
       ...snapshot,
+      ...point,
     };
   }
   return point;
 }
 
-function candidateFromRow(row: Record<string, unknown>, index: number, fallbackPriority: string): EditableCandidate {
+function candidateFromRow(row: Record<string, unknown>, index: number, fallbackPriority: string, page: unknown): EditableCandidate {
   const intentId = text(row.intent_id || row.intentId || row.key) || `intent-${String(index + 1).padStart(2, "0")}`;
   const title = text(row.title || row.summary || row.description || intentId) || intentId;
   const summary = text(row.summary || row.title || row.description || title) || title;
   const steps = stepTextList(row.steps);
-  const elements = listText(row.involved_elements || row.involvedElements);
+  const elements = normalizeInvolvedElements(row.involved_elements || row.involvedElements, page);
   return {
     intentId,
     title,
@@ -158,31 +187,45 @@ function candidatesFromItem(item: Record<string, unknown>): EditableCandidate[] 
   const plan = (item.plan || {}) as Record<string, unknown>;
   const metadata = (plan.metadata || {}) as Record<string, unknown>;
   const fallbackPriority = text(item.priority || plan.priority) || "P1";
+  const points = Array.isArray(plan.points) ? plan.points : [];
+  if (points.length) {
+    return points
+      .filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"))
+      .map((point, index) => candidateFromRow(snapshotFromPoint(point), index, fallbackPriority, item.page || plan.page));
+  }
   const selectedCandidates = Array.isArray(metadata.selected_candidates) ? metadata.selected_candidates : [];
   const candidateRows = selectedCandidates.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"));
   if (candidateRows.length) {
-    return candidateRows.map((row, index) => candidateFromRow(row, index, fallbackPriority));
+    return candidateRows.map((row, index) => candidateFromRow(row, index, fallbackPriority, item.page || plan.page));
   }
-  const points = Array.isArray(plan.points) ? plan.points : [];
-  return points
-    .filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"))
-    .map((point, index) => candidateFromRow(snapshotFromPoint(point), index, fallbackPriority));
+  return [];
 }
 
-function payloadCandidate(candidate: EditableCandidate): Record<string, unknown> {
+function payloadPoint(candidate: EditableCandidate, index: number, page: unknown): Record<string, unknown> {
   const expected = text(candidate.expected);
+  const intentId = text(candidate.intentId) || `intent-${String(index + 1).padStart(2, "0")}`;
+  const pointType = text(candidate.intentType) || "functional";
+  const steps = splitLines(candidate.stepsText).map((step) => ({
+    action: "candidate_step",
+    target: "",
+    value: step,
+    raw_text: step,
+  }));
   return {
     ...candidate.raw,
-    intent_id: text(candidate.intentId),
+    key: text((candidate.raw || {}).key) || intentId,
+    intent_id: intentId,
     title: text(candidate.title),
+    description: text(candidate.summary || candidate.title),
     summary: text(candidate.summary || candidate.title),
-    intent_type: text(candidate.intentType) || "functional",
+    point_type: pointType,
+    intent_type: pointType,
     priority: text(candidate.priority) || "P1",
     precondition: text(candidate.precondition),
-    steps: splitLines(candidate.stepsText),
+    steps,
     expected,
     expected_result: expected,
-    involved_elements: splitElements(candidate.involvedElementsText),
+    involved_elements: normalizeInvolvedElements(candidate.involvedElementsText, page),
   };
 }
 
@@ -288,7 +331,7 @@ export function TestPointAssetEditPage() {
         priority: text(form.priority) || "P1",
         requirement: text(form.requirement) || text(form.title) || assetId,
         source_type: text(form.sourceType) || "manual",
-        selected_candidates: candidates.map(payloadCandidate),
+        points: candidates.map((candidate, index) => payloadPoint(candidate, index, normalizedPage)),
       });
       const item = (payload.item || {}) as Record<string, unknown>;
       const plan = (item.plan || {}) as Record<string, unknown>;

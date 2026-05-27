@@ -116,7 +116,7 @@
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["assert_visible", "assert_count", "assert_metric", "assert_url"]
+            "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url"]
           },
           "target": {
             "type": ["string", "null"]
@@ -180,7 +180,7 @@
             "if": {
               "properties": {
                 "action": {
-                  "enum": ["assert_visible", "assert_count", "assert_metric"]
+                  "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text"]
                 }
               }
             },
@@ -221,7 +221,7 @@
             "if": {
               "properties": {
                 "action": {
-                  "enum": ["assert_url"]
+                  "enum": ["assert_text", "assert_url"]
                 }
               }
             },
@@ -235,7 +235,72 @@
     "data": {
       "type": "object",
       "additionalProperties": {
-        "type": "array"
+        "oneOf": [
+          {
+            "type": "array"
+          },
+          {
+            "type": ["string", "number", "boolean", "null"]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source_type": {
+                "type": "string",
+                "enum": ["inline", "pool", "env"]
+              },
+              "value": {
+                "type": ["string", "number", "boolean", "object", "array", "null"]
+              },
+              "pool_name": {
+                "type": ["string", "null"]
+              },
+              "key": {
+                "type": ["string", "null"]
+              }
+            },
+            "required": ["source_type"],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "source_type": {
+                      "const": "inline"
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["value"]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "source_type": {
+                      "const": "pool"
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["pool_name", "key"]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "source_type": {
+                      "const": "env"
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["key"]
+                }
+              }
+            ]
+          }
+        ]
       }
     },
     "execution": {
@@ -274,7 +339,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": ["login", "click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_url", "goto"]
+                "enum": ["login", "click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "goto"]
               },
               "target": {
                 "type": ["string", "null"]
@@ -338,7 +403,7 @@
                 "if": {
                   "properties": {
                     "action": {
-                      "enum": ["click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric"]
+                      "enum": ["click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_text"]
                     }
                   }
                 },
@@ -379,7 +444,7 @@
                 "if": {
                   "properties": {
                     "action": {
-                      "enum": ["fill", "input", "assert_url", "goto"]
+                      "enum": ["fill", "input", "assert_text", "assert_url", "goto"]
                     }
                   }
                 },

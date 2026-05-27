@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from fastapi import HTTPException, status
+from shared_backend.type_utils import normalize_project_code_strict as _normalize_project_code_strict
 from sqlalchemy import Select, func, inspect, select
 from sqlalchemy.orm import Session
 
 from app.models.test_case import TestCase
 from app.models.test_project import TestProject
+from app.repositories.test_project_repository import TestProjectRepository
 from app.models.workbench_state import (
     WorkbenchExecutionGateDecision,
     WorkbenchReviewDecision,
@@ -31,13 +32,10 @@ def _normalize_non_empty_text(value: str, *, field_name: str) -> str:
     return normalized
 
 def _normalize_project_code(value: str) -> str:
-    normalized = re.sub(r"[^a-zA-Z0-9]+", "", str(value or "").strip()).lower()
-    if len(normalized) < 2 or len(normalized) > 10:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="project_code must be 2-10 letters or digits",
-        )
-    return normalized
+    try:
+        return _normalize_project_code_strict(value, max_len=10)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 def _normalize_project_status(value: str) -> str:
@@ -70,9 +68,7 @@ def _normalize_source_terms(value: dict[str, str] | None) -> dict[str, str]:
 
 
 def _get_project_or_404(db: Session, project_code: str) -> TestProject:
-    project = db.execute(
-        select(TestProject).where(TestProject.project_code == project_code)
-    ).scalar_one_or_none()
+    project = TestProjectRepository(db).get_by_code(project_code)
     if project is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -102,9 +98,7 @@ def get_project_status(db: Session, project_code: str) -> str:
         normalized_project_code = _normalize_project_code(raw_project_code)
     except HTTPException:
         return "active"
-    project = db.execute(
-        select(TestProject).where(TestProject.project_code == normalized_project_code)
-    ).scalar_one_or_none()
+    project = TestProjectRepository(db).get_by_code(normalized_project_code)
     if project is None:
         return "active"
     normalized_status = str(project.status or "").strip().lower()
@@ -165,18 +159,12 @@ def _has_workbench_state_dir(project_code: str, *, state_root: Path) -> bool:
 
 def list_projects(db: Session) -> list[TestProject]:
     ensure_project_seed(db)
-    return list(
-        db.execute(
-            select(TestProject).order_by(TestProject.status.asc(), TestProject.project_code.asc())
-        ).scalars().all()
-    )
+    return TestProjectRepository(db).list_all()
 
 
 def create_project(db: Session, payload: TestProjectCreate) -> TestProject:
     project_code = _normalize_project_code(payload.project_code)
-    existing = db.execute(
-        select(TestProject).where(TestProject.project_code == project_code)
-    ).scalar_one_or_none()
+    existing = TestProjectRepository(db).get_by_code(project_code)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

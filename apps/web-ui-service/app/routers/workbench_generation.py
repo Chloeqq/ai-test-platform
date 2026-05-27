@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, NoReturn
+from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -24,24 +24,6 @@ router = APIRouter(tags=["workbench-generation"])
 # Router must not import pipeline / flags / normalizer / repository internals.
 
 
-def _raise_retired_generation_endpoint(endpoint: str) -> NoReturn:
-    """旧生成入口统一下线，避免绕过测试点资产审核与唯一事实源链路。"""
-    raise HTTPException(
-        status_code=status.HTTP_410_GONE,
-        detail={
-            "code": "generation_entry_retired",
-            "endpoint": endpoint,
-            "message": "该生成入口已下线，请先保存测试点资产并从已通过测试点生成用例。",
-            "replacement": "/api/workbench/test-point-assets/batch/generate-cases",
-        },
-    )
-
-
-@router.post("/api/workbench/generate")
-def generate_case(payload: Any = Body(default=None)) -> dict[str, Any]:
-    _raise_retired_generation_endpoint("/api/workbench/generate")
-
-
 @router.post("/api/workbench/preview-test-points")
 def preview_test_points(
     payload: GenerateCasePayload,
@@ -61,16 +43,6 @@ def get_preview_test_points_diagnostics(preview_id: str) -> dict[str, Any]:
 @router.get("/api/workbench/preview-test-points/{preview_id}/test-intents/{intent_id}")
 def get_preview_test_intent(preview_id: str, intent_id: str) -> dict[str, Any]:
     return preview_store.build_preview_intent_detail(preview_id, intent_id)
-
-
-@router.post("/api/workbench/full-chain/run")
-def run_full_chain(payload: Any = Body(default=None)) -> dict[str, Any]:
-    _raise_retired_generation_endpoint("/api/workbench/full-chain/run")
-
-
-@router.post("/api/workbench/auto-run")
-def auto_run(payload: Any = Body(default=None)) -> dict[str, Any]:
-    _raise_retired_generation_endpoint("/api/workbench/auto-run")
 
 
 @router.post("/api/workbench/precheck-selected-intents")

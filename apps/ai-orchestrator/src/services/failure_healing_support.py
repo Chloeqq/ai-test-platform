@@ -308,7 +308,7 @@ class FailureHealingSupport:
 
         try:
             payload = json.loads(suggestion_path.read_text(encoding="utf-8"))
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             return {}
 
         if not isinstance(payload, dict):
@@ -339,7 +339,7 @@ class FailureHealingSupport:
 
         try:
             payload = json.loads(result_path.read_text(encoding="utf-8"))
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             return {}
 
         if not isinstance(payload, dict):

@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from datetime_compat import UTC
 from shared_backend.case_ids import normalize_case_id
+from shared_backend.type_utils import dict_value as _dict_value, int_value as _int_value, list_value as _list_value
 
 NormalizeExecutionRecordPayload = Callable[[dict[str, Any]], dict[str, Any]]
 NormalizeEvidenceManifestPayload = Callable[[dict[str, Any]], dict[str, Any]]
@@ -19,21 +20,6 @@ ExecutionRecordTimeValue = Callable[[dict[str, Any]], str]
 UtcNow = Callable[[], datetime]
 ParseIsoDatetime = Callable[[str], datetime | None]
 ClampConfidence = Callable[[Any], float]
-
-
-def _int_value(value: Any) -> int:
-    try:
-        return int(value or 0)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _list_value(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _scope_from_factor(factor: str) -> str | None:
@@ -140,7 +126,7 @@ def collect_execution_records_with_meta(
         for manifest_path in sorted(artifact_root.rglob("evidence_manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True):
             try:
                 raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8")) or {}
-            except Exception:
+            except (json.JSONDecodeError, ValueError):
                 invalid_manifest_count += 1
                 logger.warning("invalid evidence_manifest.json at %s while collecting execution records", manifest_path)
                 continue

@@ -370,6 +370,126 @@ def test_update_test_point_asset_preserves_multiple_selected_candidates(
     assert [row["intent_id"] for row in item["plan"]["metadata"]["selected_candidates"]] == ["intent-01", "intent-20"]
 
 
+def test_update_existing_test_point_asset_persists_plan_points(
+    workbench_assets_client: tuple[TestClient, Session],
+) -> None:
+    client, db_session = workbench_assets_client
+    project_code = "demo"
+    asset_id = "mall-web-login-auth-fn-ai-0021"
+
+    test_project_service.create_project(
+        db_session,
+        test_project_schema.TestProjectCreate(
+            project_code=project_code,
+            project_name="Demo",
+        ),
+    )
+    page_object = PageObject(
+        project_code=project_code,
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="http://localhost:5174/#/login",
+        status="published",
+        governance_status="active",
+    )
+    db_session.add(page_object)
+    db_session.flush()
+    for element_code, element_name in [
+        ("username_input", "用户名输入框"),
+        ("password_input", "密码输入框"),
+        ("login_button", "登录按钮"),
+        ("home_menu", "首页菜单"),
+    ]:
+        db_session.add(
+            PageElement(
+                page_object_id=int(page_object.id),
+                element_code=element_code,
+                element_name=element_name,
+                locator_type="data-testid",
+                locator_value=element_code,
+                review_status="approved",
+                stability_level="high",
+                status="active",
+            )
+        )
+    db_session.commit()
+
+    create_response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页身份验证测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求",
+            "source_type": "selection_save",
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "首次登录成功",
+                    "summary": "输入正确账号密码后登录成功",
+                    "intent_type": "functional",
+                    "priority": "P0",
+                    "steps": ["输入账号 admin", "输入密码 macro", "点击登录按钮"],
+                    "expected": "跳转至工作台首页",
+                    "involved_elements": ["账号输入框", "密码输入框", "登录按钮"],
+                }
+            ],
+        },
+    )
+    assert create_response.status_code == 200
+    created_point = create_response.json()["item"]["plan"]["points"][0]
+
+    update_response = client.put(
+        f"/api/workbench/test-point-assets/{asset_id}",
+        json={
+            "project": project_code,
+            "asset_id": asset_id,
+            "page": "login",
+            "title": "登录页身份验证测试点集",
+            "priority": "P0",
+            "requirement": "登录页原始需求 - 已编辑",
+            "source_type": "selection_save",
+            "points": [
+                {
+                    **created_point,
+                    "description": "编辑后的登录成功测试点",
+                    "precondition": "用户未登录，处于登录页面，且已准备有效账号。",
+                    "expected_result": "编辑后的预期结果",
+                    "involved_elements": ["用户名输入框", "密码输入框", "登录按钮", "username_input", "password_input", "login_button", "home_menu"],
+                    "steps": [
+                        {
+                            "action": "candidate_step",
+                            "target": "",
+                            "value": "编辑后的步骤",
+                            "raw_text": "编辑后的步骤",
+                        }
+                    ],
+                }
+            ],
+            "selected_candidates": [
+                {
+                    "intent_id": "intent-01",
+                    "title": "这条旧候选不应覆盖 points",
+                }
+            ],
+        },
+    )
+
+    assert update_response.status_code == 200
+    detail = client.get(f"/api/workbench/test-point-assets/{asset_id}?project={project_code}")
+    assert detail.status_code == 200
+    point = detail.json()["item"]["plan"]["points"][0]
+    assert point["description"] == "编辑后的登录成功测试点"
+    assert point["precondition"] == "用户未登录，处于登录页面，且已准备有效账号。"
+    assert point["expected_result"] == "编辑后的预期结果"
+    assert point["involved_elements"] == ["username_input", "password_input", "login_button", "home_menu"]
+    assert point["steps"][0]["raw_text"] == "编辑后的步骤"
+    assert point["metadata"]["candidate_snapshot"]["title"] != "这条旧候选不应覆盖 points"
+
+
 def test_test_point_reviews_flatten_assets_and_batch_review_updates_plan(
     workbench_assets_client: tuple[TestClient, Session],
 ) -> None:

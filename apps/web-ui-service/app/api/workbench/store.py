@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""线程安全包装层。
+
+对 app.services.workbench_state_store 的 FILE_LOCK 包装，
+供 facade 层使用。业务代码应 import 本模块而非直接 import state_store。
+
+关系：store.py（本文件）= state_store 的线程安全外观。
+"""
+
 import os
 import threading
 import time

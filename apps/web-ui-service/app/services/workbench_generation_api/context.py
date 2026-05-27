@@ -4,7 +4,8 @@ import os
 import subprocess
 import threading
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
+from shared_backend.datetime_compat import UTC
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable
@@ -217,12 +218,6 @@ class WorkbenchGenerationContext:
     resolve_effective_requirement: Callable[..., str]
     build_preview_response: Callable[..., dict[str, Any]]
     build_generated_case_payload: Callable[..., dict[str, Any]]
-    prepare_auto_run_page_context: Callable[..., dict[str, Any]]
-    build_auto_run_generate_failed_item: Callable[..., dict[str, Any]]
-    persist_auto_run_generated_case: Callable[..., dict[str, Any]]
-    build_auto_run_governance_context: Callable[..., dict[str, Any]]
-    build_auto_run_item: Callable[..., dict[str, Any]]
-    build_auto_run_summary: Callable[..., dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -629,8 +624,6 @@ def build_workbench_context(db: Session) -> WorkbenchContext:
             workbench_generation_service.build_generated_case_payload,
             run_orchestrator_generate=orchestrator_client.generate,
             extract_quality_gate=orchestrator_client.extract_quality_gate,
-            safe_case_id=runtime.safe_case_id,
-            infer_targets=runtime.infer_targets,
             write_case_yaml=runtime.write_case_yaml,
             save_case_state=runtime.save_case_state,
             save_test_point_plan=runtime.save_test_point_plan,
@@ -638,53 +631,11 @@ def build_workbench_context(db: Session) -> WorkbenchContext:
             now_iso=runtime.now_iso,
             is_quality_gate_blocked=orchestrator_client.is_quality_gate_blocked,
             ai_cases_root=runtime.AI_CASES_ROOT,
-            utc=runtime.UTC,
-            datetime_module=runtime.datetime,
             http_exception_cls=runtime.HTTPException,
             bad_gateway_status=runtime.status.HTTP_502_BAD_GATEWAY,
             unprocessable_entity_status=422,
             allocate_case_id=repository.allocate_case_id,
         ),
-        prepare_auto_run_page_context=partial(
-            workbench_generation_service.prepare_auto_run_page_context,
-            build_system_requirement=runtime.build_system_requirement,
-            extract_page_from_url=runtime.extract_page_from_url,
-            resolve_page_url=runtime.resolve_page_url,
-            validate_page_surface_url=runtime.validate_page_surface_url,
-            extract_page_surface=runtime.extract_page_surface,
-            normalize_page_surface=runtime.normalize_page_surface,
-            build_surface_element_candidates=runtime.build_surface_element_candidates,
-            surface_confidence_summary=runtime.surface_confidence_summary,
-            enhance_page_object_from_surface=runtime.enhance_page_object_from_surface,
-            build_requirement_steps=runtime.build_requirement_steps,
-            build_page_object_quality=runtime.build_page_object_quality,
-            normalize_page_object_draft=runtime.normalize_page_object_draft,
-        ),
-        build_auto_run_generate_failed_item=workbench_generation_service.build_auto_run_generate_failed_item,
-        persist_auto_run_generated_case=partial(
-            workbench_generation_service.persist_auto_run_generated_case,
-            safe_case_id=runtime.safe_case_id,
-            write_case_yaml=runtime.write_case_yaml,
-            read_case_yaml=runtime.read_case_yaml,
-            save_case_state=runtime.save_case_state,
-            normalize_test_point_plan_payload=runtime.normalize_test_point_plan,
-            steps_to_points=runtime.steps_to_points,
-            inherit_test_point_confidence_from_surface=runtime.inherit_test_point_confidence_from_surface,
-            annotate_test_point_plan_review=runtime.annotate_test_point_plan_review,
-            save_test_point_plan=runtime.save_test_point_plan,
-            append_history=runtime.append_history,
-            now_iso=runtime.now_iso,
-            allocate_case_id=repository.allocate_case_id,
-        ),
-        build_auto_run_governance_context=partial(
-            workbench_generation_service.build_auto_run_governance_context,
-            build_page_analysis_context=runtime.build_page_analysis_context,
-            build_item_review_state=runtime.build_item_review_state,
-            evaluate_risk_report=runtime.evaluate_risk_report,
-            build_execution_gate=runtime.build_execution_gate,
-        ),
-        build_auto_run_item=workbench_generation_service.build_auto_run_item,
-        build_auto_run_summary=workbench_generation_service.build_auto_run_summary,
     )
     return WorkbenchContext(
         db=db,

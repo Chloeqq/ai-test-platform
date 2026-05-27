@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import datetime
+from shared_backend.datetime_compat import UTC
 from pathlib import Path
 from typing import Any, Callable
 
@@ -10,6 +11,12 @@ import yaml
 from fastapi import HTTPException, status
 from shared_backend.case_ids import normalize_case_id
 from shared_backend.case_rules import enrich_case_metadata, validate_case_payload
+from shared_backend.type_utils import (
+    dict_value as _dict_value,
+    float_value as _float_value,
+    int_value as _int_value,
+    list_value as _list_value,
+)
 
 from . import workbench_state_store as state_store
 
@@ -65,28 +72,6 @@ def _dedup_keep_order(items: list[str]) -> list[str]:
         seen.add(value)
         ordered.append(value)
     return ordered
-
-
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _list_value(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _int_value(value: Any, *, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _float_value(value: Any, *, default: float = 0.0) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
 
 
 _SOURCE_TYPE_LABELS = {
@@ -587,7 +572,7 @@ def resolve_case_yaml_path(
     if state_path.exists():
         try:
             state = json.loads(state_path.read_text(encoding="utf-8"))
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             state = {}
         source_ref = str((state or {}).get("source_ref", "")).strip()
         if source_ref:
@@ -603,7 +588,7 @@ def resolve_case_yaml_path(
     for candidate in sorted(assets_cases_root.rglob("*.yaml")):
         try:
             payload = yaml.safe_load(candidate.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except yaml.YAMLError:
             payload = {}
         candidate_id = _safe_case_id(str(payload.get("id", candidate.stem)).strip() or candidate.stem)
         if candidate_id == _safe_case_id(case_id):
@@ -624,7 +609,7 @@ def collect_case_items(
         for file in sorted(project_dir.glob("*.json")):
             try:
                 state = json.loads(file.read_text(encoding="utf-8")) or {}
-            except Exception:
+            except (json.JSONDecodeError, ValueError):
                 state = {}
             case_id = _safe_case_id(str(state.get("asset_id", file.stem)).strip() or file.stem)
             items.append(
@@ -642,7 +627,7 @@ def collect_case_items(
     for path in sorted(ai_cases_root.glob("*.yaml")):
         try:
             payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except yaml.YAMLError:
             payload = {}
         case_id = _safe_case_id(str(payload.get("id", path.stem)).strip() or path.stem)
         if case_id in known_ids:
@@ -747,7 +732,7 @@ def save_case_state(
     if state_file.exists():
         try:
             previous = json.loads(state_file.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             previous = {}
         if isinstance(previous, dict):
             prev_version = int(previous.get("version", 1) or 1)
@@ -772,7 +757,7 @@ def infer_targets(page_name: str, *, page_objects_root: Path) -> tuple[str, str]
 
     try:
         payload = yaml.safe_load(page_object_path.read_text(encoding="utf-8")) or {}
-    except Exception:
+    except yaml.YAMLError:
         return menu_target, assert_target
     elements = payload.get("elements", {})
     if not isinstance(elements, dict) or not elements:
@@ -874,7 +859,7 @@ def upsert_test_point_asset_snapshot(
     if asset_path.exists():
         try:
             existing = json.loads(asset_path.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             existing = {}
     points = _list_value(normalized_plan.get("points"))
     point_types = sorted(
@@ -995,12 +980,12 @@ def load_test_point_asset_with_root(project: str, case_id: str, *, state_root: P
     if asset_path.exists():
         try:
             asset = json.loads(asset_path.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             asset = {}
     if plan_path.exists():
         try:
             plan_payload = json.loads(plan_path.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             plan_payload = {}
         if isinstance(plan_payload, dict) and plan_payload:
             if not asset:

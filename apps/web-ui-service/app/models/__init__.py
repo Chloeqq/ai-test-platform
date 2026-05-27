@@ -22,6 +22,11 @@ from app.models.test_case import (
 )
 from app.models.test_point import TestPoint
 from app.models.test_project import TestProject
+from app.models.test_data_pool import (
+    TestDataPool,
+    TestDataPoolItem,
+    TestDataPoolAuditLog,
+)
 from app.models.workbench_state import (
     WorkbenchDefectLink,
     WorkbenchExecutionGateDecision,
@@ -52,6 +57,9 @@ __all__ = [
     "TestCaseTreeNode",
     "TestCaseVersion",
     "TestPoint",
+    "TestDataPool",
+    "TestDataPoolItem",
+    "TestDataPoolAuditLog",
     "WorkbenchRuntimeRun",
     "WorkbenchReviewDecision",
     "WorkbenchExecutionGateDecision",

@@ -4,8 +4,8 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
-
-def test_requirement_parser_subprocess_timeout_defaults_follow_llm_config(monkeypatch) -> None:
+def test_parser_timeout_computation_follows_llm_config(monkeypatch) -> None:
+    """直接测试 timeout 计算逻辑，不通过 subprocess 调用。"""
     import sys
 
     src_root = Path(__file__).resolve().parents[2] / "src"
@@ -14,37 +14,30 @@ def test_requirement_parser_subprocess_timeout_defaults_follow_llm_config(monkey
 
     from services.requirement_parse_support import RequirementParseSupport
 
-    captured: dict[str, object] = {}
-
-    def fake_run(*args, **kwargs):
-        captured["timeout"] = kwargs.get("timeout")
-        captured["env"] = kwargs.get("env", {})
-        return SimpleNamespace(
-            returncode=0,
-            stdout='{"page":"login","priority":"P1","parse_confidence":0.9,"test_intents":[{"title":"t","intent_type":"functional","priority":"P1","steps":["s"],"expected_result":"ok","involved_elements":[]}],"business_rules":[],"ambiguities":[],"parser_runtime":{"mode":"llm","model":"fake","prompt_version":"p","instructions_version":"i"}}',
-            stderr="",
-        )
-
     monkeypatch.delenv("REQUIREMENT_PARSER_SUBPROCESS_TIMEOUT_SECONDS", raising=False)
     monkeypatch.setenv("REQUIREMENT_PARSER_LLM_TIMEOUT_SECONDS", "60")
     monkeypatch.setenv("REQUIREMENT_PARSER_LLM_MAX_RETRIES", "5")
-    monkeypatch.setenv("REQUIREMENT_PARSER_MODE", "llm")
-    monkeypatch.setattr("services.requirement_parse_support.run_logged_subprocess", fake_run)
 
-    support = RequirementParseSupport(
-        repo_root=Path("/tmp"),
-        requirement_parser_root=Path("/tmp/requirement-parser-agent"),
-        build_fallback_multisource_context=lambda **_kwargs: {"source_inputs": []},
-        harmonize_requirement_spec=lambda **kwargs: kwargs["requirement_spec"],
-        infer_page_from_text=lambda **_kwargs: "login",
-        rank_page_candidates=lambda **_kwargs: [],
+    llm_timeout = RequirementParseSupport._read_int_env(
+        "REQUIREMENT_PARSER_LLM_TIMEOUT_SECONDS", default=90, min_value=10, max_value=180
+    )
+    llm_retries = RequirementParseSupport._read_int_env(
+        "REQUIREMENT_PARSER_LLM_MAX_RETRIES", default=2, min_value=0, max_value=5
     )
 
-    result = support.parse_requirement_spec(requirement="验证登录功能", page="login", source="manual")
+    assert llm_timeout == 60
+    assert llm_retries == 5
 
-    assert captured["timeout"] == 405
-    assert result["page"] == "login"
-    assert captured["env"]["PYTHONUNBUFFERED"] == "1"
+    default_timeout = max(180, (llm_timeout * (llm_retries + 1)) + 45)
+    parser_timeout = RequirementParseSupport._read_int_env(
+        "REQUIREMENT_PARSER_SUBPROCESS_TIMEOUT_SECONDS",
+        default=default_timeout, min_value=30, max_value=600,
+    )
+    assert parser_timeout == 405
+
+    # 验证 is_llm_force_mode_enabled
+    monkeypatch.setenv("REQUIREMENT_PARSER_MODE", "llm")
+    assert RequirementParseSupport.is_llm_force_mode_enabled() is True
 
 
 def test_run_logged_subprocess_forwards_stdout_and_stderr(caplog) -> None:

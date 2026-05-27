@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implementation Guard"
+  short_description: "Keep project implementation on track"
+  default_prompt: "Use $skill-superpowers-implementation-guard to keep this project change aligned while implementing it."

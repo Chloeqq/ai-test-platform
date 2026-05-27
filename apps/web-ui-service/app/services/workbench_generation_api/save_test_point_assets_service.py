@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any
 
 from shared_backend.case_ids import normalize_case_id
+
+from shared_backend.type_utils import dict_value as _dict_value, str_value as _normalized_text
 
 from app.services import workbench_asset_service, workbench_state_store
 
 from .context import WorkbenchContext
 from . import preview_store
-
-
-def _normalized_text(value: Any) -> str:
-    return str(value or "").strip()
 
 
 def _list_text(value: Any) -> list[str]:
@@ -38,10 +37,6 @@ def _existing_test_point_asset_ids(project: str) -> list[str]:
             if case_id and case_id not in ids:
                 ids.append(case_id)
     return ids
-
-
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
 
 
 def _preview_requirement(preview_id: str) -> tuple[str, dict[str, Any]]:
@@ -84,8 +79,13 @@ def _candidate_snapshot(candidate: dict[str, Any]) -> dict[str, Any]:
         "review_note",
         "reviewed_at",
         "reviewed_by",
+        "data",
     ):
         value = candidate.get(key)
+        if isinstance(value, dict):
+            if value:
+                snapshot[key] = value
+            continue
         if isinstance(value, list):
             rows = _list_text(value)
             if rows:
@@ -97,6 +97,197 @@ def _candidate_snapshot(candidate: dict[str, Any]) -> dict[str, Any]:
     return snapshot
 
 
+_LOGIN_ELEMENT_RULES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
+    ("username_input", "用户名输入框", "username", ("用户名输入框", "账号输入框", "用户名", "账号")),
+    ("password_input", "密码输入框", "password", ("密码输入框", "密码")),
+    ("login_button", "登录按钮", "", ("登录按钮", "登录")),
+    ("home_menu", "首页菜单", "", ("首页菜单", "首页", "工作台首页")),
+)
+
+
+def _login_element_from_text(text: str) -> tuple[str, str, str] | None:
+    """从测试点自然语言中识别登录页元素，避免把候选步骤长期停留在 candidate_step。"""
+    normalized = _normalized_text(text)
+    for element_code, element_name, data_key, aliases in _LOGIN_ELEMENT_RULES:
+        if any(alias in normalized for alias in aliases):
+            return element_code, element_name, data_key
+    return None
+
+
+def _input_value_from_text(text: str) -> tuple[bool, Any]:
+    """只提取步骤文本中明确写出的输入值；不在代码里猜账号、密码或边界值。"""
+    normalized = _normalized_text(text)
+    if any(token in normalized for token in ("清空", "留空", "为空", "空值", "双空")):
+        return True, ""
+    if "空格" in normalized:
+        return True, " "
+    quoted = re.search(r"[\"“'‘](.*?)[\"”'’]", normalized)
+    if quoted is not None:
+        return True, quoted.group(1)
+    matched = re.search(r"(?:输入|填写)(?:正确账号|正确密码|账号|密码|用户名)?\s*([A-Za-z0-9_@.\-]+)\s*$", normalized)
+    if matched is not None:
+        return True, matched.group(1)
+    return False, None
+
+
+def _data_ref_for_element(element_code: str, fallback_key: str) -> str:
+    if element_code == "username_input":
+        return "username"
+    if element_code == "password_input":
+        return "password"
+    normalized = _normalized_text(fallback_key or element_code)
+    return normalized.removesuffix("_input") if normalized else "input_value"
+
+
+def _append_unique(items: list[str], value: str) -> None:
+    normalized = _normalized_text(value)
+    if normalized and normalized not in items:
+        items.append(normalized)
+
+
+def _canonical_login_involved_elements(involved_elements: list[str], involved_codes: list[str]) -> list[str]:
+    """登录页结构化后以 element_code 为准，中文元素名只作为识别输入，不再混入正式字段。"""
+    canonical: list[str] = []
+    for element_code in involved_codes:
+        _append_unique(canonical, element_code)
+    for raw_element in involved_elements:
+        normalized = _normalized_text(raw_element)
+        if not normalized or normalized in canonical:
+            continue
+        matched = _login_element_from_text(normalized)
+        if matched is not None and matched[0] in canonical:
+            continue
+        _append_unique(canonical, normalized)
+    return canonical
+
+
+def _structured_steps_from_candidate(
+    *,
+    candidate: dict[str, Any],
+    steps: list[str],
+    expected: str,
+) -> tuple[list[dict[str, Any]], list[str], dict[str, dict[str, Any]], list[str], list[str]]:
+    """将候选测试点步骤治理成 DSL V1.1 可消费的结构化步骤、steps_hint 与 data。"""
+    structured_steps: list[dict[str, Any]] = []
+    steps_hint: list[str] = []
+    data: dict[str, dict[str, Any]] = {}
+    warnings: list[str] = []
+    involved_codes: list[str] = []
+
+    for raw_step in steps:
+        step_text = _normalized_text(raw_step)
+        if not step_text:
+            continue
+        element = _login_element_from_text(step_text)
+        if any(token in step_text for token in ("输入", "填写", "清空", "留空")) and element is not None:
+            element_code, element_name, data_key_hint = element
+            has_value, value = _input_value_from_text(step_text)
+            data_ref = _data_ref_for_element(element_code, data_key_hint)
+            step: dict[str, Any] = {
+                "action": "input",
+                "target": f"element:{element_code}",
+                "target_name": element_name,
+                "data_ref": data_ref,
+                "raw_text": step_text,
+            }
+            if has_value:
+                step["value"] = value
+                data[data_ref] = {"source_type": "inline", "value": value}
+                # steps_hint 是当前直接编译器的稳定输入；空字符串可以表达，纯空格暂时不能安全表达。
+                if value == " ":
+                    warnings.append(f"{element_name} 的空格输入需要后续由 DSL 数据引用执行，当前 steps_hint 无法无损表达纯空格。")
+                else:
+                    _append_unique(steps_hint, f"input:{element_name}={value}")
+            else:
+                warnings.append(f"{element_name} 输入步骤缺少明确测试数据：{step_text}")
+            structured_steps.append(step)
+            _append_unique(involved_codes, element_code)
+            continue
+
+        if "点击" in step_text and element is not None:
+            element_code, element_name, _data_key = element
+            structured_steps.append(
+                {
+                    "action": "click",
+                    "target": f"element:{element_code}",
+                    "target_name": element_name,
+                    "raw_text": step_text,
+                }
+            )
+            _append_unique(steps_hint, f"click:{element_name}")
+            _append_unique(involved_codes, element_code)
+            continue
+
+        if any(token in step_text for token in ("刷新", "访问首页", "进入首页")):
+            structured_steps.append(
+                {
+                    "action": "goto",
+                    "value": "#/home",
+                    "raw_text": step_text,
+                }
+            )
+            _append_unique(steps_hint, "goto:#/home")
+            continue
+
+        structured_steps.append(
+            {
+                "action": "candidate_step",
+                "target": "",
+                "value": step_text,
+                "raw_text": step_text,
+            }
+        )
+        warnings.append(f"步骤仍需人工结构化：{step_text}")
+
+    expected_text = _normalized_text(expected)
+    if any(token in expected_text for token in ("成功登录", "跳转到首页", "首页菜单可见", "进入首页")):
+        structured_steps.append(
+            {
+                "action": "assert_visible",
+                "target": "element:home_menu",
+                "target_name": "首页菜单",
+                "raw_text": expected_text or "校验首页菜单可见",
+            }
+        )
+        _append_unique(steps_hint, "assert:首页菜单")
+        _append_unique(involved_codes, "home_menu")
+    elif any(token in expected_text for token in ("提示", "错误", "请输入", "失败", "拦截", "登录页面", "登录页")):
+        structured_steps.append(
+            {
+                "action": "assert_url",
+                "value": "#/login",
+                "raw_text": expected_text or "校验仍停留在登录页",
+            }
+        )
+        _append_unique(steps_hint, "assert_url:#/login")
+
+    if not structured_steps:
+        fallback = _normalized_text(candidate.get("summary") or candidate.get("title"))
+        if fallback:
+            structured_steps.append({"action": "candidate_step", "target": "", "value": fallback, "raw_text": fallback})
+            warnings.append("缺少可结构化步骤。")
+
+    return structured_steps, steps_hint, data, warnings, involved_codes
+
+
+def _fallback_precondition(candidate: dict[str, Any], *, point_type: str, expected: str) -> str:
+    """补齐业务级前置条件；不补账号密码、不补环境地址。"""
+    precondition = _normalized_text(candidate.get("precondition"))
+    if precondition:
+        return precondition
+    merged = " ".join(
+        _normalized_text(candidate.get(key))
+        for key in ("title", "summary", "expected", "expected_result")
+    )
+    if "已登录" in merged:
+        return "用户已登录并处于首页。"
+    if "未登录" in merged or "拦截" in merged:
+        return "用户未登录。"
+    if point_type in {"functional", "negative", "boundary", "format", "interaction_exception"} or "登录" in merged or expected:
+        return "用户未登录，处于登录页面。"
+    return "未维护。"
+
+
 def _build_point(candidate: dict[str, Any], *, index: int) -> dict[str, Any]:
     intent_id = _normalized_text(candidate.get("intent_id")) or f"candidate-{index:02d}"
     title = _normalized_text(candidate.get("title")) or intent_id
@@ -104,34 +295,23 @@ def _build_point(candidate: dict[str, Any], *, index: int) -> dict[str, Any]:
     steps = _list_text(candidate.get("steps"))
     involved_elements = _list_text(candidate.get("involved_elements"))
     expected = _normalized_text(candidate.get("expected") or candidate.get("expected_result"))
-    precondition = _normalized_text(candidate.get("precondition"))
     point_type = _normalized_text(candidate.get("intent_type")) or "functional"
+    precondition = _fallback_precondition(candidate, point_type=point_type, expected=expected)
     action = "candidate"
     if point_type in {"boundary", "negative", "abnormal"}:
         action = "review"
-    point_steps = [
-        {
-            "action": "candidate_step",
-            "target": "",
-            "value": step,
-            "raw_text": step,
-        }
-        for step in steps
-    ]
-    if not point_steps:
-        point_steps = [
-            {
-                "action": "candidate_step",
-                "target": "",
-                "value": summary,
-                "raw_text": summary,
-            }
-        ]
+    point_steps, steps_hint, data, structure_warnings, involved_codes = _structured_steps_from_candidate(
+        candidate=candidate,
+        steps=steps or [summary],
+        expected=expected,
+    )
     warnings: list[str] = []
+    warnings.extend(structure_warnings)
     if not steps:
         warnings.append("缺少结构化步骤。")
     if not involved_elements:
         warnings.append("缺少涉及元素。")
+    involved_elements = _canonical_login_involved_elements(involved_elements, involved_codes)
     return {
         "key": intent_id,
         "intent_id": intent_id,
@@ -142,6 +322,8 @@ def _build_point(candidate: dict[str, Any], *, index: int) -> dict[str, Any]:
         "dependencies": [],
         "source_ids": [intent_id],
         "steps": point_steps,
+        "steps_hint": steps_hint,
+        "data": data,
         "warnings": warnings,
         "requires_review": bool(warnings),
         "involved_elements": involved_elements,
@@ -155,6 +337,11 @@ def _build_point(candidate: dict[str, Any], *, index: int) -> dict[str, Any]:
             "traceability": {
                 "source_ids": [intent_id],
                 "intent_ids": [intent_id],
+            },
+            "dsl_v1_1_structuring": {
+                "data_keys": sorted(data.keys()),
+                "steps_hint_count": len(steps_hint),
+                "has_precondition": bool(precondition and precondition != "未维护。"),
             },
         },
     }
@@ -327,8 +514,8 @@ class SaveTestPointAssetsService:
         involved_elements = _list_text(
             [
                 element
-                for candidate in batch_candidates
-                for element in _list_text(candidate.get("involved_elements"))
+                for point in points
+                for element in _list_text(point.get("involved_elements"))
             ]
         )
         asset_title = _first_candidate_title(batch_candidates, page=page)
@@ -386,6 +573,10 @@ class SaveTestPointAssetsService:
             page_url="",
             requirement=effective_requirement,
             plan=plan,
+            # 保存“测试点资产”时必须写入 test-points 事实源目录。
+            # runtime 默认绑定 generated-cases，是为了生成正式用例时不覆盖源资产；
+            # 这里显式覆盖 state_root，避免详情页读取 TEST_POINTS_ROOT 时拿到空资产。
+            state_root=workbench_state_store.WEB_UI_STATE_ROOT / "test-points",
         )
         asset_path = workbench_asset_service.state_case_file(
             project,

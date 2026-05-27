@@ -11,10 +11,9 @@ import os
 import re
 import shutil
 import subprocess
-import socket
-import time
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+from shared_backend.datetime_compat import UTC
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,18 +27,19 @@ from shared_backend.element_binding import build_element_alias_map, resolve_elem
 from shared_backend.schemas.contracts import normalize_test_point_plan_v1
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from urllib import error as url_error
-from urllib import request as url_request
 
 from app.api.workbench import constants, store
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core import page_analysis_rules
-from app.models.page_object import PageElement, PageObject
-from app.models.test_case import TestCase, TestCaseExecution, TestCaseVersion
+from app.repositories.page_object_repository import PageObjectRepository
+from app.repositories.test_case_repository import TestCaseRepository
+from app.models.page_object import PageElement
+from app.models.test_case import TestCase, TestCaseExecution
 from app.services import (
     test_project_service,
     test_case_service,
+    test_data_pool_service,
     workbench_analysis_service,
     workbench_asset_service,
     workbench_case_consistency_service,
@@ -54,8 +54,27 @@ from app.services import (
 )
 from app.services.workbench_generation_api.payloads import GenerateCasePayload as GenerationGenerateCasePayload
 from app.services.workbench_generation_api.usecase_factory import build_generate_case_usecase
-from shared_backend.observability import get_request_id, summarize_http_context
 
+from ._http import get_json as _get_json
+from ._helpers import (
+    build_empty_trend as _build_empty_trend,
+    default_overview as _default_overview,
+    is_within as _is_within,
+    normalize_generation_case_source as _normalize_generation_case_source,
+    normalize_optional_project_code as _normalize_optional_project_code,
+    normalize_test_point_review_status as _normalize_test_point_review_status,
+    parse_iso_datetime as _parse_iso_datetime,
+    python_literal as _python_literal,
+    read_json_file as _read_json_file,
+    safe_python_identifier as _safe_python_identifier,
+    safe_rollback_or_invalidate as _safe_rollback_or_invalidate,
+    text as _text,
+    text_list as _text_list,
+    to_utc as _to_utc,
+    utc_now as _utc_now,
+    validate_test_point_review_status as _validate_test_point_review_status,
+    write_json_file as _write_json_file,
+)
 from .service import WorkbenchService
 from .service import (
     _append_history,
@@ -89,119 +108,7 @@ def _settings() -> Any:
     """统一读取运行配置，避免在调用点重复导入配置对象。"""
     return get_settings()
 
-
-def _get_json(url: str, *, timeout_seconds: int = 300) -> dict[str, Any]:
-    """请求 orchestrator JSON 接口，并将网络/协议异常映射为 HTTPException。"""
-    request_id = get_request_id()
-    start = time.perf_counter()
-    request = url_request.Request(url=url, method="GET")
-    if request_id:
-        request.add_header("X-Request-Id", request_id)
-    try:
-        with url_request.urlopen(request, timeout=timeout_seconds) as response:
-            text = response.read().decode("utf-8")
-            logging.getLogger(__name__).info(
-                "orchestrator_get_end %s",
-                summarize_http_context(
-                    method="GET",
-                    path=url,
-                    request_id=request_id,
-                    status_code=getattr(response, "status", 200),
-                    duration_ms=round((time.perf_counter() - start) * 1000, 2),
-                ),
-            )
-    except url_error.HTTPError as exc:
-        raw_body = exc.read().decode("utf-8", errors="ignore")
-        detail: Any = raw_body.strip() or str(exc)
-        try:
-            parsed = json.loads(raw_body or "{}")
-            if isinstance(parsed, dict):
-                detail = parsed.get("error", parsed)
-        except Exception:
-            pass
-        logging.getLogger(__name__).warning(
-            "orchestrator_get_http_error %s",
-            summarize_http_context(
-                method="GET",
-                path=url,
-                request_id=request_id,
-                status_code=exc.code,
-                duration_ms=round((time.perf_counter() - start) * 1000, 2),
-                error=detail,
-            ),
-        )
-        raise HTTPException(status_code=exc.code, detail=detail) from exc
-    except url_error.URLError as exc:
-        logging.getLogger(__name__).warning(
-            "orchestrator_get_unavailable %s",
-            summarize_http_context(
-                method="GET",
-                path=url,
-                request_id=request_id,
-                duration_ms=round((time.perf_counter() - start) * 1000, 2),
-                error=exc.reason,
-            ),
-        )
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"orchestrator unavailable: {exc.reason}") from exc
-    except TimeoutError as exc:
-        logging.getLogger(__name__).warning(
-            "orchestrator_get_timeout %s",
-            summarize_http_context(
-                method="GET",
-                path=url,
-                request_id=request_id,
-                duration_ms=round((time.perf_counter() - start) * 1000, 2),
-                error="timeout",
-            ),
-        )
-        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="orchestrator request timed out") from exc
-    except socket.timeout as exc:
-        logging.getLogger(__name__).warning(
-            "orchestrator_get_timeout %s",
-            summarize_http_context(
-                method="GET",
-                path=url,
-                request_id=request_id,
-                duration_ms=round((time.perf_counter() - start) * 1000, 2),
-                error="socket_timeout",
-            ),
-        )
-        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="orchestrator request timed out") from exc
-
-    try:
-        data = json.loads(text or "{}")
-    except Exception as exc:
-        logging.getLogger(__name__).warning(
-            "orchestrator_get_invalid_json %s",
-            summarize_http_context(
-                method="GET",
-                path=url,
-                request_id=request_id,
-                duration_ms=round((time.perf_counter() - start) * 1000, 2),
-                error="invalid_json",
-            ),
-        )
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="orchestrator returned non-json payload") from exc
-    if not isinstance(data, dict):
-        logging.getLogger(__name__).warning(
-            "orchestrator_get_invalid_response %s",
-            summarize_http_context(
-                method="GET",
-                path=url,
-                request_id=request_id,
-                duration_ms=round((time.perf_counter() - start) * 1000, 2),
-                error="invalid_response_object",
-            ),
-        )
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="orchestrator returned invalid response object")
-    return data
-
-
-def _normalize_optional_project_code(value: Any) -> str:
-    """标准化可选 project 字段（空值 -> 空串，非空 -> 小写）。"""
-    return str(value or "").strip().lower()
-
-
+# ---- 历史/项目解析 ----
 def _resolve_history_project_code(item: dict[str, Any]) -> str:
     """优先从记录字段取 project，缺失时回退到 case_id 解析。"""
     normalized_project_code = _normalize_optional_project_code(item.get("project_code") or item.get("project"))
@@ -212,53 +119,6 @@ def _resolve_history_project_code(item: dict[str, Any]) -> str:
     if not matched:
         return ""
     return _normalize_optional_project_code(matched.group("project"))
-
-
-def _to_utc(value: datetime | None) -> datetime:
-    """将时间值统一转换为 UTC，空值使用当前 UTC 时间。"""
-    if not value:
-        return datetime.now(UTC)
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
-
-
-def _parse_iso_datetime(value: str) -> datetime | None:
-    """解析 ISO 时间字符串，并统一返回带 UTC 时区的 datetime。"""
-    text = str(value or "").strip()
-    if not text:
-        return None
-    parsed_text = text.replace("Z", "+00:00")
-    try:
-        parsed = datetime.fromisoformat(parsed_text)
-    except Exception:
-        return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
-
-
-def _utc_now() -> datetime:
-    """返回当前 UTC 时间，供运行态和报表时间戳复用。"""
-    return datetime.now(UTC)
-
-
-def _text(value: Any) -> str:
-    """将任意输入标准化为去首尾空白的字符串。"""
-    return str(value or "").strip()
-
-
-def _text_list(value: Any) -> list[str]:
-    """将列表输入清洗为去重后的非空字符串列表。"""
-    if not isinstance(value, list):
-        return []
-    items: list[str] = []
-    for raw in value:
-        text = _text(raw)
-        if text and text not in items:
-            items.append(text)
-    return items
-
 
 def _attach_test_point_asset_summary(item: dict[str, Any]) -> dict[str, Any]:
     """为用例记录补充关联测试点资产的汇总与可追溯信息。"""
@@ -336,34 +196,11 @@ _VIRTUAL_TEST_POINT_ELEMENTS = {"页面", "浏览器地址栏", "工作台URL", 
 _GENERATION_CASE_SOURCE_VALUES = {"manual", "ai", "regression"}
 
 
-def _normalize_generation_case_source(value: Any) -> str:
-    """将页面传入的生成来源归一化为用例生成链路支持的枚举。"""
-    normalized = _text(value).lower()
-    if normalized in _GENERATION_CASE_SOURCE_VALUES:
-        return normalized
-    # Asset/review detail pages pass UI trigger names here. The generation
-    # pipeline expects the semantic case source enum, so test-point generation
-    # falls back to AI while source asset metadata keeps traceability.
-    return "ai"
 
 
-def _normalize_test_point_review_status(value: Any) -> str:
-    """统一测试点评审状态别名，便于前后端使用同一状态集合。"""
-    normalized = _text(value).lower()
-    return _REVIEW_STATUS_ALIASES.get(normalized, normalized)
-
-
-def _validate_test_point_review_status(value: Any) -> str:
-    """校验测试点评审状态，只允许 pending/approved/rejected。"""
-    normalized = _normalize_test_point_review_status(value)
-    if normalized not in {"pending", "approved", "rejected"}:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="status must be one of: pending, approved, rejected",
-        )
-    return normalized
-
-
+# ═══════════════════════════════════════════════════════════════
+# Review helpers —— 测试点审核状态、快照、绑定明细
+# ═══════════════════════════════════════════════════════════════
 def _candidate_snapshot_from_point(point: dict[str, Any]) -> dict[str, Any]:
     """从测试点 metadata 中提取原始候选快照。"""
     metadata = point.get("metadata") if isinstance(point.get("metadata"), dict) else {}
@@ -411,35 +248,10 @@ def _is_virtual_test_point_element(value: Any) -> bool:
     return normalized in _VIRTUAL_TEST_POINT_ELEMENTS or normalized.endswith("URL")
 
 
-def _read_json_file(path: Path) -> dict[str, Any]:
-    """以容错方式读取 JSON 文件，异常时返回空对象供上层降级。"""
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8")) or {}
-    except Exception as exc:
-        LOGGER.warning("failed to read json file: path=%s error=%s", path, exc)
-        return {}
-    return payload if isinstance(payload, dict) else {}
 
 
-def _write_json_file(path: Path, payload: dict[str, Any]) -> None:
-    """将 JSON 对象原子化落盘到指定路径（自动创建目录）。"""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_name(f".{path.name}.tmp")
-    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    tmp_path.replace(path)
 
 
-def _safe_rollback_or_invalidate(db: Session) -> None:
-    """数据库异常后的兜底清理：先回滚，失败则尝试失效当前会话。"""
-    try:
-        db.rollback()
-    except Exception:
-        try:
-            db.invalidate()
-        except Exception:
-            logging.getLogger(__name__).debug("failed to invalidate broken DB session", exc_info=True)
 
 
 def _test_point_asset_state_paths(project: str, asset_id: str) -> tuple[Path, Path]:
@@ -484,13 +296,8 @@ def _page_object_generation_context(db: Session, *, project: str, page: str) -> 
             "page_object": {},
             "base_blockers": ["页面为空，无法定位页面对象"],
         }
-    page_object = db.execute(
-        select(PageObject).where(
-            PageObject.project_code == normalized_project,
-            PageObject.client == "web",
-            PageObject.page_code == normalized_page,
-        )
-    ).scalar_one_or_none()
+    repo = PageObjectRepository(db)
+    page_object = repo.get_by_identity(normalized_project, "web", normalized_page)
     if page_object is None:
         return {
             "page_object_found": False,
@@ -498,15 +305,7 @@ def _page_object_generation_context(db: Session, *, project: str, page: str) -> 
             "page_object": {},
             "base_blockers": [f"{normalized_project}/web/{normalized_page} 页面对象未治理，请先在页面对象管理中补齐"],
         }
-    elements = (
-        db.execute(
-            select(PageElement)
-            .where(PageElement.page_object_id == int(page_object.id))
-            .order_by(PageElement.id.asc())
-        )
-        .scalars()
-        .all()
-    )
+    elements = repo.list_elements_by_page_object_id(int(page_object.id), order_by_id=True)
     qualified_elements = [element for element in elements if _is_generation_qualified_element(element)]
     mapping: dict[str, dict[str, Any]] = {}
     for element in qualified_elements:
@@ -578,6 +377,41 @@ def _test_point_generation_state(point: dict[str, Any], *, page_context: dict[st
         "generation_blockers": blockers,
         "can_generate": review_status_value == "approved" and not blockers,
     }
+
+
+def _canonical_involved_elements_for_page(involved_elements: Any, *, page_context: dict[str, Any]) -> list[str]:
+    """将测试点涉及元素收敛为页面对象 element_code，避免中文名与编码混存。"""
+    raw_elements = _text_list(involved_elements)
+    page_object = page_context.get("page_object") if isinstance(page_context.get("page_object"), dict) else {}
+    if not raw_elements or not page_object:
+        return raw_elements
+    alias_map = build_element_alias_map(page_object)
+    canonical: list[str] = []
+    for raw in raw_elements:
+        if _is_virtual_test_point_element(raw):
+            if raw not in canonical:
+                canonical.append(raw)
+            continue
+        element_code = resolve_element_code(raw, alias_map)
+        normalized = element_code or raw
+        if normalized and normalized not in canonical:
+            canonical.append(normalized)
+    return canonical
+
+
+def _normalize_points_involved_elements(points: list[dict[str, Any]], *, page_context: dict[str, Any]) -> list[dict[str, Any]]:
+    """规范化 plan.points[].involved_elements；旧 snapshot 只保留历史，不再作为正式事实源。"""
+    normalized_points: list[dict[str, Any]] = []
+    for point in points:
+        current = _text_list(point.get("involved_elements"))
+        canonical = _canonical_involved_elements_for_page(current, page_context=page_context)
+        if canonical == current:
+            normalized_points.append(point)
+            continue
+        copied = dict(point)
+        copied["involved_elements"] = canonical
+        normalized_points.append(copied)
+    return normalized_points
 
 
 def _element_bindings_for_review(involved_elements: list[str], *, page_context: dict[str, Any]) -> list[dict[str, Any]]:
@@ -653,22 +487,14 @@ def _review_history_from_point(point: dict[str, Any]) -> list[dict[str, Any]]:
     return history
 
 
-def _python_literal(value: Any) -> str:
-    """将值渲染为安全的 Python 字面量字符串。"""
-    return json.dumps(_text(value), ensure_ascii=False)
 
 
-def _safe_python_identifier(value: Any, *, fallback: str = "intent") -> str:
-    """把测试点或用例标识转换为可用的 Python 函数名片段。"""
-    raw = _text(value).lower().replace("-", "_")
-    cleaned = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in raw).strip("_")
-    if not cleaned:
-        cleaned = fallback
-    if cleaned[0].isdigit():
-        cleaned = f"intent_{cleaned}"
-    return cleaned
 
 
+
+# ═══════════════════════════════════════════════════════════════
+# Script preview helpers —— Selenium 脚本生成
+# ═══════════════════════════════════════════════════════════════
 def _selenium_by_expression(locator_type: Any) -> str:
     """将页面对象定位器类型映射为 Selenium By 表达式。"""
     normalized = _text(locator_type).lower().replace("-", "_")
@@ -857,6 +683,10 @@ def _build_test_point_script_preview(*, asset: dict[str, Any], candidate: dict[s
     return "\n".join(lines) + "\n"
 
 
+
+# ═══════════════════════════════════════════════════════════════
+# Case identity helpers —— case_id 解析、source identity、元数据
+# ═══════════════════════════════════════════════════════════════
 def _append_unique_intent_id(items: list[str], value: Any) -> None:
     """向 intent_id 列表追加去重后的有效测试点标识。"""
     intent_id = _text(value)
@@ -877,7 +707,7 @@ def _intent_ids_from_case_steps(case: TestCase) -> list[str]:
         return ids
     try:
         script_payload = yaml.safe_load(_text(case.script_code)) or {}
-    except Exception:
+    except yaml.YAMLError:
         script_payload = {}
     if isinstance(script_payload, dict):
         execution = script_payload.get("execution") if isinstance(script_payload.get("execution"), dict) else {}
@@ -892,7 +722,7 @@ def _source_identity_from_case(case: TestCase) -> tuple[str, list[str]]:
     intent_ids = _intent_ids_from_case_steps(case)
     try:
         script_payload = yaml.safe_load(_text(case.script_code)) or {}
-    except Exception:
+    except yaml.YAMLError:
         script_payload = {}
     if isinstance(script_payload, dict):
         raw_requirement = script_payload.get("requirement")
@@ -914,7 +744,7 @@ def _structured_requirement_metadata_from_case(case: TestCase) -> dict[str, str]
     """从 `script_code.requirement` 结构化对象中读取业务追踪元数据。"""
     try:
         script_payload = yaml.safe_load(_text(case.script_code)) or {}
-    except Exception:
+    except yaml.YAMLError:
         return {}
     if not isinstance(script_payload, dict):
         return {}
@@ -946,10 +776,12 @@ def _existing_case_id_for_source_intent(
     normalized_intent = _text(intent_id)
     if not normalized_project or not normalized_asset or not normalized_intent:
         return ""
-    stmt = select(TestCase).where(TestCase.project_code == normalized_project)
-    if normalized_page:
-        stmt = stmt.where(TestCase.page_code == normalized_page)
-    candidates = db.execute(stmt.order_by(TestCase.updated_at.desc(), TestCase.id.desc())).scalars().all()
+    repo = TestCaseRepository(db)
+    candidates = repo.list_filtered(
+        project_code=normalized_project,
+        page_code=normalized_page if normalized_page else None,
+        order_by=TestCase.updated_at.desc(),
+    )
     legacy_intent_match = ""
     for case in candidates:
         case_asset_id, case_intent_ids = _source_identity_from_case(case)
@@ -990,6 +822,10 @@ def _point_review_status(point: dict[str, Any]) -> str:
     return _review_status_from_point(point)
 
 
+
+# ═══════════════════════════════════════════════════════════════
+# Generation diagnostics —— 生成失败记录、诊断信息
+# ═══════════════════════════════════════════════════════════════
 def _generated_case_plan_items(project: str) -> list[dict[str, Any]]:
     """读取项目下已生成用例计划项，供失败诊断和列表聚合使用。"""
     project_dir = Path(constants.GENERATED_CASES_STATE_ROOT) / (_text(project) or "mall") / "plans"
@@ -999,7 +835,7 @@ def _generated_case_plan_items(project: str) -> list[dict[str, Any]]:
     for path in sorted(project_dir.glob("*.json")):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             continue
         if isinstance(payload, dict):
             payload["_state_path"] = str(path)
@@ -1183,6 +1019,10 @@ def _build_generation_diagnostics_for_asset(project: str, asset: dict[str, Any])
     }
 
 
+
+# ═══════════════════════════════════════════════════════════════
+# Asset index helpers —— 测试点资产索引、用例列表补充
+# ═══════════════════════════════════════════════════════════════
 def _source_asset_index(project: str) -> dict[str, dict[str, str]]:
     """按来源资产和 intent_id 建立测试点资产索引。"""
     project_dir = workbench_asset_service.state_project_dir(project, state_root=constants.TEST_POINTS_ROOT)
@@ -1297,20 +1137,11 @@ def _active_state_from_case(case: TestCase) -> str:
 
 def _page_object_url_map(db: Session, *, project: str, page_codes: list[str]) -> dict[str, str]:
     """批量查询页面对象 URL，供用例列表补充页面入口。"""
+    repo = PageObjectRepository(db)
     normalized_codes = sorted({workbench_gate_service.normalize_page_slug(item) for item in page_codes if _text(item)})
     if not normalized_codes:
         return {}
-    rows = (
-        db.execute(
-            select(PageObject).where(
-                PageObject.project_code == (_text(project) or "mall"),
-                PageObject.client == "web",
-                PageObject.page_code.in_(normalized_codes),
-            )
-        )
-        .scalars()
-        .all()
-    )
+    rows = repo.list_by_project_and_page_codes(_text(project) or "mall", "web", normalized_codes)
     return {str(row.page_code or "").strip(): _text(row.page_url) for row in rows}
 
 
@@ -1318,15 +1149,8 @@ def _latest_execution_map(db: Session, *, case_ids: list[int]) -> dict[int, Test
     """按用例数据库 ID 查询最近一次执行记录。"""
     if not case_ids:
         return {}
-    rows = (
-        db.execute(
-            select(TestCaseExecution)
-            .where(TestCaseExecution.case_id.in_(case_ids))
-            .order_by(TestCaseExecution.executed_at.desc(), TestCaseExecution.id.desc())
-        )
-        .scalars()
-        .all()
-    )
+    repo = TestCaseRepository(db)
+    rows = repo.list_executions_by_case_ids(case_ids)
     latest: dict[int, TestCaseExecution] = {}
     for row in rows:
         row_case_id = int(row.case_id or 0)
@@ -1335,89 +1159,12 @@ def _latest_execution_map(db: Session, *, case_ids: list[int]) -> dict[int, Test
     return latest
 
 
-def _duration_ms_from_run(run_item: dict[str, Any], execution_record: dict[str, Any]) -> int:
-    """从运行快照或起止时间中计算执行耗时毫秒数。"""
-    raw_duration = execution_record.get("duration_seconds")
-    try:
-        return max(0, int(float(raw_duration or 0) * 1000))
-    except (TypeError, ValueError):
-        pass
-    started_at = _parse_iso_datetime(_text(execution_record.get("started_at")) or _text(run_item.get("started_at")))
-    finished_at = _parse_iso_datetime(_text(execution_record.get("finished_at")) or _text(run_item.get("finished_at")))
-    if started_at and finished_at:
-        return max(0, int((finished_at - started_at).total_seconds() * 1000))
-    return 0
-
-
 def _persist_runtime_run_to_case_center(db: Session, run_item: dict[str, Any]) -> TestCaseExecution | None:
-    """将运行态执行结果同步写入用例中心执行记录。"""
-    if not isinstance(run_item, dict):
-        return None
-    run_id = _text(run_item.get("run_id"))
-    case_id = _text(run_item.get("case_id"))
-    project = _text(run_item.get("project")) or "mall"
-    if not case_id:
-        return None
-    execution_record = run_item.get("execution_record") if isinstance(run_item.get("execution_record"), dict) else {}
-    status_value = (_text(run_item.get("status")) or _text(execution_record.get("status")) or "unknown").lower()
-    if status_value not in {"passed", "failed", "cancelled", "skipped", "error"}:
-        return None
-    case = db.execute(
-        select(TestCase).where(
-            TestCase.case_id == case_id,
-            TestCase.project_code == project,
-        )
-    ).scalar_one_or_none()
-    if case is None:
-        LOGGER.warning(
-            "skip runtime persistence because case is not found in project: project=%s case_id=%s run_id=%s",
-            project,
-            case_id,
-            run_id,
-        )
-        return None
-    executed_at = (
-        _parse_iso_datetime(_text(execution_record.get("finished_at")))
-        or _parse_iso_datetime(_text(run_item.get("finished_at")))
-        or _parse_iso_datetime(_text(execution_record.get("started_at")))
-        or _parse_iso_datetime(_text(run_item.get("started_at")))
-        or datetime.now(UTC)
-    )
-    duration_ms = _duration_ms_from_run(run_item, execution_record)
-    existing: TestCaseExecution | None = None
-    if run_id:
-        existing = db.execute(
-            select(TestCaseExecution).where(
-                TestCaseExecution.case_id == int(case.id),
-                TestCaseExecution.report_url.like(f"%run_id={run_id}%"),
-            )
-        ).scalar_one_or_none()
-    if existing is None:
-        existing = TestCaseExecution(
-            case_id=int(case.id),
-            status=status_value,
-            duration_ms=duration_ms,
-            report_url="",
-            executed_at=executed_at,
-        )
-        db.add(existing)
-        db.flush()
-    else:
-        existing.status = status_value
-        existing.duration_ms = duration_ms
-        existing.executed_at = executed_at
-    report_url = f"/react/execution/results/{int(existing.id)}"
-    if run_id:
-        report_url = f"{report_url}?run_id={run_id}"
-    existing.report_url = report_url
-    case.last_execution_result = status_value
-    case.last_report_url = report_url
-    case.updated_at = datetime.now(UTC)
-    db.add(case)
-    db.add(existing)
-    db.commit()
-    db.refresh(existing)
-    return existing
+    """将运行态执行结果同步写入用例中心执行记录。
+
+    委托给 workbench_runtime_service.persist_runtime_run_to_case_center。
+    """
+    return workbench_runtime_service.persist_runtime_run_to_case_center(db, run_item)
 
 
 def _workbench_test_case_list_item(
@@ -1457,6 +1204,10 @@ def _workbench_test_case_list_item(
     }
 
 
+
+# ═══════════════════════════════════════════════════════════════
+# Candidate formatting —— 测试点→候选结构 转换
+# ═══════════════════════════════════════════════════════════════
 def _steps_from_candidate(candidate: dict[str, Any]) -> list[dict[str, Any]]:
     """将候选测试点步骤规范化为结构化用例步骤。"""
     steps = _text_list(candidate.get("steps"))
@@ -1565,6 +1316,35 @@ def _point_step_texts(point_steps: list[Any]) -> list[str]:
 def _steps_hint_from_current_steps(point_steps: list[Any], involved_elements: list[str]) -> list[str]:
     """根据当前测试点步骤推导脚本生成可使用的步骤提示。"""
     hints: list[str] = []
+    for row in point_steps:
+        if not isinstance(row, dict):
+            continue
+        action = _text(row.get("action")).lower()
+        target_name = _text(row.get("target_name") or row.get("target"))
+        if target_name.startswith("element:"):
+            target_name = target_name.split(":", 1)[1]
+        if action in {"input", "fill"} and target_name:
+            value = row.get("value")
+            if value is not None and str(value) != " ":
+                hints.append(f"input:{target_name}={value}")
+            continue
+        if action == "click" and target_name:
+            hints.append(f"click:{target_name}")
+            continue
+        if action in {"assert_visible", "assert_text"} and target_name:
+            prefix = "assert_text" if action == "assert_text" else "assert"
+            value = _text(row.get("value"))
+            hints.append(f"{prefix}:{target_name}={value}" if value else f"{prefix}:{target_name}")
+            continue
+        if action == "assert_url" and _text(row.get("value")):
+            hints.append(f"assert_url:{_text(row.get('value'))}")
+            continue
+        if action == "goto" and _text(row.get("value")):
+            hints.append(f"goto:{_text(row.get('value'))}")
+            continue
+    if hints:
+        return _text_list(hints)
+
     for step in _point_step_texts(point_steps):
         if "点击" in step:
             element_name = _element_name_from_step(step, involved_elements)
@@ -1601,6 +1381,8 @@ def _candidate_from_asset_point(point: dict[str, Any], *, fallback_title: str, f
     steps: list[str] = current_steps or _text_list(point.get("steps_hint")) or snapshot_steps or _text_list(snapshot.get("steps_hint"))
     involved_elements = _text_list(point.get("involved_elements")) or _text_list(snapshot.get("involved_elements"))
     current_steps_hint = _steps_hint_from_current_steps(point_steps, involved_elements)
+    saved_steps_hint = _text_list(point.get("steps_hint")) or _text_list(snapshot.get("steps_hint"))
+    merged_steps_hint = _text_list([*current_steps_hint, *saved_steps_hint])
     return {
         "intent_id": intent_id or "manual-intent",
         "title": title,
@@ -1609,7 +1391,7 @@ def _candidate_from_asset_point(point: dict[str, Any], *, fallback_title: str, f
         "priority": _text(point.get("priority") or snapshot.get("priority")) or fallback_priority or "P1",
         "precondition": precondition,
         "steps": steps,
-        "steps_hint": current_steps_hint or _text_list(point.get("steps_hint")) or _text_list(snapshot.get("steps_hint")),
+        "steps_hint": merged_steps_hint,
         "expected": expected,
         "expected_result": expected,
         "involved_elements": involved_elements,
@@ -1620,64 +1402,10 @@ def _candidate_from_asset_point(point: dict[str, Any], *, fallback_title: str, f
     }
 
 
-def _is_within(path: Path, root: Path) -> bool:
-    """
-    判断 path 是否在 root 目录的子目录内，防止路径遍历攻击（Path Traversal）
-    :param path:
-    :param root:
-    :return:
-    """
-    try:
-        resolved_path = path.resolve()
-        resolved_root = root.resolve()
-        return resolved_path.is_relative_to(resolved_root)
-    except Exception:
-        try:
-            resolved_path = os.path.abspath(str(path))
-            resolved_root = os.path.abspath(str(root))
-            return os.path.commonpath([resolved_path, resolved_root]) == resolved_root
-        except Exception:
-            return False
 
 
-def _build_empty_trend(now: datetime) -> list[dict[str, Any]]:
-    """构造无执行数据时使用的 24 小时趋势占位。"""
-    base = (now - timedelta(hours=23)).replace(minute=0, second=0, microsecond=0)
-    return [
-        {
-            "hour": (base + timedelta(hours=i)).strftime("%H:%M"),
-            "pass_rate": 0.0,
-            "execution_count": 0,
-        }
-        for i in range(24)
-    ]
 
 
-def _default_overview(now: datetime, reason: str) -> dict[str, Any]:
-    """构造 dashboard 概览异常降级时的默认响应。"""
-    trend = _build_empty_trend(now)
-    return {
-        "as_of": now.isoformat(),
-        "risk": {
-            "score": 0,
-            "level": "数据不可用",
-            "summary": "暂无可用执行数据，已启用降级视图。",
-            "detail_url": "/quality/trends",
-        },
-        "summary": {
-            "pass_rate_24h": 0.0,
-            "execution_count_24h": 0,
-            "intercepted_last10": 0,
-            "pending_issues": 0,
-            "as_of": now.isoformat(),
-        },
-        "trend_24h": trend,
-        "top_flaky": [],
-        "gate_last10": [],
-        "pending_issues": [],
-        "degraded": True,
-        "degraded_reason": reason,
-    }
 
 
 class WorkbenchFacade:
@@ -2183,7 +1911,8 @@ class WorkbenchFacade:
                 "status": next_status,
                 "updated_count": updated_count,
                 "asset_ids": affected_assets,
-            }
+            },
+            db=db,
         )
         return {
             "message": f"updated {updated_count} test points",
@@ -2387,14 +2116,10 @@ class WorkbenchFacade:
         """WorkbenchFacade.get_workbench_test_case 接口实现。"""
         normalized_project = _text(project) or "mall"
         normalized_case_id = _text(case_id)
-        case = db.execute(
-            select(TestCase).where(
-                TestCase.case_id == normalized_case_id,
-                TestCase.project_code == normalized_project,
-            )
-        ).scalar_one_or_none()
+        repo = TestCaseRepository(db)
+        case = repo.get_by_case_id_and_project(normalized_case_id, normalized_project)
         if case is None:
-            case = db.execute(select(TestCase).where(TestCase.case_id == normalized_case_id)).scalar_one_or_none()
+            case = repo.get_by_case_id(normalized_case_id)
         if case is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="test case not found")
         detail = test_case_service.get_test_case_detail(db, str(case.id))
@@ -2411,16 +2136,7 @@ class WorkbenchFacade:
             .scalars()
             .all()
         )
-        versions = (
-            db.execute(
-                select(TestCaseVersion)
-                .where(TestCaseVersion.case_id == int(case.id))
-                .order_by(TestCaseVersion.version_no.desc(), TestCaseVersion.id.desc())
-                .limit(10)
-            )
-            .scalars()
-            .all()
-        )
+        versions = TestCaseRepository(db).list_versions_by_case_id(int(case.id), limit=10)
         latest_execution = executions[0] if executions else None
         requirement_metadata = _structured_requirement_metadata_from_case(case)
         item = _workbench_test_case_list_item(
@@ -2521,7 +2237,8 @@ class WorkbenchFacade:
                 "deleted_count": deleted_count,
                 "deleted_case_ids": deleted_case_ids,
                 "missing_case_ids": missing_case_ids,
-            }
+            },
+            db=db,
         )
         return {
             "message": f"deleted {deleted_count} test cases",
@@ -2648,6 +2365,8 @@ class WorkbenchFacade:
 
         if not incoming_points and not existing_points:
             points = [_manual_point_from_candidate(candidate, index=index) for index, candidate in enumerate(selected_candidates, start=1)]
+        page_context = _page_object_generation_context(db, project=project, page=page)
+        points = _normalize_points_involved_elements(points, page_context=page_context)
         selected_intent_ids = [intent_id for intent_id in [_text(item.get("intent_id") or item.get("key")) for item in points] if intent_id]
         technique_distribution: dict[str, int] = {}
         for point in points:
@@ -2750,7 +2469,8 @@ class WorkbenchFacade:
                 "case_id": asset_id,
                 "page": page,
                 "path": str(plan_path.resolve()),
-            }
+            },
+            db=db,
         )
         detail = self.get_test_point_asset(asset_id=asset_id, project=project, db=db)
         item = detail.get("item", {}) if isinstance(detail.get("item"), dict) else {}
@@ -2827,7 +2547,8 @@ class WorkbenchFacade:
                 "removed_paths": removed_paths,
                 "cascade_cases": bool(cascade_cases),
                 "deleted_case_count": deleted_case_count,
-            }
+            },
+            db=db,
         )
         return {
             "item": {
@@ -3139,12 +2860,7 @@ class WorkbenchFacade:
         ):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="case_id not found in case center")
 
-        case_for_run = db.execute(
-            select(TestCase).where(
-                TestCase.case_id == normalized_case_id,
-                TestCase.project_code == normalized_project,
-            )
-        ).scalar_one_or_none()
+        case_for_run = TestCaseRepository(db).get_by_case_id_and_project(normalized_case_id, normalized_project)
         if case_for_run is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="case_id not found in project case center")
         case_for_run = test_case_service.get_test_case_detail(db, str(case_for_run.id)).case
@@ -3305,12 +3021,14 @@ class WorkbenchFacade:
 
         def _build_run_command(case_path_value: Path) -> tuple[list[str], dict[str, str]]:
             """WorkbenchFacade._build_run_command 接口实现。"""
+            runner_environ = os.environ.copy()
+            runner_environ["DSL_DATA_POOL_JSON"] = test_data_pool_service.serialize_runner_data_pool_snapshot(db)
             return workbench_runtime_service.build_run_command(
                 case_path_value,
                 get_python_bin_fn=lambda: workbench_runtime_service.get_python_bin(repo_root=constants.REPO_ROOT),
                 repo_root=constants.REPO_ROOT,
                 allure_results_root=constants.ALLURE_RESULTS_ROOT,
-                environ=os.environ.copy(),
+                environ=runner_environ,
             )
 
         def _execute_run(job: dict[str, Any]) -> None:
@@ -3426,7 +3144,8 @@ class WorkbenchFacade:
                 "from_run_id": run_id,
                 "run_id": new_job.get("run_id", ""),
                 "queue_status": "queued",
-            }
+            },
+            db=db,
         )
         return {"item": new_job}
 
@@ -3949,205 +3668,7 @@ class WorkbenchFacade:
 
     def dashboard_overview(self, db: Session) -> dict[str, Any]:
         """WorkbenchFacade.dashboard_overview 接口实现。"""
-        now = datetime.now(UTC)
-        try:
-            test_case_service.ensure_seed_data(db)
-            cases = db.execute(select(TestCase).order_by(TestCase.id.asc())).scalars().all()
-            executions = db.execute(select(TestCaseExecution).order_by(TestCaseExecution.executed_at.desc())).scalars().all()
-            case_map = {item.id: item for item in cases}
-
-            base = (now - timedelta(hours=23)).replace(minute=0, second=0, microsecond=0)
-            buckets: dict[datetime, dict[str, int]] = {
-                base + timedelta(hours=i): {"total": 0, "passed": 0}
-                for i in range(24)
-            }
-            for item in executions:
-                executed_at = _to_utc(item.executed_at).replace(minute=0, second=0, microsecond=0)
-                if executed_at not in buckets:
-                    continue
-                buckets[executed_at]["total"] += 1
-                if (item.status or "").lower() == "passed":
-                    buckets[executed_at]["passed"] += 1
-
-            total = sum(v["total"] for v in buckets.values())
-            passed = sum(v["passed"] for v in buckets.values())
-            base_pass_rate = round((passed / total * 100) if total > 0 else 100.0, 1)
-
-            trend: list[dict[str, Any]] = []
-            for i in range(24):
-                hour = base + timedelta(hours=i)
-                total_runs = buckets[hour]["total"]
-                pass_rate = round((buckets[hour]["passed"] / total_runs * 100), 1) if total_runs > 0 else base_pass_rate
-                trend.append(
-                    {
-                        "hour": hour.strftime("%H:%M"),
-                        "pass_rate": pass_rate,
-                        "execution_count": total_runs,
-                    }
-                )
-
-            case_runs: dict[int, list[TestCaseExecution]] = defaultdict(list)
-            for item in executions:
-                case_runs[item.case_id].append(item)
-
-            flaky_rows: list[dict[str, Any]] = []
-            for case_id, case in {item.id: item for item in cases}.items():
-                runs = sorted(case_runs.get(case_id, []), key=lambda item: (_to_utc(item.executed_at), item.id))
-                statuses = [(item.status or "unknown").lower() for item in runs]
-                total_runs = len(statuses)
-                if total_runs >= 2:
-                    transitions = sum(1 for idx in range(1, total_runs) if statuses[idx] != statuses[idx - 1])
-                    failed = sum(1 for value in statuses if value == "failed")
-                    transition_ratio = transitions / (total_runs - 1)
-                    failed_ratio = failed / total_runs
-                    flaky_rate = round(min(100.0, transition_ratio * 70 + failed_ratio * 30), 1)
-                    unstable_runs = transitions
-                else:
-                    seed = ((case_id * 17) % 25) + 8
-                    last = (case.last_execution_result or "unknown").lower()
-                    if last == "failed":
-                        flaky_rate = min(98.0, float(seed + 24))
-                    elif last == "skipped":
-                        flaky_rate = min(90.0, float(seed + 12))
-                    else:
-                        flaky_rate = float(seed)
-                    unstable_runs = 0
-                flaky_rows.append(
-                    {
-                        "case_id": case_id,
-                        "name": case.name,
-                        "module": case.module,
-                        "flaky_rate": flaky_rate,
-                        "total_runs": total_runs,
-                        "unstable_runs": unstable_runs,
-                        "last_result": case.last_execution_result or "unknown",
-                    }
-                )
-            flaky_rows = sorted(flaky_rows, key=lambda item: item["flaky_rate"], reverse=True)[:5]
-
-            sorted_runs = sorted(executions, key=lambda item: (_to_utc(item.executed_at), item.id), reverse=True)[:10]
-            gate_rows: list[dict[str, Any]] = []
-            for item in sorted_runs:
-                item_status = (item.status or "unknown").lower()
-                if item_status == "failed":
-                    gate_status = "intercepted"
-                    reason = "失败率超过门禁阈值"
-                elif item_status == "passed":
-                    gate_status = "passed"
-                    reason = "门禁规则校验通过"
-                else:
-                    gate_status = "warning"
-                    reason = "前置数据不足，需人工复核"
-                case = case_map.get(item.case_id)
-                gate_rows.append(
-                    {
-                        "execution_id": item.id,
-                        "pr_key": f"PR-{6800 + item.id}",
-                        "branch": f"feature/case-{item.case_id}",
-                        "gate_rule": "主分支质量门禁",
-                        "gate_status": gate_status,
-                        "reason": reason,
-                        "case_name": case.name if case else f"用例#{item.case_id}",
-                        "executed_at": _to_utc(item.executed_at).isoformat(),
-                    }
-                )
-            if len(gate_rows) < 10:
-                for index in range(len(gate_rows), 10):
-                    gate_rows.append(
-                        {
-                            "execution_id": 0,
-                            "pr_key": f"PR-NA-{index + 1}",
-                            "branch": "-",
-                            "gate_rule": "主分支质量门禁",
-                            "gate_status": "warning",
-                            "reason": "历史门禁样本不足",
-                            "case_name": "-",
-                            "executed_at": (now - timedelta(hours=index + 1)).isoformat(),
-                        }
-                    )
-
-            sorted_runs_desc = sorted(executions, key=lambda item: (_to_utc(item.executed_at), item.id), reverse=True)
-            pending_issues: list[dict[str, Any]] = []
-            for item in sorted_runs_desc:
-                item_status = (item.status or "unknown").lower()
-                if item_status not in {"failed", "skipped"}:
-                    continue
-                case = case_map.get(item.case_id)
-                if item_status == "failed":
-                    recommendation = "疑似断言与页面状态不一致，建议先复核选择器和等待策略。"
-                    confidence = 0.82 + ((item.id % 7) * 0.01)
-                else:
-                    recommendation = "疑似环境前置条件未满足，建议检查测试数据和依赖服务健康度。"
-                    confidence = 0.68 + ((item.id % 5) * 0.01)
-                pending_issues.append(
-                    {
-                        "issue_key": f"ISS-{9000 + item.id}",
-                        "title": f"{case.name if case else f'用例#{item.case_id}'} 待确认",
-                        "agent": "失败归因 Agent",
-                        "confidence": round(min(confidence, 0.95), 2),
-                        "status": "待确认",
-                        "recommendation": recommendation,
-                        "detail_url": f"/cases/{item.case_id}",
-                    }
-                )
-                if len(pending_issues) >= 6:
-                    break
-            if not pending_issues:
-                for idx, row in enumerate(flaky_rows[:3], start=1):
-                    pending_issues.append(
-                        {
-                            "issue_key": f"ISS-F{idx:03d}",
-                            "title": f"{row['name']} 波动风险复核",
-                            "agent": "失败归因 Agent",
-                            "confidence": round(min(0.6 + row["flaky_rate"] / 200, 0.93), 2),
-                            "status": "待确认",
-                            "recommendation": "建议补充稳定性断言并提高重试与隔离策略。",
-                            "detail_url": f"/cases/{row['case_id']}",
-                        }
-                    )
-
-            total_runs = len(executions)
-            failed_runs = sum(1 for item in executions if (item.status or "").lower() == "failed")
-            pass_runs = sum(1 for item in executions if (item.status or "").lower() == "passed")
-            pass_rate = round((pass_runs / total_runs * 100) if total_runs else 100.0, 1)
-            fail_rate = (failed_runs / total_runs * 100) if total_runs else 0.0
-            flaky_avg = (sum(item["flaky_rate"] for item in flaky_rows) / len(flaky_rows)) if flaky_rows else 0.0
-            intercepted_count = sum(1 for item in gate_rows if item["gate_status"] == "intercepted")
-
-            risk_score = int(min(100, fail_rate * 0.55 + flaky_avg * 0.30 + intercepted_count * 4.5))
-            if risk_score >= 70:
-                risk_level = "高"
-                risk_summary = "主分支风险偏高，建议先处理高优先级失败与Flaky用例。"
-            elif risk_score >= 40:
-                risk_level = "中"
-                risk_summary = "主分支风险可控，但仍需关注波动用例与门禁告警。"
-            else:
-                risk_level = "低"
-                risk_summary = "主分支风险较低，可继续推进回归与发布节奏。"
-
-            return {
-                "as_of": now.isoformat(),
-                "risk": {
-                    "score": risk_score,
-                    "level": risk_level,
-                    "summary": risk_summary,
-                    "detail_url": "/quality/trends",
-                },
-                "summary": {
-                    "pass_rate_24h": trend[-1]["pass_rate"] if trend else pass_rate,
-                    "execution_count_24h": sum(item["execution_count"] for item in trend),
-                    "intercepted_last10": intercepted_count,
-                    "pending_issues": len(pending_issues),
-                    "as_of": now.isoformat(),
-                },
-                "trend_24h": trend,
-                "top_flaky": flaky_rows,
-                "gate_last10": gate_rows,
-                "pending_issues": pending_issues,
-            }
-        except Exception:
-            LOGGER.exception("dashboard overview degraded due to backend error")
-            return _default_overview(now, reason="dashboard_backend_error")
+        return workbench_governance_service.build_dashboard_overview(db)
 
     def dashboard_governance(self, db: Session) -> dict[str, Any]:
         """WorkbenchFacade.dashboard_governance 接口实现。"""
@@ -4223,46 +3744,10 @@ class WorkbenchFacade:
 
         try:
             test_case_service.ensure_seed_data(db)
-            cases = db.execute(select(TestCase).order_by(TestCase.id.asc())).scalars().all()
-            executions = db.execute(select(TestCaseExecution).order_by(TestCaseExecution.executed_at.desc())).scalars().all()
-            case_map = {item.id: item for item in cases}
-            case_runs: dict[int, list[TestCaseExecution]] = defaultdict(list)
-            for item in executions:
-                case_runs[item.case_id].append(item)
-            flaky_rows: list[dict[str, Any]] = []
-            for case_id, case in case_map.items():
-                runs = sorted(case_runs.get(case_id, []), key=lambda item: (_to_utc(item.executed_at), item.id))
-                statuses = [(item.status or "unknown").lower() for item in runs]
-                total_runs = len(statuses)
-                if total_runs >= 2:
-                    transitions = sum(1 for idx in range(1, total_runs) if statuses[idx] != statuses[idx - 1])
-                    failed = sum(1 for value in statuses if value == "failed")
-                    transition_ratio = transitions / (total_runs - 1)
-                    failed_ratio = failed / total_runs
-                    flaky_rate = round(min(100.0, transition_ratio * 70 + failed_ratio * 30), 1)
-                    unstable_runs = transitions
-                else:
-                    seed = ((case_id * 17) % 25) + 8
-                    last = (case.last_execution_result or "unknown").lower()
-                    if last == "failed":
-                        flaky_rate = min(98.0, float(seed + 24))
-                    elif last == "skipped":
-                        flaky_rate = min(90.0, float(seed + 12))
-                    else:
-                        flaky_rate = float(seed)
-                    unstable_runs = 0
-                flaky_rows.append(
-                    {
-                        "case_id": case_id,
-                        "name": case.name,
-                        "module": case.module,
-                        "flaky_rate": flaky_rate,
-                        "total_runs": total_runs,
-                        "unstable_runs": unstable_runs,
-                        "last_result": case.last_execution_result or "unknown",
-                    }
-                )
-            flaky_payload = {"top_flaky": sorted(flaky_rows, key=lambda item: item["flaky_rate"], reverse=True)[:5]}
+            repo = TestCaseRepository(db)
+            cases = repo.list_all()
+            executions = repo.list_all_executions_ordered()
+            flaky_payload = {"top_flaky": workbench_governance_service.build_flaky_top5(cases, executions)}
         except Exception:
             LOGGER.exception("dashboard governance degraded: flaky snapshot unavailable")
             degraded_sources.append("flaky")
@@ -4302,6 +3787,10 @@ class WorkbenchFacade:
 
 
 
+
+# ═══════════════════════════════════════════════════════════════
+# 构建函数
+# ═══════════════════════════════════════════════════════════════
 def build_workbench_facade(service: WorkbenchService | None = None) -> WorkbenchFacade:
     """build_workbench_facade 功能入口。"""
     return WorkbenchFacade(service=service)

@@ -8,9 +8,11 @@ from fastapi import HTTPException
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
+import yaml
 
 from app.api.workbench import facade as workbench_facade
-from app.api.workbench.facade import WorkbenchFacade, _persist_runtime_run_to_case_center
+from app.api.workbench.facade import WorkbenchFacade
+from app.services.workbench_runtime_service import persist_runtime_run_to_case_center as _persist_runtime_run_to_case_center
 from app.core.database import Base
 import app.models.page_object as page_object_model  # noqa: F401
 import app.models.test_case as test_case_model
@@ -50,7 +52,16 @@ def test_get_detail_does_not_repair_password_input_to_remember_checkbox(db_sessi
         status="online",
         created_by="qa",
     )
-    db_session.add(page_object)
+    home_page_object = page_object_model.PageObject(
+        project_code="mall",
+        client="web",
+        page_code="home",
+        page_name="首页",
+        page_url="http://localhost:5174/#/home",
+        status="online",
+        created_by="qa",
+    )
+    db_session.add_all([page_object, home_page_object])
     db_session.flush()
     db_session.add_all(
         [
@@ -609,6 +620,280 @@ def test_upsert_test_case_from_workbench_reuses_case_by_source_asset_and_intent(
     assert synchronized.name == "首次登录成功-重新生成"
     assert db_session.query(test_case_model.TestCase).count() == 1
     assert "id: mall-web-login-auth-fn-ai-0001" in synchronized.script_code
+
+
+def test_upsert_test_case_from_workbench_requires_source_asset_identity(db_session: Session) -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        test_case_service.upsert_test_case_from_workbench(
+            db_session,
+            project_code="mall",
+            case_yaml={
+                "id": "mall-web-login-auth-fn-ai-0099",
+                "title": "缺少测试点资产来源",
+                "module": "login",
+                "tags": ["ai-generated"],
+                "requirement": {
+                    "intent_id": "intent-99",
+                    "title": "缺少来源资产",
+                    "type": "functional",
+                },
+                "execution": {
+                    "page": "login",
+                    "selected_intent_ids": ["intent-99"],
+                    "steps": [{"action": "click", "target": "login_button"}],
+                },
+            },
+            source_path="/tmp/mall-web-login-auth-fn-ai-0099.yaml",
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["code"] == "workbench_case_missing_source_identity"
+
+
+def test_upsert_test_case_from_workbench_preserves_data_testid_locators_for_login(
+    db_session: Session,
+) -> None:
+    page_object = page_object_model.PageObject(
+        project_code="mall",
+        client="web",
+        page_code="login",
+        page_name="登录页",
+        page_url="http://localhost:5174/#/login",
+        status="online",
+        created_by="qa",
+    )
+    home_page_object = page_object_model.PageObject(
+        project_code="mall",
+        client="web",
+        page_code="home",
+        page_name="首页",
+        page_url="http://localhost:5174/#/home",
+        status="online",
+        created_by="qa",
+    )
+    db_session.add_all([page_object, home_page_object])
+    db_session.flush()
+    db_session.add_all(
+        [
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="username_input",
+                element_name="用户名输入框",
+                locator_type="placeholder",
+                locator_value="请输入用户名",
+                role="username",
+                business_type="input",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="password_input",
+                element_name="密码输入框",
+                locator_type="placeholder",
+                locator_value="请输入密码",
+                role="password",
+                business_type="input",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login_button",
+                element_name="登录按钮",
+                locator_type="role",
+                locator_value="登录",
+                role="button",
+                business_type="button",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login-username-input",
+                element_name="用户名输入框",
+                locator_type="data-testid",
+                locator_value="login-username-input",
+                locator_source="testid",
+                testid_value="login-username-input",
+                role="username",
+                business_type="input",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login-password-input",
+                element_name="密码输入框",
+                locator_type="data-testid",
+                locator_value="login-password-input",
+                locator_source="testid",
+                testid_value="login-password-input",
+                role="password",
+                business_type="input",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=page_object.id,
+                element_code="login-submit-btn",
+                element_name="登录按钮",
+                locator_type="data-testid",
+                locator_value="login-submit-btn",
+                locator_source="testid",
+                testid_value="login-submit-btn",
+                role="button",
+                business_type="button",
+                owner="qa",
+            ),
+            page_object_model.PageElement(
+                page_object_id=home_page_object.id,
+                element_code="home-page",
+                element_name="首页页面容器",
+                locator_type="data-testid",
+                locator_value="home-page",
+                locator_source="testid",
+                testid_value="home-page",
+                role="",
+                business_type="container",
+                owner="qa",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    source_path = test_case_service.ASSETS_CASES_ROOT / "ai-generated" / "mall-web-login-auth-fn-ai-0001.yaml"
+    case = test_case_service.upsert_test_case_from_workbench(
+        db_session,
+        project_code="mall",
+        case_yaml={
+            "version": "v1.1",
+            "id": "mall-web-login-auth-fn-ai-0001",
+            "project": "mall",
+            "module": "login",
+            "title": "首次使用正确账号密码登录成功",
+            "priority": "P0",
+            "tags": ["ai-generated"],
+            "requirement": {
+                "intent_id": "intent-01",
+                "title": "首次使用正确账号密码登录成功",
+                "type": "functional",
+                "source_asset_id": "mall-web-login-auth-fn-ai-0001",
+            },
+            "data": {
+                "username": {"source_type": "inline", "value": "admin"},
+                "password": {"source_type": "inline", "value": "macro"},
+            },
+            "execution": {
+                "runner": "playwright",
+                "page": "login",
+                "page_url": "http://localhost:5174/#/login",
+                "variables": {
+                    "login_username": "{{username}}",
+                    "login_password": "{{password}}",
+                },
+                "selected_intent_ids": ["intent-01"],
+                "steps": [
+                    {
+                        "action": "input",
+                        "target": "element:username_input",
+                        "locator_type": "css",
+                        "locator_value": "input[name='username']",
+                        "value": "{{login_username}}",
+                    },
+                    {
+                        "action": "input",
+                        "target": "element:password_input",
+                        "locator_type": "css",
+                        "locator_value": "input[type='password']",
+                        "value": "{{login_password}}",
+                    },
+                    {
+                        "action": "click",
+                        "target": "element:login_button",
+                        "locator_type": "role",
+                        "locator_value": "登录",
+                    },
+                    {
+                        "action": "assert_visible",
+                        "target": "element:home_menu",
+                        "locator_type": "role",
+                        "locator_value": "首页",
+                    },
+                ],
+            },
+            "expected_result": "成功登录，页面跳转到首页",
+        },
+        source_path=str(source_path),
+    )
+
+    script = yaml.safe_load(case.script_code)
+    steps = script["execution"]["steps"]
+
+    assert script["version"] == "v1.1"
+    assert steps[0]["target"] == "element:username_input"
+    assert steps[0]["locator_type"] == "data-testid"
+    assert steps[0]["locator_value"] == "login-username-input"
+    assert steps[1]["target"] == "element:password_input"
+    assert steps[1]["locator_type"] == "data-testid"
+    assert steps[1]["locator_value"] == "login-password-input"
+    assert steps[2]["target"] == "element:login_button"
+    assert steps[2]["locator_type"] == "data-testid"
+    assert steps[2]["locator_value"] == "login-submit-btn"
+    assert steps[3]["target"] == "element:home_menu"
+    assert steps[3]["locator_type"] == "data-testid"
+    assert steps[3]["locator_value"] == "home-page"
+    assert "input[name='username']" not in case.script_code
+    assert "input[type='password']" not in case.script_code
+
+
+def test_update_script_keeps_formal_workbench_case_source_identity(db_session: Session) -> None:
+    source_path = test_case_service.ASSETS_CASES_ROOT / "ai-generated" / "mall-web-login-auth-fn-ai-0001.yaml"
+    case = test_case_service.upsert_test_case_from_workbench(
+        db_session,
+        project_code="mall",
+        case_yaml={
+            "id": "mall-web-login-auth-fn-ai-0001",
+            "title": "首次登录成功",
+            "module": "login",
+            "tags": ["ai-generated"],
+            "requirement": {
+                "intent_id": "intent-01",
+                "title": "首次登录成功",
+                "type": "functional",
+                "source_asset_id": "mall-web-login-auth-fn-ai-0021",
+            },
+            "execution": {
+                "page": "login",
+                "selected_intent_ids": ["intent-01"],
+                "steps": [{"action": "click", "target": "login_button"}],
+            },
+        },
+        source_path=str(source_path),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        test_case_service.update_script(
+            db_session,
+            case.id,
+            test_case_schema.TestCaseScriptUpdate(
+                script_code=(
+                    "version: v1.1\n"
+                    "id: mall-web-login-auth-fn-ai-0001\n"
+                    "title: 首次登录成功\n"
+                    "tags:\n"
+                    "  - ai-generated\n"
+                    "requirement:\n"
+                    "  intent_id: intent-01\n"
+                    "execution:\n"
+                    "  page: login\n"
+                    "  selected_intent_ids:\n"
+                    "    - intent-01\n"
+                    "  steps:\n"
+                    "    - action: click\n"
+                    "      target: login_button\n"
+                ),
+                changed_by="qa",
+            ),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["code"] == "workbench_case_missing_source_identity"
 
 
 def test_update_project_updates_name_description_and_status(db_session: Session) -> None:

@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from shared_backend.case_ids import normalize_case_id
+from shared_backend.type_utils import now_iso as _now_iso
 
 from app.core.config import get_settings
 
@@ -19,10 +20,6 @@ PAGE_ALIAS_MAP = {
 
 def _settings() -> Any:
     return get_settings()
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _dedup_keep_order(items: list[str]) -> list[str]:

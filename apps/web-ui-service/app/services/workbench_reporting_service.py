@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 import uuid
 from shared_backend.case_ids import normalize_case_id
+from shared_backend.type_utils import dict_value as _dict_value
 
 
 ReadDefectItems = Callable[[], list[dict[str, Any]]]
@@ -48,10 +49,6 @@ def apply_no_store_headers(response: Any) -> None:
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
-
-
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
 
 
 def _safe_report_slug(value: str) -> str:
@@ -145,7 +142,7 @@ def collect_failure_entries_with_meta(
         for manifest_path in sorted(artifact_root.rglob("evidence_manifest.json"), key=lambda p: p.stat().st_mtime, reverse=True):
             try:
                 raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8")) or {}
-            except Exception:
+            except (json.JSONDecodeError, ValueError):
                 safe_logger.warning("invalid evidence_manifest.json at %s; keep compatibility scan path", manifest_path)
                 invalid_manifest_count += 1
                 continue
@@ -185,7 +182,7 @@ def collect_failure_entries_with_meta(
                 if suggestion_path.exists():
                     try:
                         suggestion_payload = json.loads(suggestion_path.read_text(encoding="utf-8")) or {}
-                    except Exception:
+                    except (json.JSONDecodeError, ValueError):
                         suggestion_payload = {}
                 entries.append(
                     {
@@ -530,10 +527,6 @@ def list_defect_items(case_id: str, *, read_items: ReadDefectItems) -> list[dict
     return items
 
 
-def load_defect_items(*, read_items: ReadDefectItems) -> list[dict[str, Any]]:
-    return list_defect_items("", read_items=read_items)
-
-
 def add_defect_item(
     *,
     case_id: str,
@@ -742,7 +735,7 @@ def parse_analysis_file(path: Path) -> dict[str, Any]:
     }
     try:
         text = path.read_text(encoding="utf-8")
-    except Exception:
+    except (OSError, UnicodeDecodeError):
         return parsed
     for raw_line in text.splitlines():
         if ": " not in raw_line:
@@ -757,13 +750,13 @@ def parse_analysis_file(path: Path) -> dict[str, Any]:
             elif target == "source_evidence":
                 try:
                     loaded = json.loads(value.strip())
-                except Exception:
+                except (json.JSONDecodeError, ValueError):
                     loaded = []
                 parsed[target] = loaded if isinstance(loaded, list) else []
             elif target in {"failed_step", "element_impact"}:
                 try:
                     loaded = json.loads(value.strip())
-                except Exception:
+                except (json.JSONDecodeError, ValueError):
                     loaded = {}
                 parsed[target] = loaded if isinstance(loaded, dict) else {}
             else:
@@ -809,7 +802,7 @@ def _parse_last_json_object(text: str) -> dict[str, Any]:
         candidate = "\n".join(lines[index:]).strip()
         try:
             payload = json.loads(candidate)
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             continue
         if isinstance(payload, dict):
             return payload
@@ -862,65 +855,6 @@ def normalize_failure_entry_view(entry: dict[str, Any] | None) -> dict[str, Any]
     normalized = dict(source)
     normalized["analysis"] = normalize_failure_analysis_view(_dict_value(source.get("analysis")))
     return normalized
-
-
-def build_run_failure_source_summary(
-    failures: list[dict[str, Any]],
-    *,
-    clamp_confidence: ClampConfidence,
-) -> dict[str, Any]:
-    source_counts: dict[str, int] = {}
-    total = 0
-    manual_review_count = 0
-    low_confidence_count = 0
-    confidence_sum = 0.0
-    confidence_count = 0
-
-    for item in failures:
-        if not isinstance(item, dict):
-            continue
-        analysis = _dict_value(item.get("analysis"))
-        source = str(analysis.get("failure_source", "")).strip().lower() or "unknown"
-        source_counts[source] = int(source_counts.get(source, 0) or 0) + 1
-        total += 1
-
-        if bool(analysis.get("requires_manual_review", False)):
-            manual_review_count += 1
-
-        confidence = clamp_confidence(
-            analysis.get(
-                "failure_source_confidence",
-                analysis.get("confidence", 0),
-            )
-        )
-        confidence_sum += confidence
-        confidence_count += 1
-        if confidence < 0.7:
-            low_confidence_count += 1
-
-    top_source = ""
-    top_source_count = 0
-    if source_counts:
-        top_source = max(
-            source_counts,
-            key=lambda key: (
-                int(source_counts.get(key, 0) or 0),
-                key,
-            ),
-        )
-        top_source_count = int(source_counts.get(top_source, 0) or 0)
-
-    avg_confidence = round(confidence_sum / confidence_count, 3) if confidence_count > 0 else 0.0
-    return {
-        "version": "FailureSourceSummaryV1",
-        "total_failures": total,
-        "source_counts": dict(sorted(source_counts.items())),
-        "top_source": top_source or "unknown",
-        "top_source_count": top_source_count,
-        "requires_manual_review_count": manual_review_count,
-        "low_confidence_count": low_confidence_count,
-        "average_failure_source_confidence": avg_confidence,
-    }
 
 
 def resolve_run_failure_snapshot(
@@ -1328,7 +1262,7 @@ def read_allure_summary(*, allure_report_root: Path) -> dict[str, Any]:
         return {}
     try:
         payload = json.loads(summary_path.read_text(encoding="utf-8")) or {}
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         return {}
     return payload if isinstance(payload, dict) else {}
 
@@ -1346,7 +1280,7 @@ def _read_allure_widget_list(path: Path) -> list[dict[str, Any]]:
         return []
     try:
         payload = json.loads(path.read_text(encoding="utf-8")) or []
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         return []
     if not isinstance(payload, list):
         return []
@@ -1369,7 +1303,7 @@ def ensure_allure_snapshot(
     if version_marker.exists():
         try:
             existing_version = version_marker.read_text(encoding="utf-8").strip()
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             existing_version = ""
     if target.exists() and existing_version != str(version):
         shutil.rmtree(target, ignore_errors=True)

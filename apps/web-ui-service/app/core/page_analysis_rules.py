@@ -3,20 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _list_value(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _int_value(value: Any, *, default: int = 0) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+from shared_backend.type_utils import dict_value as _dict_value, int_value as _int_value, list_value as _list_value
 
 
 def dedup_keep_order(items: list[str]) -> list[str]:

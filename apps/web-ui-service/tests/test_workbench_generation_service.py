@@ -9,10 +9,12 @@ import pytest
 
 from app.services import workbench_generation_service
 from app.services.workbench_generation_api import preview_store
+from app.services.workbench_generation_api import save_test_point_assets_service
 from app.services.workbench_generation_api.candidate_normalizer import CandidateNormalizer
 from app.services.workbench_generation_compiler.runtime import generate_pipeline as generate_pipeline_module
 from shared_backend.element_binding import resolve_involved_element_codes
 from shared_backend.execution_compiler import ExecutionCompilerError
+from shared_backend.schemas.contracts import normalize_test_point_plan_v1
 
 
 def test_allocate_case_id_skips_existing_requested_case_id(tmp_path: Path) -> None:
@@ -32,6 +34,96 @@ def test_allocate_case_id_skips_existing_requested_case_id(tmp_path: Path) -> No
     )
 
     assert allocated == "atp-web-ret-query-fn-ai-0002"
+
+
+def test_saved_test_point_structures_login_candidate_for_dsl_v1_1() -> None:
+    point = save_test_point_assets_service._build_point(
+        {
+            "intent_id": "intent-01",
+            "title": "首次登录成功",
+            "summary": "首次登录成功",
+            "intent_type": "functional",
+            "priority": "P0",
+            "steps": [
+                "在用户名输入框输入正确账号 admin",
+                "在密码输入框输入正确密码 macro",
+                "点击登录按钮",
+            ],
+            "expected": "成功登录，页面跳转到首页",
+            "involved_elements": ["用户名输入框", "密码输入框", "登录按钮"],
+        },
+        index=1,
+    )
+
+    assert point["precondition"] == "用户未登录，处于登录页面。"
+    assert point["data"] == {
+        "username": {"source_type": "inline", "value": "admin"},
+        "password": {"source_type": "inline", "value": "macro"},
+    }
+    assert point["steps_hint"] == [
+        "input:用户名输入框=admin",
+        "input:密码输入框=macro",
+        "click:登录按钮",
+        "assert:首页菜单",
+    ]
+    assert [step["action"] for step in point["steps"]] == ["input", "input", "click", "assert_visible"]
+
+
+def test_saved_test_point_adds_assertion_for_unauthorized_home_redirect() -> None:
+    point = save_test_point_assets_service._build_point(
+        {
+            "intent_id": "intent-24",
+            "title": "未登录访问首页被拦截",
+            "summary": "未登录访问首页被拦截",
+            "intent_type": "security",
+            "priority": "P0",
+            "precondition": "用户未登录",
+            "steps": ["尝试直接访问首页"],
+            "expected": "页面跳转回登录页面",
+            "involved_elements": ["首页"],
+        },
+        index=24,
+    )
+
+    assert point["steps_hint"] == ["goto:#/home", "assert_url:#/login"]
+    assert [step["action"] for step in point["steps"]] == ["goto", "assert_url"]
+
+
+def test_test_point_plan_normalizer_preserves_dsl_v1_1_fields() -> None:
+    normalized, warnings = normalize_test_point_plan_v1(
+        {
+            "version": "TestPointPlanV1",
+            "case_id": "mall-web-login-auth-fn-ai-0001",
+            "points": [
+                {
+                    "key": "intent-01",
+                    "intent_id": "intent-01",
+                    "point_type": "functional",
+                    "precondition": "用户未登录，处于登录页面。",
+                    "steps_hint": ["input:用户名输入框=admin", "assert:首页菜单"],
+                    "data": {"username": {"source_type": "inline", "value": "admin"}},
+                    "steps": [
+                        {
+                            "action": "input",
+                            "target": "element:username_input",
+                            "target_name": "用户名输入框",
+                            "data_ref": "username",
+                            "value": "admin",
+                            "raw_text": "在用户名输入框输入正确账号 admin",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert warnings == []
+    point = normalized["points"][0]
+    assert point["precondition"] == "用户未登录，处于登录页面。"
+    assert point["steps_hint"] == ["input:用户名输入框=admin", "assert:首页菜单"]
+    assert point["data"] == {"username": {"source_type": "inline", "value": "admin"}}
+    assert point["steps"][0]["target_name"] == "用户名输入框"
+    assert point["steps"][0]["data_ref"] == "username"
 
 
 def test_preview_payload_uses_parser_runtime_source_count_when_source_summary_missing() -> None:
@@ -523,16 +615,12 @@ def test_build_generated_case_payload_passes_through_orchestrator_validation_err
             openapi_spec={},
             run_orchestrator_generate=_raise_unprocessable,
             extract_quality_gate=lambda _payload: None,
-            safe_case_id=lambda value: str(value or ""),
-            infer_targets=lambda _page: ("", ""),
             write_case_yaml=lambda _path, _case_yaml: "",
             save_case_state=lambda _project, _case_yaml, _case_path: {},
             append_history=lambda _entry: None,
             now_iso=lambda: "",
             is_quality_gate_blocked=lambda _payload: (False, None),
             ai_cases_root=Path("/tmp"),
-            utc=None,
-            datetime_module=None,
             http_exception_cls=HTTPException,
             bad_gateway_status=502,
             unprocessable_entity_status=422,
@@ -658,8 +746,6 @@ def test_build_generated_case_payload_saves_test_point_plan_snapshot(tmp_path: P
         openapi_spec={},
         run_orchestrator_generate=_run_orchestrator_generate,
         extract_quality_gate=lambda _payload: {"decision": "allow", "blockers": []},
-        safe_case_id=lambda value: str(value or ""),
-        infer_targets=lambda _page: ("", ""),
         write_case_yaml=_write_case_yaml,
         save_case_state=_save_case_state,
         save_test_point_plan=_save_test_point_plan,
@@ -667,8 +753,6 @@ def test_build_generated_case_payload_saves_test_point_plan_snapshot(tmp_path: P
         now_iso=lambda: "2026-04-23T00:00:00+00:00",
         is_quality_gate_blocked=lambda _payload: (False, None),
         ai_cases_root=ai_cases_root,
-        utc=None,
-        datetime_module=None,
         http_exception_cls=HTTPException,
         bad_gateway_status=502,
         unprocessable_entity_status=422,
@@ -792,6 +876,13 @@ def test_build_generated_case_payload_directly_compiles_selected_candidate_steps
                     "aliases": ["首页", "工作台首页"],
                     "business_type": "menu",
                 },
+                "home-page": {
+                    "selector": "home-page",
+                    "type": "data-testid",
+                    "name": "首页页面容器",
+                    "aliases": ["首页", "工作台首页"],
+                    "business_type": "container",
+                },
             },
         },
     )
@@ -805,8 +896,6 @@ def test_build_generated_case_payload_directly_compiles_selected_candidate_steps
         openapi_spec={},
         run_orchestrator_generate=_unexpected_orchestrator_call,
         extract_quality_gate=lambda payload: (payload or {}).get("quality_gate") if isinstance(payload, dict) else None,
-        safe_case_id=lambda value: str(value or ""),
-        infer_targets=lambda _page: ("", ""),
         write_case_yaml=_write_case_yaml,
         save_case_state=lambda _project, _case_yaml, _case_path: {"version": 1},
         save_test_point_plan=lambda **_kwargs: tmp_path / "test-point-plan.json",
@@ -814,8 +903,6 @@ def test_build_generated_case_payload_directly_compiles_selected_candidate_steps
         now_iso=lambda: "2026-05-08T00:00:00+00:00",
         is_quality_gate_blocked=lambda _payload: (False, None),
         ai_cases_root=ai_cases_root,
-        utc=None,
-        datetime_module=None,
         http_exception_cls=HTTPException,
         bad_gateway_status=502,
         unprocessable_entity_status=422,
@@ -836,32 +923,37 @@ def test_build_generated_case_payload_directly_compiles_selected_candidate_steps
         "source_asset_id": "mall-web-login-auth-fn-ai-0021",
     }
     assert written_case["execution"]["page_url"] == "http://localhost:5174/#/login"
-    assert [step["action"] for step in non_entry_steps] == ["input", "input", "click"]
+    assert [step["action"] for step in non_entry_steps] == ["input", "input", "click", "assert_visible"]
     assert [step["target"] for step in non_entry_steps] == [
         "element:username_input",
         "element:password_input",
         "element:login_button",
+        "element:error_message",
     ]
-    assert written_case["data"] == {"username": [""], "password": [""]}
+    assert written_case["data"] == {
+        "username": {"source_type": "inline", "value": ""},
+        "password": {"source_type": "inline", "value": ""},
+    }
     assert written_case["execution"]["variables"] == {
         "login_username": "{{username}}",
         "login_password": "{{password}}",
     }
     assert non_entry_steps[0]["value"] == "{{login_username}}"
     assert non_entry_steps[1]["value"] == "{{login_password}}"
-    assert non_entry_steps[0]["locator_type"] == "css"
-    assert non_entry_steps[1]["locator_type"] == "css"
-    assert non_entry_steps[-1]["expected_result"] == "已点击登录按钮"
-    assert written_case["assertions"] == [
-        {
-            "action": "assert_visible",
-            "target": "element:error_message",
-            "locator_type": "css",
-            "locator_value": ".el-message--error",
-            "target_name": "错误提示",
-            "expected_result": "提示请输入账号和密码",
-        }
-    ]
+    assert non_entry_steps[0]["locator_type"] == "placeholder"
+    assert non_entry_steps[0]["locator_value"] == "请输入用户名"
+    assert non_entry_steps[1]["locator_type"] == "placeholder"
+    assert non_entry_steps[1]["locator_value"] == "请输入密码"
+    assert non_entry_steps[2]["expected_result"] == "已点击登录按钮"
+    assert non_entry_steps[3] == {
+        "action": "assert_visible",
+        "target": "element:error_message",
+        "locator_type": "css",
+        "locator_value": ".el-message--error",
+        "target_name": "错误提示",
+        "expected_result": "提示请输入账号和密码",
+    }
+    assert written_case["assertions"] == []
     assert "input:密码输入框" not in str(written_case["requirement"])
 
 
@@ -969,6 +1061,13 @@ def test_build_generated_case_payload_writes_product_yaml_for_login_success(
                     "aliases": ["首页", "工作台首页"],
                     "business_type": "menu",
                 },
+                "home-page": {
+                    "selector": "home-page",
+                    "type": "data-testid",
+                    "name": "首页页面容器",
+                    "aliases": ["首页", "工作台首页"],
+                    "business_type": "container",
+                },
             },
         },
     )
@@ -982,8 +1081,6 @@ def test_build_generated_case_payload_writes_product_yaml_for_login_success(
         openapi_spec={},
         run_orchestrator_generate=lambda **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected orchestrator call")),
         extract_quality_gate=lambda payload: (payload or {}).get("quality_gate") if isinstance(payload, dict) else None,
-        safe_case_id=lambda value: str(value or ""),
-        infer_targets=lambda _page: ("", ""),
         write_case_yaml=_write_case_yaml,
         save_case_state=lambda _project, _case_yaml, _case_path: {"version": 1},
         save_test_point_plan=lambda **_kwargs: tmp_path / "test-point-plan.json",
@@ -991,8 +1088,6 @@ def test_build_generated_case_payload_writes_product_yaml_for_login_success(
         now_iso=lambda: "2026-05-08T00:00:00+00:00",
         is_quality_gate_blocked=lambda _payload: (False, None),
         ai_cases_root=ai_cases_root,
-        utc=None,
-        datetime_module=None,
         http_exception_cls=HTTPException,
         bad_gateway_status=502,
         unprocessable_entity_status=422,
@@ -1012,31 +1107,34 @@ def test_build_generated_case_payload_writes_product_yaml_for_login_success(
         "source_asset_id": "mall-web-login-auth-fn-ai-0021",
     }
     assert written_case["execution"]["page_url"] == "http://localhost:5174/#/login"
-    assert written_case["data"] == {"username": ["test001"], "password": ["123456"]}
+    assert written_case["data"] == {
+        "username": {"source_type": "inline", "value": "test001"},
+        "password": {"source_type": "inline", "value": "123456"},
+    }
     assert written_case["execution"]["variables"] == {
         "login_username": "{{username}}",
         "login_password": "{{password}}",
     }
     assert steps[0]["action"] == "goto"
     assert steps[1]["target"] == "element:username_input"
-    assert "input[placeholder*='请输入用户名']" in steps[1]["locator_value"]
+    assert steps[1]["locator_type"] == "placeholder"
+    assert steps[1]["locator_value"] == "请输入用户名"
     assert steps[1]["value"] == "{{login_username}}"
     assert steps[2]["target"] == "element:password_input"
-    assert "input[placeholder*='请输入密码']" in steps[2]["locator_value"]
+    assert steps[2]["locator_type"] == "placeholder"
+    assert steps[2]["locator_value"] == "请输入密码"
     assert steps[2]["value"] == "{{login_password}}"
     assert steps[3]["target"] == "element:login_button"
     assert steps[3]["expected_result"] == expected
-    assert written_case["assertions"] == [
-        {
-            "action": "assert_visible",
-            "target": "element:home_menu",
-            "locator_type": "role",
-            "locator_value": "首页",
-            "target_name": "首页菜单",
-            "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
-            "role": "menuitem",
-        }
-    ]
+    assert steps[4] == {
+        "action": "assert_visible",
+        "target": "element:home_menu",
+        "locator_type": "data-testid",
+        "locator_value": "home-page",
+        "target_name": "首页菜单",
+        "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
+    }
+    assert written_case["assertions"] == []
     assert "登录失败" not in str(written_case)
     assert "remember_password_checkbox" not in str(written_case)
 
@@ -1061,7 +1159,7 @@ def test_dsl_v1_1_enrichment_rejects_input_without_value() -> None:
     with pytest.raises(ExecutionCompilerError) as exc_info:
         generate_pipeline_module._enrich_product_case_yaml_v1_1(product_yaml, page="login")
 
-    assert exc_info.value.code == "dsl_v1_1_missing_input_data"
+    assert exc_info.value.code == "dsl_v1_1_missing_input_data_source"
 
 
 def test_dsl_v1_1_enrichment_rejects_ai_case_without_executable_assertion() -> None:
@@ -1090,3 +1188,285 @@ def test_dsl_v1_1_enrichment_rejects_ai_case_without_executable_assertion() -> N
         generate_pipeline_module._enrich_product_case_yaml_v1_1(product_yaml, page="login")
 
     assert exc_info.value.code == "dsl_v1_1_missing_executable_assertion"
+
+
+def test_dsl_v1_1_enrichment_keeps_step_assertions_and_dedupes_top_level() -> None:
+    product_yaml = {
+        "version": "v1",
+        "id": "mall-web-login-auth-fn-ai-0001",
+        "tags": ["ai-generated"],
+        "status": "automated",
+        "requirement": {
+            "intent_id": "intent-01",
+            "source_asset_id": "mall-web-login-auth-fn-ai-0021",
+        },
+        "execution": {
+            "selected_intent_ids": ["intent-01"],
+            "steps": [
+                {"action": "input", "target": "element:username_input", "value": "admin"},
+                {
+                    "action": "assert_visible",
+                    "target": "element:home_menu",
+                    "locator_type": "role",
+                    "locator_value": "首页",
+                    "role": "menuitem",
+                },
+            ],
+        },
+        "assertions": [
+            {
+                "action": "assert_visible",
+                "target": "element:home_menu",
+                "locator_type": "role",
+                "locator_value": "首页",
+                "role": "menuitem",
+            }
+        ],
+    }
+
+    enriched = generate_pipeline_module._enrich_product_case_yaml_v1_1(product_yaml, page="login")
+
+    steps = enriched["execution"]["steps"]
+    assert [step["action"] for step in steps] == ["input", "assert_visible"]
+    assert enriched["assertions"] == []
+
+
+def test_dsl_v1_1_assertion_dedupe_keeps_same_target_different_values() -> None:
+    product_yaml = {
+        "version": "v1",
+        "id": "mall-web-login-auth-fn-ai-0001",
+        "tags": ["ai-generated"],
+        "status": "automated",
+        "requirement": {
+            "intent_id": "intent-01",
+            "source_asset_id": "mall-web-login-auth-fn-ai-0021",
+        },
+        "execution": {
+            "selected_intent_ids": ["intent-01"],
+            "steps": [
+                {
+                    "action": "assert_text",
+                    "target": "element:error_message",
+                    "locator_type": "css",
+                    "locator_value": ".el-message--error",
+                    "value": "请输入用户名",
+                }
+            ],
+        },
+        "assertions": [
+            {
+                "action": "assert_text",
+                "target": "element:error_message",
+                "locator_type": "css",
+                "locator_value": ".el-message--error",
+                "value": "请输入用户名",
+            },
+            {
+                "action": "assert_text",
+                "target": "element:error_message",
+                "locator_type": "css",
+                "locator_value": ".el-message--error",
+                "value": "请输入密码",
+            },
+        ],
+    }
+
+    enriched = generate_pipeline_module._enrich_product_case_yaml_v1_1(product_yaml, page="login")
+
+    assert enriched["execution"]["steps"][0]["value"] == "请输入用户名"
+    assert enriched["assertions"] == [
+        {
+            "action": "assert_text",
+            "target": "element:error_message",
+            "locator_type": "css",
+            "locator_value": ".el-message--error",
+            "value": "请输入密码",
+        }
+    ]
+
+
+def test_product_execution_steps_preserve_governed_data_testid_locator() -> None:
+    steps = generate_pipeline_module._format_product_execution_steps(
+        compiled_steps=[
+            {
+                "action": "input",
+                "target": "username_input",
+                "locator_type": "css",
+                "locator_value": "input[name='username']",
+                "value": "admin",
+                "intent_id": "intent-01",
+            }
+        ],
+        page="login",
+        page_url="http://localhost:5174/#/login",
+        page_object={
+            "elements": {
+                "username_input": {
+                    "selector": "login-username-input",
+                    "type": "data-testid",
+                    "name": "用户名输入框",
+                }
+            }
+        },
+        expected_by_intent={},
+    )
+
+    assert steps[0]["locator_type"] == "data-testid"
+    assert steps[0]["locator_value"] == "login-username-input"
+
+
+def test_product_execution_steps_prefer_login_data_testid_counterpart_over_legacy_semantic_element() -> None:
+    steps = generate_pipeline_module._format_product_execution_steps(
+        compiled_steps=[
+            {
+                "action": "input",
+                "target": "username_input",
+                "locator_type": "css",
+                "locator_value": "input[name='username']",
+                "value": "admin",
+                "intent_id": "intent-01",
+            },
+            {
+                "action": "click",
+                "target": "login_button",
+                "locator_type": "role",
+                "locator_value": "登录",
+                "intent_id": "intent-01",
+            },
+        ],
+        page="login",
+        page_url="http://localhost:5174/#/login",
+        page_object={
+            "elements": {
+                "username_input": {
+                    "selector": "请输入用户名",
+                    "type": "placeholder",
+                    "name": "用户名输入框",
+                },
+                "login-username-input": {
+                    "selector": "login-username-input",
+                    "type": "data-testid",
+                    "name": "用户名输入框",
+                },
+                "login_button": {
+                    "selector": "登录",
+                    "type": "role",
+                    "role": "button",
+                    "name": "登录按钮",
+                },
+                "login-submit-btn": {
+                    "selector": "login-submit-btn",
+                    "type": "data-testid",
+                    "name": "登录按钮",
+                },
+            }
+        },
+        expected_by_intent={},
+    )
+
+    assert steps[0]["target"] == "element:username_input"
+    assert steps[0]["locator_type"] == "data-testid"
+    assert steps[0]["locator_value"] == "login-username-input"
+    assert steps[1]["target"] == "element:login_button"
+    assert steps[1]["locator_type"] == "data-testid"
+    assert steps[1]["locator_value"] == "login-submit-btn"
+
+
+def test_trusted_page_url_rejects_payload_override() -> None:
+    with pytest.raises(ExecutionCompilerError) as exc_info:
+        generate_pipeline_module._trusted_page_url(
+            payload_page_url="http://127.0.0.1:8013/react/login",
+            page_object={"page_url": "http://localhost:5174/#/login"},
+        )
+
+    assert exc_info.value.code == "dsl_v1_1_page_url_mismatch"
+
+
+def test_attach_point_expected_results_does_not_override_step_expected_result() -> None:
+    steps = [
+        {
+            "action": "click",
+            "target": "login_button",
+            "intent_id": "intent-01",
+            "expected_result": "已点击登录按钮",
+        }
+    ]
+    points = [{"intent_id": "intent-01", "expected_result": "页面跳转至工作台首页"}]
+
+    result = generate_pipeline_module._attach_point_expected_results(steps, points)
+
+    assert result[0]["expected_result"] == "已点击登录按钮"
+
+
+def test_build_generated_case_payload_rejects_multiple_selected_intents(tmp_path: Path) -> None:
+    payload = SimpleNamespace(
+        project="mall",
+        page="login",
+        requirement="登录页身份验证测试点集",
+        title="批量意图",
+        source="ai",
+        case_id="",
+        priority="P1",
+        tags=["ai-generated"],
+        input_sources=[],
+        openapi_spec={},
+        prd_text="",
+        prd_url="",
+        user_story="",
+        git_diff="",
+        git_diff_path="",
+        openapi_url="",
+        defect_ticket="",
+        runtime_logs="",
+        selected_candidates=[
+            {"intent_id": "intent-01", "source_asset_id": "mall-web-login-auth-fn-ai-0021"},
+            {"intent_id": "intent-02", "source_asset_id": "mall-web-login-auth-fn-ai-0021"},
+        ],
+        selected_intent_ids=["intent-01", "intent-02"],
+        page_url="http://localhost:5174/#/login",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        workbench_generation_service.build_generated_case_payload(
+            payload=payload,
+            normalized_page="login",
+            effective_requirement="登录页身份验证测试点集",
+            multisource_enabled=False,
+            input_sources=[],
+            openapi_spec={},
+            run_orchestrator_generate=lambda **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected orchestrator call")),
+            extract_quality_gate=lambda _payload: None,
+            write_case_yaml=lambda _path, _case_yaml: "",
+            save_case_state=lambda _project, _case_yaml, _case_path: {},
+            append_history=lambda _entry: None,
+            now_iso=lambda: "2026-05-25T00:00:00+00:00",
+            is_quality_gate_blocked=lambda _payload: (False, None),
+            ai_cases_root=tmp_path,
+            http_exception_cls=HTTPException,
+            bad_gateway_status=502,
+            unprocessable_entity_status=422,
+            allocate_case_id=lambda **_kwargs: "mall-web-login-auth-fn-ai-0001",
+            existing_case_ids=[],
+            selected_candidate=None,
+        )
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail["code"] == "dsl_v1_1_selected_intent_count_invalid"
+
+
+def test_generation_payload_redaction_hides_sensitive_values() -> None:
+    payload = {
+        "selected_candidate": {
+            "intent_id": "intent-01",
+            "steps_hint": ["input:密码输入框=macro"],
+            "password": "macro",
+        },
+        "input_sources": [{"source_type": "text", "content": "password=123456"}],
+        "data": {"password": {"source_type": "inline", "value": "macro"}},
+    }
+
+    redacted = generate_pipeline_module._redact_generation_payload(payload)
+
+    assert "macro" not in str(redacted)
+    assert "123456" not in str(redacted)
+    assert redacted["selected_candidate"]["password"] == "***"

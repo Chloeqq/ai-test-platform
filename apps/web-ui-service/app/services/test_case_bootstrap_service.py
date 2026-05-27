@@ -10,6 +10,7 @@ from shared_backend.case_ids import (
     infer_client_code,
     normalize_case_id,
 )
+from shared_backend.type_utils import normalize_project_code as _normalize_project_code_raw
 from sqlalchemy import func, inspect, select, text
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,7 @@ from app.models.test_case import (
 )
 from app.models.test_point import TestPoint
 from app.models.test_project import TestProject
+from app.repositories.test_case_repository import TestCaseRepository
 from app.services.test_case_data_service import (
     normalize_status,
     normalize_test_case_type,
@@ -54,8 +56,7 @@ DEFAULT_PROJECT_SOURCE_TERMS = {
 
 
 def _normalize_project_code(value: str) -> str:
-    text = str(value or "").strip().lower()
-    return text or DEFAULT_PROJECT_CODE
+    return _normalize_project_code_raw(value) or DEFAULT_PROJECT_CODE
 
 
 def _infer_source(*, creator: str, tags: list[str]) -> str:
@@ -321,7 +322,7 @@ def ensure_project_seed(db: Session) -> None:
 
 
 def backfill_test_case_metadata(db: Session) -> None:
-    cases = list(db.execute(select(TestCase).order_by(TestCase.id.asc())).scalars().all())
+    cases = TestCaseRepository(db).list_all()
     if not cases:
         return
     case_id_repository = WorkbenchGenerationRepository(db)
@@ -343,7 +344,7 @@ def backfill_test_case_metadata(db: Session) -> None:
     existing_case_ids.extend(
         [
             str(item).strip()
-            for item in db.execute(select(TestCase.case_id)).scalars().all()
+            for item in TestCaseRepository(db).list_case_ids()
             if str(item or "").strip()
         ]
     )
@@ -396,7 +397,7 @@ def ensure_demo_seed_data(db: Session) -> None:
     ensure_test_cases_schema_compatibility(db)
     ensure_project_seed(db)
     case_id_repository = WorkbenchGenerationRepository(db)
-    existing_count = db.execute(select(func.count(TestCase.id))).scalar_one()
+    existing_count = TestCaseRepository(db).count_all()
     if existing_count and existing_count > 0:
         backfill_test_case_metadata(db)
         return
@@ -597,7 +598,7 @@ def ensure_demo_seed_data(db: Session) -> None:
     db.commit()
     backfill_test_case_metadata(db)
 
-    cases = db.execute(select(TestCase).order_by(TestCase.id.asc())).scalars().all()
+    cases = TestCaseRepository(db).list_all()
     for case in cases:
         db.add(
             TestCaseVersion(
@@ -755,9 +756,7 @@ def get_module_tree_items(
         if isinstance(modules, list) and item_module:
             modules.append({"module": item_module, "count": int(count)})
 
-    tree_nodes = list(
-        db.execute(select(TestCaseTreeNode).order_by(TestCaseTreeNode.project_code, TestCaseTreeNode.product_line, TestCaseTreeNode.module)).scalars().all()
-    )
+    tree_nodes = TestCaseRepository(db).list_all_tree_nodes()
     for node in tree_nodes:
         node_project_code = str(node.project_code or DEFAULT_PROJECT_CODE).strip() or DEFAULT_PROJECT_CODE
         node_product_line = str(node.product_line or "").strip()

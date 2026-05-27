@@ -371,7 +371,7 @@ class RequirementParseSupport:
         try:
             parsed = json.loads(text)
             return parsed if isinstance(parsed, dict) else {}
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             pass
         start = text.find("{")
         end = text.rfind("}")
@@ -380,7 +380,7 @@ class RequirementParseSupport:
         try:
             parsed = json.loads(text[start : end + 1])
             return parsed if isinstance(parsed, dict) else {}
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             return {}
 
     @classmethod

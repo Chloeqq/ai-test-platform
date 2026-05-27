@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException, Request, status
 from shared_backend.case_ids import normalize_case_id
+from shared_backend.type_utils import dict_value as _dict_value, list_value as _list_value
 
 from app.core.security import decode_access_token
 
@@ -52,14 +53,6 @@ def _normalize_history_text_list(value: Any, *, limit: int = 10) -> list[str]:
     items = value if isinstance(value, list) else []
     normalized = [str(item).strip() for item in items if str(item).strip()]
     return _dedup_keep_order(normalized)[:limit]
-
-
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _list_value(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
 
 
 def _payload_value(payload: Any, key: str, default: Any = "") -> Any:

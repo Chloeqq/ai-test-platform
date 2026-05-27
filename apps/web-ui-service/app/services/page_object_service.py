@@ -8,12 +8,13 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from shared_backend.case_ids import normalize_client_code
+from shared_backend.type_utils import json_dict as _json_dict
+from shared_backend.type_utils import normalize_project_code_strict as _normalize_project_code_strict
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.page_object import (
     PageElement,
-    PageElementHealthCheck,
     PageElementLocator,
     PageElementVersion,
     PageObject,
@@ -34,7 +35,8 @@ from app.schemas.page_object import (
     PageObjectRefCreate,
     PageObjectUpdate,
 )
-from app.services.page_element_code_policy import require_valid_element_code, suggest_business_element_code
+from app.repositories.page_object_repository import PageObjectRepository
+from app.services.page_element_code_policy import require_valid_element_code
 from app.services import test_project_service
 
 PAGE_OBJECT_STATUS_VALUES = {"draft", "review", "published", "retired"}
@@ -76,13 +78,10 @@ class PageElementMutationResult:
 
 
 def _normalize_project_code(value: str) -> str:
-    normalized = re.sub(r"[^a-zA-Z0-9]+", "", str(value or "").strip()).lower()
-    if len(normalized) < 2 or len(normalized) > 20:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="project_code must be 2-20 letters or digits",
-        )
-    return normalized
+    try:
+        return _normalize_project_code_strict(value, max_len=20)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 def _normalize_identifier(value: str, *, field_name: str, min_length: int = 2, max_length: int = 80) -> str:
@@ -327,10 +326,6 @@ def _normalize_binary_health_status(value: int) -> int:
     return normalized
 
 
-def _json_dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
 def _json_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
@@ -411,10 +406,9 @@ def _write_governance_log(
 
 
 def _page_object_governance_counts(db: Session, page_object: PageObject) -> dict[str, Any]:
+    _po_repo = PageObjectRepository(db)
     formal_element_count = int(
-        db.execute(
-            select(func.count()).select_from(PageElement).where(PageElement.page_object_id == page_object.id)
-        ).scalar_one()
+        _po_repo.count_elements_by_page_object_id(page_object.id)
         or 0
     )
     approved_element_count = int(
@@ -523,235 +517,16 @@ def _cleanup_page_recorder_assets(
     }
 
 
-def _serialize_page_object(item: PageObject, *, element_count: int = 0) -> dict[str, Any]:
-    effective_element_count = int(element_count) if element_count >= 0 else int(item.element_count or 0)
-    return {
-        "id": item.id,
-        "page_id": item.id,
-        "project_code": item.project_code,
-        "client": item.client,
-        "page_code": item.page_code,
-        "page_name": item.page_name,
-        "page_url": item.page_url,
-        "precondition_state": item.precondition_state,
-        "route_pattern": item.route_pattern,
-        "anchor_config_json": _json_dict(item.anchor_config_json),
-        "governance_status": item.governance_status,
-        "testability_score": _bounded_score(item.testability_score),
-        "key_element_count": int(item.key_element_count or 0),
-        "approved_element_count": int(item.approved_element_count or 0),
-        "candidate_pending_count": int(item.candidate_pending_count or 0),
-        "module_id": int(item.module_id or 0),
-        "description": item.description,
-        "status": item.status,
-        "health_status": int(item.health_status if item.health_status is not None else 1),
-        "created_by": item.created_by,
-        "created_at": item.created_at,
-        "updated_at": item.updated_at,
-        "create_time": item.created_at,
-        "update_time": item.updated_at,
-        "element_count": effective_element_count,
-    }
-
-
-def _serialize_page_element(
-    item: PageElement,
-    *,
-    latest_version_no: int = 0,
-    reference_count: int = 0,
-    locators: list[PageElementLocator] | None = None,
-) -> dict[str, Any]:
-    serialized = {
-        "id": item.id,
-        "element_id": item.id,
-        "page_object_id": item.page_object_id,
-        "page_id": item.page_object_id,
-        "element_code": item.element_code,
-        "element_name": item.element_name,
-        "locator_type": item.locator_type,
-        "locator_value": item.locator_value,
-        "backup_locator": item.backup_locator,
-        "business_type": item.business_type,
-        "business_domain": item.business_domain,
-        "aliases_json": _json_list(item.aliases_json),
-        "semantic_tags_json": _json_list(item.semantic_tags_json),
-        "locator_source": item.locator_source,
-        "match_strategy": item.match_strategy,
-        "stability_level": item.stability_level,
-        "review_status": item.review_status,
-        "origin_candidate_key": item.origin_candidate_key,
-        "route_scope": item.route_scope,
-        "anchor_required": bool(item.anchor_required),
-        "is_key_element": bool(item.is_key_element),
-        "testid_value": item.testid_value,
-        "qa_value": item.qa_value,
-        "governance_note": item.governance_note,
-        "health_status": int(item.health_status if item.health_status is not None else 1),
-        "version": int(item.version if item.version is not None else 1),
-        "role": item.role,
-        "status": item.status,
-        "is_primary": bool(item.is_primary),
-        "owner": item.owner,
-        "created_at": item.created_at,
-        "updated_at": item.updated_at,
-        "create_time": item.created_at,
-        "update_time": item.updated_at,
-        "latest_version_no": int(latest_version_no),
-        "reference_count": int(reference_count),
-    }
-    if locators is not None:
-        serialized_locators = [_serialize_element_locator(locator) for locator in locators]
-        serialized["locators"] = serialized_locators
-        serialized["locator_count"] = len(serialized_locators)
-        serialized["alternate_locator_count"] = len([locator for locator in serialized_locators if not locator["is_primary"]])
-    return serialized
-
-
-def _serialize_element_locator(item: PageElementLocator) -> dict[str, Any]:
-    return {
-        "id": item.id,
-        "page_element_id": item.page_element_id,
-        "locator_type": item.locator_type,
-        "locator_value": item.locator_value,
-        "role": item.role,
-        "locator_source": item.locator_source,
-        "priority": int(item.priority if item.priority is not None else 100),
-        "is_primary": bool(item.is_primary),
-        "health_status": item.health_status,
-        "verification_status": item.verification_status,
-        "last_verified_at": item.last_verified_at,
-        "created_by": item.created_by,
-        "created_at": item.created_at,
-        "updated_at": item.updated_at,
-    }
-
-
-def _element_locators_for_serialization(db: Session, *, page_element_id: int) -> list[PageElementLocator]:
-    return list(
-        db.execute(
-            select(PageElementLocator)
-            .where(PageElementLocator.page_element_id == page_element_id)
-            .order_by(PageElementLocator.is_primary.desc(), PageElementLocator.priority.asc(), PageElementLocator.id.asc())
-        ).scalars().all()
-    )
-
-
-def _serialize_element_version(item: PageElementVersion) -> dict[str, Any]:
-    return {
-        "id": item.id,
-        "page_element_id": item.page_element_id,
-        "version_no": item.version_no,
-        "locator_type": item.locator_type,
-        "locator_value": item.locator_value,
-        "role": item.role,
-        "status": item.status,
-        "is_primary": bool(item.is_primary),
-        "changed_by": item.changed_by,
-        "change_summary": item.change_summary,
-        "created_at": item.created_at,
-        "create_time": item.created_at,
-    }
-
-
-def _serialize_ref(item: PageObjectRef) -> dict[str, Any]:
-    return {
-        "id": item.id,
-        "page_element_id": item.page_element_id,
-        "reference_type": item.reference_type,
-        "reference_key": item.reference_key,
-        "source": item.source,
-        "created_by": item.created_by,
-        "created_at": item.created_at,
-        "create_time": item.created_at,
-    }
-
-
-def _serialize_candidate_group(item: PageObjectCandidateGroup) -> dict[str, Any]:
-    proposed_element_code = str(item.proposed_element_code or "").strip()
-    if not proposed_element_code:
-        proposed_element_code = suggest_business_element_code(
-            str(item.proposed_element_name or item.top_locator_value or ""),
-            page_code=str(item.page_code or ""),
-            business_type=str(item.business_type_guess or ""),
-        )
-    return {
-        "id": item.id,
-        "project_code": item.project_code,
-        "client": item.client,
-        "page_code": item.page_code,
-        "group_key": item.group_key,
-        "proposed_element_code": proposed_element_code,
-        "proposed_element_name": item.proposed_element_name,
-        "business_type_guess": item.business_type_guess,
-        "business_domain_guess": item.business_domain_guess,
-        "quality_tier": item.quality_tier,
-        "max_score": int(item.max_score or 0),
-        "avg_score": int(item.avg_score or 0),
-        "session_count": int(item.session_count or 0),
-        "candidate_count": int(item.candidate_count or 0),
-        "recommended_action": item.recommended_action,
-        "promotion_status": item.promotion_status,
-        "route_scope": item.route_scope,
-        "top_locator_source": item.top_locator_source,
-        "top_locator_type": item.top_locator_type,
-        "top_locator_value": item.top_locator_value,
-        "top_role": item.top_role,
-        "risk_tags_json": _json_list(item.risk_tags_json),
-        "sample_texts_json": _json_list(item.sample_texts_json),
-        "matched_existing_element_code": item.matched_existing_element_code,
-        "reviewed_by": item.reviewed_by,
-        "reviewed_at": item.reviewed_at,
-        "review_note": item.review_note,
-        "latest_session_id": item.latest_session_id,
-        "created_at": item.created_at,
-        "updated_at": item.updated_at,
-    }
-
-
-def _serialize_candidate_element(item: PageObjectCandidateElement) -> dict[str, Any]:
-    proposed_element_code = str(item.proposed_element_code or "").strip()
-    if not proposed_element_code:
-        proposed_element_code = suggest_business_element_code(
-            str(item.proposed_element_name or item.raw_text or item.raw_locator_value or ""),
-            page_code=str(item.page_code or ""),
-            business_type=str(item.business_type_guess or ""),
-        )
-    return {
-        "id": item.id,
-        "project_code": item.project_code,
-        "client": item.client,
-        "page_code": item.page_code,
-        "session_id": item.session_id,
-        "candidate_key": item.candidate_key,
-        "group_key": item.group_key,
-        "raw_locator_type": item.raw_locator_type,
-        "raw_locator_value": item.raw_locator_value,
-        "raw_role": item.raw_role,
-        "raw_text": item.raw_text,
-        "dom_signature": item.dom_signature,
-        "route": item.route,
-        "step_hit_count": int(item.step_hit_count or 0),
-        "quality_score": int(item.quality_score or 0),
-        "quality_tier": item.quality_tier,
-        "risk_tags_json": _json_list(item.risk_tags_json),
-        "recommended_action": item.recommended_action,
-        "candidate_status": item.candidate_status,
-        "ingest_block_reason": item.ingest_block_reason,
-        "proposed_element_code": proposed_element_code,
-        "proposed_element_name": item.proposed_element_name,
-        "business_type_guess": item.business_type_guess,
-        "probe_status": item.probe_status,
-        "probe_match_count": int(item.probe_match_count or 0),
-        "probe_visible": bool(item.probe_visible),
-        "probe_interactable": bool(item.probe_interactable),
-        "merged_to_element_code": item.merged_to_element_code,
-        "promoted_element_code": item.promoted_element_code,
-        "reviewed_by": item.reviewed_by,
-        "reviewed_at": item.reviewed_at,
-        "review_note": item.review_note,
-        "created_at": item.created_at,
-        "updated_at": item.updated_at,
-    }
+from .page_object_serializers import (
+    _element_locators_for_serialization,
+    _serialize_candidate_element,
+    _serialize_candidate_group,
+    _serialize_element_locator,
+    _serialize_element_version,
+    _serialize_page_element,
+    _serialize_page_object,
+    _serialize_ref,
+)
 
 
 def _candidate_group_or_404(
@@ -809,13 +584,8 @@ def _page_object_or_404(
     client: str,
     page_code: str,
 ) -> PageObject:
-    item = db.execute(
-        select(PageObject).where(
-            PageObject.project_code == project_code,
-            PageObject.client == client,
-            PageObject.page_code == page_code,
-        )
-    ).scalar_one_or_none()
+    repo = PageObjectRepository(db)
+    item = repo.get_by_identity(project_code, client, page_code)
     if item is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -825,12 +595,8 @@ def _page_object_or_404(
 
 
 def _page_element_or_404(db: Session, *, page_object_id: int, element_code: str) -> PageElement:
-    item = db.execute(
-        select(PageElement).where(
-            PageElement.page_object_id == page_object_id,
-            PageElement.element_code == element_code,
-        )
-    ).scalar_one_or_none()
+    repo = PageObjectRepository(db)
+    item = repo.get_element_by_code(page_object_id, element_code)
     if item is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -965,11 +731,8 @@ def _purge_duplicate_page_elements(db: Session, *, page_object_id: int) -> dict[
     duplicate_ids = sorted(duplicate_id_set)
 
     if duplicate_ids:
-        db.execute(delete(PageElementLocator).where(PageElementLocator.page_element_id.in_(duplicate_ids)))
-        db.execute(delete(PageElementVersion).where(PageElementVersion.page_element_id.in_(duplicate_ids)))
-        db.execute(delete(PageObjectRef).where(PageObjectRef.page_element_id.in_(duplicate_ids)))
-        db.execute(delete(PageElementHealthCheck).where(PageElementHealthCheck.page_element_id.in_(duplicate_ids)))
-        db.execute(delete(PageElement).where(PageElement.id.in_(duplicate_ids)))
+        repo = PageObjectRepository(db)
+        repo.bulk_cascade_delete_elements(duplicate_ids)
         db.commit()
         _sync_page_object_metrics(db, page_object_id=page_object_id)
         db.commit()
@@ -1073,17 +836,12 @@ def deduplicate_page_elements(
 
 
 def create_page_object(db: Session, payload: PageObjectCreate) -> dict[str, Any]:
+    repo = PageObjectRepository(db)
     normalized_project_code = _normalize_project_code(payload.project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     normalized_client = normalize_client_code(payload.client)
     normalized_page_code = _normalize_identifier(payload.page_code, field_name="page_code", max_length=40)
-    existing = db.execute(
-        select(PageObject).where(
-            PageObject.project_code == normalized_project_code,
-            PageObject.client == normalized_client,
-            PageObject.page_code == normalized_page_code,
-        )
-    ).scalar_one_or_none()
+    existing = repo.get_by_identity(normalized_project_code, normalized_client, normalized_page_code)
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1126,10 +884,8 @@ def get_page_object(
         client=normalize_client_code(client),
         page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
-    element_count = int(
-        db.execute(select(func.count()).select_from(PageElement).where(PageElement.page_object_id == item.id)).scalar_one()
-        or 0
-    )
+    repo = PageObjectRepository(db)
+    element_count = int(repo.count_elements_by_page_object_id(item.id) or 0)
     governance_counts = _page_object_governance_counts(db, item)
     payload = _serialize_page_object(item, element_count=element_count)
     payload["approved_element_count"] = int(governance_counts["approved_element_count"])
@@ -1247,10 +1003,8 @@ def update_page_object(
         db.add(item)
         db.commit()
         db.refresh(item)
-    element_count = int(
-        db.execute(select(func.count()).select_from(PageElement).where(PageElement.page_object_id == item.id)).scalar_one()
-        or 0
-    )
+    repo = PageObjectRepository(db)
+    element_count = int(repo.count_elements_by_page_object_id(item.id) or 0)
     return _serialize_page_object(item, element_count=element_count)
 
 
@@ -1278,11 +1032,8 @@ def delete_page_object(
         )
     deleted_element_count = len(element_ids)
     if element_ids:
-        db.execute(delete(PageElementLocator).where(PageElementLocator.page_element_id.in_(element_ids)))
-        db.execute(delete(PageElementVersion).where(PageElementVersion.page_element_id.in_(element_ids)))
-        db.execute(delete(PageObjectRef).where(PageObjectRef.page_element_id.in_(element_ids)))
-        db.execute(delete(PageElementHealthCheck).where(PageElementHealthCheck.page_element_id.in_(element_ids)))
-        db.execute(delete(PageElement).where(PageElement.id.in_(element_ids)))
+        repo = PageObjectRepository(db)
+        repo.bulk_cascade_delete_elements(element_ids)
     db.execute(
         delete(PageObjectCandidateElement).where(
             PageObjectCandidateElement.project_code == item.project_code,
@@ -1443,12 +1194,8 @@ def create_page_element(
         locator_type=locator_type,
         testid_value=testid_value,
     )
-    existing = db.execute(
-        select(PageElement).where(
-            PageElement.page_object_id == page_object.id,
-            PageElement.element_code == normalized_element_code,
-        )
-    ).scalar_one_or_none()
+    repo = PageObjectRepository(db)
+    existing = repo.get_element_by_code(page_object.id, normalized_element_code)
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1747,20 +1494,12 @@ def delete_page_element(
         page_object_id=page_object.id,
         element_code=_normalize_identifier(element_code, field_name="element_code"),
     )
-    db.execute(delete(PageElementVersion).where(PageElementVersion.page_element_id == element.id))
-    db.execute(delete(PageElementLocator).where(PageElementLocator.page_element_id == element.id))
-    db.execute(delete(PageObjectRef).where(PageObjectRef.page_element_id == element.id))
-    db.execute(delete(PageElementHealthCheck).where(PageElementHealthCheck.page_element_id == element.id))
-    db.delete(element)
+    repo = PageObjectRepository(db)
+    repo.cascade_delete_element(element.id)
     db.commit()
     _sync_page_object_metrics(db, page_object_id=page_object.id)
     db.commit()
-    remaining_element_count = int(
-        db.execute(
-            select(func.count()).select_from(PageElement).where(PageElement.page_object_id == page_object.id)
-        ).scalar_one()
-        or 0
-    )
+    remaining_element_count = int(repo.count_elements_by_page_object_id(page_object.id) or 0)
     cleanup_result = (
         _cleanup_page_recorder_assets(
             db,
@@ -1822,11 +1561,8 @@ def batch_delete_page_elements(
     element_ids = [int(item.id) for item in rows]
     deleted_codes = [str(item.element_code or "") for item in rows]
     if element_ids:
-        db.execute(delete(PageElementVersion).where(PageElementVersion.page_element_id.in_(element_ids)))
-        db.execute(delete(PageElementLocator).where(PageElementLocator.page_element_id.in_(element_ids)))
-        db.execute(delete(PageObjectRef).where(PageObjectRef.page_element_id.in_(element_ids)))
-        db.execute(delete(PageElementHealthCheck).where(PageElementHealthCheck.page_element_id.in_(element_ids)))
-        db.execute(delete(PageElement).where(PageElement.id.in_(element_ids)))
+        repo = PageObjectRepository(db)
+        repo.bulk_cascade_delete_elements(element_ids)
         db.commit()
         _sync_page_object_metrics(db, page_object_id=page_object.id)
         db.commit()
@@ -2096,13 +1832,8 @@ def create_page_object_ref(
     )
     normalized_reference_type = _normalize_reference_type(payload.reference_type)
     normalized_reference_key = str(payload.reference_key or "").strip()
-    existing = db.execute(
-        select(PageObjectRef).where(
-            PageObjectRef.page_element_id == element.id,
-            PageObjectRef.reference_type == normalized_reference_type,
-            PageObjectRef.reference_key == normalized_reference_key,
-        )
-    ).scalar_one_or_none()
+    repo = PageObjectRepository(db)
+    existing = repo.get_ref(element.id, normalized_reference_type, normalized_reference_key)
     if existing is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -2397,9 +2128,8 @@ def promote_candidate_group(
         locator_type=locator_type,
         testid_value=testid_value,
     )
-    existing = db.execute(
-        select(PageElement).where(PageElement.page_object_id == page_object.id, PageElement.element_code == element_code)
-    ).scalar_one_or_none()
+    repo = PageObjectRepository(db)
+    existing = repo.get_element_by_code(page_object.id, element_code)
     if existing is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"page element already exists: {element_code}")
     if bool(payload.is_key_element) and not testid_value and not qa_value:
@@ -2571,14 +2301,8 @@ def merge_candidate_group(
         primary_role = str(target.role or "").strip()
         if primary_locator_type and primary_locator_value:
             primary_key = (int(target.id), primary_locator_type, primary_locator_value[:512], primary_role)
-            existing_primary = db.execute(
-                select(PageElementLocator).where(
-                    PageElementLocator.page_element_id == target.id,
-                    PageElementLocator.locator_type == primary_locator_type,
-                    PageElementLocator.locator_value == primary_locator_value[:512],
-                    PageElementLocator.role == primary_role,
-                )
-            ).scalar_one_or_none()
+            repo = PageObjectRepository(db)
+            existing_primary = repo.get_locator(target.id, primary_locator_type, primary_locator_value[:512], primary_role)
             if existing_primary is None:
                 db.add(
                     PageElementLocator(
@@ -2604,14 +2328,7 @@ def merge_candidate_group(
             locator_key = (int(target.id), locator_type, locator_value[:512], role)
             if locator_key in seen_locator_keys:
                 continue
-            existing_locator = db.execute(
-                select(PageElementLocator).where(
-                    PageElementLocator.page_element_id == target.id,
-                    PageElementLocator.locator_type == locator_type,
-                    PageElementLocator.locator_value == locator_value[:512],
-                    PageElementLocator.role == role,
-                )
-            ).scalar_one_or_none()
+            existing_locator = repo.get_locator(target.id, locator_type, locator_value[:512], role)
             if existing_locator is None:
                 db.add(
                     PageElementLocator(

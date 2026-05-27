@@ -9,10 +9,22 @@ import time
 import uuid
 import subprocess
 import sys
+from datetime import datetime
+from shared_backend.datetime_compat import UTC
 from pathlib import Path
 from typing import Any, Callable
 
 from shared_backend.case_ids import normalize_case_id
+from shared_backend.type_utils import dict_value as _dict_value
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.api.workbench._helpers import (
+    parse_iso_datetime as _parse_iso_datetime,
+    text as _text,
+)
+from app.models.test_case import TestCase, TestCaseExecution
+from app.repositories.test_case_repository import TestCaseRepository
 
 NormalizeExecutionRecordPayload = Callable[[dict[str, Any]], dict[str, Any]]
 NormalizePageSlug = Callable[[str], str]
@@ -74,10 +86,6 @@ def runtime_run_id(item: dict[str, Any]) -> str:
     if isinstance(execution_record, dict):
         return str(execution_record.get("run_id", "")).strip()
     return ""
-
-
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
 
 
 def build_runtime_execution_record(
@@ -347,7 +355,7 @@ def extract_json_from_text(text: str) -> dict[str, Any]:
     try:
         payload = json.loads(text)
         return payload if isinstance(payload, dict) else {}
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         pass
     start = text.rfind("{")
     end = text.rfind("}")
@@ -356,7 +364,7 @@ def extract_json_from_text(text: str) -> dict[str, Any]:
         try:
             payload = json.loads(candidate)
             return payload if isinstance(payload, dict) else {}
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             return {}
     return {}
 
@@ -404,7 +412,7 @@ def load_execution_record_payload(
         return {}
     try:
         payload = json.loads(path.read_text(encoding="utf-8")) or {}
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         return {}
     return normalize_execution_record_payload(payload)
 
@@ -426,7 +434,7 @@ def load_runtime_execution_record_from_artifacts(
     for manifest_path in manifest_candidates:
         try:
             raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8")) or {}
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             continue
         manifest = normalize_evidence_manifest_payload(raw_manifest)
         record_paths = resolve_manifest_entries_fn(manifest.get("execution_record_files"), manifest_path.parent)
@@ -1055,3 +1063,93 @@ def execute_run(
         },
         update_runtime_run=update_runtime_run,
     )
+
+
+def _duration_ms_from_run(run_item: dict[str, Any], execution_record: dict[str, Any]) -> int:
+    """从运行快照或起止时间中计算执行耗时毫秒数。"""
+    raw_duration = execution_record.get("duration_seconds")
+    try:
+        return max(0, int(float(raw_duration or 0) * 1000))
+    except (TypeError, ValueError):
+        pass
+    started_at = _parse_iso_datetime(_text(execution_record.get("started_at")) or _text(run_item.get("started_at")))
+    finished_at = _parse_iso_datetime(_text(execution_record.get("finished_at")) or _text(run_item.get("finished_at")))
+    if started_at and finished_at:
+        return max(0, int((finished_at - started_at).total_seconds() * 1000))
+    return 0
+
+
+def persist_runtime_run_to_case_center(db: Session, run_item: dict[str, Any]) -> TestCaseExecution | None:
+    """将运行态执行结果同步写入用例中心执行记录。
+
+    Args:
+        db: SQLAlchemy database session.
+        run_item: Runtime run dictionary containing run_id, case_id,
+            project, status, and optional execution_record.
+
+    Returns:
+        The persisted TestCaseExecution record, or None if the run_item
+        is invalid or the referenced case is not found.
+    """
+    if not isinstance(run_item, dict):
+        return None
+    run_id = _text(run_item.get("run_id"))
+    case_id = _text(run_item.get("case_id"))
+    project = _text(run_item.get("project")) or "mall"
+    if not case_id:
+        return None
+    execution_record = run_item.get("execution_record") if isinstance(run_item.get("execution_record"), dict) else {}
+    status_value = (_text(run_item.get("status")) or _text(execution_record.get("status")) or "unknown").lower()
+    if status_value not in {"passed", "failed", "cancelled", "skipped", "error"}:
+        return None
+    case = TestCaseRepository(db).get_by_case_id_and_project(case_id, project)
+    if case is None:
+        LOGGER.warning(
+            "skip runtime persistence because case is not found in project: project=%s case_id=%s run_id=%s",
+            project,
+            case_id,
+            run_id,
+        )
+        return None
+    executed_at = (
+        _parse_iso_datetime(_text(execution_record.get("finished_at")))
+        or _parse_iso_datetime(_text(run_item.get("finished_at")))
+        or _parse_iso_datetime(_text(execution_record.get("started_at")))
+        or _parse_iso_datetime(_text(run_item.get("started_at")))
+        or datetime.now(UTC)
+    )
+    duration_ms = _duration_ms_from_run(run_item, execution_record)
+    existing: TestCaseExecution | None = None
+    if run_id:
+        existing = db.execute(
+            select(TestCaseExecution).where(
+                TestCaseExecution.case_id == int(case.id),
+                TestCaseExecution.report_url.like(f"%run_id={run_id}%"),
+            )
+        ).scalar_one_or_none()
+    if existing is None:
+        existing = TestCaseExecution(
+            case_id=int(case.id),
+            status=status_value,
+            duration_ms=duration_ms,
+            report_url="",
+            executed_at=executed_at,
+        )
+        db.add(existing)
+        db.flush()
+    else:
+        existing.status = status_value
+        existing.duration_ms = duration_ms
+        existing.executed_at = executed_at
+    report_url = f"/react/execution/results/{int(existing.id)}"
+    if run_id:
+        report_url = f"{report_url}?run_id={run_id}"
+    existing.report_url = report_url
+    case.last_execution_result = status_value
+    case.last_report_url = report_url
+    case.updated_at = datetime.now(UTC)
+    db.add(case)
+    db.add(existing)
+    db.commit()
+    db.refresh(existing)
+    return existing

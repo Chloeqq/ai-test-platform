@@ -101,10 +101,6 @@ test-orchestrator-manifest-strict:
 test-orchestrate-e2e-smoke:
 	TEST_DESIGN_MODE=deterministic $(PYTEST) apps/ai-orchestrator/tests/integration/test_orchestrate_execute_true_e2e_smoke.py -v
 
-check-console:
-	node --check apps/web-console/static/app.js
-
-check-webui-static:
 	scripts/qa/check-web-ui-static.sh
 
 check-webui-pages:

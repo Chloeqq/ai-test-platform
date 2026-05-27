@@ -695,7 +695,10 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                         normalized_steps.append({
                             "action": _string(step_item.get("action")),
                             "target": _string(step_item.get("target")),
+                            "target_name": _string(step_item.get("target_name")),
+                            "data_ref": _string(step_item.get("data_ref")),
                             "value": step_item.get("value"),
+                            "expected_result": _string(step_item.get("expected_result") or step_item.get("expected")),
                             "raw_text": _string(
                                 step_item.get("raw_text")
                                 or step_item.get("description")
@@ -721,6 +724,9 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                 "api_path": _string(item.get("api_path")),
                 "priority": _string(item.get("priority"), default="P1"),
                 "expected_result": _string(item.get("expected_result") or item.get("expected")),
+                "precondition": _string(item.get("precondition")),
+                "steps_hint": _string_list(item.get("steps_hint")),
+                "data": _dict_copy(item.get("data")),
                 "dependencies": _string_list(item.get("dependencies")),
                 "source_ids": _string_list(item.get("source_ids")),
                 "involved_elements": _dedup_strings(involved_elements),

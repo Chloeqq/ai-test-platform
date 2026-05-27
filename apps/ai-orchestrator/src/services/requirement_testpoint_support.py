@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import os
-import sqlite3
 import logging
 from pathlib import Path
 from typing import Any
@@ -19,35 +18,28 @@ _logger = logging.getLogger(__name__)
 def _fetch_page_object_elements(page: str, project: str = "atp", client: str = "web") -> dict[str, dict[str, str]] | None:
     """Fetch page object elements from DB or YAML for PO Store validation."""
     try:
-        db_url = str(os.getenv("DATABASE_URL", "")).strip()
-        if db_url.startswith("sqlite:///"):
-            db_path = db_url.removeprefix("sqlite:///")
-        else:
-            db_path = str(Path(__file__).resolve().parents[4] / "apps" / "web-ui-service" / "dev.db")
-        with sqlite3.connect(db_path) as conn:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                select id
-                from page_objects
-                where project_code = ? and client = ? and page_code = ?
-                """,
-                (project, client, page),
-            )
-            row = cur.fetchone()
+        from shared_backend.db import get_db_session
+        from sqlalchemy import text
+
+        with get_db_session() as db:
+            row = db.execute(
+                text(
+                    "select id from page_objects "
+                    "where project_code = :project and client = :client and page_code = :page"
+                ),
+                {"project": project, "client": client, "page": page},
+            ).fetchone()
             if row is None:
                 raise LookupError("page object not found in DB")
-            cur.execute(
-                """
-                select element_code, locator_type, locator_value, role, coalesce(element_name, '')
-                from page_elements
-                where page_object_id = ?
-                order by id asc
-                """,
-                (int(row[0]),),
-            )
+            items = db.execute(
+                text(
+                    "select element_code, locator_type, locator_value, role, coalesce(element_name, '') "
+                    "from page_elements where page_object_id = :po_id order by id asc"
+                ),
+                {"po_id": int(row[0])},
+            ).fetchall()
             elements: dict[str, dict[str, str]] = {}
-            for item in cur.fetchall():
+            for item in items:
                 code = str(item[0]).strip()
                 if not code:
                     continue

@@ -5,16 +5,16 @@ import json
 import re
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, status
 from shared_backend.case_ids import normalize_client_code
-from sqlalchemy import delete, func, select
+from shared_backend.type_utils import now_iso as _now_iso
 from sqlalchemy.orm import Session
 
-from app.models.page_object import PageElement, PageElementHealthCheck, PageElementLocator, PageElementVersion, PageObject, PageObjectRef
+from app.models.page_object import PageElement, PageElementLocator, PageObject
+from app.repositories.page_object_repository import PageObjectRepository
 from app.services import page_object_service, test_project_service
 
 _IMPORT_ROOT = (Path(__file__).resolve().parents[4] / "artifacts" / "page-object-imports").resolve()
@@ -212,10 +212,6 @@ class ParsedTestIdElement:
     is_key_element: bool
     match_strategy: str
     semantic_tags: list[str]
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def _hash_bytes(content: bytes) -> str:
@@ -528,14 +524,9 @@ def _primary_locator_upsert(db: Session, *, element: PageElement, operator: str)
     locator_value = str(element.locator_value or "").strip()[:512]
     if not locator_value:
         return
-    existing = db.execute(
-        select(PageElementLocator).where(
-            PageElementLocator.page_element_id == element.id,
-            PageElementLocator.locator_type == element.locator_type,
-            PageElementLocator.locator_value == locator_value,
-            PageElementLocator.role == str(element.role or "").strip(),
-        )
-    ).scalar_one_or_none()
+    existing = PageObjectRepository(db).get_locator(
+        element.id, element.locator_type, locator_value, str(element.role or "").strip()
+    )
     if existing is None:
         db.add(
             PageElementLocator(
@@ -575,40 +566,19 @@ def _cleanup_legacy_layout_pages(
     if layout_page is None:
         return result
     for legacy_page_code in sorted(_SHARED_LAYOUT_PREFIXES - {"layout"}):
-        legacy_page = db.execute(
-            select(PageObject).where(
-                PageObject.project_code == project_code,
-                PageObject.client == client,
-                PageObject.page_code == legacy_page_code,
-            )
-        ).scalar_one_or_none()
+        legacy_page = PageObjectRepository(db).get_by_identity(project_code, client, legacy_page_code)
         if legacy_page is None:
             continue
-        legacy_elements = list(
-            db.execute(select(PageElement).where(PageElement.page_object_id == legacy_page.id)).scalars().all()
-        )
+        legacy_elements = PageObjectRepository(db).list_elements_by_page_object_id(legacy_page.id)
         deleted_element_ids: list[int] = []
         for legacy_element in legacy_elements:
-            target = db.execute(
-                select(PageElement).where(
-                    PageElement.page_object_id == layout_page.id,
-                    PageElement.element_code == legacy_element.element_code,
-                )
-            ).scalar_one_or_none()
+            target = PageObjectRepository(db).get_element_by_code(layout_page.id, legacy_element.element_code)
             if target is None:
                 result["legacy_element_skipped_count"] += 1
                 continue
-            refs = list(
-                db.execute(select(PageObjectRef).where(PageObjectRef.page_element_id == legacy_element.id)).scalars().all()
-            )
+            refs = PageObjectRepository(db).list_refs_by_element_id(legacy_element.id)
             for ref in refs:
-                duplicate = db.execute(
-                    select(PageObjectRef).where(
-                        PageObjectRef.page_element_id == target.id,
-                        PageObjectRef.reference_type == ref.reference_type,
-                        PageObjectRef.reference_key == ref.reference_key,
-                    )
-                ).scalar_one_or_none()
+                duplicate = PageObjectRepository(db).get_ref(target.id, ref.reference_type, ref.reference_key)
                 if duplicate is not None:
                     db.delete(ref)
                     continue
@@ -630,18 +600,15 @@ def _cleanup_legacy_layout_pages(
                 after_payload=page_object_service._element_governance_payload(target),
                 operator=operator,
             )
-            db.execute(delete(PageElementLocator).where(PageElementLocator.page_element_id == legacy_element.id))
-            db.execute(delete(PageElementVersion).where(PageElementVersion.page_element_id == legacy_element.id))
-            db.execute(delete(PageElementHealthCheck).where(PageElementHealthCheck.page_element_id == legacy_element.id))
-            db.execute(delete(PageObjectRef).where(PageObjectRef.page_element_id == legacy_element.id))
+            PageObjectRepository(db).delete_locators_by_element_ids([legacy_element.id])
+            PageObjectRepository(db).delete_versions_by_element_ids([legacy_element.id])
+            PageObjectRepository(db).delete_health_checks_by_element_ids([legacy_element.id])
+            PageObjectRepository(db).delete_refs_by_element_ids([legacy_element.id])
             db.delete(legacy_element)
             deleted_element_ids.append(int(legacy_element.id))
             result["legacy_element_deleted_count"] += 1
         db.flush()
-        remaining_count = int(
-            db.execute(select(func.count()).select_from(PageElement).where(PageElement.page_object_id == legacy_page.id)).scalar_one()
-            or 0
-        )
+        remaining_count = PageObjectRepository(db).count_elements_by_page_object_id(legacy_page.id)
         if remaining_count == 0:
             db.delete(legacy_page)
             result["legacy_page_deleted_count"] += 1
@@ -665,21 +632,10 @@ def _build_preview(
     element_rows: list[dict[str, Any]] = []
     pages: dict[str, dict[str, Any]] = {}
     for row in rows:
-        page = db.execute(
-            select(PageObject).where(
-                PageObject.project_code == project_code,
-                PageObject.client == client,
-                PageObject.page_code == row.page_code,
-            )
-        ).scalar_one_or_none()
+        page = PageObjectRepository(db).get_by_identity(project_code, client, row.page_code)
         existing = None
         if page is not None:
-            existing = db.execute(
-                select(PageElement).where(
-                    PageElement.page_object_id == page.id,
-                    PageElement.element_code == row.element_code,
-                )
-            ).scalar_one_or_none()
+            existing = PageObjectRepository(db).get_element_by_code(page.id, row.element_code)
 
         duplicate = duplicate_counts.get((row.page_code, row.element_code), 0) > 1
         if duplicate:
@@ -850,13 +806,7 @@ def apply_import(
         page_code = str(page_summary.get("page_code") or "").strip()
         if not page_code:
             continue
-        page = db.execute(
-            select(PageObject).where(
-                PageObject.project_code == project_code,
-                PageObject.client == client,
-                PageObject.page_code == page_code,
-            )
-        ).scalar_one_or_none()
+        page = PageObjectRepository(db).get_by_identity(project_code, client, page_code)
         if page is None:
             page = PageObject(
                 project_code=project_code,
@@ -907,12 +857,7 @@ def apply_import(
         touched_page_ids.add(int(page.id))
         element_code = str(item.get("element_code") or "").strip()
         testid = str(item.get("testid") or "").strip()
-        element = db.execute(
-            select(PageElement).where(
-                PageElement.page_object_id == page.id,
-                PageElement.element_code == element_code,
-            )
-        ).scalar_one_or_none()
+        element = PageObjectRepository(db).get_element_by_code(page.id, element_code)
         semantic_tags = list(item.get("semantic_tags") or [])
         note = f"由 data-testid 清单导入；source_path={item.get('source_path') or '-'}"
         next_element_name = str(item.get("element_name") or "").strip() or _element_name(

@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+"""底层 DB/文件双模读写。
+
+根据环境变量 WORKBENCH_STATE_BACKEND 在 SQLAlchemy（database 模式）
+和 JSON 文件（file 模式）之间切换。
+
+被 app.api.workbench.store 包装为线程安全外观，
+业务代码应通过 store.py 访问，不直接调用本模块。
+"""
+
 import json
 import os
 import threading
-from datetime_compat import UTC
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -44,9 +51,7 @@ FAILURE_SOURCE_CALIBRATIONS_FILE = WEB_UI_REPORTING_DIR / "failure-source-calibr
 
 FILE_LOCK = threading.Lock()
 
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+from shared_backend.type_utils import now_iso as _now_iso
 
 
 def now_iso() -> str:
@@ -98,12 +103,15 @@ def _normalize_payload(item: dict[str, Any]) -> dict[str, Any]:
     return dict(item) if isinstance(item, dict) else {}
 
 
-def _upsert_db_item(path: Path, item: dict[str, Any]) -> None:
+def _upsert_db_item(path: Path, item: dict[str, Any], db: Any = None) -> None:
     model = _db_model_for_path(path)
     if model is None:
         return
     payload = _normalize_payload(item)
-    with SessionLocal() as db:
+    _owns_db = db is None
+    if _owns_db:
+        db = SessionLocal()
+    try:
         if model is WorkbenchRuntimeRun:
             run_id = str(payload.get("run_id", "")).strip()
             if not run_id:
@@ -209,14 +217,22 @@ def _upsert_db_item(path: Path, item: dict[str, Any]) -> None:
             existing_sample.predicted_failure_source = str(payload.get("predicted_failure_source", "")).strip()
             existing_sample.confirmed_failure_source = str(payload.get("confirmed_failure_source", "")).strip()
             existing_sample.payload = payload
-        db.commit()
+        if _owns_db:
+            db.commit()
+            db.close()
+    finally:
+        if not _owns_db:
+            db.commit()
 
 
-def _replace_db_items(path: Path, items: list[dict[str, Any]]) -> None:
+def _replace_db_items(path: Path, items: list[dict[str, Any]], db: Any = None) -> None:
     model = _db_model_for_path(path)
     if model is None:
         return
-    with SessionLocal() as db:
+    _owns_db = db is None
+    if _owns_db:
+        db = SessionLocal()
+    try:
         db.execute(delete(model))
         db.commit()
         for item in items:
@@ -286,14 +302,22 @@ def _replace_db_items(path: Path, items: list[dict[str, Any]]) -> None:
                         payload=payload,
                     )
                 )
-        db.commit()
+        if _owns_db:
+            db.commit()
+            db.close()
+    finally:
+        if not _owns_db:
+            db.commit()
 
 
-def _read_db_items(path: Path) -> list[dict[str, Any]]:
+def _read_db_items(path: Path, db: Any = None) -> list[dict[str, Any]]:
     model = _db_model_for_path(path)
     if model is None:
         return []
-    with SessionLocal() as db:
+    _owns_db = db is None
+    if _owns_db:
+        db = SessionLocal()
+    try:
         if model is WorkbenchRuntimeRun:
             runtime_rows = db.execute(
                 select(WorkbenchRuntimeRun).order_by(WorkbenchRuntimeRun.updated_at.desc(), WorkbenchRuntimeRun.id.desc())
@@ -331,6 +355,9 @@ def _read_db_items(path: Path) -> list[dict[str, Any]]:
                 select(WorkbenchHistoryEvent).order_by(WorkbenchHistoryEvent.id.desc())
             ).scalars().all()
             return [dict(row.payload) for row in history_rows if isinstance(row.payload, dict)]
+    finally:
+        if _owns_db:
+            db.close()
 
 
 def ensure_dirs() -> None:
@@ -355,9 +382,9 @@ def ensure_dirs() -> None:
             FAILURE_SOURCE_CALIBRATIONS_FILE.write_text("[]\n", encoding="utf-8")
 
 
-def read_json_list(path: Path) -> list[dict[str, Any]]:
+def read_json_list(path: Path, db: Any = None) -> list[dict[str, Any]]:
     if _is_db_enabled_for_path(path):
-        return _read_db_items(path)
+        return _read_db_items(path, db=db)
     return _read_file_json_list(path)
 
 
@@ -373,45 +400,45 @@ def _read_file_json_list(path: Path) -> list[dict[str, Any]]:
     return [item for item in payload if isinstance(item, dict)]
 
 
-def write_json_list(path: Path, items: list[dict[str, Any]]) -> None:
+def write_json_list(path: Path, items: list[dict[str, Any]], db: Any = None) -> None:
     if _is_db_enabled_for_path(path):
-        _replace_db_items(path, items)
+        _replace_db_items(path, items, db=db)
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(items, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def append_history(entry: dict[str, Any]) -> None:
+def append_history(entry: dict[str, Any], db: Any = None) -> None:
     with FILE_LOCK:
         if _is_db_enabled_for_path(HISTORY_FILE):
             payload = dict(entry)
             payload.setdefault("timestamp", _now_iso())
-            _upsert_db_item(HISTORY_FILE, payload)
+            _upsert_db_item(HISTORY_FILE, payload, db=db)
             return
         items = read_json_list(HISTORY_FILE)
         items.insert(0, entry)
         write_json_list(HISTORY_FILE, items[:500])
 
 
-def append_runtime_run(entry: dict[str, Any]) -> None:
+def append_runtime_run(entry: dict[str, Any], db: Any = None) -> None:
     with FILE_LOCK:
         if _is_db_enabled_for_path(RUNTIME_RUNS_FILE):
             payload = dict(entry)
             payload.setdefault("updated_at", _now_iso())
-            _upsert_db_item(RUNTIME_RUNS_FILE, payload)
+            _upsert_db_item(RUNTIME_RUNS_FILE, payload, db=db)
             return
         items = read_json_list(RUNTIME_RUNS_FILE)
         items.insert(0, entry)
         write_json_list(RUNTIME_RUNS_FILE, items[:1000])
 
 
-def update_runtime_run(run_id: str, updates: dict[str, Any]) -> None:
+def update_runtime_run(run_id: str, updates: dict[str, Any], db: Any = None) -> None:
     normalized_run_id = str(run_id or "").strip()
     if not normalized_run_id:
         return
     with FILE_LOCK:
         if _is_db_enabled_for_path(RUNTIME_RUNS_FILE):
-            items = _read_db_items(RUNTIME_RUNS_FILE)
+            items = _read_db_items(RUNTIME_RUNS_FILE, db=db)
             updated = False
             for item in items:
                 if str(item.get("run_id", "")).strip() != normalized_run_id:
@@ -420,11 +447,11 @@ def update_runtime_run(run_id: str, updates: dict[str, Any]) -> None:
                 item["run_id"] = normalized_run_id
                 item.setdefault("updated_at", _now_iso())
                 updated = True
-                _upsert_db_item(RUNTIME_RUNS_FILE, item)
+                _upsert_db_item(RUNTIME_RUNS_FILE, item, db=db)
                 break
             if not updated:
                 payload = {"run_id": normalized_run_id, **updates, "updated_at": _now_iso()}
-                _upsert_db_item(RUNTIME_RUNS_FILE, payload)
+                _upsert_db_item(RUNTIME_RUNS_FILE, payload, db=db)
             return
         items = read_json_list(RUNTIME_RUNS_FILE)
         updated = False
