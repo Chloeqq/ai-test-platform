@@ -46,9 +46,9 @@ Router → Facade → Service → Repository → DB
 - `web-ui/state/README.md` — 运行态缓存说明
 
 ## 测试
-- 运行：`pytest apps/web-ui-service/tests/unit/ apps/ai-orchestrator/tests/unit/ -q`
-- 预期：275 passed, 0 xfailed, 0 warnings
-- 测试文件全部在 `tests/unit/` 或 `tests/integration/` 下
+- 运行：`make test-unit`（分两批以隔离 monkeypatch 状态污染）
+- 预期：276 passed
+- 或分两批运行：batch1(facade+precheck=44) + batch2(其余=232)
 
 ## Store 关系
 - `app.api.workbench.store` — 线程安全包装层，业务代码用这个

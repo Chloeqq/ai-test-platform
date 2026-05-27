@@ -106,6 +106,11 @@ test-orchestrate-e2e-smoke:
 check-webui-pages:
 	$(VENV_PYTHON) scripts/qa/check_web_ui_pages.py --base-url http://127.0.0.1:8013
 
+# 分两批运行以隔离 test-ordering 冲突(facade/precheck 的 monkeypatch 与其他测试互相污染)
+test-unit:
+	$(VENV_PYTHON) -m pytest apps/web-ui-service/tests/unit/test_workbench_facade.py apps/web-ui-service/tests/unit/test_precheck_selected_intents_service.py -q
+	$(VENV_PYTHON) -m pytest apps/web-ui-service/tests/unit/ apps/ai-orchestrator/tests/unit/ --ignore=apps/web-ui-service/tests/unit/test_workbench_facade.py --ignore=apps/web-ui-service/tests/unit/test_precheck_selected_intents_service.py -q
+
 static-baseline-fast:
 	scripts/qa/run-static-baseline-fast.sh
 
