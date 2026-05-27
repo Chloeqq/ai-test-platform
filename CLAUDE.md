@@ -72,8 +72,8 @@ Router → Facade → Service → Repository → DB
 ### WorkbenchState 表无 Alembic 迁移 ✅ 已处理
 `make db-upgrade` 和 `make db-bootstrap` 现在会在 alembic 之后自动调用 `Base.metadata.create_all()` 创建 6 张 workbench_state 表。正式迁移待补。
 
-### 启动后页面为空
-`make dev` 启动服务后，DB 里没有 seed 数据，页面显示空白。需手动运行 `make db-bootstrap` 创建示例项目和用例。`make dev` 没有自动执行这一步。
+### 启动后页面为空 ✅ 已处理
+`make dev` 现在自动运行 `db-bootstrap` 创建 seed 数据。如果仍为空，检查 `.env` 中 `DATABASE_URL` 是否正确指向 Docker PostgreSQL。
 
 ### 前端本地开发需手动 build
 React 源码在 `frontend/src/`，构建产物在 `app/static/react/`（gitignored）。Docker 部署自动 build，但本地开发需 `make frontend-build`。本地不 build 看到的是旧页面或空白页。
