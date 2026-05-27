@@ -87,7 +87,10 @@ db-upgrade:
 db-revision:
 	cd apps/web-ui-service && ../../.venv/bin/alembic revision -m "$(MSG)"
 
-test: test-contracts
+test: test-unit test-contracts
+
+verify-core-chain:
+	$(VENV_PYTHON) scripts/verify_core_chain.py
 
 test-contracts: test-pipeline-contracts test-orchestrator test-runner-assets test-webui-manifest-strict test-orchestrator-manifest-strict
 

@@ -1,3 +1,4 @@
+
 # Dev minimal — 仅本地开发需要的 4 个服务(postgres + redis + web + orchestrator)
 # 用法: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 # 不含 ELK/nginx。ELK 日志分析用 docker-compose.yml 完整版。
