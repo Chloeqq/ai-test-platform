@@ -60,6 +60,11 @@ Router → Facade → Service → Repository → DB
 - Path B（手动/治理）：`selected_candidate` 非空 → 直接编译 → V1.1 严格校验
 - DSL V1.1 6 条铁律都在编译器里 `raise ExecutionCompilerError`，不是软检查
 
+## 铁律
+
+### 🚫 永远不要 `git add -A`
+磁盘上存在大量未被跟踪的历史遗留文件（旧测试、生成产物、缓存）。`git add -A` 会把它们全部提交，污染仓库。**只 `git add <具体文件>` 或用 `git add -u`（只添加已跟踪文件的修改）。**
+
 ## 修改代码前检查
 1. 改 DB 查询 → 用 Repository 方法，不要写 `db.execute(select(...))`
 2. 改异常处理 → 用具体类型，不要加 `except Exception`
