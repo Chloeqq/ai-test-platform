@@ -66,3 +66,24 @@ Router → Facade → Service → Repository → DB
 3. 改工具函数 → 先看 `shared_backend/type_utils.py` 是否已有
 4. 改生成逻辑 → 确认两条路径都有校验覆盖
 5. 改完运行 `pytest apps/web-ui-service/tests/unit/ apps/ai-orchestrator/tests/unit/ -q`
+
+## 已知问题（接手时注意）
+
+### WorkbenchState 表无 Alembic 迁移
+6 张表（workbench_history_events / review_decisions / runtime_runs / execution_gate_decisions / defect_links / failure_source_calibrations）由 `main.py` 的 `Base.metadata.create_all()` 自动创建，**不在 Alembic 迁移中**。只跑 `alembic upgrade head` 不会创建它们。生产环境部署前需确认。
+测试环境：这些表在临时 SQLite 中可能不存在，需要 `Base.metadata.create_all(bind=engine)`。
+
+### 启动后页面为空
+`make dev` 启动服务后，DB 里没有 seed 数据，页面显示空白。需手动运行 `make db-bootstrap` 创建示例项目和用例。`make dev` 没有自动执行这一步。
+
+### 前端本地开发需手动 build
+React 源码在 `frontend/src/`，构建产物在 `app/static/react/`（gitignored）。Docker 部署自动 build，但本地开发需 `make frontend-build`。本地不 build 看到的是旧页面或空白页。
+
+### `app.py` 和 `app/` 包冲突
+orchestrator 的 `apps/ai-orchestrator/src/app.py` 和 web-ui 的 `apps/web-ui-service/app/` 包在同一个 PYTHONPATH 中会冲突（`.py` 先于 package/）。`verify_core_chain.py` 已 workaround。CI 和本地开发应通过 `docker compose` 隔离两个服务，不要混在同一个 PYTHONPATH。
+
+### ORM 无 relationship 定义
+所有模型只有 `mapped_column`，没有 `relationship()`。TestCase 和 TestCaseExecution 之间的关联只能通过 Repository 方法手动查询。不要尝试用 `case.executions` 等 ORM 懒加载——不存在。
+
+### test ordering 失败
+`test_workbench_facade.py` 和 `test_precheck_selected_intents_service.py` 的 monkeypatch 与其他测试存在状态污染。`make test-unit` 已分两批运行（44 + 232 = 276 passed）隔离。单独跑 `pytest apps/web-ui-service/tests/unit/ -q` 会有 15 个假失败。根因待排查。
