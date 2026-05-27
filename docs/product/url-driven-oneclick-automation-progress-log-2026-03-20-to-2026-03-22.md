@@ -1,0 +1,2748 @@
+# URL 驱动一键自动化详细进展归档（2026-03-20 至 2026-03-22）
+
+> 本文档从 `url-driven-oneclick-automation-status-and-priority-plan-2026-03-20.md` 拆分而来，用于存放详细里程碑和逐条进度记录。
+
+## 1. 详细进展记录归档
+
+### 3.1 已完成的主链能力
+
+1. 生成页支持 URL-first 启动
+2. `requirement` 已不再是用户必须手填的唯一入口
+3. `auto-run` 能串起：
+   - 页面访问
+   - surface 抽取
+   - page object 补齐
+   - test points 生成
+   - YAML 生成
+   - 执行
+   - 报告刷新
+
+### 3.2 已完成的防幻觉确认链
+
+已完成并上线的确认点：
+
+1. 确认点 1：低置信度页面元素
+2. 确认点 2：待确认测试点
+3. 确认点 3：风险决策
+
+已完成的能力：
+
+1. review 状态持久化
+2. review 状态随 run 回显
+3. 当前页确认后即时刷新
+4. 风险确认纳入同一 review_state
+
+### 3.3 已完成的审计治理
+
+已完成：
+
+1. 确认动作写历史事件
+2. 历史记录展示确认人
+3. 登录页、退出登录、token 落浏览器
+4. 前端未登录提示
+5. 后端 review 接口硬门禁
+6. 匿名确认被拒绝时也会留下审计记录
+7. 历史页支持按动作 / 状态 / 确认人筛选
+8. run 详情有审计摘要
+9. 生成页、工作台有审计时间线
+10. 历史页可深链跳到工作台 / 生成页
+
+### 3.4 详细里程碑记录
+
+已完成：
+
+1. `PageSurfaceV1` 共享契约已正式落到 `apps/shared_backend/schemas/contracts.py`
+2. `legacy_workbench.py` 的页面分析输出已统一归一化到 `PageSurfaceV1`
+3. 为兼容现有 UI / run 记录，保留了历史顶层字段别名：
+   - `url`
+   - `page_title`
+   - `has_table`
+   - `has_form`
+   - `has_dialog`
+   - `auth_state`
+   - `load_state`
+   - `element_candidates`
+   - `confidence_summary`
+4. `auto-run` 对 monkeypatch / 历史兼容 surface 也会补做归一化，避免链路只在“真实 Playwright 抽取”时才满足新契约
+5. 已补回归验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `39 passed`
+   - `./.venv/bin/python -m py_compile apps/shared_backend/schemas/contracts.py apps/web-ui-service/app/routers/legacy_workbench.py`
+6. `PageObjectDraftV1` 共享契约已正式落到 `apps/shared_backend/schemas/contracts.py`
+7. `legacy_workbench.py` 的页面对象质量输出已统一归一化到 `PageObjectDraftV1`
+8. 为兼容现有 UI / run 记录，保留了历史核心字段别名：
+   - `summary`
+   - `coverage`
+   - `missing_elements`
+   - `next_actions`
+   - `confidence`
+   - `warnings`
+   - `low_confidence_items`
+9. `auto-run` 对 monkeypatch / 历史兼容 page object 质量结构也会补做归一化
+10. 已补追加验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `40 passed`
+11. `TestPointPlanV1` 已从“基础字段可用”收口到正式契约，补齐：
+   - `dependent_elements`
+   - `point_count`
+   - `review_summary`
+   - `coverage` 结构化字段
+   - `fallback_reason`
+12. `legacy_workbench.py` 的步骤转测试点、orchestrator 测试点接入、落盘保存，现已统一走正式 `TestPointPlanV1`
+13. `auto-run` 返回的 `test_points` 现在会稳定带上：
+   - `version/schema_version`
+   - `review_summary`
+   - `dependent_elements`
+   - `confidence/warnings/requires_review`
+14. 已补追加验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `42 passed`
+15. 页面分析确定性规则已抽出为独立模块：
+   - `apps/web-ui-service/app/core/page_analysis_rules.py`
+   - 包含候选元素生成、置信度摘要、推断元素、必需元素规则等
+16. `legacy_workbench.py` 已改为“编排层”调用规则模块，不再在单文件内内联全部规则实现
+17. 确认点与风险治理入口开始正式消费三套模型：
+   - review_state 由模型消费层统一产出（附 model_versions）
+   - risk_report 统一从三模型摘要取值（附 consumed_models）
+18. 已补追加验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `43 passed`
+   - `./.venv/bin/python -m py_compile apps/web-ui-service/app/core/page_analysis_rules.py apps/web-ui-service/app/routers/legacy_workbench.py apps/shared_backend/schemas/contracts.py`
+19. 页面分析规则模块进一步前移到“规则优先”：
+   - `page_analysis_rules.py` 新增页面快照规则组装器 `build_surface_result_from_snapshot`
+   - 把搜索框/查询按钮/主按钮/标题/菜单选择规则从 `legacy_workbench.py` 下沉到规则模块
+20. `legacy_workbench.py` 的 `_extract_page_surface` 进一步收敛为编排层：
+   - 页面快照 -> 规则模块 -> `PageSurfaceV1` 归一化
+   - 避免在路由内散落重复规则分支
+21. 运行记录读取链路开始正式“模型消费优先”：
+   - `/api/workbench/runs` 与 `/api/workbench/runs/{run_id}` 在运行态视图构建时优先消费三模型
+   - 基于三模型重建 `review_state`，并补齐 `model_versions`
+   - `risk_report.metadata` 自动补齐 `consumed_models`（缺失时）
+22. 已补追加验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `43 passed`
+   - `./.venv/bin/python -m py_compile apps/web-ui-service/app/core/page_analysis_rules.py apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+23. 测试点已接入“低置信度元素 -> 置信度继承”链路：
+   - 按 `dependent_elements` 关联 `PageSurfaceV1.element_candidates`
+   - 测试点置信度按依赖元素最小置信度下调（只降不升）
+   - 缺失依赖元素会标记告警并强制进入 review/skip 决策
+24. 执行门禁已形成可落盘模型：
+   - 新增 `ExecutionGateV1`（`allow / manual_review / block`）
+   - 门禁依据包含：执行状态、覆盖状态、低置信度元素、缺失必需元素、待确认测试点、待确认分组、风险 gate
+   - `auto-run` 返回、runtime run、runs 列表/详情均可回显 `execution_gate`
+25. 风险评估入参 `ExecutionPlanV1` 已补 `gate_check`，risk agent 可消费确定性门禁结论
+26. 已补追加验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `44 passed`
+   - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+27. 执行门禁支持配置化读取（环境变量 -> SETTINGS）：
+   - 阻断阈值、失败状态阻断、风险阻断、待确认告警等规则可配置
+   - 新增接口：`GET /api/workbench/execution-gate/config`
+28. 门禁可见化已补齐：
+   - 生成页确认面板新增“执行门禁”卡片（决策 / 阻断原因 / 告警原因）
+   - 自动执行摘要和输出增加门禁统计（blocked/manual_review/allow）
+   - 工作台失败分析区增加执行门禁摘要
+29. 已补追加验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `45 passed`
+   - `node --check apps/web-ui-service/app/static/workbench_generate.js`
+   - `node --check apps/web-ui-service/app/static/workbench.js`
+30. 执行门禁人工决策闭环已落地：
+   - 新增接口：`POST /api/workbench/execution-gate/decisions`
+   - 支持人工 `allow / block / manual_review` 决策与备注
+   - 决策写入独立存储并写入审计历史（含决策人、角色、时间、备注）
+31. 运行记录回显支持“系统决策 + 人工覆盖”：
+   - `execution_gate` 增加 `manual_decision / effective_decision / decision_source`
+   - runs 列表与 run detail 可直接看到人工覆盖后的生效决策
+32. 生成页与工作台已展示人工门禁信息：
+   - 生成页门禁卡片新增“人工放行 / 人工阻断”操作（带备注）
+   - 工作台失败分析区显示生效门禁决策与人工决策人信息
+33. 已补追加验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `47 passed`
+   - `node --check apps/web-ui-service/app/static/workbench_generate.js`
+
+34. Runner 架构与优先级已完成收口，避免后续继续大范围发散
+   - 已新增/修正文档：
+     - `docs/architecture/runners/README.md`
+     - `docs/architecture/runners/current-yaml-v4-contract.md`
+     - `docs/architecture/runners/multi-page-web-runner-plan.md`
+     - `docs/architecture/runners/execution-module-ownership-matrix.md`
+     - `docs/architecture/runners/yaml-schema-v5.md`
+     - `docs/architecture/runners/multi-page-dependency-support.md`
+   - 已明确冻结“当前下一优先项”为：
+     - `Web Runner v4.1 最小多页面增强`
+   - 已明确执行相关模块的归属边界：
+     - Agent 负责规划/建议
+     - Runner / Orchestrator / Shared Core 负责确定性执行
+   - 完成时间：`2026-03-21 14:44:34 CST`
+   - `node --check apps/web-ui-service/app/static/workbench.js`
+34. 执行门禁权限分级与二次审批 / 撤销闭环已补齐：
+   - 新增 `POST /api/workbench/execution-gate/decisions/approve`
+   - 新增 `POST /api/workbench/execution-gate/decisions/revoke`
+   - `save_execution_gate_decision` 开始正式校验 privileged roles
+   - `pending_second_approval / approved / revoked` 三态可回显
+   - 生成页、工作台、历史页开始消费审批状态与撤销状态
+35. 已补追加验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `50 passed`
+   - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - `node --check apps/web-ui-service/app/static/workbench_generate.js`
+   - `node --check apps/web-ui-service/app/static/workbench.js`
+   - `node --check apps/web-ui-service/app/static/workbench_history.js`
+36. `PageAnalysisBundleV1` 正式收口到 shared schema：
+   - 新增 `normalize_page_analysis_bundle_v1`
+   - 通过 `shared_backend.schemas` 对外导出，后端可直接消费
+   - `_consume_model_bundle` 开始返回正式 bundle 视图
+   - bundle 统一承载 `page_surface / page_object / test_points` 与它们的版本和摘要
+37. 已补追加验证：
+   - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+   - `51 passed`
+   - `./.venv/bin/python -m py_compile apps/shared_backend/schemas/contracts.py apps/shared_backend/schemas/__init__.py apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+38. 页面分析 bundle 组装已进一步拆出独立编排模块：
+   - 新增 `apps/web-ui-service/app/core/page_analysis_pipeline.py`
+   - `legacy_workbench.py` 仅保留调用层与兼容封装
+   - `consume_page_analysis_bundle` 作为统一编排入口，输出 bundle 视图与三模型摘要
+   - 页面分析规则、模型规范化、运行时消费边界开始真正分层
+39. Web Runner `v4.1` 最小多页面增强已完成：
+   - `yaml_testcase.schema.json` 已支持 `step.page`
+   - `YamlExecutor` 已支持按 step 切换 page object 上下文
+   - page object 已加入缓存，重复页面不会重复加载
+   - 错误信息已精确到 `step/page/target`
+   - `VariableResolver` 已增强为：
+     - 支持点路径读取
+     - 完整变量占位时保留原生类型
+     - 局部字符串插值保持兼容
+   - 已补兼容资产收口：
+     - `assets/page-objects/web/flash.page-object.yaml`
+     - `assets/test-cases/ai-generated/flash-list-smoke.yaml`
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest runners/web-playwright-python/tests/test_asset_contracts.py runners/web-playwright-python/tests/test_variable_resolver.py runners/web-playwright-python/tests/test_yaml_executor_multi_page.py -q`
+     - `8 passed`
+     - `./.venv/bin/python -m py_compile runners/web-playwright-python/runner/variable_resolver.py runners/web-playwright-python/runner/yaml_executor.py runners/web-playwright-python/tests/test_variable_resolver.py runners/web-playwright-python/tests/test_yaml_executor_multi_page.py`
+   - 完成时间：`2026-03-21 14:58:41 CST`
+40. 页面分析独立编排最小收口已完成：
+   - `page_analysis_pipeline.py` 已统一承接三模型的归一化入口：
+     - `normalize_page_surface_model`
+     - `normalize_page_object_model`
+     - `normalize_test_point_plan_model`
+   - `consume_page_analysis_bundle` 现在直接消费上述归一化结果，不再由 `legacy_workbench.py` 各处分别拼三模型 contract 细节
+   - `legacy_workbench.py` 新增统一 `page analysis context` 消费层，review / risk / run detail 开始正式从同一 bundle context 读取：
+     - `page_surface_summary`
+     - `page_object_summary`
+     - `test_points`
+     - `model_versions`
+   - 这次收口保持了现有 URL-first 路由、三模型契约和确认点 / 风险 / 门禁行为不变，只减少了 router 内重复编排逻辑
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/core/page_analysis_pipeline.py apps/web-ui-service/app/routers/legacy_workbench.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+     - `51 passed`
+   - 完成时间：`2026-03-21 15:16:04 CST`
+41. 测试点依赖深化第一段已完成：
+   - `TestPointPlanV1` 新增并开始稳定保留测试点级 `dependency_review`：
+     - `propagated`
+     - `matched_elements`
+     - `low_confidence_dependencies`
+     - `missing_dependencies`
+     - `base_confidence / inherited_confidence`
+     - `evidence`
+   - `legacy_workbench.py` 中“页面元素 → 测试点”的置信度继承已改成更确定性的证据传播：
+     - 低置信度依赖元素会明确写入测试点证据
+     - 页面分析未识别依赖元素会明确写入测试点证据
+     - `review_reason` 不再只给泛化文案，而是能直接说明具体依赖原因
+   - `review_summary` 已补依赖治理统计：
+     - `dependency_review_count`
+     - `low_confidence_dependency_point_count`
+     - `missing_dependency_point_count`
+     - `dependency_skip_count`
+   - `execution_gate` 已开始正式消费这些确定性依赖指标与证据：
+     - `metrics` 新增 dependency 相关计数
+     - `evidence` 开始输出“哪些测试点受低置信度元素影响 / 哪些 skip 由依赖传播触发”
+   - 这一步没有改动现有三确认点主链，也没有引入新的 AI 决策，只是把依赖传递做得更可解释、更适合回归门禁使用
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile apps/shared_backend/schemas/contracts.py apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+     - `51 passed`
+   - 完成时间：`2026-03-21 15:38:17 CST`
+42. 测试点依赖深化第二段已完成：
+   - `execution_gate` 对依赖传播开始具备正式“阻断边界”：
+     - 新增 `block_missing_dependency_points_threshold`
+     - 新增 `warn_on_low_confidence_dependency_points`
+   - 当前规则明确为：
+     - 页面依赖未识别的测试点达到阈值时，门禁直接 `block`
+     - 仅受低置信度依赖影响的测试点，默认仍维持 `manual_review`
+   - `execution_gate.config_snapshot` 与 `/api/workbench/execution-gate/config` 已同步暴露这两个配置项
+   - 生成页和主工作台开始展示 `execution_gate.evidence`
+     - 用户可以直接看到本次是因“缺失必需元素”还是“未识别依赖元素”或“低置信度依赖元素”进入复核 / 阻断
+   - 这一步继续保持了“高确定性规则优先”的边界，没有把门禁判断交给 AI
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/core/config.py apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+     - `52 passed`
+    - `node --check apps/web-ui-service/app/static/workbench.js`
+    - `node --check apps/web-ui-service/app/static/workbench_generate.js`
+   - 完成时间：`2026-03-21 16:00:58 CST`
+43. 测试点依赖深化第三段已完成：
+   - 生成页的“确认点 2：待确认测试点”开始直接展示依赖传播证据：
+     - 依赖了哪些元素
+     - 为什么被建议 `review / skip`
+     - 低置信度依赖或未识别依赖的具体依据
+   - `POST /api/workbench/reviews` 落盘时，测试点确认记录开始保留：
+     - `dependent_elements`
+     - `dependency_review`
+   - 这样确认动作不再只是“点过了”，而是能追溯：
+     - 这个测试点依赖了什么
+     - 当时为什么进入人工确认
+   - 这一步继续没有扩大战线到新 UI 或新 Agent，只是把同一条防幻觉链的证据保真做完整
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+    - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+    - `52 passed`
+    - `node --check apps/web-ui-service/app/static/workbench_generate.js`
+   - 完成时间：`2026-03-21 16:03:18 CST`
+44. 测试点依赖深化第四段已完成：
+   - 生成页与主工作台的 `execution_gate` 展示已补齐“完整可见性”：
+     - `evidence`
+     - `metrics`
+     - `config_snapshot`
+   - 用户现在可以直接看到：
+     - 当前门禁为什么是 `allow / manual_review / block`
+     - 本次命中了哪些规则
+     - 当前阻断阈值与告警开关是什么
+   - UI 中也明确补充了当前使用边界：
+     - 未识别依赖达到阈值时阻断
+     - 低置信度依赖默认人工复核
+   - 这一步是“解释性增强”，没有改动后端主判断逻辑
+   - 已补追加验证：
+     - `node --check apps/web-ui-service/app/static/workbench.js`
+     - `node --check apps/web-ui-service/app/static/workbench_generate.js`
+   - 完成时间：`2026-03-21 16:06:56 CST`
+45. 测试点依赖深化第五段已完成：
+   - 生成页与主工作台的门禁卡片开始直接给出“下一步动作建议”
+   - 当前动作引导规则已统一为：
+     - `block`：先修复阻断项，再重新执行
+     - `manual_review`：先完成确认点，再决定人工放行或阻断
+     - `allow`：可继续推进后续执行或发布判断
+   - 生成页顶部确认摘要也会根据当前门禁分布给出同样的行动提示，避免用户只看到状态数字却不知道下一步怎么做
+   - 这一步仍然只做使用体验收口，没有改动后端门禁规则
+   - 已补追加验证：
+     - `node --check apps/web-ui-service/app/static/workbench.js`
+     - `node --check apps/web-ui-service/app/static/workbench_generate.js`
+   - 完成时间：`2026-03-21 16:10:58 CST`
+46. 测试点依赖深化第六段已完成：
+   - `execution_gate` 人工决策相关历史事件现在会真正写入门禁命中依据，而不再只有一句“人工决策：allow/block/manual_review”
+   - 已补规则优先的门禁审计快照：
+     - `matched_rules`
+     - `gate_reason_summary`
+     - `evidence`
+     - `metrics`
+     - `config_snapshot`
+   - `review_audit_timeline` 已开始正式纳入 `execution_gate_*` 事件：
+     - `execution_gate_decided`
+     - `execution_gate_approved`
+     - `execution_gate_revoked`
+   - 这样 run 级审计时间线现在可以回放：
+     - 谁做了门禁决策
+     - 决策时命中了哪些规则
+     - 为什么进入 `manual_review / block`
+   - 生成页与主工作台的审计时间线也已补最小可见反馈：
+     - 当时间线事件带 `gate_reason_summary` 时，前端直接展示“门禁依据”
+   - 这一步继续保持“规则命中证据先落盘，再让人工决策覆盖”的边界，没有把门禁理由生成交给 AI
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+     - `52 passed`
+     - `node --check apps/web-ui-service/app/static/workbench.js`
+     - `node --check apps/web-ui-service/app/static/workbench_generate.js`
+   - 完成时间：`2026-03-21 16:19:57 CST`
+47. 测试点依赖深化第七段已完成：
+   - 历史页开始和生成页、主工作台一样，结构化展示门禁审计依据
+   - `workbench_history.js` 现已在历史详情中展开：
+     - `gate_reason_summary`
+     - `matched_rules`
+     - `evidence`
+   - 历史记录中的 `execution_gate_decided` 不再只是单行字符串，用户现在可以直接看到：
+     - 本次门禁为什么被人工放行/阻断/复核
+     - 当时命中了哪些 warning / blocker 规则
+     - 系统证据摘要是什么
+   - 已补回归断言，确认 `/api/workbench/history` 对门禁审计字段保持透传，不会在历史查询时丢失
+   - 这一步仍然只是同一冻结优先级下的“审计展示一致性收口”，没有新增新流程、也没有改动门禁规则本身
+   - 已补追加验证：
+     - `node --check apps/web-ui-service/app/static/workbench_history.js`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+     - `52 passed`
+   - 完成时间：`2026-03-21 16:22:49 CST`
+48. `execution_gate` 收口第 1 步已完成：
+   - 历史页动作筛选已补齐门禁拒绝类事件：
+     - `execution_gate_decision_rejected_auth`
+     - `execution_gate_decision_rejected_permission`
+     - `execution_gate_approve_rejected_auth`
+     - `execution_gate_revoke_rejected_auth`
+   - 已补接口级审计断言，确保以下拒绝事件真正会留下历史记录：
+     - 匿名二次审批被拒绝
+     - 匿名撤销被拒绝
+   - 历史查询 `status=rejected` 现在也会自然包含 review 拒绝和 execution gate 拒绝两类事件，审计口径已统一
+   - 到这里为止，`execution_gate` 这条链的“拒绝类事件可见性与可追溯性”已完成，不再需要继续补更多外围展示
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+     - `54 passed`
+   - 完成时间：`2026-03-21 16:33:24 CST`
+49. `execution_gate` 收口第 2 步已完成：
+   - 当前门禁规则与人工覆盖边界已固化为稳定基线对象，不再需要靠读 router 代码理解门禁策略
+   - `/api/workbench/execution-gate/config` 现在新增：
+     - `policy_baseline.system_decision_rules`
+     - `policy_baseline.manual_override_boundary`
+     - `policy_baseline.non_goals`
+   - 已明确固定的边界包括：
+     - 哪些系统条件会直接 `block`
+     - 哪些 warning 会进入 `manual_review`
+     - `manual_review` 允许任意已登录用户确认
+     - `allow / block` 仅允许 privileged roles
+     - `block` 在启用双人审批时只对非豁免角色触发二次审批
+     - 撤销仅允许原决策人或 privileged roles
+   - 这一步没有修改门禁执行结果，只把既有规则显式化、可回归化，后续不再轻易变更
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+     - `55 passed`
+   - 完成时间：`2026-03-21 16:39:50 CST`
+50. `execution_gate` 收口第 3 步已完成：
+   - 已补“发布前验收场景”回归验证，不再继续扩展 execution gate 功能
+   - 本次新增验收覆盖：
+     - 系统门禁 `allow` 场景
+     - 系统门禁 `manual_review` 场景
+     - 系统门禁 `block` 场景
+     - run detail 对门禁审计时间线的完整回放：
+       - `execution_gate_decided`
+       - `execution_gate_approved`
+       - `execution_gate_revoked`
+   - 到这里为止，`execution_gate` 已具备：
+     - 确定性规则判定
+     - 人工 override
+     - 双人审批
+     - 撤销
+     - 审计落盘
+     - 三处回显
+     - 验收回归用例
+   - 结论：
+     - `execution_gate` 进入“阶段完成”状态
+     - 后续默认只修 bug，不再继续新增 execution gate 功能或外围展示优化
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+     - `57 passed`
+   - 完成时间：`2026-03-21 16:43:06 CST`
+51. 主优先项已切换到 `data-generation-agent`，且第一段最小可用已完成：
+   - 新的冻结主线改为：
+     - `data-generation-agent 最小可用（确定性优先）`
+   - `agents/data-generation-agent` 已从空壳补成可运行的最小确定性入口：
+     - `src/schema.py`：输入输出契约
+     - `src/agent.py`：确定性字段生成、关系引用、校验、清理指令
+     - `src/index.py`：CLI 入口
+     - `README.md`：现状边界与运行方式
+   - 当前最小版本已具备：
+     - 基础字段生成
+     - 边界值生成（整数/浮点/枚举/邮箱/字符串）
+     - 关系引用
+     - 唯一性校验
+     - cleanup instructions
+   - 当前仍明确不做：
+     - LLM-first 数据生成
+     - 企业级 registry / cleanup manager 全量能力
+     - 生产数据复制与复杂脱敏编排
+   - 这一步的目标不是“做完企业级 Data Generation”，而是先把空壳消掉，建立一个真实可运行、可测试、可扩展的确定性基础
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py agents/data-generation-agent/src/index.py agents/data-generation-agent/src/schema.py`
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `2 passed`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --input agents/data-generation-agent/examples/input.json`
+   - 完成时间：`2026-03-21 16:48:29 CST`
+52. `data-generation-agent` 第 2 小段已完成：
+   - 已补内置模板库，不再要求每个需求都手工重复声明全部字段
+   - 当前新增模板能力：
+     - `template_key`
+     - 内置模板：
+       - `user_basic`
+       - `product_basic`
+       - `order_basic`
+   - 模板行为已固定为确定性规则：
+     - 指定 `template_key` 时显式应用模板
+     - 未指定且 `fields` 为空时，按 `data_type` 选默认模板
+     - 自定义 `fields` 会覆盖同名模板字段，并保留额外字段
+   - 这一步让 `data-generation-agent` 从“能生成字段”提升到了“能复用模板”，但仍然没有引入 LLM 自由生成
+   - 当前主线完成度可更新为：
+     - `data-generation-agent` 最小可用约 `45%`
+   - 剩余主线仍只收这几项：
+     - validator 丰富
+     - cleanup / registry 落盘
+     - 后续才考虑 AI 建议层
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py agents/data-generation-agent/src/schema.py agents/data-generation-agent/src/templates/builtins.py`
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `4 passed`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --input agents/data-generation-agent/examples/input.json`
+   - 完成时间：`2026-03-21 16:56:04 CST`
+53. `data-generation-agent` 第 3 小段已完成：
+   - validator 已从“基础长度/范围校验”增强为更接近真实测试数据守门层
+   - 当前新增校验项：
+     - 邮箱格式校验
+     - 枚举值合法性校验
+     - 正则 `pattern` 校验
+     - 关系源存在性校验
+     - 空字段集告警升级为错误
+   - 当前新增告警项：
+     - 非法正则 pattern
+     - enum 未配置 options
+   - 这一步仍然保持确定性优先，没有把校验交给 AI，也没有提前引入 registry
+   - 当前主线完成度可更新为：
+     - `data-generation-agent` 最小可用约 `60%`
+   - 当前剩余主线只建议继续收：
+     - cleanup / registry 落盘
+     - 后续才考虑 AI 建议层
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py`
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `7 passed`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --input agents/data-generation-agent/examples/input.json`
+   - 完成时间：`2026-03-21 16:58:07 CST`
+54. `data-generation-agent` 第 4 小段已完成：
+   - `cleanup / registry` 已补最小落盘闭环
+   - 新增能力：
+     - `registry_entry` 生成后自动写入本地 registry JSON
+     - `cleanup_status` 可从 `pending` 标记为 `cleaned`
+     - CLI 支持：
+       - `--registry-path`
+       - `--mark-cleaned <request_id>`
+   - registry 现在至少能稳定记录：
+     - `request_id`
+     - `project`
+     - `environment`
+     - `status`
+     - `cleanup_status`
+     - `total_records`
+     - `requirement_ids`
+   - cleanup 现在至少能按 request_id 做最小标记收口，不再只是“输出 cleanup 指令但没有状态”
+   - 这一步仍然保持确定性优先，未引入复杂生命周期调度或 AI 参与
+   - 当前主线完成度可更新为：
+     - `data-generation-agent` 最小可用约 `80%`
+   - 剩余主线只建议继续收：
+     - registry / cleanup 规则再丰富一点
+     - 后续再考虑 AI 建议层
+   - 已补追加验证：
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py agents/data-generation-agent/src/index.py agents/data-generation-agent/src/registry.py agents/data-generation-agent/src/cleanup_manager.py agents/data-generation-agent/src/schema.py`
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `9 passed`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --input agents/data-generation-agent/examples/input.json --registry-path /tmp/data-generation-registry.json`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --registry-path /tmp/data-generation-registry.json --mark-cleaned req-product-001`
+   - 完成时间：`2026-03-21 17:13:36 CST`
+55. `data-generation-agent` 最小可用已正式收口完成：
+   - 当前代码已不再是空壳，也不应再在文档里按“未实现”理解
+   - 可用能力包括：
+     - 输入输出 schema
+     - deterministic 字段生成
+     - template library 复用
+     - registry 落盘
+     - cleanup 标记
+     - CLI 回放与 `--mark-cleaned`
+   - 回归验证：
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `9 passed`
+   - 完成时间：`2026-03-21 17:21:50 CST`
+
+---
+
+
+---
+
+## 2. 最新进展补充归档
+
+   - 上一冻结项：
+     - `failure source classification（确定性优先）`
+     - 已完成 `100%`
+   - 新的冻结主线改为：
+     - `测试点中间层与追溯链路（确定性优先）`
+   - 切换原因：
+     - 失败来源分类已完成分类、证据、人工复核、聚合回显和校准样本闭环
+     - 当前更影响企业级回归落地的是“测试点资产层缺失”和“需求到用例跳跃过大”
+     - 三模型、review/gate/audit、页面分析规则优先底座已具备，适合把测试点正式提升为中间资产层
+   - 新冻结项当前只收三件事：
+     - 独立测试点资产层
+     - 测试点与元素 / Page Object / 用例 / 运行记录追溯链
+     - 测试点正式进入覆盖统计与执行门禁输入
+   - 新冻结项当前明确不做：
+     - 执行调度统一任务模型
+     - 企业级数据治理增强
+     - 新一轮外围 UI 扩张
+   - 切换时间：`2026-03-21 19:19:42 CST`
+
+62. `测试点中间层与追溯链路` 第 1 小段已完成：
+   - 测试点现在不再只是 `run` 返回里的附属字段，已补成最小可用的“独立资产层”
+   - 当前落盘方式已收口为两层：
+     - `plans/<case_id>.json`：正式 `TestPointPlanV1`
+     - `<case_id>.json`：测试点资产快照，包含 plan 摘要、references、coverage、review_summary、confidence
+   - `save_test_point_plan` 现在会在写 plan 的同时同步生成资产快照，不再依赖额外离线整理
+   - 新增后端查询入口：
+     - `/api/workbench/test-point-assets`
+     - `/api/workbench/test-point-assets/{asset_id}`
+   - 当前资产视图已开始正式聚合：
+     - `asset_id / page / priority / source_type`
+     - `point_count / point_types / point_keys`
+     - `coverage / review_summary / dependent_elements`
+     - `references`
+     - `latest_run`
+   - `latest_run` 已开始提供最小追溯闭环：
+     - `run_id`
+     - `status`
+     - `review_state`
+     - `coverage`
+     - `execution_gate`
+     - `risk_report`
+   - 这一步的价值是：
+     - 测试点首次拥有独立资产视角
+     - 可以不依赖单次 run，也能查询某个 case 的测试点资产
+     - 为下一步“测试点 -> 用例 / run / gate 正式追溯链”打底
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "save_test_point_plan_updates_asset_snapshot or list_test_point_assets_returns_latest_run_snapshot or get_test_point_asset_returns_detail_with_plan_and_references"`
+     - `3 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `测试点中间层与追溯链路` 约 `25%`
+   - 剩余主线建议继续只收：
+     - 测试点与 case / page object / run / review / gate 的正式追溯关系补齐
+     - 测试点进入覆盖统计与执行门禁的显式资产化消费
+   - 完成时间：`2026-03-21 19:27:42 CST`
+
+63. `测试点中间层与追溯链路` 第 2 小段已完成：
+   - 测试点资产现在不只是“能单独查”，而是已经正式进入 `run` 主视图
+   - `runs` 列表与 `run detail` 现已开始挂载：
+     - `test_point_asset`
+   - 当前挂载的资产摘要字段包括：
+     - `asset_id`
+     - `title`
+     - `page`
+     - `priority`
+     - `source_type`
+     - `point_count`
+     - `confidence`
+     - `requires_review`
+     - `plan_path`
+     - `review_summary`
+     - `coverage`
+   - 这一步的价值是：
+     - 用户从运行列表和详情页就能直接知道当前运行对应哪份测试点资产
+     - 测试点不再只是生成时临时返回的对象，而是成为主运行视图里的正式关联资产
+     - 为下一步把测试点正式纳入 gate / coverage / review 的资产化统计继续打底
+   - 当前已具备的最小追溯链：
+     - `test_point_asset -> latest_run`
+     - `run -> test_point_asset`
+     - `test_point_asset -> references(case_yaml / page_object / plan)`
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "runs_endpoint_attaches_test_point_asset_summary or get_run_attaches_test_point_asset_summary or save_test_point_plan_updates_asset_snapshot or list_test_point_assets_returns_latest_run_snapshot or get_test_point_asset_returns_detail_with_plan_and_references"`
+     - `5 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `测试点中间层与追溯链路` 约 `45%`
+   - 剩余主线建议继续只收：
+     - 测试点与 review / execution_gate / 覆盖统计的显式追溯关系继续补齐
+     - 测试点成为门禁和回归选择的正式输入，而不只是运行附属信息
+   - 完成时间：`2026-03-21 19:36:20 CST`
+
+64. `测试点中间层与追溯链路` 第 3 小段已完成：
+   - 测试点资产现在不只保留 `latest_run` 原始快照，而是开始稳定产出可直接消费的“追溯摘要”
+   - 当前三处读取口径已统一挂载：
+     - `/api/workbench/test-point-assets`
+     - `/api/workbench/test-point-assets/{asset_id}`
+     - `run list / run detail` 里的 `test_point_asset`
+   - 新增并稳定透出的资产追溯摘要字段：
+     - `traceability_summary.coverage`
+     - `traceability_summary.review`
+     - `traceability_summary.gate`
+     - `traceability_summary.risk`
+   - 当前这层摘要已明确回答四类问题：
+     - 资产自身是否要求复核、资产 coverage 状态是什么
+     - 最近一次运行的 coverage 是 `full / partial / unknown`
+     - 最近一次 review 到了哪一步，`test_point` 是否仍待确认，最后由谁确认
+     - 最近一次门禁的 `decision / effective_decision / gate_reason_summary` 是什么
+   - `latest_run` 也已开始补齐更稳定的派生字段：
+     - `review_audit_summary`
+     - `execution_gate_summary`
+   - 这一步的价值是：
+     - 测试点资产开始正式消费现有 `review_state / execution_gate / coverage / risk_report`
+     - 后续做回归选择和门禁显式消费时，不需要再临时拼接第二套追溯逻辑
+     - run 视图、资产视图、门禁治理开始共享同一份确定性摘要口径
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "save_test_point_plan_updates_asset_snapshot or list_test_point_assets_returns_latest_run_snapshot or get_test_point_asset_returns_detail_with_plan_and_references or runs_endpoint_attaches_test_point_asset_summary or get_run_attaches_test_point_asset_summary"`
+     - `5 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `测试点中间层与追溯链路` 约 `62%`
+   - 剩余主线建议继续只收：
+     - 让测试点成为 `execution_gate` 的显式资产化输入，而不只是 run 上的派生摘要
+     - 让测试点进入回归选择 / 覆盖统计的正式筛选条件
+   - 完成时间：`2026-03-21 19:59:13 CST`
+
+65. `测试点中间层与追溯链路` 第 4 小段已完成：
+   - 测试点资产列表现在不只是“能看”，而是已经具备最小可用的“回归选择入口”
+   - `/api/workbench/test-point-assets` 新增确定性筛选条件：
+     - `coverage_status`
+     - `review_status`
+     - `gate_decision`
+     - `selection_state`
+   - 当前筛选口径统一基于资产追溯摘要，而不是额外拼接第二套规则：
+     - `traceability_summary.coverage`
+     - `traceability_summary.review`
+     - `traceability_summary.gate`
+     - `traceability_summary.risk`
+   - 新增稳定产出的选择摘要字段：
+     - `selection_summary.selection_state`
+     - `selection_summary.ready_for_regression`
+     - `selection_summary.effective_gate_decision`
+     - `selection_summary.reasons`
+   - 当前选择状态已收口为三类：
+     - `ready`
+     - `needs_review`
+     - `blocked`
+   - 列表返回也已开始提供汇总视图：
+     - `selection_summary.total_assets`
+     - `selection_summary.ready_count`
+     - `selection_summary.needs_review_count`
+     - `selection_summary.blocked_count`
+     - `selection_summary.filter_snapshot`
+   - 这一步的价值是：
+     - 测试点首次可以按 gate / review / coverage 状态做回归筛选
+     - “哪些资产可以直接进入回归、哪些需要人工复核、哪些应被阻断”已有统一确定性口径
+     - 为下一步把这套结果正式接进 `execution_gate` 决策和覆盖汇总打底
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "save_test_point_plan_updates_asset_snapshot or list_test_point_assets_returns_latest_run_snapshot or list_test_point_assets_supports_selection_filters or get_test_point_asset_returns_detail_with_plan_and_references or runs_endpoint_attaches_test_point_asset_summary or get_run_attaches_test_point_asset_summary"`
+     - `6 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `测试点中间层与追溯链路` 约 `72%`
+   - 剩余主线建议继续只收：
+     - 让 `execution_gate` 在缺少即时 `test_points` 时也能正式消费测试点资产选择摘要
+     - 让覆盖统计开始按测试点资产维度做聚合，而不只停留在单 run 视图
+   - 完成时间：`2026-03-21 20:04:50 CST`
+
+66. `测试点中间层与追溯链路` 第 5 小段已完成：
+   - `execution_gate` 现在不再强依赖“run 当次带完整 test_points 模型”
+   - 当即时 `test_points` 缺失时，门禁会正式消费同 case 的测试点资产上下文：
+     - `review_summary`
+     - `traceability_summary`
+     - `selection_summary`
+   - 当前门禁新增的资产化消费结果包括：
+     - `metrics.asset_selection_state`
+     - `metrics.asset_ready_for_regression`
+     - `test_point_asset_context.asset_id`
+     - `test_point_asset_context.selection_state`
+     - `test_point_asset_context.selection_reasons`
+   - 当前系统门禁的兜底行为已收口为：
+     - 资产 `selection_state=blocked` -> 门禁阻断
+     - 资产 `selection_state=needs_review` -> 门禁进入 `manual_review`
+     - 资产 `selection_state=ready` -> 门禁记录“可直接进入回归”的确定性证据
+   - `run detail` 在缺少即时 `test_points` 的情况下，也已能基于测试点资产稳定重建门禁口径，不再只能依赖旧的 runtime gate 快照
+   - 这一步的价值是：
+     - 测试点资产开始正式进入 `execution_gate` 决策链，而不只是列表筛选和附属摘要
+     - 门禁在历史 run / 精简 run / 非当次生成链路下也有了确定性兜底
+     - 当前冻结主线已从“测试点可查、可筛选”推进到“测试点开始参与系统决策”
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "save_test_point_plan_updates_asset_snapshot or list_test_point_assets_returns_latest_run_snapshot or list_test_point_assets_supports_selection_filters or get_test_point_asset_returns_detail_with_plan_and_references or runs_endpoint_attaches_test_point_asset_summary or get_run_attaches_test_point_asset_summary or execution_gate_consumes_test_point_asset_selection_summary_when_test_points_missing or get_run_builds_execution_gate_from_test_point_asset_when_test_points_missing"`
+     - `8 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `测试点中间层与追溯链路` 约 `84%`
+   - 剩余主线建议继续只收最后一段：
+     - 让覆盖统计开始按测试点资产维度做聚合，并输出 ready / needs_review / blocked 的汇总口径
+   - 完成时间：`2026-03-21 20:40:29 CST`
+
+67. `测试点中间层与追溯链路` 第 6 小段已完成：
+   - 测试点资产维度的覆盖统计现在已正式落地，不再只停留在单 asset 明细或单 run 视图
+   - `/api/workbench/test-point-assets` 列表响应现已补充：
+     - `coverage_summary`
+   - 新增只读聚合入口：
+     - `/api/workbench/test-point-assets/coverage-summary`
+   - 当前聚合口径已稳定覆盖：
+     - `total_assets`
+     - `total_points`
+     - `regression_ready_asset_count`
+     - `regression_ready_point_count`
+     - `coverage_status_counts`
+     - `latest_run_coverage_status_counts`
+     - `selection_state_counts`
+     - `page_counts`
+     - `source_type_counts`
+     - `filter_snapshot`
+   - 这意味着当前冻结主线已经完整收口为：
+     - 测试点可独立落盘为资产
+     - 测试点可追溯到 run / review / gate / risk
+     - 测试点可作为回归筛选输入
+     - 测试点可作为 execution_gate 的资产化兜底输入
+     - 测试点覆盖统计可按资产维度聚合
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "save_test_point_plan_updates_asset_snapshot or list_test_point_assets_returns_latest_run_snapshot or list_test_point_assets_supports_selection_filters or test_point_asset_coverage_summary_endpoint_aggregates_asset_dimension or get_test_point_asset_returns_detail_with_plan_and_references or runs_endpoint_attaches_test_point_asset_summary or get_run_attaches_test_point_asset_summary or execution_gate_consumes_test_point_asset_selection_summary_when_test_points_missing or get_run_builds_execution_gate_from_test_point_asset_when_test_points_missing"`
+     - `9 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `测试点中间层与追溯链路` 已完成 `100%`
+   - 当前主线到此收口，不再继续无边界优化：
+     - 后续如继续，应切换新的单一优先项，而不是再在这条线上叠外围功能
+   - 完成时间：`2026-03-21 20:46:04 CST`
+
+68. 主优化项已切换：
+   - 上一冻结项：
+     - `测试点中间层与追溯链路（确定性优先）`
+     - 已完成 `100%`
+   - 新的冻结主线改为：
+     - `执行调度统一任务模型 + 证据治理（确定性优先）`
+   - 切换原因：
+     - 测试点资产层、回归筛选、execution_gate 资产兜底和 coverage 聚合已经收口
+     - 当前更值得补的是平台层统一读取口径，否则后续调度、重试、证据治理会继续各用各的视图
+     - 现有 `execution_record + evidence_manifest` 底座已具备，适合先做统一任务视图而不是直接做复杂队列
+   - 新冻结项当前只收三件事：
+     - 统一任务视图
+     - 证据事实源治理
+     - 为后续调度 / 门禁 / 报表提供统一 task 读取口径
+   - 新冻结项当前明确不做：
+     - 分布式任务队列
+     - 多 Runner 混编主链
+     - LLM-first 调度裁决
+     - 大范围 orchestrator 重构
+   - 切换时间：`2026-03-21 21:02:47 CST`
+
+69. `执行调度统一任务模型 + 证据治理` 第 1 小段已完成：
+   - 当前平台已经补出最小可用的“统一任务视图”，不再只有 `run` 视图
+   - 新增只读任务读取入口：
+     - `/api/workbench/tasks`
+     - `/api/workbench/tasks/{task_id}`
+   - 当前任务视图已统一消费：
+     - `execution_record`
+     - manifest / compat_scan / runtime_realtime 等来源信息
+     - runtime active 任务补充
+   - 统一任务字段当前已收口为：
+     - `task_id / run_id / case_id / project / page`
+     - `runner / status / queue_status / queue`
+     - `resource_profile / expected_total_seconds`
+     - `source / mode`
+     - `started_at / finished_at / created_at`
+     - `execution_record_path / manifest_path / has_manifest`
+     - `step_summary / evidence_index / scheduling_hints`
+   - 列表响应也已开始提供统一汇总：
+     - `summary.total_tasks`
+     - `summary.status_counts`
+     - `summary.queue_status_counts`
+     - `summary.runner_counts`
+     - `summary.source_counts`
+     - `summary.execution_meta`
+   - 这一步的价值是：
+     - 后续调度、重试、门禁、报表开始有共同的 task 事实源
+     - 不需要再在 `run`、manifest、runtime active 补充之间重复拼接不同读取口径
+     - 统一任务模型先以只读视图落地，避免过早引入复杂队列实现
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail"`
+     - `2 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `18%`
+   - 剩余主线建议继续只收：
+     - 让任务视图开始稳定暴露 evidence / manifest 健康度摘要
+     - 再决定是否需要补 task 级重试/依赖占位字段，而不是直接进入队列实现
+   - 完成时间：`2026-03-21 21:02:47 CST`
+
+70. `执行调度统一任务模型 + 证据治理` 第 2 小段已完成：
+   - 统一任务视图现在已开始稳定暴露 task 级证据健康摘要，不再只返回原始 `evidence_index`
+   - 当前每个 task 新增字段：
+     - `evidence_health.status`
+     - `evidence_health.reason`
+     - `evidence_health.total_files`
+     - `evidence_health.runner_exit_code`
+     - `evidence_health.execution_requested`
+     - `evidence_health.has_manifest`
+   - 当前 task 级证据健康口径已收口为：
+     - `healthy`：已绑定 `evidence_manifest`
+     - `degraded`：通过 `compat_scan` 回退读取
+     - `warning`：当前仍依赖 `runtime_realtime / runtime_fallback`
+     - `unknown`：证据来源无法明确判断
+   - 任务列表 summary 也已开始聚合：
+     - `summary.evidence_health_counts`
+   - 这一步的价值是：
+     - 证据治理开始进入统一 task 视图，而不是只停留在 report overview / execution_meta
+     - 后续 strict/compat 策略、证据回填和 runner 治理可以直接从 task 维度观察健康状态
+     - 为下一步补 task 级 manifest 严格度 / compat fallback 摘要打底
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail"`
+     - `2 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `30%`
+   - 剩余主线建议继续只收：
+     - 让任务 summary 继续暴露 manifest-first / compat fallback 的 task 维度统计
+     - 再考虑是否补 task 级 retry / dependency 占位字段
+   - 完成时间：`2026-03-21 21:46:39 CST`
+
+71. `执行调度统一任务模型 + 证据治理` 第 3 小段已完成：
+   - 统一任务 summary 现在已开始稳定暴露 `manifest-first / compat fallback / runtime supplement` 的 task 维度统计
+   - 当前新增 summary 字段：
+     - `manifest_first_task_count`
+     - `compat_fallback_task_count`
+     - `runtime_supplement_task_count`
+     - `has_manifest_task_count`
+     - `no_manifest_task_count`
+     - `manifest_first_ratio_visible`
+     - `compat_fallback_ratio_visible`
+     - `runtime_supplement_ratio_visible`
+   - 这一步的价值是：
+     - 证据治理不再只依赖全局 `execution_meta`，而是开始有 task 可见范围内的真实比例口径
+     - 当前过滤后的任务集也能直接看出“manifest-first 占比、compat fallback 占比、runtime supplement 占比”
+     - 后续如果补 strict/compat 门禁、证据回填优先级，就可以直接从 task summary 出发，而不必再自己统计
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail or list_execution_tasks_summary_surfaces_manifest_and_compat_stats"`
+     - `3 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `42%`
+   - 剩余主线建议继续只收：
+     - 让任务视图补 task 级 retry / dependency 占位字段
+     - 或补 evidence strict/compat 异常任务筛选入口
+   - 完成时间：`2026-03-21 21:53:12 CST`
+
+72. `执行调度统一任务模型 + 证据治理` 第 4 小段已完成：
+   - 统一任务视图现在已补出 evidence strict/compat 异常任务筛选入口，不再只能靠人工阅读 `source` 和 `execution_meta`
+   - 当前 task 新增字段：
+     - `manifest_action`
+   - 当前 `manifest_action` 已收口为：
+     - `ok`
+     - `backfill_manifest`
+     - `await_runtime_flush`
+     - `inspect_source`
+   - `/api/workbench/tasks` 现已支持新增过滤条件：
+     - `evidence_health_status`
+     - `manifest_action`
+   - 列表 summary 也已开始聚合：
+     - `summary.manifest_action_counts`
+   - 这一步的价值是：
+     - “哪些任务需要补 manifest、哪些只是 runtime 临时态、哪些已经健康”现在可以直接筛出来
+     - 证据治理开始具备面向任务的异常任务入口，而不是只停留在统计和人工判断
+     - 后续 strict/compat 治理、回填脚本和 runner 改造可以直接以这些任务集合为目标
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail or list_execution_tasks_summary_surfaces_manifest_and_compat_stats or list_execution_tasks_supports_evidence_health_and_manifest_action_filters"`
+     - `4 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `54%`
+   - 剩余主线建议继续只收：
+     - 让任务视图补 task 级 retry / dependency 占位字段
+     - 或补更细的 evidence strict/compat 风险提示摘要
+   - 完成时间：`2026-03-21 21:56:00 CST`
+
+73. `执行调度统一任务模型 + 证据治理` 第 5 小段已完成：
+   - 统一任务视图现在已补出 task 级 `retry / dependency` 只读字段，但仍然保持“读模型优先”，没有提前进入真实队列或调度执行
+   - 当前每个 task 新增字段：
+     - `retry.enabled`
+     - `retry.max_retries`
+     - `retry.backoff_seconds`
+     - `dependency.dependencies`
+     - `dependency.dependency_count`
+     - `dependency.has_dependencies`
+   - 当前字段读取优先级已收口为：
+     - `source.retry_policy / source.dependencies`
+     - `execution_record.metadata.retry_policy / execution_record.metadata.dependencies`
+     - `execution_record.metadata.execution_plan.retry_policy / execution_record.metadata.execution_plan.dependencies`
+     - 若都不存在，则稳定回落到：
+       - `retry = disabled + 0 + 0`
+       - `dependency = []`
+   - 这一步的价值是：
+     - 后续真正实现 `DependencyResolver / retry scheduler` 前，任务层已经先有统一读取契约
+     - 前端、门禁、报表不需要再各自猜测“这个任务有没有依赖 / 是否允许重试”
+     - 继续坚持确定性优先，不把尚未真实存在的队列能力伪装成已实现
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail or list_execution_tasks_summary_surfaces_manifest_and_compat_stats or list_execution_tasks_supports_evidence_health_and_manifest_action_filters"`
+     - `4 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `64%`
+   - 剩余主线建议继续只收：
+     - 为统一任务视图补 task 级 evidence freshness / stale 风险摘要
+     - 或补“需要 manifest 回填”的任务批量只读清单，而不是直接进入分布式调度实现
+   - 完成时间：`2026-03-21 22:00:41 CST`
+
+74. `执行调度统一任务模型 + 证据治理` 第 6 小段已完成：
+   - `retry / dependency` 这两组字段现在不只是“能看见”，还已经进入统一任务列表的筛选和 summary 聚合
+   - `/api/workbench/tasks` 现已支持新增过滤条件：
+     - `retry_enabled`
+     - `has_dependencies`
+   - 列表 summary 现已新增：
+     - `retry_enabled_task_count`
+     - `dependency_task_count`
+     - `retry_enabled_ratio_visible`
+     - `dependency_ratio_visible`
+   - 当前布尔筛选口径已收口为：
+     - `true / false`
+     - `1 / 0`
+     - `yes / no`
+     - 空值表示不过滤
+   - 这一步的价值是：
+     - 后续如果补任务调度看板、依赖检查面板或 retry 治理报表，已经有稳定筛选口径可直接复用
+     - 当前仍然坚持“只读治理先行”，不会把筛选字段误导成真实调度器已完成
+     - 统一任务模型开始具备更接近企业排障和治理的可观察性
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail or list_execution_tasks_summary_surfaces_manifest_and_compat_stats or list_execution_tasks_supports_evidence_health_and_manifest_action_filters"`
+     - `4 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `72%`
+   - 剩余主线建议继续只收：
+     - 补 task 级 evidence freshness / stale 风险摘要
+     - 或补 manifest 回填候选任务的只读聚合摘要
+   - 完成时间：`2026-03-21 22:03:28 CST`
+
+75. `执行调度统一任务模型 + 证据治理` 第 7 小段已完成：
+   - 统一任务视图现在已补出 task 级 `evidence_freshness` 摘要，开始用确定性时间窗判断证据是新鲜、老化、陈旧还是实时写入态
+   - 当前每个 task 新增字段：
+     - `evidence_freshness.status`
+     - `evidence_freshness.reason`
+     - `evidence_freshness.age_seconds`
+     - `evidence_freshness.reference_time`
+     - `evidence_freshness.stale`
+     - `evidence_freshness.source_window_hours`
+   - 当前规则边界已收口为：
+     - `runtime_realtime + queued/running`：
+       - `live`
+     - `runtime_fallback`：
+       - 直接标记 `stale`
+     - 其余来源：
+       - `manifest` 按 `24h` 新鲜窗口
+       - `compat_scan` 按 `12h` 新鲜窗口
+       - 其他来源按 `6h` 新鲜窗口
+       - `<= 1x window = fresh`
+       - `<= 3x window = aging`
+       - `> 3x window = stale`
+   - 列表 summary 也已开始聚合：
+     - `summary.evidence_freshness_counts`
+   - 这一步的价值是：
+     - 当前任务视图已经能回答“证据是否新鲜、是否只是运行中临时态、是否已经陈旧需要回填/重跑”
+     - 后续 strict/compat 治理、artifact 生命周期管理和补录优先级有了稳定时间口径
+     - 仍然坚持只读治理，不把 freshness 直接升级成自动调度决策
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail or list_execution_tasks_summary_surfaces_manifest_and_compat_stats or list_execution_tasks_supports_evidence_health_and_manifest_action_filters"`
+     - `4 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `80%`
+   - 剩余主线建议继续只收：
+     - 为 `evidence_freshness` 增加只读筛选入口
+     - 或补 manifest 回填候选任务的只读聚合摘要
+   - 完成时间：`2026-03-21 22:07:22 CST`
+
+76. `执行调度统一任务模型 + 证据治理` 第 8 小段已完成：
+   - `evidence_freshness` 现在不只是可见摘要，也已经进入统一任务列表的只读筛选入口
+   - `/api/workbench/tasks` 现已支持新增过滤条件：
+     - `evidence_freshness_status`
+   - 当前 freshness 筛选口径已收口为：
+     - `live`
+     - `fresh`
+     - `aging`
+     - `stale`
+     - `unknown`
+   - 当前列表返回也会稳定记录到：
+     - `summary.filter_snapshot.evidence_freshness_status`
+   - 这一步的价值是：
+     - 当前可以直接筛出“实时任务”“陈旧任务”“仍然新鲜的任务”，不必再靠人工阅读时间字段
+     - 后续如果补 artifact 回填、重跑建议或生命周期治理，可以直接以 freshness 状态为入口
+     - 仍然保持只读治理边界，没有把 freshness 升级成自动调度裁决
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail or list_execution_tasks_summary_surfaces_manifest_and_compat_stats or list_execution_tasks_supports_evidence_health_and_manifest_action_filters"`
+     - `4 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `84%`
+   - 剩余主线建议继续只收：
+     - 补 manifest 回填候选任务的只读聚合摘要
+     - 或补 evidence freshness / health 组合风险的只读 summary 指标
+   - 完成时间：`2026-03-21 22:10:24 CST`
+
+77. `执行调度统一任务模型 + 证据治理` 第 9 小段已完成：
+   - 统一任务 summary 现在已补出 `manifest` 回填候选任务的只读聚合摘要，不再只看到 `manifest_action_counts` 这一层
+   - 当前新增 summary 字段：
+     - `manifest_backfill_candidate_count`
+     - `manifest_backfill_freshness_counts`
+     - `manifest_backfill_priority`
+   - 当前聚合口径已收口为：
+     - `manifest_action == backfill_manifest` 视为回填候选任务
+     - 候选任务再按 `evidence_freshness.status` 聚合：
+       - `fresh / aging / stale / live / unknown`
+     - 当前优先级规则：
+       - 只要存在 `stale` 候选，则 `urgent`
+       - 否则只要存在 `aging` 候选，则 `normal`
+       - 否则只要还有候选，则 `low`
+       - 否则 `none`
+   - 这一步的价值是：
+     - 当前可以直接看出“需要补 manifest 的候选任务有多少、是否已经老化、优先级是否紧急”
+     - 后续如果补 manifest 回填脚本或治理面板，可以直接消费这组聚合字段
+     - 仍然保持只读治理，不会把聚合优先级误当成自动执行决策
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail or list_execution_tasks_summary_surfaces_manifest_and_compat_stats or list_execution_tasks_supports_evidence_health_and_manifest_action_filters"`
+     - `4 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `88%`
+   - 剩余主线建议继续只收：
+     - 补 evidence freshness / health / manifest_action 的组合风险 summary
+     - 或补“最值得优先治理的任务样本”只读 TopN 摘要
+   - 完成时间：`2026-03-21 22:13:18 CST`
+
+78. `执行调度统一任务模型 + 证据治理` 第 10 小段已完成：
+   - 统一任务 summary 现在已补出 `evidence_health + evidence_freshness + manifest_action` 的组合治理风险统计，开始能直接看出当前任务集的治理压力分布
+   - 当前新增 summary 字段：
+     - `governance_risk_counts`
+     - `governance_risk_priority`
+   - 当前组合风险判定规则已收口为确定性评分：
+     - `evidence_health.status`
+       - `healthy=0`
+       - `warning=2`
+       - `degraded=3`
+       - `unknown=4`
+     - `evidence_freshness.status`
+       - `fresh=0`
+       - `live=1`
+       - `aging=2`
+       - `stale=3`
+       - `unknown=2`
+     - `manifest_action`
+       - `ok=0`
+       - `await_runtime_flush=2`
+       - `backfill_manifest=3`
+       - `inspect_source=4`
+     - 总分映射：
+       - `>=6 => critical`
+       - `>=4 => high`
+       - `>=2 => medium`
+       - 其余 `low`
+   - 这一步的价值是：
+     - 当前可以直接回答“这批任务整体治理风险高不高，是否已经进入 critical 区间”
+     - 后续如果补治理看板、回填优先级面板或运营报表，可以直接消费这组组合风险统计
+     - 仍然坚持只读治理边界，没有把风险等级直接变成调度或门禁裁决
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail or list_execution_tasks_summary_surfaces_manifest_and_compat_stats or list_execution_tasks_supports_evidence_health_and_manifest_action_filters"`
+     - `4 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 约 `92%`
+   - 剩余主线建议继续只收：
+     - 补“最值得优先治理的任务样本”只读 TopN 摘要
+     - 完成后即可收口当前冻结主线，不再继续无边界扩张
+   - 完成时间：`2026-03-21 22:16:58 CST`
+
+79. `执行调度统一任务模型 + 证据治理` 第 11 小段已完成：
+   - 统一任务 summary 现在已补出“最值得优先治理的任务样本”只读 `TopN` 摘要，当前不再只有聚合计数，也能直接看到应该先处理哪几个 task
+   - 当前新增 summary 字段：
+     - `governance_risk_top_items`
+   - 当前 `TopN` 样本输出已收口为：
+     - `task_id`
+     - `run_id`
+     - `case_id`
+     - `page`
+     - `source`
+     - `queue_status`
+     - `manifest_action`
+     - `evidence_health_status`
+     - `evidence_freshness_status`
+     - `governance_risk_level`
+     - `governance_risk_score`
+     - `governance_risk_reason`
+   - 当前排序规则已收口为：
+     - 先按 `governance_risk_score` 倒序
+     - 分数相同再按 `task_id / run_id` 稳定排序
+     - 当前最多返回前 `5` 条
+   - 这一步的价值是：
+     - 当前冻结主线已经从“统一任务事实源”走到“统一任务治理视角”
+     - 后续如果做治理面板、回填清单或运营排障入口，可以直接复用这组 TopN 数据
+     - 仍然坚持只读治理边界，没有把 TopN 样本升级成自动执行计划
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "list_execution_tasks_returns_unified_task_view or get_execution_task_returns_detail or list_execution_tasks_summary_surfaces_manifest_and_compat_stats or list_execution_tasks_supports_evidence_health_and_manifest_action_filters"`
+     - `4 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `执行调度统一任务模型 + 证据治理` 已完成 `100%`
+   - 当前冻结主线到此收口，不再继续无边界优化：
+     - 后续如继续，应切换新的单一优先项，而不是继续在这条线上叠外围字段
+   - 完成时间：`2026-03-21 22:19:41 CST`
+
+80. 主优先项已切换：
+   - 上一冻结项：
+     - `执行调度统一任务模型 + 证据治理（确定性优先）`
+     - 已完成 `100%`
+   - 新的冻结主线改为：
+     - `企业级数据治理收口（确定性优先）`
+   - 切换原因：
+     - 统一 task 读模型与证据治理已经收口，不需要继续在同一条线上叠外围字段
+     - 当前更值得补的是 `data-generation-agent` 从“最小可用”走向“可治理、可追踪、可汇总”
+     - 回归测试要想真正企业级落地，数据治理必须继续增强，但仍应保持确定性优先
+   - 新冻结项当前只收三件事：
+     - registry 治理摘要
+     - cleanup 治理增强
+     - template / 版本 / 数据治理事实源增强
+   - 新冻结项当前明确不做：
+     - LLM-first 数据自由生成
+     - 生产数据复制与复杂脱敏编排
+     - 并行推进别的治理大项
+   - 切换时间：`2026-03-21 22:37:02 CST`
+
+81. `企业级数据治理收口` 第 1 小段已完成：
+   - `data-generation-agent` 现在已补出 `registry` 治理摘要能力，不再只是“能落盘、能标记 cleaned”
+   - 当前新增能力：
+     - `registry.summarize_registry_entries(...)`
+     - CLI 新增：
+       - `--registry-summary`
+   - 当前 registry 摘要已稳定返回：
+     - `registry_path`
+     - `total_entries`
+     - `pending_cleanup_count`
+     - `cleaned_count`
+     - `generated_with_errors_count`
+     - `project_counts`
+     - `environment_counts`
+     - `status_counts`
+     - `cleanup_status_counts`
+     - `latest_created_at`
+     - `oldest_pending_request_id`
+     - `oldest_pending_created_at`
+   - 这一步的价值是：
+     - 当前 `data-generation-agent` 已经开始具备企业级治理的“可读事实源”，不再只是一个写文件的最小生成器
+     - 后续如果补 cleanup 看板、治理告警、版本绑定，可以直接复用这组摘要输出
+     - 仍然坚持确定性优先，没有把摘要判断交给 AI
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `10 passed`
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py agents/data-generation-agent/src/index.py agents/data-generation-agent/src/registry.py agents/data-generation-agent/src/schema.py`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --input agents/data-generation-agent/examples/input.json --registry-path /tmp/data-generation-registry.XXXXXX.json`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --registry-path /tmp/data-generation-registry.XXXXXX.json --registry-summary`
+   - 当前冻结主线完成度可更新为：
+     - `企业级数据治理收口` 约 `20%`
+   - 剩余主线建议继续只收：
+     - cleanup 待清理视图 / pending tracker
+     - template 版本 / 标签治理增强
+   - 完成时间：`2026-03-21 22:37:02 CST`
+
+82. `企业级数据治理收口` 第 2 小段已完成：
+   - `data-generation-agent` 现在已补出 cleanup 的待清理视图与 pending tracker，不再只是“能标记 cleaned”，也能直接看到当前待处理队列
+   - 当前新增能力：
+     - `registry.list_pending_cleanup_entries(...)`
+     - CLI 新增：
+       - `--pending-cleanups`
+   - 当前 pending tracker 已稳定返回：
+     - `pending_items`
+     - `pending_items_count`
+     - `pending_cleanup_ratio`
+     - `oldest_pending_item`
+   - 当前 pending item 已稳定包含：
+     - `request_id`
+     - `project`
+     - `environment`
+     - `status`
+     - `cleanup_status`
+     - `created_at`
+     - `age_seconds`
+     - `total_records`
+     - `requirement_ids`
+   - 这一步的价值是：
+     - 当前可以直接查看“哪些生成请求还没清理、按什么顺序处理、已经积压多久”
+     - 后续如果补 cleanup 看板或治理告警，可以直接复用这组输出
+     - 仍然坚持确定性优先，没有引入 AI 参与清理判定
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `11 passed`
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py agents/data-generation-agent/src/index.py agents/data-generation-agent/src/registry.py agents/data-generation-agent/src/schema.py`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --input agents/data-generation-agent/examples/input.json --registry-path /tmp/data-generation-registry.XXXXXX`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --registry-path /tmp/data-generation-registry.XXXXXX --pending-cleanups`
+   - 当前冻结主线完成度可更新为：
+     - `企业级数据治理收口` 约 `40%`
+   - 剩余主线建议继续只收：
+     - template 版本 / 标签治理增强
+     - 或 cleanup 过期/归档策略的只读摘要
+   - 完成时间：`2026-03-21 23:45:13 CST`
+
+83. `企业级数据治理收口` 第 3 小段已完成：
+   - `data-generation-agent` 现在已补出 `template` 版本 / 标签治理摘要，不再只是“模板可用”，而是可以直接读出模板目录的治理状态
+   - 当前新增能力：
+     - `templates.summarize_template_library()`
+     - CLI 新增：
+       - `--template-summary`
+   - 当前 template summary 已稳定返回：
+     - `catalog_version`
+     - `total_templates`
+     - `default_template_by_data_type`
+     - `data_type_counts`
+     - `version_counts`
+     - `tag_counts`
+     - `templates`
+   - 当前 `DataGenerationResponse` 也已补充：
+     - `template_summary`
+   - 当前模板治理已开始覆盖的重点：
+     - 模板目录版本
+     - 每个模板的版本号
+     - 标签分布
+     - 默认 data_type 映射
+     - 请求实际使用的 template / tag 统计
+   - 这一步的价值是：
+     - 当前可以直接看出“模板目录是否一致、版本是否统一、标签是否稳定”
+     - 后续如果补 template governance 看板、版本迁移或标签治理规则，可以直接复用这组摘要
+     - 仍然坚持确定性优先，没有把模板治理交给 AI
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `13 passed`
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py agents/data-generation-agent/src/index.py agents/data-generation-agent/src/registry.py agents/data-generation-agent/src/schema.py agents/data-generation-agent/src/templates/builtins.py agents/data-generation-agent/src/templates/__init__.py`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --template-summary`
+   - 当前冻结主线完成度可更新为：
+     - `企业级数据治理收口` 约 `60%`
+   - 剩余主线建议继续只收：
+     - template 标签治理规则再补一点
+     - 或 cleanup 过期/归档策略的只读摘要
+   - 完成时间：`2026-03-22 08:45:05 CST`
+
+84. `企业级数据治理收口` 第 4 小段已完成：
+   - 模板治理现在已补上“标签规范化 / 重复标签告警”的最小规则层，不再只是统计标签分布
+   - 当前标签规则已收口为：
+     - `trim`
+     - `lowercase`
+     - `spaces / underscores -> hyphen`
+     - `dedup`
+   - 当前新增能力：
+     - `templates.normalize_tags(...)`
+     - `template_summary.request_tag_warnings`
+     - `template_summary.request_unique_tag_count`
+     - catalog summary 新增：
+       - `tag_rule`
+       - `tag_warnings`
+   - 当前效果是：
+     - 请求标签会统一规范化后再进入统计
+     - 重复标签会被折叠
+     - 规范化和重复折叠过程会进入 warning
+   - 这一步的价值是：
+     - 当前模板与请求标签终于开始具备一致口径，不会因为大小写、空格或重复标签导致统计漂移
+     - 后续如果补模板治理看板或标签策略校验，可以直接沿用这套规则
+     - 仍然坚持确定性优先，没有把标签治理交给 AI
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `14 passed`
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py agents/data-generation-agent/src/index.py agents/data-generation-agent/src/registry.py agents/data-generation-agent/src/schema.py agents/data-generation-agent/src/templates/builtins.py agents/data-generation-agent/src/templates/__init__.py`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --template-summary`
+   - 当前冻结主线完成度可更新为：
+     - `企业级数据治理收口` 约 `75%`
+   - 剩余主线建议继续只收：
+     - cleanup 过期/归档策略的只读摘要
+     - 或 template 版本迁移提示的只读治理摘要
+   - 完成时间：`2026-03-22 10:58:23 CST`
+
+85. `企业级数据治理收口` 第 5 小段已完成：
+   - `data-generation-agent` 现在已补出 cleanup 保留期 / 归档候选的只读治理摘要，不再只是“知道有哪些 pending”，也能直接看出哪些已经超期待处理、哪些 cleaned 已进入归档窗口
+   - 当前新增能力：
+     - `registry.summarize_cleanup_retention(...)`
+     - CLI 新增：
+       - `--cleanup-retention-summary`
+   - 当前 retention summary 已稳定返回：
+     - `generated_at`
+     - `retention_policy`
+     - `overdue_pending_count`
+     - `archive_candidate_count`
+     - `overdue_pending_ratio`
+     - `archive_candidate_ratio`
+     - `overdue_pending_items`
+     - `archive_candidate_items`
+     - `oldest_overdue_pending_item`
+     - `oldest_archive_candidate_item`
+   - 当前治理口径已收口为：
+     - `pending` 超过 `7` 天视为超期待清理
+     - `cleaned` 超过 `30` 天视为可归档候选
+     - `cleaned` 年龄优先使用 `cleaned_at`，缺失时回退到 `created_at`
+   - 当前 registry 记录也已补充：
+     - `cleaned_at`
+   - 这一步的价值是：
+     - 当前 cleanup 治理不再只有“状态”，而是已经开始具备保留期审计和归档候选判断能力
+     - 后续如果补 cleanup 看板、生命周期策略或归档脚本，可以直接复用这组确定性摘要
+     - 仍然坚持确定性优先，没有把保留期判定交给 AI
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `16 passed`
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py agents/data-generation-agent/src/index.py agents/data-generation-agent/src/registry.py agents/data-generation-agent/src/schema.py agents/data-generation-agent/src/templates/builtins.py agents/data-generation-agent/src/templates/__init__.py agents/data-generation-agent/tests/test_agent.py`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --registry-path /tmp/data-generation-registry.XXXXXX --cleanup-retention-summary`
+   - 当前冻结主线完成度可更新为：
+     - `企业级数据治理收口` 约 `90%`
+   - 剩余主线建议继续只收：
+     - template 版本迁移提示的只读治理摘要
+     - 或 cleanup 生命周期执行脚本的最小只读规划
+   - 完成时间：`2026-03-22 11:06:43 CST`
+
+86. `企业级数据治理收口` 第 6 小段已完成：
+   - 模板治理现在已补上“版本迁移提示”的只读治理摘要，不再只是知道模板目录里有哪些版本，也能直接看出哪些模板落后、默认模板是否漂移
+   - 当前新增能力：
+     - `templates.summarize_template_migration(...)`
+     - CLI 新增：
+       - `--template-migration-summary`
+   - 当前 migration summary 已稳定返回：
+     - `data_type_latest_versions`
+     - `data_type_recommended_templates`
+     - `migration_candidate_count`
+     - `migration_candidates`
+     - `default_template_drift_count`
+     - `default_template_drift_items`
+     - `invalid_version_template_count`
+     - `invalid_version_items`
+     - `up_to_date_template_count`
+     - `version_warnings`
+   - 当前治理口径已收口为：
+     - 同一 `data_type` 内按语义版本最高值识别推荐模板
+     - 旧版本模板只做迁移提示，不自动升级
+     - 默认模板若低于当前推荐版本，会被明确标记为 drift
+     - 非法版本号会单独告警，避免治理统计失真
+   - 这一步的价值是：
+     - 当前模板治理已经从“静态统计”走到“可读的版本迁移建议”，为后续模板升级、默认模板切换和版本审计提供了稳定事实源
+     - 仍然坚持确定性优先，没有把版本迁移判断交给 AI
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/data-generation-agent/tests/test_agent.py -q`
+     - `18 passed`
+     - `./.venv/bin/python -m py_compile agents/data-generation-agent/src/agent.py agents/data-generation-agent/src/index.py agents/data-generation-agent/src/registry.py agents/data-generation-agent/src/schema.py agents/data-generation-agent/src/templates/builtins.py agents/data-generation-agent/src/templates/__init__.py agents/data-generation-agent/tests/test_agent.py`
+     - `./.venv/bin/python agents/data-generation-agent/src/index.py --template-migration-summary`
+   - 当前冻结主线完成度可更新为：
+     - `企业级数据治理收口` `100%`
+   - 当前结论：
+     - `registry / cleanup / template` 三条治理子线都已形成最小只读闭环
+     - 后续如果继续推进，应切换到新的冻结主线，而不是继续在本项上无止境扩张
+   - 完成时间：`2026-03-22 11:10:15 CST`
+
+87. 主优先项已切换：
+   - 上一冻结项：
+     - `企业级数据治理收口（确定性优先）`
+     - 已完成 `100%`
+   - 新的冻结主线改为：
+     - `风险依据增强 + self-healing 边界治理（确定性优先）`
+   - 切换原因：
+     - 数据治理主线已经收口，不需要继续在同一条线上叠额外能力
+     - 当前更值得补的是风险依据透明化，以及 self-healing 从“约定边界”变成“代码硬边界”
+     - 回归测试要真正可落地，必须明确禁止 AI 越界改业务断言和业务流程
+   - 新冻结项当前只收三件事：
+     - 风险依据解释增强
+     - self-healing 允许范围收紧
+     - 边界结果可回显、可验证、可审计
+   - 新冻结项当前明确不做：
+     - 多主线并行扩张
+     - 自动写回 page object
+     - 自动修改业务断言和业务流程
+   - 切换时间：`2026-03-22 11:14:27 CST`
+
+88. `风险依据增强 + self-healing 边界治理` 第 1 小段已完成：
+   - self-healing 现在已从“文档约定边界”升级为“代码层硬边界”，自动修复不再允许越界应用 `assertion_update`
+   - 当前新增能力：
+     - `patch_generator.build_auto_heal_boundary_summary(...)`
+     - patch plan 新增：
+       - `boundary.version`
+       - `boundary.allowed`
+       - `boundary.allowed_advice_types`
+       - `boundary.preview_only_advice_types`
+       - `boundary.forbidden_mutations`
+       - `boundary.allowed_mutations`
+       - `boundary.reason`
+     - orchestrator rejection result 新增：
+       - `boundary`
+   - 当前 auto-heal 硬边界已收口为：
+     - 自动应用只允许：
+       - `locator_update`
+       - `wait_strategy`
+     - 以下类型仅保留 preview / 人工建议，不自动应用：
+       - `assertion_update`
+       - `data_adjustment`
+       - `environment_check`
+       - `no_change`
+     - 明确禁止：
+       - `business_assertion_change`
+       - `business_flow_change`
+       - `page_object_writeback`
+       - `login_step_mutation`
+   - 这一步的价值是：
+     - self-healing 是否越界，已经可以由 patch plan 和结果对象直接判断，不再依赖人工猜测
+     - 平台开始正式遵守“只允许 locator / timeout / backup selector，不碰业务断言和业务流程”的确定性边界
+     - 为后续把边界状态接进 run 视图、风险视图和审计记录提供了稳定事实源
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/self-healing-advisor-agent/test_patch_workflow.py agents/self-healing-advisor-agent/test_agent.py -q`
+     - `9 passed`
+     - `./.venv/bin/python -m py_compile agents/self-healing-advisor-agent/patch_generator.py agents/self-healing-advisor-agent/self_healing_orchestrator.py agents/self-healing-advisor-agent/test_patch_workflow.py agents/self-healing-advisor-agent/src/agent.py agents/self-healing-advisor-agent/src/schema.py`
+     - 最小 CLI 取样验证：
+       - `assertion_update` 会被 `boundary.allowed=false` 拒绝自动应用
+   - 当前冻结主线完成度可更新为：
+     - `风险依据增强 + self-healing 边界治理` 约 `20%`
+   - 剩余主线建议继续只收：
+     - risk_report 因子结构化与解释口径增强
+     - run 视图 / 审计链路开始消费 self-healing boundary 摘要
+   - 完成时间：`2026-03-22 11:14:27 CST`
+
+89. `风险依据增强 + self-healing 边界治理` 第 2 小段已完成：
+   - `risk_report` 现在已从“主要靠 evidence 字符串解释”升级为“结构化 factors + factor_summary + evidence 兼容输出”，本地规则和 orchestrator 路径都开始统一消费这套口径
+   - 当前新增能力：
+     - `risk_report.factors`
+     - `risk_report.factor_summary`
+     - `risk_report.metadata.factor_count`
+     - `risk_report.metadata.top_factor`
+   - 当前 factors 已收口的字段包括：
+     - `factor`
+     - `score`
+     - `reason`
+     - `category`
+     - `source`
+   - 当前 factor summary 已稳定返回：
+     - `factor_count`
+     - `positive_factor_count`
+     - `category_counts`
+     - `top_factor`
+     - `total_factor_score`
+   - 当前治理效果是：
+     - 本地 fallback 风险报告会把执行状态、低置信度元素、Page Object 缺失、待确认测试点、待确认分组统一转成结构化因子
+     - orchestrator 风险报告会先做 factors 归一化，再生成一致的 `factor_summary / evidence`
+     - 旧的 `evidence` 字段仍保留，避免打断现有确认点和 UI 消费链
+   - 这一步的价值是：
+     - 风险判断终于开始具备稳定、可聚合、可回放的因子结构，而不再只是字符串拼接
+     - 后续如果要把风险依据接入 run 详情、历史视图或审计链路，可以直接复用这组确定性字段
+     - 仍然坚持确定性优先，没有把风险解释交给黑盒 AI 二次加工
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_auto_run_returns_review_state_for_low_confidence_points or test_auto_run_prefers_orchestrator_risk_report"`
+     - `2 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `风险依据增强 + self-healing 边界治理` 约 `40%`
+   - 剩余主线建议继续只收：
+     - run 视图 / 审计链路开始消费 risk_report.factor_summary
+     - self-healing boundary 摘要进入 run 详情或历史记录
+   - 完成时间：`2026-03-22 11:26:00 CST`
+
+90. `风险依据增强 + self-healing 边界治理` 第 3 小段已完成：
+   - `run` 视图和测试点资产追溯现在已经开始正式消费 `risk_report.factor_summary`，结构化风险因子不再只停留在底层原始产物里
+   - 当前新增能力：
+     - `run.risk_summary`
+     - `latest_run.risk_summary`
+     - `test_point_asset.traceability_summary.risk.factor_count`
+     - `test_point_asset.traceability_summary.risk.top_factor`
+     - `test_point_asset.traceability_summary.risk.provider`
+   - 当前 risk summary 已稳定返回：
+     - `risk_level`
+     - `gate_decision`
+     - `requires_review`
+     - `risk_score`
+     - `factor_count`
+     - `positive_factor_count`
+     - `top_factor`
+     - `provider`
+     - `source`
+   - 当前治理效果是：
+     - `/api/workbench/runs` 列表页可以直接拿稳定风险摘要，而不是每次自己拆 `risk_report`
+     - `/api/workbench/runs/{run_id}` 详情页会回显同一套 `risk_summary`
+     - 测试点资产追溯开始同步消费风险摘要，后续做回归筛选或审计透视时不需要再次手工汇总
+   - 这一步的价值是：
+     - 风险依据开始真正进入上层读模型，形成“底层结构化 -> 上层稳定摘要”的闭环
+     - 后续如果接历史记录、审计面板或筛选条件，可以直接复用 `risk_summary`
+     - 仍然坚持确定性优先，没有引入新的 AI 推断层
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_runs_and_asset_traceability_surface_risk_summary"`
+     - `1 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `风险依据增强 + self-healing 边界治理` 约 `55%`
+   - 剩余主线建议继续只收：
+     - self-healing boundary 摘要进入 run 详情或历史记录
+     - risk_summary 进入历史筛选或审计摘要
+   - 完成时间：`2026-03-22 11:31:07 CST`
+
+91. `风险依据增强 + self-healing 边界治理` 第 4 小段已完成：
+   - `run` 视图现在已经开始正式回显 `self-healing boundary` 摘要，自愈边界不再只存在于底层结果文件里
+   - 当前新增能力：
+     - `run.self_healing_summary`
+     - `run.self_healing_summary.boundary`
+     - 自动从 `self_healing_result.json` 读取最近一次自愈结果
+     - 无结果文件时回退使用 `execution_record.evidence_index.self_healing_result_files`
+   - 当前 self-healing summary 已稳定返回：
+     - `attempted`
+     - `result_file_count`
+     - `status`
+     - `healed`
+     - `rolled_back`
+     - `reason`
+     - `result_path`
+     - `plan_path`
+     - `boundary.version`
+     - `boundary.allowed`
+     - `boundary.advice_type`
+     - `boundary.reason`
+   - 当前治理效果是：
+     - `/api/workbench/runs` 列表页可以直接看出该 run 是否尝试过 self-healing、是否被边界拒绝
+     - `/api/workbench/runs/{run_id}` 详情页会回显最近一次自愈结果和边界原因
+     - 上层开始能够直接读取“为什么自愈被拒绝”，而不是再去翻结果文件
+   - 这一步的价值是：
+     - self-healing 边界终于进入上层可见读模型，风险治理和自愈治理两条线开始在 run 视图汇合
+     - 后续如果把历史记录、审计面板或筛选条件接进来，可以直接复用这组稳定摘要
+     - 仍然坚持确定性优先，没有新增自动修复范围
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_runs_surface_self_healing_boundary_summary"`
+     - `1 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `风险依据增强 + self-healing 边界治理` 约 `70%`
+   - 剩余主线建议继续只收：
+     - `risk_summary / self_healing_summary` 进入历史筛选或审计摘要
+     - 风险与自愈治理在历史视图中的聚合展示
+   - 完成时间：`2026-03-22 11:36:08 CST`
+
+92. `风险依据增强 + self-healing 边界治理` 第 5 小段已完成：
+   - 历史治理视图现在已经开始正式消费 `risk_summary / self_healing_summary`，历史记录不再只展示动作本身，也能直接看到当时的风险摘要和自愈边界摘要
+   - 当前新增能力：
+     - `/api/workbench/history` 会从 run snapshot enrich：
+       - `risk_summary`
+       - `self_healing_summary`
+     - 历史页详情块新增：
+       - 风险摘要
+       - 自愈摘要
+   - 当前历史详情已稳定回显：
+     - 风险等级 / 门禁 / 风险分 / 因子数 / 主因子
+     - 自愈状态 / 是否尝试 / 边界是否允许 / 建议类型 / 边界原因
+   - 当前治理效果是：
+     - 历史记录可以直接回答“这次为什么被判成 manual_review / block”
+     - 历史记录也可以直接回答“这次 self-healing 为什么被拒绝或没有生效”
+     - 风险治理和自愈治理第一次在历史页形成可读闭环
+   - 这一步的价值是：
+     - 不再需要为了看治理原因去翻 run 详情或结果文件，历史页已具备企业级追溯的最小可读性
+     - 后续如果要继续做历史筛选或聚合统计，可以直接沿用这两个摘要字段
+     - 仍然坚持确定性优先，没有新增新的 AI 判定层
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_workbench_history_enriches_risk_and_self_healing_from_run_snapshot"`
+     - `1 passed`
+     - `node --check apps/web-ui-service/app/static/workbench_history.js`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `风险依据增强 + self-healing 边界治理` 约 `82%`
+   - 剩余主线建议继续只收：
+     - 历史筛选层消费 `risk_summary / self_healing_summary`
+     - 风险与自愈治理在历史视图中的聚合统计
+   - 完成时间：`2026-03-22 11:39:52 CST`
+
+93. `风险依据增强 + self-healing 边界治理` 第 6 小段已完成：
+   - 历史筛选层现在已经开始正式消费 `risk_summary / self_healing_summary`，历史治理不再只能按动作/状态/确认人查，也能按风险门禁和自愈状态筛选
+   - 当前新增能力：
+     - `/api/workbench/history` 新增筛选参数：
+       - `risk_gate_decision`
+       - `self_healing_status`
+     - 历史页工具栏新增筛选器：
+       - 风险门禁
+       - 自愈状态
+   - 当前筛选口径已收口为：
+     - `risk_gate_decision`: `allow / manual_review / block`
+     - `self_healing_status`: `rejected / success / rollback / not_attempted`
+   - 当前治理效果是：
+     - 可以直接从历史页筛出“所有 manual_review 的治理事件”
+     - 也可以直接筛出“所有 self-healing rejected / success”的事件
+     - 风险治理和自愈治理第一次进入同一个历史筛选层
+   - 这一步的价值是：
+     - 企业级追溯已经不只是“能看明细”，而是开始具备按治理状态追踪和抽查的能力
+     - 后续如果继续补历史聚合统计，可以直接沿用这两个筛选维度
+     - 仍然坚持确定性优先，没有新增 AI 解释层
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_workbench_history_filters_by_risk_gate_and_self_healing_status"`
+     - `1 passed`
+     - `node --check apps/web-ui-service/app/static/workbench_history.js`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `风险依据增强 + self-healing 边界治理` 约 `92%`
+   - 剩余主线建议继续只收：
+     - 风险与自愈治理在历史视图中的聚合统计
+     - 或当前主线收口复盘
+   - 完成时间：`2026-03-22 11:56:27 CST`
+
+94. `风险依据增强 + self-healing 边界治理` 第 7 小段已完成：
+   - 历史治理视图现在已经补上“聚合治理总览”，这条冻结主线不再只有明细和筛选，也具备了最小的历史聚合统计闭环
+   - 当前新增能力：
+     - `/api/workbench/history` 响应新增：
+       - `summary.total_items`
+       - `summary.risk_gate_counts`
+       - `summary.self_healing_status_counts`
+       - `summary.risk_requires_review_count`
+       - `summary.boundary_rejected_count`
+       - `summary.top_risk_gate`
+       - `summary.top_self_healing_status`
+     - 历史页新增治理汇总区：
+       - 当前结果条数
+       - 风险门禁分布
+       - 自愈状态分布
+       - 人工复核数 / 边界拒绝数
+   - 当前统计口径已收口为：
+     - 仅基于当前筛选后的历史结果做确定性聚合，不额外引入 AI 推断
+     - `boundary_rejected_count` 同时兼容：
+       - `self_healing_summary.status = rejected`
+       - `self_healing_summary.boundary.allowed = false`
+     - top bucket 使用确定性计数排序，不做主观解释
+   - 当前治理效果是：
+     - 历史页已经可以直接回答“当前筛选结果里哪种风险门禁最多、哪种自愈状态最多”
+     - 也可以直接看到“还有多少条需要人工复核、多少条被自愈边界拒绝”
+     - 风险治理与 self-healing 治理在历史页正式形成“明细 + 筛选 + 聚合”的最小企业级追溯闭环
+   - 这一步的价值是：
+     - 当前冻结主线需要的三件事都已经具备：
+       - 风险依据更透明
+       - self-healing 边界变成代码硬边界
+       - 边界结果可回显、可筛选、可聚合
+     - 后续如果继续扩这条线，收益已经明显递减，不应再无止境优化
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_workbench_history_returns_governance_summary_counts or test_workbench_history_enriches_risk_and_self_healing_from_run_snapshot or test_workbench_history_filters_by_risk_gate_and_self_healing_status"`
+     - `3 passed`
+     - `node --check apps/web-ui-service/app/static/workbench_history.js`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `风险依据增强 + self-healing 边界治理` 已完成 `100%`
+   - 当前结论：
+     - 这条冻结主线到此收口，后续如继续，应切换到新的单一主优先项，而不是继续在本线叠加功能
+   - 完成时间：`2026-03-22 12:01:36 CST`
+
+95. 主优先项已切换：
+   - 上一冻结项：
+     - `风险依据增强 + self-healing 边界治理（确定性优先）`
+     - 已完成 `100%`
+   - 新的冻结主线改为：
+     - `独立 PageSemanticModelV1 稳定契约（规则优先）`
+   - 切换原因：
+     - 风险治理和 self-healing 边界已经收口，继续在同一条线上扩收益很低
+     - 当前更值得补的是页面分析三模型里仍未独立稳定的语义层契约
+     - 要让后续 test design / review / gate 真正消费“规则优先”的页面语义，必须先有独立可落盘、可回放的 `PageSemanticModelV1`
+   - 新冻结项当前只收三件事：
+     - `PageSemanticModelV1` 契约稳定化
+     - 主链开始消费 `page_semantic / page_semantic_summary`
+     - 继续坚持规则优先，不把页面语义重新做成黑盒 AI 推断
+   - 新冻结项当前明确不做：
+     - 直接改 test design agent 的推理逻辑
+     - 直接改 execution gate 判定逻辑
+     - 新增大段 UI 展示
+   - 切换时间：`2026-03-22 12:16:45 CST`
+
+96. `独立 PageSemanticModelV1 稳定契约` 第 1 小段已完成：
+   - `PageSemanticModelV1` 现在已经从“文档目标抽象”推进到“代码层稳定契约 + 主链最小消费”，并且坚持了规则优先路线
+   - 当前新增能力：
+     - `shared_backend.schemas.contracts.py` 新增：
+       - `PAGE_SEMANTIC_MODEL_VERSION`
+       - `normalize_page_semantic_model_v1(...)`
+     - `page_analysis_rules.py` 新增：
+       - `build_page_semantic_model(...)`
+     - `page_analysis_pipeline.py` 已开始正式消费：
+       - `page_semantic`
+       - `page_semantic_summary`
+     - `PageAnalysisBundleV1` 已扩展包含：
+       - `page_semantic`
+       - `page_semantic_summary`
+       - `model_versions.page_semantic`
+   - 当前规则优先语义口径已收口为：
+     - 先根据确定性结构信号判断：
+       - `has_table / has_form / has_dialog`
+       - `search_placeholder / query_button_text / primary_button_text`
+       - `route_mismatch / login_success / iframe blocked / stability`
+     - 结构信号不足时，再用稳定规则兜底：
+       - `product / order / returnapply -> list`
+       - `addproduct -> form`
+     - 当前稳定输出字段包括：
+       - `page_type`
+       - `business_domain`
+       - `primary_goal`
+       - `primary_actions`
+       - `reason_codes`
+       - `signals`
+       - `confidence / warnings / requires_review`
+   - 当前主链消费效果是：
+     - `auto-run` 返回项已开始稳定回传：
+       - `page_semantic`
+       - `page_semantic_summary`
+     - `analysis_bundle` 已开始稳定记录：
+       - `model_versions.page_semantic = PageSemanticModelV1`
+       - `page_semantic_summary`
+     - `run` 视图已经具备继续消费 `page_semantic_summary` 的读模型入口
+   - 这一步的价值是：
+     - 页面分析正式从“两模型 + 测试点”扩展为“三模型 + 测试点”，但仍然是规则优先
+     - 后续如果要让 test design / review / gate 消费页面语义，不需要再从零拼接页面语义字段
+     - 也避免了把页面类型判断完全重新交回黑盒 AI
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_auto_run_supports_multisource_without_requirement or test_auto_run_supports_url_only_without_requirement or test_consume_model_bundle_promotes_nested_models_to_analysis_bundle_contract"`
+     - `3 passed`
+     - `./.venv/bin/python -m py_compile apps/shared_backend/schemas/contracts.py apps/shared_backend/schemas/__init__.py apps/web-ui-service/app/core/page_analysis_rules.py apps/web-ui-service/app/core/page_analysis_pipeline.py apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `独立 PageSemanticModelV1 稳定契约` 约 `20%`
+   - 剩余主线建议继续只收：
+     - `run / asset / history` 读模型稳定消费 `page_semantic_summary`
+     - test point / gate 开始按确定性语义字段做最小消费
+   - 完成时间：`2026-03-22 12:16:45 CST`
+
+97. `独立 PageSemanticModelV1 稳定契约` 第 2 小段已完成：
+   - `page_semantic_summary` 现在已经从“主链原始返回字段”推进到“run / asset / history 三处稳定读模型”，后续不需要再各处手工拆语义模型
+   - 当前新增能力：
+     - `legacy_workbench.py` 新增：
+       - `_build_page_semantic_summary(...)`
+     - `latest_run` 快照现在会稳定返回：
+       - `page_semantic_summary`
+     - `test_point_asset.traceability_summary` 新增：
+       - `semantic.page_type`
+       - `semantic.business_domain`
+       - `semantic.primary_goal`
+       - `semantic.primary_actions`
+       - `semantic.confidence`
+       - `semantic.requires_review`
+     - `/api/workbench/history` 现在会从 run snapshot enrich：
+       - `page_semantic_summary`
+   - 当前读模型消费效果是：
+     - `runs` 列表和详情现在都能直接回显 `page_semantic_summary`
+     - 测试点资产追溯现在可以回答“这份资产最近一次运行对应的页面语义是什么”
+     - 历史记录在没有风险 / 自愈摘要时，也能稳定回显页面语义摘要
+   - 当前历史页最小可见反馈也已补齐：
+     - 历史详情块新增“页面语义”
+     - 会显示：
+       - 类型
+       - 领域
+       - 目标
+       - 动作
+   - 这一步的价值是：
+     - `PageSemanticModelV1` 不再只是底层契约，而是开始真正进入平台读模型
+     - 后续如果让 gate / test point / review 正式消费页面语义，不需要重复做快照拼装
+     - 仍然坚持规则优先，没有增加新的黑盒语义推断层
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_runs_and_asset_traceability_surface_risk_summary or test_workbench_history_enriches_page_semantic_summary_from_run_snapshot"`
+     - `2 passed`
+     - `node --check apps/web-ui-service/app/static/workbench_history.js`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `独立 PageSemanticModelV1 稳定契约` 约 `40%`
+   - 剩余主线建议继续只收：
+     - test point / gate 开始按确定性语义字段做最小消费
+     - 语义模型在资产层形成更明确的稳定摘要口径
+   - 完成时间：`2026-03-22 12:21:55 CST`
+
+98. `独立 PageSemanticModelV1 稳定契约` 第 3 小段已完成：
+   - `PageSemanticModelV1` 现在已经开始正式参与测试点资产选择和 execution gate，但当前只影响“治理提示与复核要求”，没有被提升成新的强阻断规则
+   - 当前新增能力：
+     - `execution_gate` 现在开始消费：
+       - `page_semantic_summary.requires_review`
+       - `page_semantic_summary.page_type`
+       - `page_semantic_summary.business_domain`
+       - `page_semantic_summary.primary_goal`
+     - `execution_gate.metrics` 新增：
+       - `semantic_requires_review`
+       - `semantic_page_type`
+       - `semantic_business_domain`
+     - `test_point_asset.selection_summary` 现在开始消费：
+       - `traceability_summary.semantic.requires_review`
+   - 当前最小消费口径已收口为：
+     - 若页面语义摘要仍要求人工复核：
+       - `execution_gate` 增加 warning / evidence
+       - 但不会单独把结果升级成 `block`
+     - 若测试点资产语义摘要仍要求人工复核：
+       - `selection_summary.selection_state` 转为 `needs_review`
+       - 但不会覆盖已有 `block` 结论
+   - 当前治理效果是：
+     - 门禁现在不仅知道“元素不稳 / 测试点待确认”，也开始知道“页面语义本身不稳”
+     - 测试点资产选择摘要也开始能把“页面语义未稳定”纳入回归前复核理由
+     - 语义模型第一次正式进入系统决策辅助层，但仍然保持从属地位
+   - 这一步的价值是：
+     - `PageSemanticModelV1` 不再只是展示字段，而是已经开始给测试治理提供确定性辅助信号
+     - 同时保持了你要求的边界：
+       - 工程事实优先
+       - 页面语义只做辅助
+       - 不让语义模型单独一票否决执行
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_execution_gate_blocks_when_missing_dependency_points_reach_threshold or test_execution_gate_release_acceptance_matrix or test_execution_gate_consumes_test_point_asset_selection_summary_when_test_points_missing or test_execution_gate_warns_when_page_semantic_requires_review or test_test_point_asset_selection_summary_consumes_semantic_review_signal"`
+     - `5 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `独立 PageSemanticModelV1 稳定契约` 约 `60%`
+   - 剩余主线建议继续只收：
+     - 语义模型在资产层形成更明确的稳定摘要口径
+     - 风险评估 / 测试点生成开始有限消费语义字段，但仍保持规则优先
+   - 完成时间：`2026-03-22 12:29:46 CST`
+
+99. `独立 PageSemanticModelV1 稳定契约` 第 4 小段已完成：
+   - 测试点资产层现在已经拥有独立 `semantic_summary`，不再完全依赖最近一次 run 才能回答“这份资产语义上是什么页面”
+   - 当前新增能力：
+     - `test point asset` 落盘时新增：
+       - `semantic_summary.page_type`
+       - `semantic_summary.business_domain`
+       - `semantic_summary.primary_goal`
+       - `semantic_summary.primary_actions`
+       - `semantic_summary.reason_codes`
+       - `semantic_summary.confidence`
+       - `semantic_summary.warnings`
+       - `semantic_summary.requires_review`
+       - `semantic_summary.source = asset_plan`
+     - `test-point-assets` 列表和详情现在都会直接返回：
+       - `semantic_summary`
+     - `traceability_summary.semantic` 现在会优先使用：
+       - run 语义快照
+       - 若缺失则回退到 asset 自带 `semantic_summary`
+   - 当前资产层语义口径已收口为：
+     - 优先根据资产自身稳定信息推断：
+       - `page`
+       - `source_type`
+       - `point_types`
+       - `actions`
+       - `dependent_elements`
+       - `requires_review`
+     - 没有新 run 时：
+       - 仍可稳定输出 `list / form / unknown`
+       - 仍可稳定输出 `product / order / aftersales / generic`
+   - 当前治理效果是：
+     - 测试点资产列表和详情不再需要依赖最近一次 run 才能给出语义摘要
+     - `traceability_summary.semantic.source` 可以明确区分：
+       - `run_snapshot`
+       - `asset_plan`
+     - 这让资产层第一次具备“离线也可用”的稳定语义口径
+   - 这一步的价值是：
+     - `PageSemanticModelV1` 已经从运行时模型进一步沉淀为资产级摘要
+     - 后续做回归选择、资产巡检、语义聚类时，不需要强依赖最近运行记录
+     - 仍然保持规则优先，没有引入新的 AI 生成链路
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_list_test_point_assets_returns_latest_run_snapshot or test_get_test_point_asset_returns_detail_with_plan_and_references"`
+     - `2 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `独立 PageSemanticModelV1 稳定契约` 约 `80%`
+   - 剩余主线建议继续只收：
+     - 风险评估 / 测试点生成开始有限消费语义字段，但仍保持规则优先
+     - 或当前主线收口复盘
+   - 完成时间：`2026-03-22 12:39:42 CST`
+
+100. `独立 PageSemanticModelV1 稳定契约` 第 5 小段已完成：
+   - 风险报告现在已经开始正式消费 `page_semantic_summary`，但仍严格保持“解释增强，不单独改判”的边界
+   - 当前新增能力：
+     - `risk_report.evidence` 现在会追加稳定语义证据：
+       - `page_type`
+       - `business_domain`
+       - `primary_goal`
+       - `confidence`
+       - `requires_review`
+     - `risk_report.metadata` 现在会同步落盘：
+       - `semantic_page_type`
+       - `semantic_business_domain`
+       - `semantic_primary_goal`
+       - `semantic_confidence`
+       - `semantic_requires_review`
+     - `risk_report.metadata.consumed_models` 现在已明确包含：
+       - `page_semantic = PageSemanticModelV1`
+   - 当前这一步的边界是：
+     - 没有让页面语义单独增加风险分
+     - 没有让页面语义单独触发 `block`
+     - 仅把语义摘要纳入风险解释和追溯证据，继续保持规则优先
+   - 当前主线闭环状态已达到：
+     - 规则优先生成 `PageSemanticModelV1`
+     - run / history / asset 可回显
+     - execution gate 可有限消费
+     - test point asset 可持久化摘要
+     - risk report 可持久化解释性消费
+   - 这意味着本轮冻结主项已经完成“稳定契约 + 有限治理消费”的最小闭环
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_auto_run_supports_multisource_without_requirement or test_auto_run_prefers_orchestrator_risk_report"`
+     - `2 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `独立 PageSemanticModelV1 稳定契约` 约 `100%`
+   - 下一步建议不要继续在这条线上扩散优化，应该切回新的冻结主优先项
+   - 完成时间：`2026-03-22 12:50:02 CST`
+
+56. `failure source classification` 第 1 小段已完成：
+   - `failure-analysis-agent` 已从“只给 failure_category”升级为“failure_category + failure_source”双层输出
+   - 当前新增来源分类字段：
+     - `failure_source`
+     - `failure_source_reason`
+     - `failure_source_confidence`
+   - 当前来源分类边界已先收口到：
+     - `page_object`
+     - `page_analysis`
+     - `case_design`
+     - `app_bug`
+     - `environment`
+     - `unknown`
+   - 规则优先级已按回归治理需要调整：
+     - 定位器 / selector 漂移优先归到 `page_object`
+     - 带页面元信息的断言漂移优先归到 `page_analysis`
+     - 断言/测试数据假设过期归到 `case_design`
+     - 5xx / traceback / server exception 信号归到 `app_bug`
+   - `failure-triage-agent` 已开始正式消费 `failure_source`：
+     - `page_object` -> `qa-automation` / `ui-regression`
+     - `page_analysis` -> `qa-platform` / `page-analysis-review`
+     - `case_design` -> `qa-design` / `case-design-review`
+     - `app_bug` -> `product-engineering` / `product-regression`
+   - orchestrator fallback 与 workbench 风险兜底分析也已补齐同构字段，避免只有 agent 成功时才有 `failure_source`
+   - 工作台失败分析面板已开始展示：
+     - 失败来源
+     - 来源依据
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/failure-analysis-agent/test_analyze.py -q`
+     - `3 passed`
+     - `./.venv/bin/python -m pytest agents/failure-triage-agent/tests/test_agent.py -q`
+     - `3 passed`
+     - `./.venv/bin/python -m pytest apps/ai-orchestrator/tests/integration/test_orchestrator_service_asset_flow.py -q`
+     - `7 passed, 1 skipped`
+     - `./.venv/bin/python -m pytest apps/ai-orchestrator/tests/integration/test_orchestrate_endpoint.py -q`
+     - `35 passed`
+     - `node --check apps/web-ui-service/app/static/workbench.js`
+   - 当前冻结主线完成度可更新为：
+     - `failure source classification` 约 `35%`
+   - 剩余主线建议继续只收：
+     - 来源分类证据标准化
+     - 低置信度来源自动人工复核
+     - 失败来源在 run / report / history 的稳定回显
+     - 后续再考虑人工复核回流校准
+   - 完成时间：`2026-03-21 17:46:29 CST`
+57. `failure source classification` 第 2 小段已完成：
+   - 低置信度来源现在会正式触发“自动人工复核”，不再只是 triage 侧的隐含判断
+   - `failure-analysis-agent` 新增并稳定输出：
+     - `requires_manual_review`
+   - 当前自动人工复核规则已收口为：
+     - `failure_source == unknown`
+     - `failure_source_confidence < 0.7`
+     - `confidence < 0.65`
+   - `failure-triage-agent` 已开始正式消费：
+     - `failure_analysis.requires_manual_review`
+     - `failure_source_confidence`
+   - 失败报告与工作台展示已开始回显：
+     - workbench 失败分析面板显示“需人工复核”
+     - `/api/report/failures` 返回 `failure_source / failure_source_reason / requires_manual_review`
+     - `report_failures.js` 已展示来源、来源依据、人工复核状态
+   - orchestrator markdown report 里的 Failure Analysis 段已补齐：
+     - `Source`
+     - `Source Reason`
+     - `Source Confidence`
+     - `Requires Manual Review`
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/failure-analysis-agent/test_analyze.py -q`
+     - `3 passed`
+     - `./.venv/bin/python -m pytest agents/failure-triage-agent/tests/test_agent.py -q`
+     - `4 passed`
+     - `./.venv/bin/python -m pytest apps/ai-orchestrator/tests/integration/test_orchestrator_service_asset_flow.py -q`
+     - `7 passed, 1 skipped`
+     - `./.venv/bin/python -m pytest apps/ai-orchestrator/tests/integration/test_orchestrate_endpoint.py -q`
+     - `35 passed`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k report_failures_exposes_evidence_source`
+     - `1 passed`
+     - `node --check apps/web-ui-service/app/static/workbench.js`
+     - `node --check apps/web-ui-service/app/static/report_failures.js`
+   - 说明：
+     - `apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q` 全量运行时仍有一个与当前改动无关的既有失败：
+       - `test_quality_gate_summary_supports_alert_code_and_page_filters`
+     - 本次未顺手改该时间窗口相关用例，避免打断冻结项主线
+   - 当前冻结主线完成度可更新为：
+     - `failure source classification` 约 `55%`
+   - 剩余主线建议继续只收：
+     - 失败来源在 run / report / history 的稳定回显
+     - 人工复核结果回流为来源校准数据
+   - 完成时间：`2026-03-21 18:07:59 CST`
+58. `failure source classification` 第 3 小段已完成：
+   - 失败来源在 `run / report / history` 三个聚合视图中已稳定回显，不再只停留在单点失败详情
+   - `legacy_workbench.py` 已把失败分析聚合归一到统一视图：
+     - `_normalize_failure_analysis_view(...)`
+     - `_normalize_failure_entry_view(...)`
+     - `_resolve_run_failure_snapshot(...)`
+   - `/api/workbench/runs/{run_id}/analysis` 现在会对 `latest_failure.analysis` 做统一标准化：
+     - 补齐 `failure_source`
+     - 补齐 `failure_source_reason`
+     - 补齐 `failure_source_confidence`
+     - 按低置信度规则稳定计算 `requires_manual_review`
+   - `/api/report/overview` 的最近失败列表已开始回显：
+     - `failure_source`
+     - `requires_manual_review`
+     - 并继续沿用统一归一化逻辑，避免 overview 与 failures 详情口径不一致
+   - `/api/workbench/history` 现在会按 `run_id` 自动补挂失败快照：
+     - `failure_source`
+     - `failure_source_reason`
+     - `requires_manual_review`
+     - 若历史项自身无摘要，会生成可读的 `detail_summary`
+   - 前端展示已补齐最小可见反馈：
+     - `report_overview.js` 已展示“失败来源 / 人工复核”
+     - `workbench_history.js` 已在历史详情中展示失败来源、来源依据、人工复核状态
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "workbench_history_enriches_failure_source_from_run_snapshot or report_overview_normalizes_failure_source_and_manual_review or get_run_analysis_normalizes_latest_failure_source_fields or report_overview_prefers_execution_records or report_failures_exposes_evidence_source or workbench_history_supports_audit_filters"`
+     - `6 passed`
+     - `node --check apps/web-ui-service/app/static/report_overview.js`
+     - `node --check apps/web-ui-service/app/static/workbench_history.js`
+   - 当前冻结主线完成度可更新为：
+     - `failure source classification` 约 `75%`
+   - 剩余主线建议继续只收：
+     - 人工复核结果回流为来源校准数据
+     - 失败来源证据字段进一步标准化为可审计训练样本
+   - 完成时间：`2026-03-21 18:54:58 CST`
+59. `failure source classification` 第 4 小段已完成：
+   - 失败来源现在不只返回“结论”，还会返回结构化“来源证据”：
+     - `source_evidence`
+   - 当前证据结构已统一为可审计样本：
+     - `signal`
+     - `value`
+     - `origin`
+     - `supports`
+   - `failure-analysis-agent` 规则链已开始稳定产出这类证据：
+     - `page_object` 会记录命中的 selector / locator token
+     - `page_analysis` 会记录 `current_url` / `meta_summary` / 页面证据文件
+     - `app_bug` 会记录 5xx / traceback / exception 信号
+     - `unknown` 会记录 `fallback=insufficient_evidence`
+   - `orchestrator_service.py` 已补齐兼容：
+     - 非失败场景返回空 `source_evidence`
+     - failure-analysis-agent 不可用时返回 fallback `source_evidence`
+     - markdown 报告已开始输出 `Source Evidence`
+   - `legacy_workbench.py` 聚合视图已开始透传：
+     - `/api/workbench/runs/{run_id}/analysis`
+     - `/api/report/overview`
+     - `/api/report/failures`
+     - `/api/workbench/history`
+   - 前端可见反馈已补齐：
+     - `workbench.js` 失败分析面板显示“来源证据”
+     - `report_failures.js` 失败列表显示“来源证据”
+   - 这一步的价值是：
+     - 后续人工复核不再只看到一个 `failure_source`
+     - 可以追溯“这次为什么判成 page_object / case_design / app_bug”
+     - 为下一步“人工复核回流为校准样本”提供稳定输入
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/failure-analysis-agent/test_analyze.py -q`
+     - `3 passed`
+     - `./.venv/bin/python -m pytest apps/ai-orchestrator/tests/integration/test_orchestrator_service_asset_flow.py -q apps/ai-orchestrator/tests/integration/test_orchestrate_endpoint.py -q`
+     - `42 passed, 1 skipped`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "workbench_history_enriches_failure_source_from_run_snapshot or report_overview_normalizes_failure_source_and_manual_review or get_run_analysis_normalizes_latest_failure_source_fields or report_failures_exposes_evidence_source"`
+     - `4 passed`
+     - `node --check apps/web-ui-service/app/static/workbench.js`
+     - `node --check apps/web-ui-service/app/static/report_failures.js`
+   - 当前冻结主线完成度可更新为：
+     - `failure source classification` 约 `90%`
+   - 剩余主线建议继续只收：
+     - 人工复核结果回流为来源校准数据
+   - 完成时间：`2026-03-21 19:14:00 CST`
+60. `failure source classification` 第 5 小段已完成：
+   - 人工复核结果现在已正式回流为 `failure_source` 校准样本，不再只停留在 history 文本记录
+   - 新增落盘文件：
+     - `web-ui/state/reporting/failure-source-calibrations.json`
+   - 当前校准样本结构已稳定为：
+     - `version`
+     - `sample_id`
+     - `project / run_id / case_id / page`
+     - `review_type / review_status`
+     - `predicted_failure_source`
+     - `predicted_failure_source_reason`
+     - `predicted_failure_source_confidence`
+     - `predicted_source_evidence`
+     - `human_decision`
+     - `confirmed_failure_source`
+     - `feedback_reason`
+     - `usable_for_training`
+     - `confirmed_by / confirmed_by_role / actor_display`
+     - `created_at`
+   - 回流规则当前已收口为：
+     - `risk` 确认点成功提交时，若存在失败来源快照，则默认记录一条 `accepted` 样本
+     - 任意确认点若显式提交 `failure_source_feedback`，则可记录 `corrected` 样本
+     - `status != confirmed` 时不生成校准样本
+   - 这意味着当前主链已具备最小闭环：
+     - AI 先给 `failure_source`
+     - 人工确认动作触发样本沉淀
+     - 样本保留预测值、人工结论、证据和审计身份
+   - 审计侧也已补齐：
+     - 保存 review 后若成功生成样本，会追加 `failure_source_calibration_recorded` 历史事件
+   - 这一步先只做后端闭环，不强制追加新 UI 入口：
+     - 现有风险确认动作会自动生成 `accepted` 样本
+     - 未来如需“纠正 failure_source”按钮，可直接复用现有 payload 扩展字段 `failure_source_feedback`
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "save_review_accepts_risk_confirmation or save_review_records_corrected_failure_source_feedback or save_review_persists_confirmation"`
+     - `3 passed`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 当前冻结主线完成度可更新为：
+     - `failure source classification` 已完成 `100%`
+   - 下一步不再继续优化这条主线，除非你明确要求：
+     - 若后续继续，只建议做前端“纠正 failure_source”显式入口，而不是再改分类规则
+   - 完成时间：`2026-03-21 19:18:00 CST`
+
+101. 主优先项已切换：
+   - 上一冻结项：
+     - `独立 PageSemanticModelV1 稳定契约（规则优先）`
+     - 已完成 `100%`
+   - 新的冻结主线改为：
+     - `test-design-agent 企业级结构化约束接入（确定性优先）`
+   - 切换原因：
+     - 页面语义契约已经完成“稳定契约 + 有限治理消费”的最小闭环，再继续扩收益明显下降
+     - 当前更影响真实企业级回归落地的是：`test-design-agent` 还缺少对结构化字段约束的正式消费
+     - 结合现有文档和代码现实，最值得先补的是：
+       - `field_definitions / parameter_constraints`
+       - `boundary / equivalence`
+       - technique metadata
+     - 这条线比继续加外围 UI 或直接做大而全经典测试技术模块，更符合“高确定性优先”的原则
+   - 新冻结项当前只收三件事：
+     - `requirement_spec` 开始稳定消费结构化字段约束
+     - `design_bundle` 输出 `technique_type / technique_source / technique_confidence`
+     - 先做确定性的 `boundary + equivalence`，不直接并行上状态机 / 因果图 / 正交实验
+   - 新冻结项当前明确不做：
+     - 六大经典测试技术模块一次性全实现
+     - LLM 自由生成边界值和等价类
+     - 把补充设计点直接强塞进当前可执行主链
+   - 切换时间：`2026-03-22 13:02:25 CST`
+
+102. `test-design-agent 企业级结构化约束接入` 第 1 小段已完成：
+   - `test-design-agent` 现在已经开始正式消费结构化字段约束，并把最小的经典测试设计能力接进了现有 `design_bundle`
+   - 当前新增能力：
+     - `requirement_spec` 现在开始消费可选输入：
+       - `field_definitions`
+       - `parameter_constraints`
+     - `TestPoint` 现在新增稳定技术元数据：
+       - `field_key`
+       - `technique_type`
+       - `technique_source`
+       - `technique_confidence`
+       - `execution_scope`
+     - 现有步骤生成的测试点已统一补齐：
+       - `technique_type = normal`
+       - `technique_source = step_action`
+       - `execution_scope = mainline`
+   - 当前确定性测试技术接入范围已收口为：
+     - `equivalence`
+       - 必填空值
+       - 枚举有效值 / 非法值
+     - `boundary`
+       - 字符串最小长度
+       - 字符串超最大长度
+       - 数值最小值
+       - 数值超最大值
+   - 当前主链行为边界是：
+     - 这些结构化约束点会进入：
+       - `test_points.points`
+       - `review_summary.technique_distribution`
+       - `traceability.design_only_point_count`
+     - 但不会直接污染当前主执行步骤：
+       - 约束生成点会标记 `execution_scope = design_only`
+       - `render_steps_from_test_point_plan(...)` 会跳过 `design_only`
+     - 这保证了：
+       - 企业级测试设计能力开始落盘
+       - 当前可执行 case 主链仍保持稳定、确定性
+   - 当前这一步的价值是：
+     - `test-design-agent` 不再只会基于 `test_intents` 生成 happy path
+     - 已经开始把结构化字段约束转成可治理的补充测试点
+     - 并且复用了现有 `confidence / warnings / requires_review / review_summary / dependent_elements` 治理语义，没有另起一套体系
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/test-design-agent/tests/test_enterprise_design.py -q`
+     - `3 passed`
+     - `./.venv/bin/python -m pytest agents/test-design-agent/tests/test_stable_generation_rules.py -q`
+     - `5 passed`
+     - `./.venv/bin/python -m py_compile agents/test-design-agent/src/agent.py agents/test-design-agent/src/test_points.py agents/test-design-agent/src/schema.py agents/test-design-agent/tests/test_enterprise_design.py agents/test-design-agent/tests/test_stable_generation_rules.py`
+   - 当前冻结主线完成度可更新为：
+     - `test-design-agent 企业级结构化约束接入` 约 `35%`
+   - 剩余主线建议继续只收：
+     - 日期 / 金额 / API 参数等字段类型继续补齐
+     - technique distribution 开始进入更正式的资产 / 编排读模型
+     - 保持 `design_only` 与 `mainline` 的边界，不把补充设计点直接变成自动执行主链
+   - 完成时间：`2026-03-22 13:02:25 CST`
+
+103. `test-design-agent 企业级结构化约束接入` 第 2 小段已完成：
+   - 结构化约束的类型覆盖率已经从“字符串/数值基础边界”继续扩到：
+     - 日期 / 时间
+     - 金额 / 小数
+     - API 参数约束
+   - 当前新增能力：
+     - `type=string + format=date/date-time` 现在会被识别成：
+       - `date`
+       - `datetime`
+     - 日期类约束现在会稳定生成：
+       - `min_date`
+       - `max_date`
+       - `invalid_date_format`
+     - 金额 / 小数类约束现在会稳定生成：
+       - `min_value`
+       - `over_max_value`
+       - `negative_value`
+     - `parameter_constraints` 现在会补齐 API 语义字段：
+       - `parameter_location`
+       - `api_method`
+       - `api_path`
+       - 同时生成：
+         - `point_type = api`
+         - `action = api_request`
+   - 当前别名兼容口径也已补齐：
+     - `minimum / maximum`
+     - `minLength / maxLength`
+     - `format`
+     - 会统一归并到当前 agent 使用的稳定约束字段
+   - 当前主链边界仍保持不变：
+     - 新增日期 / 金额 / API 参数测试点仍然只作为：
+       - `design_only`
+     - 不会直接进入当前主执行步骤
+     - 也不会破坏现有 `case.execution.steps` 的稳定 smoke / 回归主链
+   - 这一步的价值是：
+     - `test-design-agent` 开始能覆盖更接近企业真实场景的字段约束，而不只是简单字符串输入
+     - OpenAPI 参数约束第一次开始进入统一 `design_bundle`，为后续 API 回归设计打下了稳定入口
+     - 仍然坚持“先落资产与治理语义，再决定是否进入执行链”的确定性节奏
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest agents/test-design-agent/tests/test_enterprise_design.py -q`
+     - `4 passed`
+     - `./.venv/bin/python -m pytest agents/test-design-agent/tests/test_stable_generation_rules.py -q`
+     - `5 passed`
+     - `./.venv/bin/python -m py_compile agents/test-design-agent/src/agent.py agents/test-design-agent/src/test_points.py agents/test-design-agent/src/schema.py agents/test-design-agent/tests/test_enterprise_design.py agents/test-design-agent/tests/test_stable_generation_rules.py`
+   - 当前冻结主线完成度可更新为：
+     - `test-design-agent 企业级结构化约束接入` 约 `55%`
+   - 剩余主线建议继续只收：
+     - technique distribution 开始进入资产 / orchestrator 读模型
+     - 针对 `design_only` 点建立更明确的回归筛选 / 审核入口
+     - 继续只做确定性 `boundary / equivalence`，暂不并行上状态转换 / 因果图 / 正交实验
+   - 完成时间：`2026-03-22 13:05:43 CST`
+
+104. `test-design-agent 企业级结构化约束接入` 第 3 小段已完成：
+   - 平台读模型现在已经开始正式消费 `technique_distribution / design_only`，不再只是 agent 输出里“生成过但平台看不见”
+   - 当前新增能力：
+     - `TestPointPlanV1` 共享归一化契约已扩展保留：
+       - `field_key`
+       - `parameter_location`
+       - `api_method`
+       - `api_path`
+       - `technique_type`
+       - `technique_source`
+       - `technique_confidence`
+       - `execution_scope`
+     - `review_summary` 现在会稳定保留：
+       - `mainline_point_count`
+       - `design_only_point_count`
+       - `technique_distribution`
+     - 测试点资产快照现在新增：
+       - `technique_summary`
+     - `test-point-assets` 列表 / 详情 / run 附属资产摘要现在都会回显：
+       - `technique_summary`
+       - `traceability_summary.technique`
+   - 当前技术摘要口径已收口为：
+     - `total_points`
+     - `mainline_point_count`
+     - `design_only_point_count`
+     - `technique_distribution`
+     - `has_design_only_points`
+     - `mainline_ready`
+   - 当前治理边界新增了一条确定性规则：
+     - 如果某资产 `design_only_point_count > 0` 且 `mainline_point_count == 0`
+     - 则 `selection_summary.selection_state = needs_review`
+     - 原因会明确写出：
+       - `当前仅有 design_only 设计点，尚未形成可执行主链测试点。`
+   - 当前这一步的价值是：
+     - 企业级测试设计点第一次正式进入平台资产治理视角
+     - 平台现在能区分：
+       - 哪些点已经进入主执行链
+       - 哪些还只是补充设计点
+     - 同时保持了边界：
+       - 只影响资产选择与治理可见性
+       - 不直接改变当前执行门禁主判定
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "save_test_point_plan_updates_asset_snapshot or list_test_point_assets_returns_latest_run_snapshot or get_test_point_asset_returns_detail_with_plan_and_references or runs_endpoint_attaches_test_point_asset_summary or get_run_attaches_test_point_asset_summary"`
+     - `5 passed`
+     - `./.venv/bin/python -m py_compile apps/shared_backend/schemas/contracts.py apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py`
+   - 当前冻结主线完成度可更新为：
+     - `test-design-agent 企业级结构化约束接入` 约 `75%`
+   - 剩余主线建议继续只收：
+     - orchestrator / requirement_spec 读模型开始透出这批技术摘要
+     - 设计点进入更明确的审核/筛选入口，但仍不直接并入自动执行主链
+   - 完成时间：`2026-03-22 13:11:42 CST`
+
+105. `test-design-agent 企业级结构化约束接入` 第 4 小段已完成：
+   - orchestrator 现在已经开始稳定透出结构化约束技术摘要，编排层不再对这批企业级设计能力“完全无感知”
+   - 当前新增能力：
+     - `/orchestrate` 主链生成的 `test_points` 现在会在 `metadata` 中稳定补齐：
+       - `technique_summary`
+       - `field_definition_count`
+       - `parameter_constraint_count`
+     - `technique_summary` 当前收口为：
+       - `field_definition_count`
+       - `parameter_constraint_count`
+       - `api_parameter_count`
+       - `mainline_point_count`
+       - `design_only_point_count`
+       - `technique_distribution`
+       - `has_structured_constraints`
+       - `source = requirement_spec.constraints`
+   - 当前这一步的实现边界是：
+     - orchestrator 只透出“摘要事实”
+     - 不在编排层伪造真正的 `design_only` 测试点
+     - 也不修改当前 `test_points.points` 的执行/渲染行为
+   - 这意味着当前平台分层已经更清晰：
+     - `test-design-agent` 负责生成结构化约束设计能力
+     - 资产层负责落盘和治理回显
+     - orchestrator 先负责稳定透出摘要，而不是抢先复制一套生成逻辑
+   - 当前这一步的价值是：
+     - 上游 API / 报告 / 编排读模型终于能知道：
+       - 本次设计是否包含结构化约束
+       - 大概包含多少 `boundary / equivalence` 设计点
+       - 其中有多少属于 API 参数
+     - 后续如果要把这批能力接进报告、审核、筛选，会有稳定事实源可复用
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/ai-orchestrator/tests/integration/test_orchestrator_service_asset_flow.py -q -k "persists_generated_case_via_asset_toolkit or exposes_design_fallback_metadata or surfaces_constraint_technique_summary_in_test_points"`
+     - `3 passed`
+     - `./.venv/bin/python -m py_compile apps/ai-orchestrator/src/orchestrator_service.py apps/ai-orchestrator/tests/integration/test_orchestrator_service_asset_flow.py`
+   - 当前冻结主线完成度可更新为：
+     - `test-design-agent 企业级结构化约束接入` 约 `90%`
+   - 剩余主线建议继续只收：
+     - 报告 / 运行视图开始透出 `technique_summary`
+     - 或当前主线直接收口复盘，不再继续无边界扩张
+   - 完成时间：`2026-03-22 13:47:30 CST`
+
+106. `test-design-agent 企业级结构化约束接入` 第 5 小段已完成：
+   - 报告视图现在已经开始正式透出 `technique_summary`，这条冻结主线不再只是 agent / asset / orchestrator 内部有数据
+   - 当前新增能力：
+     - orchestrator `report.request_context` 现在会稳定带出：
+       - `technique_summary`
+     - orchestrator `report.test_points_summary` 现在新增：
+       - `page`
+       - `point_count`
+       - `review_summary`
+       - `technique_summary`
+     - Markdown 报告现在在 `Request Context` 中会显示：
+       - `Structured Constraints`
+       - `Technique Distribution`
+       - `Design-only Points`
+     - Markdown 报告现在新增：
+       - `Test Point Summary`
+   - 当前这一步的边界仍保持清晰：
+     - 报告只回显这批结构化约束设计事实
+     - 不把 `design_only` 点直接升级成自动执行点
+     - 不改变当前执行链、门禁链和 pass/fail 裁判边界
+   - 这意味着当前冻结主线所需的几件事都已经具备：
+     - `requirement_spec` 可承接结构化约束
+     - `test-design-agent` 可生成 `boundary / equivalence` 设计能力
+     - 资产层可落盘并治理 `design_only / technique_distribution`
+     - orchestrator 可稳定透出摘要
+     - report 可正式回显这批事实
+   - 当前主线到此已经完成最小企业级收口：
+     - 企业级测试设计能力已开始进入平台事实源
+     - 但仍然严格停留在“设计与治理增强”，没有越界污染当前确定性执行主链
+   - 已补追加验证：
+     - `./.venv/bin/python -m pytest apps/ai-orchestrator/tests/integration/test_orchestrator_service_asset_flow.py -q -k "persists_generated_case_via_asset_toolkit or exposes_design_fallback_metadata or surfaces_constraint_technique_summary_in_test_points or builds_execution_report_after_runner_success"`
+     - `4 passed`
+     - `./.venv/bin/python -m py_compile apps/ai-orchestrator/src/orchestrator_service.py apps/ai-orchestrator/tests/integration/test_orchestrator_service_asset_flow.py`
+   - 当前冻结主线完成度可更新为：
+     - `test-design-agent 企业级结构化约束接入` 已完成 `100%`
+   - 当前结论：
+     - 这条冻结主线到此收口，不再继续无边界扩张
+     - 下一步如继续，应切换到新的单一主优先项
+   - 完成时间：`2026-03-22 14:08:42 CST`
+
+107. 当前进度已按暂停状态同步：
+   - 按当前要求，代码实现已暂停，不继续新增未冻结主线
+   - 当前最新完成的冻结主线仍为：
+     - `test-design-agent 企业级结构化约束接入`
+     - 完成度 `100%`
+     - 完成时间 `2026-03-22 14:08:42 CST`
+   - 本次同步已把文档前部执行总表纠偏为与详细进展一致：
+     - 补记 `test-design-agent` 主线已完成
+     - 清除仍显示“进行中”的过期主线状态
+     - 将“当前冻结优先项”更新为：
+       - `未冻结新的单一优先项（按要求暂停）`
+   - 当前暂停点定义为：
+     - 不继续扩张实现
+     - 后续恢复时先冻结新的单一主优先项
+     - 再进入下一轮小步验证和进度记录
+   - 完成时间：`2026-03-22 14:54:57 CST`
+
+108. 仓库卫生整理 + 文档拆分 + 核心链路验证已完成一轮收口：
+   - 已完成的安全清理范围：
+     - 删除 `199` 个已跟踪的零字节文件
+     - 清空并删除一批空目录
+     - 本轮主要清理的是：
+       - `analytics/`
+       - `assets/` 中的零字节占位资产
+       - `configs/`
+       - `docs/` 中的空文档
+       - `evidence/`
+       - `infra/`
+       - `scripts/`
+       - `shared/`
+       - `web-ui/state/runs/` 中的零字节运行日志
+   - 当前仍保留的零字节文件约 `225` 个：
+     - 主要集中在 `agents/*` 与 `apps/ai-orchestrator/` 的占位骨架
+     - 这批文件更接近当前声明式接口层，本轮未继续自动删除，避免在未单独复核前扩散风险
+   - 大文档拆分已完成：
+     - 主文档 `url-driven-oneclick-automation-status-and-priority-plan-2026-03-20.md` 已从超长流水文档收口为“当前状态总表”
+     - 新增归档文档：
+       - `url-driven-oneclick-automation-progress-log-2026-03-20-to-2026-03-22.md`
+     - 后续规则已明确：
+       - 主文档只保留当前阶段、优先级、结论
+       - 详细流水继续写入归档文档
+   - 已执行核心链路验证：
+     - `node --check apps/web-ui-service/app/static/workbench_generate.js`
+     - `node --check apps/web-ui-service/app/static/workbench.js`
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/ai-orchestrator/src/orchestrator_service.py agents/test-design-agent/src/agent.py`
+     - `./.venv/bin/python -m pytest apps/ai-orchestrator/tests/integration/test_orchestrator_service_asset_flow.py -q`
+       - `8 passed, 1 skipped`
+     - `./.venv/bin/python -m pytest agents/test-design-agent/tests/test_enterprise_design.py -q`
+       - `4 passed`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q`
+       - `80 passed, 2 failed`
+   - 当前验证结论：
+     - 清理和拆文档没有引入前端语法或主编排语法回归
+     - orchestrator 资产流与 test-design 结构化约束链路当前可通过
+     - 但工作台多源接口测试当前仍有 2 个现存失败点，尚不能宣称“核心链路全绿”
+   - 当前识别出的失败点：
+     - `test_quality_gate_summary_supports_alert_code_and_page_filters`
+       - 现象：`summary_24h.top_page` 返回空字符串，而断言期望 `product`
+     - `test_runs_endpoint_surfaces_review_state_from_saved_decisions`
+       - 现象：`execution_gate.decision` 返回 `manual_review`，而断言期望 `allow`
+   - 当前收口建议：
+     - 后续如果恢复开发，优先把这两个 workbench 失败点作为新的单一主优先项候选之一
+     - 不建议在修复前把“核心链路验证已完成”误判为全绿
+   - 完成时间：`2026-03-22 15:11:23 CST`
+
+109. `legacy_workbench.py` 阶段 A 已开始落地，底座抽取完成第一轮：
+   - 已新增独立服务模块：
+     - `apps/web-ui-service/app/services/workbench_state_store.py`
+     - `apps/web-ui-service/app/services/workbench_review_service.py`
+   - 已新增服务包入口：
+     - `apps/web-ui-service/app/services/__init__.py`
+   - 已新增阶段 A 最小验证测试：
+     - `apps/web-ui-service/tests/unit/test_workbench_services.py`
+   - `legacy_workbench.py` 现已把以下高频底座能力通过尾部重绑定接到新服务：
+     - `_ensure_dirs`
+     - `_read_json_list`
+     - `_write_json_list`
+     - `_append_history`
+     - `_append_runtime_run`
+     - `_update_runtime_run`
+     - `_normalize_review_type`
+     - `_normalize_review_status`
+     - `_extract_review_actor`
+     - `_require_authenticated_review_actor`
+     - `_upsert_review_decision`
+     - `_build_review_audit_summary`
+     - `_build_review_audit_timeline`
+   - 当前实现边界：
+     - review 决策保存、确认人解析、审计摘要、审计时间线已开始由独立 review service 承接
+     - state 文件读写已开始由独立 state store 承接
+     - 为兼容既有测试，`_build_review_audit_timeline` 仍保留对 legacy 读口的兼容路径
+     - history 查询本轮仍暂留在 `legacy_workbench.py`，尚未进入独立 service
+   - 已补验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/services/workbench_state_store.py apps/web-ui-service/app/services/workbench_review_service.py apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/unit/test_workbench_services.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_services.py -q`
+       - `2 passed`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_save_review_persists_confirmation or test_save_review_accepts_risk_confirmation or test_save_review_rejects_anonymous_confirmation or test_workbench_history_supports_audit_filters or test_workbench_history_enriches_failure_source_from_run_snapshot or test_workbench_history_enriches_risk_and_self_healing_from_run_snapshot or test_workbench_history_filters_by_risk_gate_and_self_healing_status or test_workbench_history_returns_governance_summary_counts or test_get_run_prefers_latest_review_decisions_over_stored_runtime_state"`
+       - `9 passed`
+   - 当前判断：
+     - 阶段 A 已经从“计划”进入“实现”
+     - 但还不是最终收口，后面仍需继续把 history 查询和更多底座逻辑进一步外移
+   - 完成时间：`2026-03-22 15:42:10 CST`
+
+110. `legacy_workbench.py` 阶段 A 第二轮收口完成，history/query 也已外移：
+   - 已新增独立服务模块：
+     - `apps/web-ui-service/app/services/workbench_history_service.py`
+   - `legacy_workbench.py` 现已将以下查询与汇总能力继续下沉：
+     - `/api/workbench/history`
+     - `/api/workbench/quality-gates/summary`
+   - 当前实现边界：
+     - history 视图的过滤、风险/自愈回显、失败来源补全已由独立 history service 承接
+     - quality gate summary 的事件聚合、告警分布、趋势统计已由独立 history service 承接
+     - router 仅保留路由入口和兼容转发壳，减少了大文件中的查询聚合逻辑
+   - 已补验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/services/workbench_history_service.py apps/web-ui-service/app/routers/legacy_workbench.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_services.py apps/web-ui-service/tests/unit/test_workbench_history_service.py -q`
+       - `4 passed`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "workbench_history"`
+       - `6 passed`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "quality_gate_summary_aggregates_alert_codes"`
+       - `1 passed`
+   - 当前判断：
+     - 阶段 A 已经完成到 `state / review / history-query` 收口
+     - 下一步如果继续拆，只适合进入更重的 gate / run / asset / analysis 领域
+   - 完成时间：`2026-03-22 15:41:47 CST`
+
+111. `legacy_workbench.py` 阶段 B 已开始，execution gate 第一片已独立成 service：
+   - 已新增独立服务模块：
+     - `apps/web-ui-service/app/services/workbench_gate_service.py`
+   - 已新增阶段 B 最小验证测试：
+     - `apps/web-ui-service/tests/unit/test_workbench_gate_service.py`
+   - `legacy_workbench.py` 现已把以下门禁底座能力通过尾部重绑定接到新 service：
+     - `_normalize_execution_gate_decision`
+     - `_normalized_role`
+     - `_is_execution_gate_privileged_role`
+     - `_can_bypass_dual_approval`
+     - `_require_execution_gate_decision_permission`
+     - `_upsert_execution_gate_decision`
+     - `_execution_gate_decision_for_run`
+     - `_approve_execution_gate_decision`
+     - `_revoke_execution_gate_decision`
+     - `_build_execution_gate_audit_snapshot`
+     - `_execution_gate_policy_baseline`
+   - 当前实现边界：
+     - execution gate 的人工决策落盘、二次审批、撤销、权限控制、审计快照、策略基线已开始由独立 gate service 承接
+     - `_build_execution_gate` 这类系统门禁规则判定仍暂留在 `legacy_workbench.py`
+     - runtime run 生命周期尚未进入本轮拆分
+   - 已补验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/services/workbench_gate_service.py apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/unit/test_workbench_gate_service.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_gate_service.py -q`
+       - `2 passed`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "execution_gate_config_endpoint_returns_rule_snapshot or execution_gate_policy_baseline_reflects_dual_approval_boundary or save_execution_gate_decision or execution_gate_approve or execution_gate_revoke or execution_gate_second_approval_and_revoke_flow"`
+       - `7 passed`
+   - 当前判断：
+     - 阶段 B 已经从“计划”进入“实现”
+     - 但当前只完成了门禁 service 第一片，runtime 仍待后续单独推进
+   - 完成时间：`2026-03-22 15:52:08 CST`
+
+112. `legacy_workbench.py` 阶段 B 的 runtime read path 第一片已完成收口：
+   - 已清理 `legacy_workbench.py` 里残留的旧 helper 覆盖层，避免晚定义把 service-backed wrapper 反向覆盖
+   - `workbench_gate_service.py` 中的无效 `ReadJsonList = callable` 已移除
+   - `_execution_gate_decision_for_run` 保持 service-backed 路径，`_runtime_view_from_entry` / `_runtime_view_with_execution_record_preferred` 继续走 `workbench_runtime_service`
+   - `_find_run_item` 现已正式切到 `workbench_runtime_service.find_run_item`
+   - `start_run` / `_execute_run` / `wait_run_terminal` 也已正式由 `workbench_runtime_service` 接管，router 只保留存储回调和执行入口
+   - 已补回归验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/app/services/workbench_gate_service.py apps/web-ui-service/app/services/workbench_runtime_service.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_runtime_service.py -q`
+     - `5 passed`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "runs_endpoint_surfaces_manual_execution_gate_decision or runs_endpoint_surfaces_pending_and_revoked_execution_gate_decisions or runs_endpoint_normalizes_legacy_runtime_entry or get_run_returns_execution_record_envelope or get_run_prefers_latest_review_decisions_over_stored_runtime_state or get_run_prefers_artifact_execution_record"`
+     - `6 passed`
+   - 当前判断：
+     - 阶段 B 现在已经从“仅门禁 service 化”推进到“门禁 + runtime 读链路第一片 + runtime 生命周期第一片 service 化”
+     - 下一步如果继续，更适合转入 `workbench_analysis_service.py` / `workbench_asset_service.py`，而不是继续扩大 runtime
+   - 完成时间：`2026-03-22 17:06:51 CST`
+
+113. `legacy_workbench.py` 阶段 C 的测试点资产存储第一片已开始收口：
+   - 新增独立服务模块：
+     - `apps/web-ui-service/app/services/workbench_asset_service.py`
+   - `legacy_workbench.py` 现已把以下测试点资产核心存储能力下沉到新 service：
+     - `_save_test_point_plan`
+     - `_upsert_test_point_asset_snapshot`
+     - `_load_test_point_asset`
+   - 当前实现边界：
+     - 测试点计划落盘、资产快照写入、资产回读路径已开始由独立 asset service 承接
+     - 资产摘要 / 追溯 / 选择态分析仍暂留在 `legacy_workbench.py`
+   - 已补回归验证：
+     - `./.venv/bin/python -m py_compile apps/web-ui-service/app/services/workbench_asset_service.py apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/tests/unit/test_workbench_asset_service.py`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_asset_service.py -q`
+       - `2 passed`
+     - `./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "save_test_point_plan_updates_asset_snapshot or list_test_point_assets_returns_latest_run_snapshot or get_test_point_asset_returns_detail_with_plan_and_references"`
+       - `3 passed`
+   - 当前判断：
+     - 阶段 C 已经从“计划”进入“实现”
+     - 下一步更适合继续拆 `workbench_analysis_service.py`，而不是在资产存储层继续扩
+   - 完成时间：`2026-03-22 17:20:54 CST`
+
+114. `legacy_workbench.py` 阶段 C 的分析服务第一片已完成收口：
+   - 已新增并接管的分析服务能力：
+     - `build_page_analysis_context`
+     - `build_failure_analysis_for_risk`
+     - `build_risk_report`
+     - `build_risk_report_summary`
+     - `build_page_semantic_summary`
+     - `build_self_healing_summary`
+     - `build_risk_review_items`
+     - `build_review_section`
+   - `legacy_workbench.py` 现已把上述分析 helpers 收缩为薄包装，路由层不再承载核心纯函数逻辑
+   - 已补验证：
+     - `PYTHONPATH=apps ./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/app/services/workbench_analysis_service.py apps/web-ui-service/tests/unit/test_workbench_analysis_service.py`
+     - `PYTHONPATH=apps ./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_analysis_service.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "normalize_page_object_draft_promotes_legacy_payload_to_v1_contract or consume_model_bundle_promotes_nested_models_to_analysis_bundle_contract or normalize_page_surface_promotes_legacy_payload_to_v1_contract or build_page_analysis_context or build_failure_analysis_for_risk_flags_confidence_gap or build_review_section_preserves_actor_display_for_existing_entry or build_risk_review_items_emits_single_review_card"`
+       - `7 passed`
+   - 当前判断：
+     - 阶段 C 已经从“资产第一片”推进到“分析第一片”
+     - 下一步如果继续，适合继续收敛 `legacy_workbench.py` 里残留的分析相关 helper，而不是回头扩其他主线
+   - 完成时间：`2026-03-22 17:36:25 CST`
+
+115. `legacy_workbench.py` 阶段 C 的风险基础工具第一片已完成收口：
+   - 已从路由层下沉到 `workbench_analysis_service.py` 的共享纯函数：
+     - `normalize_risk_factors`
+     - `build_risk_evidence`
+     - `build_semantic_risk_evidence`
+     - `build_risk_factor_summary`
+     - `reviewer_display_name`
+   - `legacy_workbench.py` 中对应调用点继续保留薄包装兼容，不改变现有调用面
+   - 已补验证：
+     - `PYTHONPATH=apps ./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/app/services/workbench_analysis_service.py apps/web-ui-service/tests/unit/test_workbench_analysis_service.py`
+     - `PYTHONPATH=apps ./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_analysis_service.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "build_risk_review_items_emits_single_review_card or risk_helpers_normalize_and_summarize or reviewer_display_name_handles_unknown_role or build_page_analysis_context or build_failure_analysis_for_risk_flags_confidence_gap or build_review_section_preserves_actor_display_for_existing_entry"`
+       - `6 passed`
+   - 当前判断：
+     - 分析服务第一片之后，风险与审计共享纯函数也已继续下沉
+     - 下一步如果继续，适合再收剩下的 analysis helper，但不要横向扩到别的主线
+   - 完成时间：`2026-03-22 17:44:30 CST`
+
+116. `legacy_workbench.py` 阶段 C 的入口级分析 wrapper 已继续下沉：
+   - `legacy_workbench.py` 中以下 wrapper 现已改为直接委托 `workbench_analysis_service.py`：
+     - `_normalize_page_surface`
+     - `_normalize_page_object_draft`
+     - `_consume_model_bundle`
+   - 路由顶部已移除对 `consume_page_analysis_bundle / normalize_page_surface_model / normalize_page_object_model` 的直引导入
+   - 已补验证：
+     - `PYTHONPATH=apps ./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/app/services/workbench_analysis_service.py apps/web-ui-service/tests/unit/test_workbench_analysis_service.py`
+     - `PYTHONPATH=apps ./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_analysis_service.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "normalize_entry_wrappers_delegate_to_pipeline or build_risk_review_items_emits_single_review_card or risk_helpers_normalize_and_summarize or reviewer_display_name_handles_unknown_role or build_page_analysis_context or build_failure_analysis_for_risk_flags_confidence_gap or build_review_section_preserves_actor_display_for_existing_entry or normalize_page_object_draft_promotes_legacy_payload_to_v1_contract or consume_model_bundle_promotes_nested_models_to_analysis_bundle_contract or normalize_page_surface_promotes_legacy_payload_to_v1_contract"`
+       - `10 passed`
+   - 当前判断：
+     - 路由层分析入口已经明显变薄
+     - 下一步如果继续，适合继续收敛 `legacy_workbench.py` 里剩余的分析相关辅助函数，但要继续保持“小片推进”
+   - 完成时间：`2026-03-22 17:48:49 CST`
+
+117. `legacy_workbench.py` 阶段 C 的 surface 入口 wrapper 已继续下沉：
+   - 已从路由层下沉到 `workbench_analysis_service.py` 的 surface 级纯函数：
+     - `_build_surface_element_candidate`
+     - `_build_surface_element_candidates`
+     - `_surface_confidence_summary`
+     - `_surface_inferred_elements`
+     - `_build_surface_result_from_snapshot`
+   - 路由层继续保持兼容包装，不再直接依赖 `page_analysis_rules` 的这些 surface 入口
+   - 已补验证：
+     - `PYTHONPATH=apps ./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/app/services/workbench_analysis_service.py apps/web-ui-service/tests/unit/test_workbench_analysis_service.py`
+     - `PYTHONPATH=apps ./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_analysis_service.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "surface_wrappers_delegate_to_rules or normalize_entry_wrappers_delegate_to_pipeline or build_risk_review_items_emits_single_review_card or risk_helpers_normalize_and_summarize or reviewer_display_name_handles_unknown_role or build_page_analysis_context or build_failure_analysis_for_risk_flags_confidence_gap or build_review_section_preserves_actor_display_for_existing_entry or normalize_page_object_draft_promotes_legacy_payload_to_v1_contract or consume_model_bundle_promotes_nested_models_to_analysis_bundle_contract or normalize_page_surface_promotes_legacy_payload_to_v1_contract"`
+       - `11 passed`
+   - 当前判断：
+     - surface 层 wrapper 已继续变薄
+     - 下一步如果继续，更适合从 page object quality / test point review 这一组再往下收，但仍保持单一小片推进
+   - 完成时间：`2026-03-22 18:01:50 CST`
+
+118. `legacy_workbench.py` 阶段 C 的 test point 链条已继续下沉：
+   - 已从路由层下沉到 `workbench_analysis_service.py` 的 test point 纯函数：
+     - `_steps_to_points`
+     - `_annotate_test_point_plan_review`
+     - `_surface_candidate_confidence_index`
+     - `_inherit_test_point_confidence_from_surface`
+     - `_build_test_point_review_items`
+   - 路由层对应 wrapper 现已直接委托分析服务，不再承载 test point 链条的细节规则
+   - 已补验证：
+     - `PYTHONPATH=apps ./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/app/services/workbench_analysis_service.py apps/web-ui-service/tests/unit/test_workbench_analysis_service.py`
+     - `PYTHONPATH=apps ./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_analysis_service.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "test_test_point_chain_helpers_delegate_and_annotate or surface_wrappers_delegate_to_rules or normalize_entry_wrappers_delegate_to_pipeline or build_risk_review_items_emits_single_review_card or risk_helpers_normalize_and_summarize or reviewer_display_name_handles_unknown_role or build_page_analysis_context or build_failure_analysis_for_risk_flags_confidence_gap or build_review_section_preserves_actor_display_for_existing_entry or normalize_page_object_draft_promotes_legacy_payload_to_v1_contract or consume_model_bundle_promotes_nested_models_to_analysis_bundle_contract or normalize_page_surface_promotes_legacy_payload_to_v1_contract"`
+       - `12 passed`
+   - 当前判断：
+     - test point 生成与复核链条已经从路由层迁入分析服务
+     - 下一步如果继续，才考虑 page object quality 那个更厚的块
+   - 完成时间：`2026-03-22 18:07:21 CST`
+
+119. `legacy_workbench.py` 阶段 C 的 page object quality 第一片已完成收口：
+   - 已从路由层下沉到 `workbench_analysis_service.py` 的 page object quality 纯函数：
+     - `_requires_search_flow`
+     - `_required_page_elements`
+     - `_element_signature`
+     - `_build_page_object_quality`
+   - 路由层对应 wrapper 现已直接委托分析服务，不再承载 page object quality 的细节规则
+   - 已补验证：
+     - `PYTHONPATH=apps ./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/app/services/workbench_analysis_service.py apps/web-ui-service/tests/unit/test_workbench_analysis_service.py`
+     - `PYTHONPATH=apps ./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_analysis_service.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "build_page_object_quality_uses_default_resolver_and_rule_helpers or test_test_point_chain_helpers_delegate_and_annotate or surface_wrappers_delegate_to_rules or normalize_entry_wrappers_delegate_to_pipeline or build_risk_review_items_emits_single_review_card or risk_helpers_normalize_and_summarize or reviewer_display_name_handles_unknown_role or build_page_analysis_context or build_failure_analysis_for_risk_flags_confidence_gap or build_review_section_preserves_actor_display_for_existing_entry or normalize_page_object_draft_promotes_legacy_payload_to_v1_contract or consume_model_bundle_promotes_nested_models_to_analysis_bundle_contract or normalize_page_surface_promotes_legacy_payload_to_v1_contract"`
+       - `13 passed`
+   - 当前判断：
+     - page object quality 这一段已经开始正式下沉
+     - 下一步如果继续，适合只收 page object quality 周边的残余函数，别再横向扩散
+   - 完成时间：`2026-03-22 18:19:11 CST`
+
+120. `legacy_workbench.py` 阶段 C 的默认元素与安全键入口已继续下沉：
+   - 已从路由层下沉到 `workbench_analysis_service.py` 的公共确定性入口：
+     - `_default_page_elements`
+     - `_safe_element_key`
+   - `legacy_workbench.py` 的 `_ensure_page_object` 现已直接复用分析服务的默认元素生成逻辑
+   - 已补验证：
+     - `PYTHONPATH=apps ./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/app/services/workbench_analysis_service.py apps/web-ui-service/tests/unit/test_workbench_analysis_service.py`
+     - `PYTHONPATH=apps ./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_analysis_service.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "default_page_elements_and_safe_key_delegate_to_rules or build_page_object_quality_uses_default_resolver_and_rule_helpers or test_test_point_chain_helpers_delegate_and_annotate or surface_wrappers_delegate_to_rules or normalize_entry_wrappers_delegate_to_pipeline or build_risk_review_items_emits_single_review_card or risk_helpers_normalize_and_summarize or reviewer_display_name_handles_unknown_role or build_page_analysis_context or build_failure_analysis_for_risk_flags_confidence_gap or build_review_section_preserves_actor_display_for_existing_entry or normalize_page_object_draft_promotes_legacy_payload_to_v1_contract or consume_model_bundle_promotes_nested_models_to_analysis_bundle_contract or normalize_page_surface_promotes_legacy_payload_to_v1_contract"`
+       - `14 passed`
+   - 当前判断：
+     - page object 基础确定性逻辑已进一步收口
+     - 下一步如果继续，优先看 page object 周边是否还有零散 helper，再决定是否切回别的主优化项
+   - 完成时间：`2026-03-22 18:23:05 CST`
+
+121. `legacy_workbench.py` 阶段 C 的 test point 归一化入口已继续下沉：
+   - 已从路由层下沉到 `workbench_analysis_service.py` 的 test point 归一化入口：
+     - `_normalize_test_point_plan_payload`
+   - 路由层现在直接复用分析服务的 `normalize_test_point_plan`，不再直连 pipeline 归一化函数
+   - 已补验证：
+     - `PYTHONPATH=apps ./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py apps/web-ui-service/app/services/workbench_analysis_service.py apps/web-ui-service/tests/unit/test_workbench_analysis_service.py`
+     - `PYTHONPATH=apps ./.venv/bin/python -m pytest apps/web-ui-service/tests/unit/test_workbench_analysis_service.py apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "normalize_test_point_plan_delegates_to_pipeline or default_page_elements_and_safe_key_delegate_to_rules or build_page_object_quality_uses_default_resolver_and_rule_helpers or test_test_point_chain_helpers_delegate_and_annotate or surface_wrappers_delegate_to_rules or normalize_entry_wrappers_delegate_to_pipeline or build_risk_review_items_emits_single_review_card or risk_helpers_normalize_and_summarize or reviewer_display_name_handles_unknown_role or build_page_analysis_context or build_failure_analysis_for_risk_flags_confidence_gap or build_review_section_preserves_actor_display_for_existing_entry or normalize_page_object_draft_promotes_legacy_payload_to_v1_contract or consume_model_bundle_promotes_nested_models_to_analysis_bundle_contract or normalize_page_surface_promotes_legacy_payload_to_v1_contract"`
+       - `15 passed`
+   - 当前判断：
+     - test point 归一化已经从路由层继续下沉
+     - 下一步如果继续，可以先回头检查还剩哪些同级 helper 再决定是否切换主优化项
+   - 完成时间：`2026-03-22 18:27:12 CST`
+
+122. `test_point_asset` 追溯摘要的门禁说明已修正：
+   - 修复了 `traceability_summary.gate.gate_reason_summary` 在部分覆盖场景下被空摘要覆盖的问题
+   - 现在会优先消费派生门禁快照的说明摘要，若派生快照为空则回退到 run 里已保存的 `execution_gate_summary`
+   - 这次修复直接恢复了两条回归断言：
+     - `/api/workbench/test-point-assets/{case_id}`
+     - `/api/workbench/runs/{run_id}`
+   - 已补验证：
+     - `PYTHONPATH=apps ./.venv/bin/python -m pytest apps/web-ui-service/tests/integration/test_workbench_multisource_endpoints.py -q -k "get_test_point_asset_returns_detail_with_plan_and_references or get_run_attaches_test_point_asset_summary"`
+     - `2 passed`
+     - `PYTHONPATH=apps ./.venv/bin/python -m py_compile apps/web-ui-service/app/routers/legacy_workbench.py`
+   - 完成时间：`2026-03-22 18:58:50 CST`

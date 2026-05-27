@@ -1,0 +1,37 @@
+version: v4
+id: atp-web-perm-auth-rg-imp-0001
+title: 权限管理页-登录认证-基础场景-执行验证-回归验证权限页面可以正常打开
+module: permission
+priority: P1
+tags:
+- regression
+- permission
+owner: qa-team
+status: automated
+description: 回归验证权限页面可以正常打开
+requirement:
+- 权限管理模块
+data: {}
+execution:
+  runner: playwright
+  page: permission
+  variables: {}
+  steps:
+  - action: login
+  - action: click
+    target: permission_menu
+  - action: wait_for
+    target: permission_table
+  - action: assert_visible
+    target: permission_table
+legacy_case_id: ATP-WEB-PERM-AUTH-RG-IMP-0001
+project: atp
+client: web
+page_code: PERM
+page_name: 权限管理页
+module_code: AUTH
+module_name: 登录认证
+case_type: rg
+case_type_name: 回归测试
+source: imp
+source_name: 历史迁移导入

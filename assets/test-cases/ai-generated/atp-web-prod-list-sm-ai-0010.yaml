@@ -1,0 +1,40 @@
+version: v4
+id: atp-web-prod-list-sm-ai-0010
+title: 商品页-列表展示-基础场景-执行验证-验证登录后可进入商品页面并看到商品列表关键元素
+module: product
+priority: P0
+tags:
+- ai-generated
+- smoke
+- product
+owner: qa-team
+status: automated
+description: 验证登录后可进入商品页面并看到商品列表关键元素
+requirement:
+- 商品列表可访问
+data: {}
+execution:
+  runner: playwright
+  page: product
+  variables: {}
+  steps:
+  - action: login
+  - action: click
+    target: product_menu
+  - action: wait_for
+    target: product_list_title
+  - action: assert_visible
+    target: product_list_title
+  - action: assert_visible
+    target: product_table
+legacy_case_id: ATP-WEB-PROD-LIST-SM-AI-0010
+project: atp
+client: web
+page_code: PROD
+page_name: 商品页
+module_code: LIST
+module_name: 列表展示
+case_type: sm
+case_type_name: 冒烟测试
+source: ai
+source_name: AI自动生成

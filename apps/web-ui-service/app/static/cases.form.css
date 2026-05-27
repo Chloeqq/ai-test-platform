@@ -1,0 +1,172 @@
+.form-grid input,
+.form-grid select,
+.form-grid textarea,
+#manual-script-wrap textarea,
+#ai-requirement-wrap textarea,
+#script-editor {
+  width: 100%;
+  border: 1px solid #cddaea;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.case-dialog {
+  border: 1px solid #d5e1ef;
+  border-radius: 12px;
+  width: min(760px, calc(100vw - 40px));
+  padding: 0;
+}
+
+.case-dialog form {
+  padding: 14px;
+}
+
+.case-dialog header,
+.case-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.case-dialog header {
+  margin-bottom: 10px;
+}
+
+.case-dialog footer {
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.case-dialog h3 {
+  margin: 0;
+}
+
+.close-btn {
+  border: 0;
+  background: transparent;
+  font-size: 22px;
+  cursor: pointer;
+  color: #6d819d;
+}
+
+.wizard-steps {
+  margin: 6px 0 12px;
+  padding-left: 18px;
+  color: #667d9a;
+  font-size: 12px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.form-grid label,
+#manual-script-wrap,
+#ai-requirement-wrap {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #5f7290;
+}
+
+.data-config-panel {
+  margin-top: 12px;
+  border: 1px solid #d8e2ef;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fbfdff;
+}
+
+.detail-data-config-panel {
+  margin-top: 0;
+}
+
+.data-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.data-config-header strong {
+  color: #36557a;
+  font-size: 13px;
+}
+
+.data-config-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #5f7290;
+  font-size: 12px;
+}
+
+.data-config-fields,
+.data-config-actions {
+  margin-bottom: 10px;
+}
+
+.data-config-fields label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #5f7290;
+}
+
+.data-config-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.data-config-table-wrap {
+  overflow: auto;
+}
+
+.data-config-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.data-config-table th,
+.data-config-table td {
+  border: 1px solid #e0e8f3;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.data-config-table thead th {
+  background: #f1f6fd;
+  color: #5f7290;
+}
+
+.data-config-table .ddt-row-action {
+  width: 84px;
+}
+
+.data-config-table input {
+  width: 100%;
+  border: 1px solid #cddaea;
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+
+.ddt-empty {
+  color: #7186a2;
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

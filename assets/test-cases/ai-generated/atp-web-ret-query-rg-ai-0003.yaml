@@ -1,0 +1,38 @@
+version: v4
+id: atp-web-ret-query-rg-ai-0003
+title: 退货申请页-查询检索-需求追溯-执行校验-验证退货申请页面可访问，服务单号查询可用，并可从
+module: returnapply
+priority: P1
+tags:
+- ai-generated
+- smoke
+- returnapply
+owner: qa-team
+status: automated
+description: 验证退货申请页的查询检索场景可正常执行，页面访问、关键元素展示及基础交互符合预期。
+requirement:
+- 验证退货申请页面可访问，服务单号查询可用，并可从生成页回流到工作台查看结果。
+data: {}
+execution:
+  runner: playwright
+  page: returnapply
+  variables: {}
+  steps:
+  - action: login
+  - action: click
+    target: returnapply_menu
+  - action: wait_for
+    target: returnapply_list_title
+  - action: assert_visible
+    target: returnapply_list_title
+legacy_case_id: ATP-WEB-RET-QUERY-RG-AI-0003
+project: atp
+client: web
+page_code: RET
+page_name: 退货申请页
+module_code: QUERY
+module_name: 查询检索
+case_type: rg
+case_type_name: 回归测试
+source: ai
+source_name: AI自动生成

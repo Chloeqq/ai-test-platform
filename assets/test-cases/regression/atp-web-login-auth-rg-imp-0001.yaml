@@ -1,0 +1,33 @@
+version: v4
+id: atp-web-login-auth-rg-imp-0001
+title: 登录页-登录认证-基础场景-执行验证-回归验证管理员登录成功后能看到首页菜单
+module: auth
+priority: P1
+tags:
+- regression
+- auth
+owner: qa-team
+status: automated
+description: 回归验证管理员登录成功后能看到首页菜单
+requirement:
+- 管理员登录功能
+data: {}
+execution:
+  runner: playwright
+  page: login
+  variables: {}
+  steps:
+  - action: login
+  - action: assert_visible
+    target: home_menu
+legacy_case_id: ATP-WEB-LOGIN-AUTH-RG-IMP-0001
+project: atp
+client: web
+page_code: LOGIN
+page_name: 登录页
+module_code: AUTH
+module_name: 登录认证
+case_type: rg
+case_type_name: 回归测试
+source: imp
+source_name: 历史迁移导入

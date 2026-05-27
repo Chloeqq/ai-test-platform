@@ -1,0 +1,33 @@
+version: v4
+id: atp-web-addprod-subm-sm-ai-0006
+title: 新增商品页-提交申请-需求追溯-执行校验-验证进入新增商品页前的登录基线状态正常，确保后续
+module: addproduct
+priority: P1
+tags:
+- ai-generated
+- smoke
+- addproduct
+owner: qa-team
+status: automated
+description: 验证进入新增商品页前的登录基线状态正常，确保后续提交申请断言具备稳定前置条件。
+requirement:
+- 验证进入新增商品页前的登录基线状态正常，确保后续提交申请断言具备稳定前置条件。
+data: {}
+execution:
+  runner: playwright
+  page: addproduct
+  variables: {}
+  steps:
+  - action: assert_visible
+    target: login_button
+legacy_case_id: ATP-WEB-ADDPROD-SUBM-SM-AI-0006
+project: atp
+client: web
+page_code: ADDPROD
+page_name: 新增商品页
+module_code: SUBM
+module_name: 提交申请
+case_type: sm
+case_type_name: 冒烟测试
+source: ai
+source_name: AI自动生成

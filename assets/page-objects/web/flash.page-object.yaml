@@ -1,0 +1,169 @@
+page: flash
+description: 限时秒杀活动列表页面 - 用于秒杀活动的管理和配置
+
+elements:
+  # 导航和面包屑
+  flash_menu:
+    locator_type: role
+    role: menuitem
+    locator_value: 秒杀活动
+    description: 秒杀活动菜单项
+
+  breadcrumb_home:
+    locator_type: role
+    role: link
+    locator_value: 首页
+    description: 面包屑 - 首页链接
+
+  breadcrumb_marketing:
+    locator_type: role
+    role: link
+    locator_value: 营销
+    description: 面包屑 - 营销链接
+
+  # 筛选搜索区域
+  filter_section:
+    locator_type: css
+    locator_value: .filter-container
+    description: 筛选搜索区域
+
+  activity_name_input:
+    locator_type: placeholder
+    locator_value: 活动名称
+    description: 活动名称搜索输入框
+
+  search_button:
+    locator_type: role
+    role: button
+    locator_value: 查询搜索
+    description: 查询搜索按钮
+
+  reset_button:
+    locator_type: role
+    role: button
+    locator_value: 重置
+    description: 重置筛选按钮
+
+  # 数据列表区域
+  data_list_section:
+    locator_type: css
+    locator_value: .data-list-container
+    description: 数据列表区域
+
+  time_period_list_button:
+    locator_type: role
+    role: button
+    locator_value: 秒杀时间段列表
+    description: 秒杀时间段列表按钮
+
+  add_activity_button:
+    locator_type: role
+    role: button
+    locator_value: 添加活动
+    description: 添加新活动按钮
+
+  # 数据表格
+  flash_table:
+    locator_type: css
+    locator_value: .el-table
+    description: 秒杀活动表格
+
+  flash_list_title:
+    locator_type: css
+    locator_value: .el-table
+    description: 兼容历史 fallback case 的列表标题别名
+
+  table_header_row:
+    locator_type: css
+    locator_value: .el-table__header tr
+    description: 表格表头行
+
+  # 表格数据行 (使用 CSS 选择器定位具体行)
+  first_activity_row:
+    locator_type: css
+    locator_value: .el-table__body tr:nth-child(1)
+    description: 第一个活动数据行
+
+  second_activity_row:
+    locator_type: css
+    locator_value: .el-table__body tr:nth-child(2)
+    description: 第二个活动数据行
+
+  # 表格列定位器
+  activity_id_cell:
+    locator_type: css
+    locator_value: .el-table__body td:nth-child(2)
+    description: 活动编号列
+
+  activity_title_cell:
+    locator_type: css
+    locator_value: .el-table__body td:nth-child(3)
+    description: 活动标题列
+
+  activity_status_cell:
+    locator_type: css
+    locator_value: .el-table__body td:nth-child(4)
+    description: 活动状态列
+
+  # 操作按钮 (在每行的操作列中)
+  set_product_button:
+    locator_type: role
+    role: button
+    locator_value: 设置商品
+    description: 设置商品按钮
+
+  edit_button:
+    locator_type: role
+    role: button
+    locator_value: 编辑
+    description: 编辑活动按钮
+
+  delete_button:
+    locator_type: role
+    role: button
+    locator_value: 删除
+    description: 删除活动按钮
+
+  # 上线/下线开关
+  status_switch:
+    locator_type: css
+    locator_value: .el-switch
+    description: 上线/下线切换开关
+
+  # 分页控件
+  pagination_section:
+    locator_type: css
+    locator_value: .el-pagination
+    description: 分页控件区域
+
+  total_count_text:
+    locator_type: text
+    locator_value: 共
+    description: 总记录数文本
+
+  page_size_selector:
+    locator_type: css
+    locator_value: .el-pagination .el-select
+    description: 每页条数选择器
+
+  prev_page_button:
+    locator_type: role
+    role: button
+    locator_value: 上一页
+    description: 上一页按钮
+
+  next_page_button:
+    locator_type: role
+    role: button
+    locator_value: 下一页
+    description: 下一页按钮
+
+  current_page_indicator:
+    locator_type: css
+    locator_value: .el-pagination .number.active
+    description: 当前页码指示器
+
+  page_jump_input:
+    locator_type: css
+    locator_value: .el-pagination .el-input__inner
+    description: 页码跳转输入框

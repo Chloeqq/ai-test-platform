@@ -1,0 +1,36 @@
+.workbench-history-shell {
+  gap: 18px;
+}
+
+.workbench-history-grid {
+  align-items: start;
+}
+
+.workbench-history-summary-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.workbench-history-note-list,
+.workbench-history-link-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.workbench-history-note-item {
+  border: 1px solid var(--gp-line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: var(--gp-panel-soft);
+}
+
+.workbench-history-note-item strong {
+  color: var(--gp-text);
+}
+
+.workbench-history-link-list a {
+  text-decoration: none;
+}

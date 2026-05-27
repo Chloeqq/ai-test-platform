@@ -46,24 +46,24 @@ def ensure_dirs() -> None:
     state_store.ensure_dirs()
 
 
-def read_json_list(path: Path) -> list[dict[str, Any]]:
-    return state_store.read_json_list(path)
+def read_json_list(path: Path, db: Any = None) -> list[dict[str, Any]]:
+    return state_store.read_json_list(path, db=db)
 
 
-def write_json_list(path: Path, items: list[dict[str, Any]]) -> None:
-    state_store.write_json_list(path, items)
+def write_json_list(path: Path, items: list[dict[str, Any]], db: Any = None) -> None:
+    state_store.write_json_list(path, items, db=db)
 
 
-def append_history(entry: dict[str, Any]) -> None:
-    state_store.append_history(entry)
+def append_history(entry: dict[str, Any], db: Any = None) -> None:
+    state_store.append_history(entry, db=db)
 
 
-def append_runtime_run(entry: dict[str, Any]) -> None:
-    state_store.append_runtime_run(entry)
+def append_runtime_run(entry: dict[str, Any], db: Any = None) -> None:
+    state_store.append_runtime_run(entry, db=db)
 
 
-def update_runtime_run(run_id: str, updates: dict[str, Any]) -> None:
-    state_store.update_runtime_run(run_id, updates)
+def update_runtime_run(run_id: str, updates: dict[str, Any], db: Any = None) -> None:
+    state_store.update_runtime_run(run_id, updates, db=db)
 
 
 def list_defect_items(case_id: str = "") -> list[dict[str, Any]]:
@@ -105,28 +105,28 @@ def read_failure_source_calibration_items() -> list[dict[str, Any]]:
     return read_json_list(FAILURE_SOURCE_CALIBRATIONS_FILE)
 
 
-def write_history_items(items: list[dict[str, Any]]) -> None:
-    write_json_list(HISTORY_FILE, items)
+def write_history_items(items: list[dict[str, Any]], db: Any = None) -> None:
+    write_json_list(HISTORY_FILE, items, db=db)
 
 
-def write_runtime_run_items(items: list[dict[str, Any]]) -> None:
-    write_json_list(RUNTIME_RUNS_FILE, items)
+def write_runtime_run_items(items: list[dict[str, Any]], db: Any = None) -> None:
+    write_json_list(RUNTIME_RUNS_FILE, items, db=db)
 
 
-def write_defect_items(items: list[dict[str, Any]]) -> None:
-    write_json_list(DEFECT_LINKS_FILE, items)
+def write_defect_items(items: list[dict[str, Any]], db: Any = None) -> None:
+    write_json_list(DEFECT_LINKS_FILE, items, db=db)
 
 
-def write_review_items(items: list[dict[str, Any]]) -> None:
-    write_json_list(REVIEW_DECISIONS_FILE, items)
+def write_review_items(items: list[dict[str, Any]], db: Any = None) -> None:
+    write_json_list(REVIEW_DECISIONS_FILE, items, db=db)
 
 
-def write_gate_decision_items(items: list[dict[str, Any]]) -> None:
-    write_json_list(EXECUTION_GATE_DECISIONS_FILE, items)
+def write_gate_decision_items(items: list[dict[str, Any]], db: Any = None) -> None:
+    write_json_list(EXECUTION_GATE_DECISIONS_FILE, items, db=db)
 
 
-def write_failure_source_calibration_items(items: list[dict[str, Any]]) -> None:
-    write_json_list(FAILURE_SOURCE_CALIBRATIONS_FILE, items)
+def write_failure_source_calibration_items(items: list[dict[str, Any]], db: Any = None) -> None:
+    write_json_list(FAILURE_SOURCE_CALIBRATIONS_FILE, items, db=db)
 
 
 def clear_state_files() -> None:

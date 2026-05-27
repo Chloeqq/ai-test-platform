@@ -1,0 +1,35 @@
+data: {}
+description: 由于测试设计生成失败，系统采用回退策略生成该用例，用于验证商品页的列表展示基础场景可正常执行。
+execution:
+  page: product
+  runner: playwright
+  steps:
+  - action: login
+  - action: click
+    target: product_menu
+  variables: {}
+id: atp-web-prod-list-sm-ai-0005
+module: product
+owner: qa-team
+priority: P1
+requirement:
+- 自动生成的页面测试目标：验证 商品 页面可访问、关键区域可见、核心基础交互可执行。
+- '测试点(P1): 自动生成的页面测试目标：验证 商品 页面可访问、关键区域可见、核心基础交互可执行'
+- '测试点(P1): [接口契约] 接口契约定义'
+status: automated
+tags:
+- ai-generated
+- smoke
+title: 商品页-列表展示-需求追溯-执行校验-自动生成的页面测试目标：验证 商品 页面可访问、
+version: v4
+legacy_case_id: ATP-WEB-PROD-LIST-SM-AI-0005
+project: atp
+client: web
+page_code: PROD
+page_name: 商品页
+module_code: LIST
+module_name: 列表展示
+case_type: sm
+case_type_name: 冒烟测试
+source: ai
+source_name: AI自动生成

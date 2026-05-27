@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 - {{ platform_name }}</title>
+  <link rel="stylesheet" href="/static/login.css">
+</head>
+<body>
+  <main class="login-shell" id="login-shell" data-next-path="{{ next_path }}">
+    <section class="login-panel">
+      <div class="login-brand">
+        <div class="login-mark">AT</div>
+        <div>
+          <h1>{{ platform_name }}</h1>
+          <p>登录后即可将 URL 自动化、确认点审核与操作审计绑定到真实用户。</p>
+        </div>
+      </div>
+
+      <div class="login-copy">
+        <h2>登录平台</h2>
+        <p>这一步只做确定性认证，不涉及 AI 推断。成功后会把 token 写入浏览器，并自动回到你原来的页面。</p>
+      </div>
+
+      <form id="login-form" class="login-form">
+        <label>
+          用户名
+          <input id="login-username" name="username" type="text" autocomplete="username" placeholder="请输入用户名" required>
+        </label>
+        <label>
+          密码
+          <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" required>
+        </label>
+        <label class="login-remember">
+          <input id="login-remember" name="remember" type="checkbox" checked>
+          <span>记住登录状态</span>
+        </label>
+        <button type="submit" class="login-submit" id="login-submit">登录并返回</button>
+      </form>
+
+      <div class="login-status" id="login-status">请输入账号密码。</div>
+      <p class="login-note">说明：若页面上方已显示真实用户名，你可以直接返回工作台，无需重复登录。</p>
+    </section>
+  </main>
+
+  <script src="/static/platform_auth.js"></script>
+  <script src="/static/login.js"></script>
+</body>
+</html>

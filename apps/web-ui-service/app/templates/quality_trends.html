@@ -1,0 +1,119 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/governance_pages.css?v=20260403-trends-3">
+{% endblock %}
+
+{% block content %}
+<section class="governance-shell" id="quality-trends-shell">
+  <section class="page-hero">
+    <div class="page-hero-head">
+      <div class="page-hero-copy">
+        <p class="breadcrumb">
+          {% for item in breadcrumbs %}
+            <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+          {% endfor %}
+        </p>
+        <h1>{{ page_title }}</h1>
+        <p>{{ page_description }}</p>
+        <div class="page-hero-actions">
+          <a class="btn btn-primary" href="/quality/flaky">查看 Flaky 分析</a>
+          <a class="btn btn-soft" href="/quality/gates">查看质量门禁</a>
+        </div>
+      </div>
+      <aside class="hero-side-note">
+        <h2>页面目标</h2>
+        <p>把治理趋势从 dashboard 的一块卡片升级成完整页面，方便团队按 7 天和 14 天窗口持续观察风险压力。</p>
+      </aside>
+    </div>
+    {% if active_filters %}
+    <div class="filter-pills">
+      {% for item in active_filters %}
+      <span class="filter-pill"><strong>{{ item.label }}</strong>{{ item.value }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="hero-kpis">
+      <article class="hero-kpi"><span>7d 门禁阻断</span><strong id="qt-blocked-7d">-</strong></article>
+      <article class="hero-kpi"><span>7d 风险阻断</span><strong id="qt-risk-blocked-7d">-</strong></article>
+      <article class="hero-kpi"><span>7d 需复核</span><strong id="qt-review-required-7d">-</strong></article>
+      <article class="hero-kpi"><span>Strict Manifest</span><strong id="qt-strict-mode">-</strong></article>
+    </div>
+  </section>
+
+  <section class="page-grid-2">
+    <article class="panel">
+      <div class="panel-head"><div><h2>治理趋势总览</h2><p>按日查看 pressure score、门禁阻断、风险阻断和需复核数量。</p></div></div>
+      <div class="list-toolbar">
+        <div class="list-search-row">
+          <label class="list-search-field" for="qt-keyword">
+            <span class="sr-only">搜索趋势</span>
+            <input id="qt-keyword" type="search" placeholder="搜索日期 / 告警码 / 视图关键词">
+            <button id="qt-search-clear" class="list-search-clear" type="button" aria-label="清空搜索">清空</button>
+          </label>
+          <button id="qt-search" class="btn btn-primary" type="button">搜索</button>
+        </div>
+        <div class="list-filter-row">
+          <div class="list-filter-strip">
+            <label class="toolbar-field"><span>时间窗口</span><select id="qt-window"><option value="14" selected>最近 14 天</option><option value="7">最近 7 天</option></select></label>
+            <label class="toolbar-field"><span>视图</span><select id="qt-view"><option value="governance" selected>治理趋势</option><option value="strict">Strict Manifest</option></select></label>
+          </div>
+          <details class="list-more-filters toolbar-advanced" id="qt-advanced-filters">
+            <summary>更多筛选</summary>
+            <div class="toolbar-advanced-grid">
+              <label class="toolbar-field"><span>门禁告警码</span><input id="qt-alert-code" placeholder="如 REQQG_CONFIDENCE_LOW"></label>
+            </div>
+            <div class="button-row">
+              <button id="qt-apply-filters" class="btn btn-primary" type="button">应用筛选</button>
+              <button id="qt-reset" class="btn" type="button">重置筛选</button>
+            </div>
+          </details>
+          <div class="toolbar-inline">
+            <button id="qt-refresh" class="btn btn-primary" type="button">刷新趋势</button>
+          </div>
+        </div>
+      </div>
+      <div class="toolbar-meta">
+        <span id="qt-filter-summary">当前按默认时间窗口展示治理趋势。</span>
+        <span id="qt-last-updated">最后刷新：-</span>
+      </div>
+      <div class="panel-body stack">
+        <div class="chart-box">
+          <table class="mini-trend-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>门禁阻断</th>
+                <th>风险阻断</th>
+                <th>需复核</th>
+                <th>压力分</th>
+              </tr>
+            </thead>
+            <tbody id="qt-trend-tbody">
+              <tr><td colspan="5" class="loading-state">正在加载趋势数据...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="table-footer" id="qt-footer"></div>
+    </article>
+
+    <aside class="stack">
+      <article class="panel">
+        <div class="panel-head"><div><h2>Top 风险摘要</h2><p>让我们知道这一阶段最值得盯的信号是什么。</p></div></div>
+        <div class="panel-body stack" id="qt-top-summary"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><h2>指标说明</h2><p>把治理页里的关键口径在这里说明清楚，避免误读。</p></div></div>
+        <div class="panel-body stack" id="qt-metrics"></div>
+      </article>
+    </aside>
+  </section>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/quality_trends.js?v=20260404-trends-4"></script>
+{% endblock %}

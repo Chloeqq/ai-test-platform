@@ -1,0 +1,36 @@
+version: v4
+id: atp-web-prod-list-fn-ai-0003
+title: 商品页-列表展示-需求追溯-执行校验-验证商品列表可打开
+module: product
+priority: P1
+tags:
+- ai-generated
+owner: qa-team
+status: automated
+description: 验证商品页的列表展示场景可正常执行，页面访问、关键元素展示及基础交互符合预期。
+requirement:
+- 验证商品列表可打开
+data: {}
+execution:
+  runner: playwright
+  page: product
+  variables: {}
+  steps:
+  - action: login
+  - action: click
+    target: product_menu
+  - action: wait_for
+    target: product_title
+  - action: assert_visible
+    target: product_title
+legacy_case_id: ATP-WEB-PROD-LIST-FN-AI-0003
+project: atp
+client: web
+page_code: PROD
+page_name: 商品页
+module_code: LIST
+module_name: 列表展示
+case_type: fn
+case_type_name: 功能测试
+source: ai
+source_name: AI自动生成

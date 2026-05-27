@@ -1,0 +1,129 @@
+{% extends "_layout.html" %}
+
+{% block title %}{{ page_title }} - {{ platform_name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="/static/governance_pages.css?v=20260403-gate-4">
+{% endblock %}
+
+{% block content %}
+<section class="governance-shell" id="gate-console-shell">
+  <section class="page-hero">
+    <div class="page-hero-head">
+      <div class="page-hero-copy">
+        <p class="breadcrumb">
+          {% for item in breadcrumbs %}
+            <span>{{ item }}</span>{% if not loop.last %}<span class="crumb-sep">/</span>{% endif %}
+          {% endfor %}
+        </p>
+        <h1>{{ page_title }}</h1>
+        <p>{{ page_description }}</p>
+        <div class="page-hero-actions">
+          <a class="btn btn-primary" href="/quality/trends">查看趋势分析</a>
+          <a class="btn btn-soft" href="/execution/results">查看执行结果</a>
+        </div>
+      </div>
+      <aside class="hero-side-note">
+        <h2>治理焦点</h2>
+        <p>这个页面优先服务“看清当前门禁策略”和“处理最近的人工决策/审批动作”，布局先围绕这两件事展开。</p>
+      </aside>
+    </div>
+    <div class="hero-kpis">
+      <article class="hero-kpi"><span>默认阻断阈值</span><strong id="gate-threshold">-</strong></article>
+      <article class="hero-kpi"><span>24h 阻断次数</span><strong id="gate-blocked-24h">-</strong></article>
+      <article class="hero-kpi"><span>24h 阻断率</span><strong id="gate-block-rate-24h">-</strong></article>
+      <article class="hero-kpi"><span>待审批决策</span><strong id="gate-pending-approvals">-</strong></article>
+    </div>
+  </section>
+
+  <section class="page-grid-2">
+    <article class="panel">
+      <div class="panel-head"><div><h2>门禁策略配置</h2><p>先展示当前策略，再给出最近阻断和动作建议。</p></div></div>
+      <div class="panel-body stack">
+        <div class="stat-grid" id="gate-config-cards"></div>
+        <div class="detail-highlight">
+          <h3 id="gate-top-alert-code">当前热点告警码：-</h3>
+          <p id="gate-top-alert-reason">正在分析最近的 quality gate 阻断热点。</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-head"><div><h2>人工决策与审批</h2><p>先做首版运营表单，支持决策、审批和撤销。</p></div></div>
+      <div class="toolbar">
+        <label class="toolbar-field"><span>项目</span><input id="gate-project" value="default"></label>
+        <label class="toolbar-field"><span>Run ID</span><input id="gate-run-id" placeholder="run-id"></label>
+        <label class="toolbar-field"><span>页面</span><input id="gate-page" placeholder="product"></label>
+        <label class="toolbar-field"><span>用例 ID</span><input id="gate-case-id" placeholder="page-module-001"></label>
+        <label class="toolbar-field"><span>决策</span><select id="gate-decision"><option value="allow">allow</option><option value="manual_review">manual_review</option><option value="block">block</option></select></label>
+        <label class="toolbar-field"><span>备注</span><textarea id="gate-note" placeholder="记录门禁说明、审批原因或撤销理由"></textarea></label>
+        <div class="button-row">
+          <button id="gate-save-btn" class="btn btn-primary" type="button">保存决策</button>
+          <button id="gate-approve-btn" class="btn btn-soft" type="button">二次审批</button>
+          <button id="gate-revoke-btn" class="btn btn-danger" type="button">撤销决策</button>
+        </div>
+        <div id="gate-action-feedback" class="muted">等待操作</div>
+      </div>
+    </article>
+  </section>
+
+  <article class="panel">
+    <div class="panel-head"><div><h2>最近门禁决策</h2><p>基于操作历史时间线回放最近的 execution gate 决策、审批和撤销。</p></div></div>
+    <div class="list-toolbar">
+      <div class="list-search-row">
+        <label class="list-search-field" for="gate-filter-keyword">
+          <span class="sr-only">搜索门禁历史</span>
+          <input id="gate-filter-keyword" type="search" placeholder="搜索 Run ID / 页面 / 动作 / 摘要">
+          <button id="gate-search-clear" class="list-search-clear" type="button" aria-label="清空搜索">清空</button>
+        </label>
+        <button id="gate-search" class="btn btn-primary" type="button">搜索</button>
+      </div>
+      <div class="list-filter-row">
+        <div class="list-filter-strip">
+          <label class="toolbar-field"><span>审批状态</span><input id="gate-filter-approval" placeholder="如 pending / approved"></label>
+        </div>
+        <details class="list-more-filters toolbar-advanced" id="gate-advanced-filters">
+          <summary>更多筛选</summary>
+          <div class="toolbar-advanced-grid">
+            <label class="toolbar-field"><span>动作</span><input id="gate-filter-action" placeholder="如 decision / approve / revoke"></label>
+          </div>
+          <div class="button-row">
+            <button id="gate-apply-filters" class="btn btn-primary" type="button">应用筛选</button>
+            <button id="gate-history-reset" class="btn" type="button">重置筛选</button>
+          </div>
+        </details>
+        <div class="toolbar-inline">
+          <button id="gate-history-refresh" class="btn btn-primary" type="button">刷新历史</button>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar-meta">
+      <span id="gate-history-summary">当前按默认顺序展示最近门禁决策。</span>
+      <span id="gate-last-updated">最后刷新：-</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>动作</th>
+            <th>Run / Page</th>
+            <th>决策</th>
+            <th>审批状态</th>
+            <th>处理人</th>
+            <th>摘要</th>
+          </tr>
+        </thead>
+          <tbody id="gate-history-tbody">
+            <tr><td colspan="7" class="loading-state">正在加载门禁历史...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    <div class="table-footer" id="gate-history-footer"></div>
+  </article>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/gate_console.js?v=20260404-gate-5"></script>
+{% endblock %}

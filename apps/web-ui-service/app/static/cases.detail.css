@@ -1,0 +1,152 @@
+.detail-grid {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.detail-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-card h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.basic-info-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 8px 10px;
+  font-size: 13px;
+}
+
+.basic-info-grid dt {
+  color: #647b98;
+}
+
+.basic-info-grid dd {
+  margin: 0;
+}
+
+.editor-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+#script-editor {
+  min-height: 300px;
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-size: 12px;
+}
+
+.code-preview {
+  margin: 0;
+  border: 1px solid #d5e1ef;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #d7e4f5;
+  padding: 10px;
+  min-height: 300px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.code-preview .kw {
+  color: #7dd3fc;
+}
+
+.code-preview .fn {
+  color: #93c5fd;
+}
+
+.code-preview .str {
+  color: #fbcfe8;
+}
+
+.detail-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+
+.version-compare-actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.version-compare-actions label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7f9a;
+}
+
+.version-compare-actions select {
+  min-width: 116px;
+  border: 1px solid #cddaea;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #fff;
+  color: #314e72;
+  font-size: 13px;
+}
+
+.version-diff-summary {
+  margin: 2px 0 10px;
+  font-size: 12px;
+  color: #6c809c;
+}
+
+.version-diff-viewer {
+  margin: 0 0 12px;
+  border: 1px solid #d8e2ef;
+  border-radius: 8px;
+  background: #f9fbff;
+  color: #314661;
+  padding: 10px;
+  min-height: 120px;
+  max-height: 360px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.version-diff-viewer .diff-added {
+  display: block;
+  color: #1e7f46;
+  background: #e8f8ee;
+}
+
+.version-diff-viewer .diff-removed {
+  display: block;
+  color: #ab2f2f;
+  background: #fbeeee;
+}
+
+.version-diff-viewer .diff-meta {
+  display: block;
+  color: #3e6da5;
+}
+
+.version-diff-viewer .diff-chunk {
+  display: block;
+  color: #5f7290;
+}
+
+.muted {
+  color: #6f839d;
+}
+
+@media (max-width: 860px) {
+  .editor-wrap {
+    grid-template-columns: 1fr;
+  }
+}

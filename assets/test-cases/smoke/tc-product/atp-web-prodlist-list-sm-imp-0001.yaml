@@ -1,0 +1,37 @@
+version: v4
+id: atp-web-prodlist-list-sm-imp-0001
+title: 商品列表页-列表展示-冒烟测试-执行验证-关键结果正确
+module: product-list
+priority: P1
+tags:
+- smoke
+- product/list
+owner: qa-team
+status: automated
+description: 点击商品列表页
+requirement:
+- 列表页面展示
+data: {}
+execution:
+  runner: playwright
+  page: product/list
+  variables: {}
+  steps:
+  - action: login
+  - action: click
+    target: list_navigation_entry
+  - action: wait_for
+    target: list_table
+  - action: assert_visible
+    target: list_table
+legacy_case_id: ATP-WEB-PRODLIST-LIST-SM-IMP-0001
+project: atp
+client: web
+page_code: PRODLIST
+page_name: 商品列表页
+module_code: LIST
+module_name: 列表展示
+case_type: sm
+case_type_name: 冒烟测试
+source: imp
+source_name: 历史迁移导入

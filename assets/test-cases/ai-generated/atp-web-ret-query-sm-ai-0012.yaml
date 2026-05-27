@@ -1,0 +1,49 @@
+version: v4
+id: atp-web-ret-query-sm-ai-0012
+title: 退货申请页-查询检索-需求追溯-执行校验-在退货申请页面输入服务单号 3 后点击查询，验证
+module: returnapply
+priority: P0
+tags:
+- ai-generated
+- smoke
+- returnapply
+- search
+owner: qa-team
+status: automated
+description: 在退货申请页面输入服务单号 3 后点击查询，验证列表仅返回服务单号为 3 的记录。
+requirement:
+- 在退货申请页面输入服务单号 3 后点击查询，验证列表仅返回服务单号为 3 的记录。
+data: {}
+execution:
+  runner: playwright
+  page: returnapply
+  variables: {}
+  steps:
+  - action: login
+  - action: goto
+    value: http://localhost:5173/#/oms/returnApply
+  - action: assert_url
+    value: http://localhost:5173/#/oms/returnApply
+  - action: wait_for
+    target: search_input
+  - action: fill
+    target: search_input
+    value: '3'
+  - action: click
+    target: search_button
+  - action: wait_for
+    target: returnapply_rows
+  - action: assert_count
+    target: returnapply_rows
+    count: 1
+legacy_case_id: ATP-WEB-RET-QUERY-SM-AI-0012
+project: atp
+client: web
+page_code: RET
+page_name: 退货申请页
+module_code: QUERY
+module_name: 查询检索
+case_type: sm
+case_type_name: 冒烟测试
+source: ai
+source_name: AI自动生成

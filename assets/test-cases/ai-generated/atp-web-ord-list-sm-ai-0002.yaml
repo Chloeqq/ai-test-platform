@@ -1,0 +1,45 @@
+data: {}
+description: 验证订单核心流程页面可访问，关键列表元素可见。
+execution:
+  page: order
+  runner: playwright
+  steps:
+  - action: login
+  - action: click
+    target: order_menu
+  - action: wait_for
+    target: order_list_title
+  - action: assert_visible
+    target: order_list_title
+  - action: assert_visible
+    target: order_table
+  - action: assert_url
+    value: http://localhost:5173/#/oms/order
+  variables: {}
+id: atp-web-ord-list-sm-ai-0002
+module: order
+owner: qa-team
+priority: P0
+requirement:
+- 验证订单核心流程页面可访问，关键列表元素可见。
+- '页面: 订单'
+- 场景说明：验证商品与订单核心流程页面可访问，关键列表/表单元素可见。
+status: automated
+tags:
+- ai-generated
+- smoke
+- oms
+- order
+title: 订单页-列表展示-需求追溯-执行校验-验证订单核心流程页面可访问，关键列表元素可见。
+version: v4
+legacy_case_id: ATP-WEB-ORD-LIST-SM-AI-0002
+project: atp
+client: web
+page_code: ORD
+page_name: 订单页
+module_code: LIST
+module_name: 列表展示
+case_type: sm
+case_type_name: 冒烟测试
+source: ai
+source_name: AI自动生成

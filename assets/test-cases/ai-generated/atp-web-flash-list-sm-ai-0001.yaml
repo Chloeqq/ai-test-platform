@@ -1,0 +1,42 @@
+data: {}
+description: 由于测试设计生成失败，系统采用回退策略生成该用例，用于验证秒杀活动页的列表展示基础场景可正常执行。
+execution:
+  page: flash
+  runner: playwright
+  steps:
+  - action: login
+  - action: click
+    target: flash_menu
+  - action: wait_for
+    target: flash_list_title
+  - action: assert_visible
+    target: flash_list_title
+  variables: {}
+id: atp-web-flash-list-sm-ai-0001
+module: flash
+owner: qa-team
+priority: P1
+requirement:
+- 由于测试设计生成失败，系统采用回退策略生成该用例，用于验证秒杀活动页的列表展示基础场景可正常执行。
+- '测试点(P2): 页面基础加载与展示'
+- 测试点(P2):-输入URL访问页面
+- 测试点(P2):-页面正常加载
+- '测试点(P2): 预期结果:'
+- '测试点(P2): 导航显示正确路径：首页/营销/秒杀活动列表'
+status: automated
+tags:
+- ai-generated
+- smoke
+title: 秒杀活动页-列表展示-需求追溯-执行校验-由于测试设计生成失败，系统采用回退策略生成该用例
+version: v4
+legacy_case_id: ATP-WEB-FLASH-LIST-SM-AI-0001
+project: atp
+client: web
+page_code: FLASH
+page_name: 秒杀活动页
+module_code: LIST
+module_name: 列表展示
+case_type: sm
+case_type_name: 冒烟测试
+source: ai
+source_name: AI自动生成

@@ -1,0 +1,37 @@
+version: v4
+id: atp-web-prod-list-sm-imp-0001
+title: 商品页-列表展示-基础场景-执行验证-登录后进入商品列表页面
+module: product
+priority: P0
+tags:
+- smoke
+- product
+owner: qa-team
+status: automated
+description: 登录后进入商品列表页面
+requirement:
+- 商品列表展示
+data: {}
+execution:
+  runner: playwright
+  page: product
+  variables: {}
+  steps:
+  - action: login
+  - action: click
+    target: product_menu
+  - action: wait_for
+    target: product_list_title
+  - action: assert_visible
+    target: product_list_title
+legacy_case_id: ATP-WEB-PROD-LIST-SM-IMP-0001
+project: atp
+client: web
+page_code: PROD
+page_name: 商品页
+module_code: LIST
+module_name: 列表展示
+case_type: sm
+case_type_name: 冒烟测试
+source: imp
+source_name: 历史迁移导入

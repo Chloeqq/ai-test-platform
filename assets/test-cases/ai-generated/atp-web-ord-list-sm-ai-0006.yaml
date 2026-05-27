@@ -1,0 +1,41 @@
+data: {}
+description: 由于测试设计生成失败，系统采用回退策略生成该用例，用于验证订单页的列表展示基础场景可正常执行。
+execution:
+  page: order
+  runner: playwright
+  steps:
+  - action: login
+  - action: click
+    target: order_menu
+  - action: wait_for
+    target: order_list_title
+  - action: assert_visible
+    target: order_list_title
+  variables: {}
+id: atp-web-ord-list-sm-ai-0006
+module: order
+owner: qa-team
+priority: P1
+requirement:
+- 由于测试设计生成失败，系统采用回退策略生成该用例，用于验证订单页的列表展示基础场景可正常执行。
+- '测试点(P0): 变更影响回归: service.py'
+- '测试点(P1): 变更函数回归: query 订单 list'
+- '测试点(P2): [defect ticket] BUG-1001 timeout in 订单 list query'
+- '测试点(P1): API: GET /api/订单/list'
+- '测试点(P1): API: 查询订单列表'
+status: automated
+tags:
+- ai-generated
+title: 订单页-列表展示-需求追溯-执行校验-由于测试设计生成失败，系统采用回退策略生成该用例
+version: v4
+legacy_case_id: ATP-WEB-ORD-LIST-SM-AI-0006
+project: atp
+client: web
+page_code: ORD
+page_name: 订单页
+module_code: LIST
+module_name: 列表展示
+case_type: sm
+case_type_name: 冒烟测试
+source: ai
+source_name: AI自动生成

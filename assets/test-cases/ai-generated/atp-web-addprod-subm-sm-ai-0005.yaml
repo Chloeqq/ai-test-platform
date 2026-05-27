@@ -1,0 +1,45 @@
+data: {}
+description: 验证新增商品页的提交申请场景可正常执行，页面访问、关键元素展示及基础交互符合预期。
+execution:
+  page: addproduct
+  runner: playwright
+  steps:
+  - action: login
+  - action: click
+    target: addproduct_menu
+  - action: assert_url
+    value: http://localhost:5173/#/pms/addProuct
+  - action: wait_for
+    target: addproduct_list_title
+  - action: assert_visible
+    target: addproduct_list_title
+  - action: assert_visible
+    target: addproduct_form
+  - action: assert_visible
+    target: save_button
+  variables: {}
+id: atp-web-addprod-subm-sm-ai-0005
+module: addproduct
+owner: qa-team
+priority: P0
+requirement:
+- 验证新增商品页的提交申请场景可正常执行，页面访问、关键元素展示及基础交互符合预期。
+status: automated
+tags:
+- ai-generated
+- smoke
+- pms
+- addproduct
+title: 新增商品页-提交申请-需求追溯-执行校验-验证新增商品页的提交申请场景可正常执行，页面访问
+version: v4
+legacy_case_id: ATP-WEB-ADDPROD-SUBM-SM-AI-0005
+project: atp
+client: web
+page_code: ADDPROD
+page_name: 新增商品页
+module_code: SUBM
+module_name: 提交申请
+case_type: sm
+case_type_name: 冒烟测试
+source: ai
+source_name: AI自动生成

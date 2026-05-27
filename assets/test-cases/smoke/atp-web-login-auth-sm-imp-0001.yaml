@@ -1,0 +1,33 @@
+version: v4
+id: atp-web-login-auth-sm-imp-0001
+title: 登录页-登录认证-基础场景-执行验证-验证管理员可以成功登录系统
+module: auth
+priority: P0
+tags:
+- smoke
+- auth
+owner: qa-team
+status: automated
+description: 验证管理员可以成功登录系统
+requirement:
+- 管理员登录功能
+data: {}
+execution:
+  runner: playwright
+  page: login
+  variables: {}
+  steps:
+  - action: login
+  - action: assert_visible
+    target: home_menu
+legacy_case_id: ATP-WEB-LOGIN-AUTH-SM-IMP-0001
+project: atp
+client: web
+page_code: LOGIN
+page_name: 登录页
+module_code: AUTH
+module_name: 登录认证
+case_type: sm
+case_type_name: 冒烟测试
+source: imp
+source_name: 历史迁移导入

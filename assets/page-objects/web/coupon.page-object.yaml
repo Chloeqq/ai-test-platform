@@ -1,0 +1,17 @@
+page: coupon
+
+description: SMS 优惠券管理页面 - 列表查看与基础导航
+
+elements:
+  coupon_menu:
+    locator_type: role
+    role: menuitem
+    locator_value: 优惠券列表
+
+  coupon_list_title:
+    locator_type: text
+    locator_value: 优惠券列表
+
+  coupon_table:
+    locator_type: css
+    locator_value: .el-table
