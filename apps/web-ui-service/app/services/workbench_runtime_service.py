@@ -909,8 +909,8 @@ def execute_run(
     log_path = Path(job["log_path"]).resolve()
     artifacts_dir = Path(job["artifacts_dir"]).resolve()
     videos_dir = Path(job["videos_dir"]).resolve()
-    allure_results_dir = artifacts_dir / "allure-results"
-    allure_report_dir = runner_root / "allure-report"
+    allure_results_dir = Path(os.getenv("ALLURE_RESULTS_DIR") or artifacts_dir / "allure-results")
+    allure_report_dir = Path(os.getenv("ALLURE_REPORT_DIR") or runner_root / "allure-report")
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     videos_dir.mkdir(parents=True, exist_ok=True)
     allure_results_dir.mkdir(parents=True, exist_ok=True)
@@ -1003,10 +1003,11 @@ def execute_run(
         log_fp.write(f"[allure] completed returncode={allure_result.returncode}\n")
         log_fp.flush()
 
-    status_value = "passed" if return_code == 0 else "failed"
+    status_value = "passed" if return_code == 0 else "timeout" if timed_out else "failed"
     finished_at_value = now_iso_fn()
     artifact_execution_record = load_runtime_execution_record_from_artifacts(artifacts_dir)
     if not artifact_execution_record:
+        LOGGER.warning("run %s evidence degraded: no manifest found in %s", run_id, artifacts_dir)
         artifact_execution_record = build_fallback_execution_record(
             job,
             status_value=status_value,
@@ -1018,6 +1019,8 @@ def execute_run(
             timeout_seconds=timeout_seconds,
             timed_out=timed_out,
         )
+        if isinstance(artifact_execution_record, dict):
+            artifact_execution_record["evidence_degraded"] = True
     case_failure: dict[str, Any] = {}
     if status_value == "failed":
         run_failure_entries: list[dict[str, Any]] = []
@@ -1100,7 +1103,7 @@ def persist_runtime_run_to_case_center(db: Session, run_item: dict[str, Any]) ->
         return None
     execution_record = run_item.get("execution_record") if isinstance(run_item.get("execution_record"), dict) else {}
     status_value = (_text(run_item.get("status")) or _text(execution_record.get("status")) or "unknown").lower()
-    if status_value not in {"passed", "failed", "cancelled", "skipped", "error"}:
+    if status_value not in {"passed", "failed", "cancelled", "skipped", "error", "timeout"}:
         return None
     case = TestCaseRepository(db).get_by_case_id_and_project(case_id, project)
     if case is None:

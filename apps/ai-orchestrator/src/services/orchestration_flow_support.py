@@ -298,6 +298,22 @@ class OrchestrationFlowSupport:
                     "upstream_error": str(exc)[:500],
                 },
             ) from exc
+        # Normalize test points to DSL V1.1 contract before validation.
+        # This mirrors the pipeline path's _normalize_and_scope_test_points step.
+        try:
+            from shared_backend.schemas.contracts import normalize_test_point_plan_v1
+
+            plan_wrapper = {
+                "version": "TestPointPlanV1",
+                "project": project,
+                "page": resolved_page,
+                "points": points,
+            }
+            normalized_plan, _warnings = normalize_test_point_plan_v1(plan_wrapper)
+            points = normalized_plan.get("points", points)
+        except Exception:
+            pass  # normalization is best-effort; validation will catch real issues
+
         validation_result = ContractValidator().validate_full(
             requirement_spec if isinstance(requirement_spec, dict) else None,
             points,

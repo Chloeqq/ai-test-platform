@@ -1896,6 +1896,13 @@ def _resolve_page_object_from_assets(page: str) -> dict[str, Any] | None:
 
 
 def resolve_page_object(project: str, page: str, *, strict_governance: bool = True) -> dict[str, Any]:
+    """Pipeline 的页面对象解析（Shared Path）。
+
+    先查 DB（通过 _load_page_object_from_db），失败则回退到 YAML asset。
+    返回 {page, page_url, elements}。
+    对应的 orchestrator 入口是 OrchestratorService._resolve_page_object()，
+    对应的 facade 入口是 facade._page_object_generation_context()。
+    """
     normalized_project = _normalized_text(project)
     normalized_page = _normalized_text(page).lower()
     if not normalized_project or not normalized_page:
@@ -2061,7 +2068,15 @@ def _call_orchestrator_and_parse(
     )
     if direct_orchestrator_result is not None:
         orchestrator_result = direct_orchestrator_result
+        _LOGGER.info(
+            "pipeline using direct candidate path (no LLM call): page=%s intent_ids=%s",
+            normalized_page, selected_intent_ids_list,
+        )
     else:
+        _LOGGER.info(
+            "pipeline calling orchestrator LLM: page=%s requirement_chars=%d",
+            normalized_page, len(effective_requirement),
+        )
         orchestrator_result = run_orchestrator_generate(
             requirement=effective_requirement,
             page=normalized_page,

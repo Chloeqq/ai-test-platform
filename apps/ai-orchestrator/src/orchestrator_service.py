@@ -992,6 +992,13 @@ class OrchestratorService:
             sys.path.insert(0, str(self.runner_root))
 
     def _resolve_page_object(self, *, project: str, page: str) -> dict[str, Any]:
+        """Orchestrator 的页面对象解析（Path A）。
+
+        先查 YAML asset，再回退到 DB。返回 {page, elements}。
+        对应的 pipeline 入口是 generate_pipeline.resolve_page_object()，
+        对应的 facade 入口是 facade._page_object_generation_context()。
+        三者功能等价，返回格式略有不同。
+        """
         normalized_project = str(project).strip() or "mall"
         normalized_page = str(page).strip().lower()
         if not normalized_page:

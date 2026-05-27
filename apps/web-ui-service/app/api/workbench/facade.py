@@ -108,6 +108,54 @@ def _settings() -> Any:
     """统一读取运行配置，避免在调用点重复导入配置对象。"""
     return get_settings()
 
+# ---- 运行时视图构建 ----
+def _build_runtime_view_from_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """为 run_case 构建运行时视图回调：将 store 函数注入 service 调用。
+
+    从 run_case 的闭包提取到模块级别——不依赖任何 run_case 局部变量。
+    """
+    review_decisions_for_run = partial(
+        workbench_review_service.review_decisions_for_run,
+        read_json_list_fn=store.read_json_list,
+        review_decisions_file=constants.REVIEW_DECISIONS_FILE,
+        normalize_page_slug_fn=workbench_gate_service.normalize_page_slug,
+        normalize_review_type_fn=workbench_review_service.normalize_review_type,
+        normalize_review_status_fn=workbench_review_service.normalize_review_status,
+        sanitize_review_items_fn=workbench_review_service.sanitize_review_items,
+    )
+    return workbench_runtime_service.runtime_view_from_entry(
+        entry,
+        normalize_execution_record_payload=_normalize_execution_record_payload,
+        normalize_page_slug=workbench_gate_service.normalize_page_slug,
+        build_page_analysis_context=workbench_analysis_service.build_page_analysis_context,
+        build_item_review_state=partial(
+            workbench_review_service.build_item_review_state,
+            normalize_page_slug_fn=workbench_gate_service.normalize_page_slug,
+            build_page_analysis_context_fn=workbench_analysis_service.build_page_analysis_context,
+            review_decisions_for_run_fn=review_decisions_for_run,
+            build_test_point_review_items_fn=workbench_analysis_service.build_test_point_review_items,
+            build_review_section_fn=workbench_analysis_service.build_review_section,
+            build_risk_review_items_fn=workbench_analysis_service.build_risk_review_items,
+        ),
+        build_run_review_state_from_decisions=partial(
+            workbench_review_service.build_run_review_state_from_decisions,
+            review_decisions_for_run_fn=review_decisions_for_run,
+            normalize_page_slug_fn=workbench_gate_service.normalize_page_slug,
+            build_review_section_fn=workbench_analysis_service.build_review_section,
+        ),
+        build_test_point_asset_gate_context=workbench_asset_service.build_test_point_asset_gate_context,
+        build_execution_gate=workbench_gate_service.build_execution_gate,
+        build_review_audit_summary=workbench_review_service.build_review_audit_summary,
+        build_review_audit_timeline=workbench_review_service.build_review_audit_timeline,
+        build_risk_report_summary=workbench_analysis_service.build_risk_report_summary,
+        build_self_healing_summary=workbench_analysis_service.build_self_healing_summary,
+        execution_gate_decision_for_run=lambda *, run_id, project="", page="": workbench_gate_service.execution_gate_decision_for_run(
+            run_id=run_id, project=project, page=page,
+            read_json_list=store.read_json_list,
+        ),
+    )
+
+
 # ---- 历史/项目解析 ----
 def _resolve_history_project_code(item: dict[str, Any]) -> str:
     """优先从记录字段取 project，缺失时回退到 case_id 解析。"""
@@ -247,13 +295,6 @@ def _is_virtual_test_point_element(value: Any) -> bool:
     normalized = _text(value)
     return normalized in _VIRTUAL_TEST_POINT_ELEMENTS or normalized.endswith("URL")
 
-
-
-
-
-
-
-
 def _test_point_asset_state_paths(project: str, asset_id: str) -> tuple[Path, Path]:
     """解析测试点资产文件及其计划文件的状态存储路径。"""
     project_dir = workbench_asset_service.state_project_dir(project, state_root=constants.TEST_POINTS_ROOT)
@@ -286,7 +327,12 @@ def _is_generation_qualified_element(element: PageElement) -> bool:
 
 
 def _page_object_generation_context(db: Session, *, project: str, page: str) -> dict[str, Any]:
-    """组装测试点生成脚本所需的页面对象、URL 和元素上下文。"""
+    """Facade 的页面对象解析（Path B 使用）。
+
+    通过 PageObjectRepository 查 DB，返回生成诊断结构。
+    对应的 orchestrator: OrchestratorService._resolve_page_object()
+    对应的 pipeline:   generate_pipeline.resolve_page_object()
+    """
     normalized_project = _text(project) or "mall"
     normalized_page = workbench_gate_service.normalize_page_slug(_text(page))
     if not normalized_page:
@@ -2884,47 +2930,7 @@ class WorkbenchFacade:
                     return source_ref_path
             return (constants.AI_CASES_ROOT / f"{normalized_case_id}.yaml").resolve()
 
-        def _resolve_fallback_case_path() -> Path:
-            """仅在 DB `script_code` 为空时解析旧 YAML 兜底路径。
-
-            这里刻意保留旧文件路径规则，但只有确认 DB 脚本缺失后才会调用。
-            这样源 YAML 只是兼容兜底，而不会再次成为和 `script_code` 竞争
-            的事实源。
-            """
-            if _text(getattr(payload, "case_path", "")):
-                requested_case_path = Path(_text(getattr(payload, "case_path", ""))).expanduser()
-                if not requested_case_path.is_absolute():
-                    requested_case_path = constants.REPO_ROOT / requested_case_path
-                return requested_case_path.resolve()
-            if _text(getattr(case_for_run, "source_ref", "")):
-                source_ref_path = Path(_text(getattr(case_for_run, "source_ref", ""))).expanduser()
-                if not source_ref_path.is_absolute():
-                    source_ref_path = constants.REPO_ROOT / source_ref_path
-                return source_ref_path.resolve()
-            return workbench_asset_service.resolve_case_yaml_path(
-                normalized_project,
-                normalized_case_id,
-                state_case_file_fn=lambda project_value, case_value: workbench_asset_service.state_case_file(
-                    project_value,
-                    case_value,
-                    state_root=constants.TEST_POINTS_ROOT,
-                ),
-                repo_root=constants.REPO_ROOT,
-                assets_cases_root=constants.ASSETS_CASES_ROOT,
-                ai_cases_root=constants.AI_CASES_ROOT,
-                is_within_fn=_is_within,
-            )
-
         source_case_path = _safe_source_case_path()
-        if not runtime_case_script:
-            # 旧链路兜底：只有 DB 脚本为空时才允许读取源 YAML，
-            # 且路径必须仍位于受治理的测试用例资产根目录下。
-            source_case_path = _resolve_fallback_case_path()
-            if not _is_within(source_case_path, constants.ASSETS_CASES_ROOT):
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="case_path must stay under assets/test-cases")
-            if not source_case_path.exists():
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"case file not found: {source_case_path}")
-            runtime_case_script = source_case_path.read_text(encoding="utf-8")
         if not runtime_case_script.strip():
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -2943,49 +2949,11 @@ class WorkbenchFacade:
             )
 
         def _runtime_view_from_entry(entry: dict[str, Any]) -> dict[str, Any]:
-            """WorkbenchFacade._runtime_view_from_entry 接口实现。"""
-            review_decisions_for_run = partial(
-                workbench_review_service.review_decisions_for_run,
-                read_json_list_fn=store.read_json_list,
-                review_decisions_file=constants.REVIEW_DECISIONS_FILE,
-                normalize_page_slug_fn=workbench_gate_service.normalize_page_slug,
-                normalize_review_type_fn=workbench_review_service.normalize_review_type,
-                normalize_review_status_fn=workbench_review_service.normalize_review_status,
-                sanitize_review_items_fn=workbench_review_service.sanitize_review_items,
-            )
-            return workbench_runtime_service.runtime_view_from_entry(
-                entry,
-                normalize_execution_record_payload=_normalize_execution_record_payload,
-                normalize_page_slug=workbench_gate_service.normalize_page_slug,
-                build_page_analysis_context=workbench_analysis_service.build_page_analysis_context,
-                build_item_review_state=partial(
-                    workbench_review_service.build_item_review_state,
-                    normalize_page_slug_fn=workbench_gate_service.normalize_page_slug,
-                    build_page_analysis_context_fn=workbench_analysis_service.build_page_analysis_context,
-                    review_decisions_for_run_fn=review_decisions_for_run,
-                    build_test_point_review_items_fn=workbench_analysis_service.build_test_point_review_items,
-                    build_review_section_fn=workbench_analysis_service.build_review_section,
-                    build_risk_review_items_fn=workbench_analysis_service.build_risk_review_items,
-                ),
-                build_run_review_state_from_decisions=partial(
-                    workbench_review_service.build_run_review_state_from_decisions,
-                    review_decisions_for_run_fn=review_decisions_for_run,
-                    normalize_page_slug_fn=workbench_gate_service.normalize_page_slug,
-                    build_review_section_fn=workbench_analysis_service.build_review_section,
-                ),
-                build_test_point_asset_gate_context=workbench_asset_service.build_test_point_asset_gate_context,
-                build_execution_gate=workbench_gate_service.build_execution_gate,
-                build_review_audit_summary=workbench_review_service.build_review_audit_summary,
-                build_review_audit_timeline=workbench_review_service.build_review_audit_timeline,
-                build_risk_report_summary=workbench_analysis_service.build_risk_report_summary,
-                build_self_healing_summary=workbench_analysis_service.build_self_healing_summary,
-                execution_gate_decision_for_run=lambda *, run_id, project="", page="": workbench_gate_service.execution_gate_decision_for_run(
-                    run_id=run_id,
-                    project=project,
-                    page=page,
-                    read_json_list=store.read_json_list,
-                ),
-            )
+            """WorkbenchFacade._runtime_view_from_entry 接口实现。
+
+            委托给模块级 _build_runtime_view_from_entry。
+            """
+            return _build_runtime_view_from_entry(entry)
 
         def _load_runtime_execution_record_from_artifacts(artifacts_dir: Path) -> dict[str, Any]:
             """WorkbenchFacade._load_runtime_execution_record_from_artifacts 接口实现。"""
