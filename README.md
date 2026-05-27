@@ -58,7 +58,226 @@ AI Test Platform 的目标是把这些环节串成平台能力：让 AI 负责�
 - 主流程实现：[`apps/ai-orchestrator/src/services/orchestration_flow_support.py`](apps/ai-orchestrator/src/services/orchestration_flow_support.py)
 - Web UI 调用位置：[`apps/web-ui-service/app/services/workbench_generation_api/orchestrator_client_factory.py`](apps/web-ui-service/app/services/workbench_generation_api/orchestrator_client_factory.py)
 
+### 2.1 生成链路（需求 → YAML 用例）
+
+两条路径最终汇聚到 `run_generate_pipeline()`：
+
+```text
+Path A: AI 驱动                         Path B: Workbench 手动
+POST /orchestrate                       Web UI 勾选测试点 → 生成
+  │                                       │
+  ▼                                       ▼
+OrchestrationFlowSupport                facade.generate_cases_from_test_point_assets()
+  .orchestrate()                          │
+  │                                       ├─ 从 store 加载测试点资产
+  ├─ 参数校验                              ├─ 页面对象治理校验
+  ├─ LLM 子进程解析需求 → requirement_spec │   (page_object_found? url? elements?)
+  ├─ 质量门检查 (enforce_quality_gate)      ├─ 过滤已审核的测试点
+  ├─ _generate_case 回调                  │
+  │   └──→ run_generate_pipeline() ←──────── usecase.execute()
+  │           │
+  │           ├─ Step 1: _call_orchestrator_and_parse
+  │           │   直接路径 / LLM 路径
+  │           ├─ Step 2: _normalize_and_scope_test_points
+  │           │   normalize_test_point_plan_v1 (DSL V1.1)
+  │           ├─ Step 3: _validate_and_compile_steps
+  │           │   resolve_page_object → ContractValidator
+  │           │   → compile_execution_steps
+  │           ├─ Step 4: _allocate_and_format_case_id
+  │           └─ Step 5: _persist_and_build_response
+  │                  _format_product_case_yaml → write_case_yaml
+  │
+  ├─ 契约校验 + 执行编译
+  └─ (可选) run_case → 执行链路
+```
+
+### 2.2 执行链路（YAML 用例 → Playwright → 报告）
+
+```text
+facade.run_case()
+  │
+  ├─ 1. 校验 case_id 在 case center 中
+  ├─ 2. 从 DB 加载 TestCase，获取 script_code
+  │     (script_code 为空时回退 YAML)
+  ├─ 3. 构建运行时上下文:
+  │     _build_run_command      → pytest 命令
+  │     _build_runtime_execution_record
+  │     _runtime_view_from_entry
+  │     _load_runtime_execution_record_from_artifacts
+  │     _collect_failure_entries
+  │
+  ├─ 4. start_run() → 创建 job，写入 store
+  │
+  └─ 5. _execute_run(job)
+         │                              ┌─────────────────────┐
+         ├─ build_run_command()         │  pytest -s          │
+         │    → python -m pytest         │  test_yaml_ai_     │
+         │      --alluredir ...          │  generated.py      │
+         │                              │  --alluredir ...    │
+         ├─ subprocess.Popen             │  ┌─────────────────┐│
+         │  实时写 log + 超时 kill        │  │ Playwright      ││
+         │                              │  │ (chromium)      ││
+         ├─ (pytest 完成)                │  │ 截图/视频/trace ││
+         │                              │  └─────────────────┘│
+         ├─ manage_allure.py generate    │  输出:              │
+         │   → allure-report/            │  allure-results/    │
+         │                              │  artifacts/         │
+         ├─ load_runtime_execution_      │  videos/            │
+         │   record_from_artifacts()     └─────────────────────┘
+         │   → 解析 evidence manifest
+         │
+         ├─ collect_failure_entries()    ←── 失败时解析 analysis 文件
+         │
+         └─ finally:
+              _persist_runtime_run_to_case_center()
+              → 同步执行结果到 test_case_executions 表
+              → 更新 TestCase.last_execution_result
+```
+
+**关键文件：**
+- `facade.run_case()` — 执行入口，11 个依赖注入闭包
+- `workbench_runtime_service.execute_run()` — subprocess 调度 + 超时管理 + Allure 后处理
+- `workbench_runtime_service.build_run_command()` — pytest 命令行拼装 + 环境变量
+- `runners/web-playwright-python/tests/test_yaml_ai_generated.py` — AI 生成用例的 pytest 入口
+- `runners/web-playwright-python/tools/manage_allure.py` — Allure 报告生成 CLI
+
 ---
+
+### 2.3 质量治理闭环（审核 → 门禁 → 归因 → 发布判断）
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│  审核 (Review)                                                  │
+│  facade.list_test_point_reviews()                               │
+│  facade.batch_review_test_points()                              │
+│    → 修改 plan.points[].review_status (pending→approved/rejected) │
+│    → 写入 review_history                                        │
+│    → store.append_history()                                     │
+└────────────────────┬────────────────────────────────────────────┘
+                     │ approved test points → 进入生成链路
+┌────────────────────▼────────────────────────────────────────────┐
+│  执行 (Execution)                                               │
+│  facade.run_case() → Playwright → allure-results + analysis    │
+│  → test_case_executions 表写入执行结果                          │
+└────────────────────┬────────────────────────────────────────────┘
+                     │ 失败 → 进入归因
+┌────────────────────▼────────────────────────────────────────────┐
+│  质量门 (Quality Gate)                                          │
+│  facade.workbench_quality_gate_summary()                        │
+│    → 从 history_events 中聚合门禁告警                           │
+│    → 阻断率统计 (block_rate_24h)                                │
+│  facade.save_execution_gate_decision()                          │
+│    → allow / manual_review / block                              │
+└────────────────────┬────────────────────────────────────────────┘
+                     │ 失败 → 进入归因
+┌────────────────────▼────────────────────────────────────────────┐
+│  失败归因 (Failure Triage)                                      │
+│  OrchestratorService.triage_failure()                           │
+│    → LLM 分析失败原因 (page_object/app_bug/environment/...)     │
+│    → 融合历史报告上下文                                         │
+│  facade.list_defects() / add_defect()                           │
+│    → 缺陷链接管理                                               │
+└────────────────────┬────────────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────────────┐
+│  仪表盘 + 发布判断 (Dashboard & Release Gate)                   │
+│  facade.dashboard_overview()                                    │
+│    → build_dashboard_overview(db)                               │
+│    → 24h 趋势 / flaky top5 / risk scoring                      │
+│  facade.dashboard_governance()                                  │
+│    → 质量门摘要 / 任务治理快照 / 失败聚类 / 治理趋势            │
+│  facade.workbench_history()                                     │
+│    → 全量操作历史 + 项目状态富化                                │
+│  facade.scheduler_summary()                                     │
+│    → 定时任务治理摘要                                           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**治理数据流：**
+1. 测试点审核 → `review_status` 写入 asset JSON → `store.append_history()`
+2. 执行失败 → `failure_analysis.json` → orchestrator `triage_failure()` → 归因结果
+3. 所有操作 → `store.append_history()` → `workbench_history_events` 表
+4. 仪表盘 → 从 history + executions + orchestrator clusters 聚合
+
+### 2.4 Page Object 录制与治理（Playwright Codegen → 候选评分 → 正式元素）
+
+```text
+POST /api/page-objects/recorder/sessions
+  │
+  ├─ create_recorder_session() → 启动 Playwright codegen 子进程
+  ├─ 用户在浏览器操作 → codegen 记录交互
+  ├─ stop_recorder_session()
+  │     ├─ _stop_codegen_process()
+  │     ├─ _parse_recorded_steps() → _ParsedLocator + _ParsedStep
+  │     └─ _build_element_candidates()
+  │           ├─ 去重 / 过滤视觉定位器 / 过滤不可用定位器
+  │           ├─ 评分: _locator_base_score (0-100)
+  │           │       → _probe_availability (Playwright 探活)
+  │           │       → _risk_adjusted_locator_quality
+  │           │       → _score_to_tier (S/A/B/C)
+  │           └─ _recommended_action (approve/review/reject)
+  │
+  ├─ _sync_candidate_group() → 相似候选聚合为 CandidateGroup
+  └─ promote_candidate_group() → 提升为正式 PageElement
+```
+
+**关键文件：** `app/routers/page_objects_recorder.py` (8 端点)、`app/services/page_object_recorder_service.py` (2,305 行)
+
+### 2.5 DSL V1.1 用例格式（script_code 唯一事实源）
+
+`TestCase.script_code` 是唯一的可执行用例格式。YAML 文件从 `script_code` 派生，不可逆。
+
+```yaml
+# DSL V1.1 YAML 结构
+id: mall-web-login-fn-ai-0001          # case_id（唯一）
+project: mall
+module: login
+title: 首次登录成功
+priority: P1
+
+requirement:                            # 需求追溯（V1.1 新增）
+  source_asset_id: mall-web-login-001
+  intent_id: auth-login-success
+
+execution:
+  page: login
+  page_url: https://example.com/login
+  selected_intent_ids: [auth-login-success]  # V1.1 必填
+  steps:                                 # 编译后的可执行步骤
+    - action: goto
+      value: https://example.com/login
+    - action: input
+      target: element:username_input
+      value: "{{login_username}}"
+    - action: input
+      target: element:password_input
+      value: "{{login_password}}"
+    - action: click
+      target: element:login_button
+    - action: assert_visible
+      target: element:home_menu
+
+assertions:                             # V1.1 顶层断言（从不依赖 expected_result）
+  - action: assert_visible
+    target: element:home_menu
+
+data:                                   # V1.1 数据源
+  login_username:
+    source_type: pool                   # inline / pool / env
+    value: username
+  login_password:
+    source_type: pool
+    value: password
+```
+
+**编译管线：** test_points → `normalize_test_point_plan_v1` → `compile_execution_steps` → `_format_product_case_yaml`
+
+**关键约束（DSL V1.1）：**
+- `requirement.source_asset_id + requirement.intent_id` 用于去重
+- input 步骤缺少 value → 422 `dsl_v1_1_missing_input_data`
+- 无法生成可执行断言 → 422 `dsl_v1_1_missing_executable_assertion`
+- 代码层永远不写默认账号密码
+- `expected_result` 只是说明文本，不参与通过/失败判定
 
 ## 3. 业务架构图
 
@@ -96,6 +315,41 @@ flowchart TD
 ```
 
 业务上可以理解为四层：输入源、测试资产、执行证据、质量治理。
+
+### 3.1 Orchestrator Agent 管线
+
+8 个 AI Agent 按固定顺序执行，每个是 `agents/<name>/src/agent.py`：
+
+```text
+1. requirement-parser-agent   (LLM 子进程)
+   输入: requirement + page + 多源输入
+   输出: RequirementSpec (test_intents, business_rules)
+
+2. test-design-agent         (Python import)
+   输入: design_requirement + page
+   输出: case YAML + test_points + traceability
+
+3. script-generation-agent   (Python 子进程)
+   输出: GeneratedScriptV1 (script_code, entrypoint)
+
+4. execution-planner-agent   (Python 子进程)
+   输出: 执行调度计划 (stages, resource_profile)
+
+5. risk-evaluation-agent     (Python 子进程)
+   输出: RiskReportV1 (risk_level, risk_factors)
+
+6. failure-analysis-agent    (Python 子进程)
+   输出: FailureAnalysisV1 (failure_source, root_cause)
+
+7. failure-triage-agent      (Python 子进程)
+   输出: FailureTriageV1 (cluster_id, priority)
+
+8. self-healing-advisor-agent (Python 子进程)
+   输出: SelfHealingAdvice (locator_suggestions, script_fixes)
+```
+
+Agent 3-8 仅在 `execute=true`（generate_and_run）时触发。
+状态通过 `OrchestrationResult` dataclass 在 Agent 间传递。
 
 ---
 
@@ -177,6 +431,77 @@ flowchart TD
 
 - [`docs/bugfixes/2026-05-22_case_center_script_code_execution_chain_fix.md`](docs/bugfixes/2026-05-22_case_center_script_code_execution_chain_fix.md)
 - [`docs/代码流程图/2026-05-22_DSL_V1.1_script_code唯一事实源流程图与代码评审.md`](docs/代码流程图/2026-05-22_DSL_V1.1_script_code唯一事实源流程图与代码评审.md)
+
+### 5.1 数据模型关系图
+
+```text
+TestCase (test_cases)               PageObject (page_objects)
+├── id (PK)                         ├── id (PK)
+├── case_id (UQ, 业务编号)          ├── project_code + client + page_code (UQ)
+├── project_code ──────────────┐    ├── page_url
+├── page_code ────┐            │    ├── governance_status
+├── script_code (唯一事实源)   │    │
+├── status, priority, tags     │    │
+│                               │    │
+├── TestCaseStep (子表)         │    ├── PageElement (page_elements)
+│   ├── case_id (FK)           │    │   ├── page_object_id (FK)
+│   ├── step_index, action     │    │   ├── element_code (业务编码)
+│   └── locator_type/value     │    │   ├── locator_type/value
+│                               │    │   ├── review_status
+├── TestCaseExecution (子表)    │    │   └── stability_level
+│   ├── case_id (FK)           │    │
+│   ├── status, duration_ms    │    │   ├── PageElementLocator (多定位器)
+│   └── executed_at            │    │   ├── PageElementVersion (版本)
+│                               │    │   ├── PageObjectRef (引用)
+├── TestCaseVersion (子表)      │    │   └── PageElementHealthCheck (健康)
+│   ├── case_id (FK)           │    │
+│   ├── version_no             │    ├── PageObjectRecorderSession (录制)
+│   └── script_code (历史版本)  │    │   ├── PageObjectCandidateElement
+│                               │    │   └── PageObjectCandidateGroup
+├── TestCaseDefect (子表)       │    │
+│   ├── case_id (FK)           │    │
+│   └── defect_key, defect_url │    │
+│                               │    │
+└── TestCaseTreeNode (分类树)    │    │
+    ├── project_code            │    │
+    ├── product_line            │    │
+    └── module                  │    │
+                                │    │
+TestPoint (test_points)         │    │
+├── project_code ──────────────┘    │
+├── page_code ──────────────────────┘
+├── point_id (业务编号)
+├── involved_elements ──→ PageElement.element_code
+└── status, priority
+
+TestProject (test_projects)        TestDataPool (test_data_pools)
+├── project_code (UQ) ──────┐      ├── pool_name (UQ)
+└── status                  │      └── TestDataPoolItem (子表)
+                            │          ├── pool_id (FK)
+WorkbenchState (运行态)      │          └── item_key, item_value
+├── WorkbenchHistoryEvent    │
+├── WorkbenchRuntimeRun      │      (project_code 是逻辑外键，非 DB FK)
+├── WorkbenchReviewDecision  │
+├── WorkbenchDefectLink      │
+└── WorkbenchFailureSourceCalibration
+
+TestCase.script_code 是唯一事实源:
+  execution.compiled_steps ──派生──→ TestCaseStep (投影)
+  execution-compiled YAML  ──派生──→ runtime YAML (执行输入)
+```
+
+**关键关系速查：**
+
+| 关系 | 连接方式 |
+|------|---------|
+| TestCase → PageObject | `TestCase.page_code` = `PageObject.page_code`（逻辑，无 FK） |
+| TestCase → TestProject | `TestCase.project_code` = `TestProject.project_code`（逻辑，无 FK） |
+| TestCase → TestCaseExecution | `TestCase.id` = `TestCaseExecution.case_id`（FK CASCADE） |
+| PageObject → PageElement | `PageObject.id` = `PageElement.page_object_id`（FK CASCADE） |
+| TestPoint → PageElement | `TestPoint.involved_elements` 存 `element_code` 列表（逻辑，JSON 数组） |
+| TestCase.script_code → TestCaseStep | script_code 解析后派生 steps，写入 test_case_steps 表（数据投影，不可逆） |
+
+**YAML vs DB 双层存储：** 测试点和用例同时以 YAML 文件（`assets/test-cases/`）和 DB 表存储。YAML 是"源码"，DB 是"查询视图"。`TestCase.script_code` 是唯一事实源——YAML 和 DB 的 steps/report 都从 script_code 派生。
 
 ---
 
