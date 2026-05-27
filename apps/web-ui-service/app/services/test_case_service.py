@@ -536,7 +536,7 @@ def _ensure_workbench_source_identity(case_yaml: dict[str, Any]) -> tuple[str, s
     normalized_selected_ids = {normalize_optional_text(item) for item in selected_ids if normalize_optional_text(item)}
     if not source_asset_id or not source_intent_id or normalized_selected_ids != {source_intent_id}:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "code": "workbench_case_missing_source_identity",
                 "message": "formal workbench case requires source_asset_id and exactly one selected intent_id",
@@ -668,7 +668,7 @@ def _normalize_workbench_data_source_entry(*, key: str, raw_value: Any) -> dict[
         source_type = normalize_optional_text(raw_value.get("source_type") or "inline").lower()
         if source_type not in {"inline", "pool", "env"}:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={
                     "code": "dsl_v1_1_invalid_data_source",
                     "message": f"unsupported source_type `{source_type}` for `{key}`",
@@ -677,7 +677,7 @@ def _normalize_workbench_data_source_entry(*, key: str, raw_value: Any) -> dict[
         if source_type == "inline":
             if "value" not in raw_value:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail={
                         "code": "dsl_v1_1_invalid_data_source",
                         "message": f"inline source requires value for `{key}`",
@@ -689,7 +689,7 @@ def _normalize_workbench_data_source_entry(*, key: str, raw_value: Any) -> dict[
             pool_key = normalize_optional_text(raw_value.get("key"))
             if not pool_name or not pool_key:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail={
                         "code": "dsl_v1_1_invalid_data_source",
                         "message": f"pool source requires pool_name and key for `{key}`",
@@ -699,7 +699,7 @@ def _normalize_workbench_data_source_entry(*, key: str, raw_value: Any) -> dict[
         env_key = normalize_optional_text(raw_value.get("key"))
         if not env_key:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={
                     "code": "dsl_v1_1_invalid_data_source",
                     "message": f"env source requires key for `{key}`",
@@ -709,7 +709,7 @@ def _normalize_workbench_data_source_entry(*, key: str, raw_value: Any) -> dict[
     if isinstance(raw_value, list):
         if not raw_value:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail={
                     "code": "dsl_v1_1_invalid_data_source",
                     "message": f"legacy list data for `{key}` must not be empty",
@@ -726,7 +726,7 @@ def _normalize_workbench_data_sources_for_storage(case_yaml: dict[str, Any]) -> 
         return {}
     if not isinstance(raw_data, dict):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "code": "dsl_v1_1_invalid_data_source",
                 "message": "data must be an object",

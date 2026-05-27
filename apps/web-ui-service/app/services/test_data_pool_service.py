@@ -31,7 +31,7 @@ def _normalized_pool_status(value: Any) -> str:
     normalized = normalize_optional_text(value).lower() or "active"
     if normalized not in _VALID_POOL_STATUS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={
                 "code": "data_pool_invalid_status",
                 "message": f"unsupported pool status `{normalized}`",
