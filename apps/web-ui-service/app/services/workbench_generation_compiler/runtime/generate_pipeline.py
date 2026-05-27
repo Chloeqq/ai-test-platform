@@ -2069,8 +2069,8 @@ def _call_orchestrator_and_parse(
     if direct_orchestrator_result is not None:
         orchestrator_result = direct_orchestrator_result
         _LOGGER.info(
-            "pipeline using direct candidate path (no LLM call): page=%s intent_ids=%s",
-            normalized_page, selected_intent_ids_list,
+            "pipeline using direct candidate path (no LLM call): page=%s candidates=%d",
+            normalized_page, len(candidate_snapshots),
         )
     else:
         _LOGGER.info(
