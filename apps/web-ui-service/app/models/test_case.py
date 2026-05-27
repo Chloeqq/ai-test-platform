@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -11,6 +11,11 @@ class TestCase(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     case_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # 反向引用：通过 Repository 查询，此处仅供 ORM 导航（非强制）
+    executions: Mapped[list["TestCaseExecution"]] = relationship(back_populates="case", lazy="select")
+    steps: Mapped[list["TestCaseStep"]] = relationship(back_populates="case", lazy="select")
+    versions: Mapped[list["TestCaseVersion"]] = relationship(back_populates="case", lazy="select")
+    defects: Mapped[list["TestCaseDefect"]] = relationship(back_populates="case", lazy="select")
     project_code: Mapped[str] = mapped_column(String(20), default="atp", index=True)
     client: Mapped[str] = mapped_column(String(10), default="web", index=True)
     page_code: Mapped[str] = mapped_column(String(20), default="common", index=True)
@@ -75,6 +80,7 @@ class TestCaseStep(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     case_id: Mapped[int] = mapped_column(ForeignKey("test_cases.id", ondelete="CASCADE"), index=True)
+    case: Mapped["TestCase"] = relationship(back_populates="steps")
     case_business_id: Mapped[str] = mapped_column(String(64), index=True)
     project_code: Mapped[str] = mapped_column(String(20), default="atp", index=True)
     page_code: Mapped[str] = mapped_column(String(40), default="", index=True)
@@ -100,6 +106,7 @@ class TestCaseDefect(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     case_id: Mapped[int] = mapped_column(ForeignKey("test_cases.id", ondelete="CASCADE"), index=True)
+    case: Mapped["TestCase"] = relationship(back_populates="defects")
     defect_key: Mapped[str] = mapped_column(String(120), index=True)
     defect_url: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -110,6 +117,7 @@ class TestCaseExecution(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     case_id: Mapped[int] = mapped_column(ForeignKey("test_cases.id", ondelete="CASCADE"), index=True)
+    case: Mapped["TestCase"] = relationship(back_populates="executions")
     status: Mapped[str] = mapped_column(String(40), index=True)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     report_url: Mapped[str] = mapped_column(Text, default="")
@@ -121,6 +129,7 @@ class TestCaseVersion(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     case_id: Mapped[int] = mapped_column(ForeignKey("test_cases.id", ondelete="CASCADE"), index=True)
+    case: Mapped["TestCase"] = relationship(back_populates="versions")
     version_no: Mapped[int] = mapped_column(Integer, index=True)
     script_code: Mapped[str] = mapped_column(Text, default="")
     changed_by: Mapped[str] = mapped_column(String(120), default="system")

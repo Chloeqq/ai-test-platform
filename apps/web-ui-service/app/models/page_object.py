@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -19,6 +19,7 @@ class PageObject(Base):
     project_code: Mapped[str] = mapped_column(String(20), default="mall", index=True)
     client: Mapped[str] = mapped_column(String(10), default="web", index=True)
     page_code: Mapped[str] = mapped_column(String(40), index=True)
+    elements: Mapped[list["PageElement"]] = relationship(back_populates="page_object", lazy="select")
     page_name: Mapped[str] = mapped_column(String(120), default="")
     page_url: Mapped[str] = mapped_column(String(256), default="")
     precondition_state: Mapped[str] = mapped_column(Text, default="")
@@ -57,6 +58,7 @@ class PageElement(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     page_object_id: Mapped[int] = mapped_column(ForeignKey("page_objects.id", ondelete="CASCADE"), index=True)
+    page_object: Mapped["PageObject"] = relationship(back_populates="elements")
     element_code: Mapped[str] = mapped_column(String(80), index=True)
     element_name: Mapped[str] = mapped_column(String(120), default="")
     locator_type: Mapped[str] = mapped_column(String(30), default="css")

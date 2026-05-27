@@ -81,8 +81,8 @@ Router → Facade → Service → Repository → DB
 ### `app.py` 和 `app/` 包冲突 ✅ 已处理
 orchestrator: `app.py` → `main.py`。两个服务不再有 PYTHONPATH 冲突。
 
-### ORM 无 relationship 定义
-所有模型只有 `mapped_column`，没有 `relationship()`。TestCase 和 TestCaseExecution 之间的关联只能通过 Repository 方法手动查询。不要尝试用 `case.executions` 等 ORM 懒加载——不存在。
+### ORM 无 relationship 定义 ✅ 已处理
+TestCase ↔ Execution/Step/Version/Defect 和 PageObject ↔ PageElement 已添加 `relationship(back_populates=..., lazy="select")`。可直接 `case.executions` 导航。注意 N+1 风险——批量查询仍应走 Repository。
 
 ### test ordering 失败
 `test_workbench_facade.py` 和 `test_precheck_selected_intents_service.py` 的 monkeypatch 与其他测试存在状态污染。`make test-unit` 已分两批运行（44 + 232 = 276 passed）隔离。单独跑 `pytest apps/web-ui-service/tests/unit/ -q` 会有 15 个假失败。根因待排查。
