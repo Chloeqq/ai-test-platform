@@ -54,3 +54,7 @@ apps/web-ui-service/frontend/vite.config.js
 apps/web-ui-service/frontend/vite.config.d.ts
 apps/web-ui-service/app/static/react/
 backups/
+.docker-buildx/
+generate_pdf_summary.py
+sitecustomize.py
+reports/data-generation/
