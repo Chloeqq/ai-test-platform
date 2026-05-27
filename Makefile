@@ -109,6 +109,9 @@ test: test-unit test-contracts
 verify-core-chain:
 	$(VENV_PYTHON) scripts/verify_core_chain.py
 
+check-architecture:
+	$(VENV_PYTHON) scripts/ci/check_architecture.py
+
 test-contracts: test-pipeline-contracts test-orchestrator test-runner-assets test-webui-manifest-strict test-orchestrator-manifest-strict
 
 test-pipeline-contracts:

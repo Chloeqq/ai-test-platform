@@ -36,6 +36,9 @@ jobs:
       - name: Install root dev dependencies
         run: make install-dev
 
+      - name: Architecture guard (file/function size, repo enforcement, layer imports)
+        run: make check-architecture
+
       - name: Run unit tests (两批: facade/precheck + 其余)
         run: make test-unit
 

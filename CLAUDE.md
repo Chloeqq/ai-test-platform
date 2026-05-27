@@ -72,6 +72,55 @@ Router → Facade → Service → Repository → DB
 4. 改生成逻辑 → 确认两条路径都有校验覆盖
 5. 改完运行 `pytest apps/web-ui-service/tests/unit/ apps/ai-orchestrator/tests/unit/ -q`
 
+## 文件大小红线（CI 自动拦截）
+| 层级 | 上限 |
+|------|------|
+| facade | 2,500 行 |
+| service | 1,000 行 |
+| repository | 400 行 |
+| router | 200 行 |
+| 单个函数 | 200 行（超 100 行警告） |
+超过必须在 commit message 中说明原因，并计划拆分。
+
+## AI 代码生成模板
+
+### 新建 service 函数
+```python
+from app.repositories.xxx_repository import XxxRepository
+from shared_backend.type_utils import dict_value, list_value  # 按需
+
+def new_business_function(db: Session, *, param1: str, param2: int) -> dict[str, Any]:
+    """做什么事情。返回 {key: value}。"""
+    repo = XxxRepository(db)
+    items = repo.list_filtered(status=param1)
+    return {"items": items, "total": len(items)}
+```
+要求: 参数 type hint 必写、返回 dict 必写 shape 注释、DB 访问必须通过 repo、必须写测试。
+
+### 新建工具函数
+1. 先查 `shared_backend/type_utils.py` 是否有同功能函数
+2. 如果有 → `from shared_backend.type_utils import xxx as _xxx`
+3. 如果通用 → 加到 `type_utils.py`
+4. 如果仅本文件使用 → 在文件顶部定义 `def _xxx(...)`
+
+### 新建 Repository 方法
+```python
+def list_by_xxx(self, project_code: str) -> list[Model]:
+    return list(self.db.execute(
+        select(Model).where(Model.project_code == project_code)
+    ).scalars().all())
+```
+Repository 是唯一可以写 `db.execute(select(...))` 的地方。
+
+## CI 护栏（scripts/ci/check_architecture.py）
+每次 PR 自动检查:
+- 文件/函数大小是否超限
+- 非 repository 层是否写了 `db.execute(select(...))`
+- service 层是否 `SessionLocal()`
+- 是否重复定义 `type_utils` 已有函数
+- 是否 `import sqlite3`
+- 是否 `import *`
+
 ## 已知问题（接手时注意）
 
 ### WorkbenchState 表无 Alembic 迁移 ✅ 已处理

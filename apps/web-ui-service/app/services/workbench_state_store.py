@@ -54,8 +54,7 @@ FILE_LOCK = threading.Lock()
 from shared_backend.type_utils import now_iso as _now_iso
 
 
-def now_iso() -> str:
-    return _now_iso()
+# now_iso 从 shared_backend.type_utils 导入
 
 
 def _resolve_state_backend() -> str:

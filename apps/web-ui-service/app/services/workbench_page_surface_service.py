@@ -23,16 +23,7 @@ LOGGER = logging.getLogger(__name__)
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _dedup_keep_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    output: list[str] = []
-    for item in items:
-        key = str(item).strip()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        output.append(key)
-    return output
+from shared_backend.type_utils import dedup_keep_order as _dedup_keep_order
 
 
 def _clamp_confidence(value: Any) -> float:

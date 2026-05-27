@@ -18,15 +18,7 @@ PAGE_ALIAS_MAP = {
 }
 
 
-def _dedup_keep_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for item in items:
-        if item in seen:
-            continue
-        seen.add(item)
-        ordered.append(item)
-    return ordered
+from shared_backend.type_utils import dedup_keep_order as _dedup_keep_order
 
 
 def _clamp_confidence(value: Any) -> float:
