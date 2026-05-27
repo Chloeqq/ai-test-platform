@@ -23,4 +23,4 @@ WORKDIR /app/apps/ai-orchestrator
 ENV PYTHONPATH=/app:/app/apps/ai-orchestrator/src
 EXPOSE 8000
 
-CMD ["python", "-m", "uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--timeout-keep-alive", "300"]
+CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--timeout-keep-alive", "300"]

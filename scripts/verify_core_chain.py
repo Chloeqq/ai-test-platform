@@ -51,7 +51,7 @@ for fn in ["execute_run", "start_run", "build_run_command"]:
 print("\n🤖 Orchestrator")
 sys.path.insert(0, str(ROOT / "apps" / "ai-orchestrator" / "src"))
 check("orchestrator_service", "orchestrator_service", "OrchestratorService")
-# 移除后继续,避免 app.py 冲突
+check("FastAPI app", "main", "app")
 sys.path.pop(0)
 
 print("\n📦 Repository 层")
