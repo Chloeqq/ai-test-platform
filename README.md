@@ -427,6 +427,36 @@ flowchart TD
 - `test_steps`、`test_steps_text`、`precondition_state`、`expected_result` 是展示投影，只能从 `script_code` 派生，不能反向覆盖。
 - `assets/` 保存可复用测试资产；`reports/`、`web-ui/state/`、`runners/**/artifacts` 保存运行态产物。
 
+### 5.2 事实源层次
+
+同一个 case 的数据存在于 5 个位置，按权威等级排列：
+
+```
+第 1 层（唯一事实源，不可逆）
+  test_cases.script_code (DB)     ← 唯一可执行格式，所有执行从此读取
+  test_case_executions (DB)       ← 执行记录，追加写入
+
+第 2 层（持久化资产，从第 1 层派生）
+  assets/test-cases/*.yaml        ← 用例源码，从 script_code 渲染
+                                     修改后须通过 save_case 回写 DB
+
+第 3 层（运行态缓存，可重建）
+  web-ui/state/test-points/       ← 测试点资产快照，upsert_test_point_asset 写入
+  web-ui/state/generated-cases/   ← 生成历史缓存，save_case_state 写入
+                                    删除不影响系统运行，下次操作时重建
+
+第 4 层（运行时记录，追加不覆盖）
+  web-ui/state/default/           ← 操作历史 (history.json)
+  web-ui/state/runs/              ← 执行日志和产物
+  web-ui/state/reporting/         ← 审核决策、缺陷链接、门禁决策
+```
+
+**硬规则：**
+- **执行只用 `script_code`。** YAML 文件是展示/编辑视图，不直接执行。已删除 YAML 回退逻辑。
+- **第 3 层可以删除重建。** 见 `web-ui/state/README.md`。
+- **第 4 层不可随意删除**（包含业务决策记录）。
+- **不要手动编辑 state/ 目录下的文件。** 所有写入通过 `store.*` 函数。
+
 唯一事实源修复背景见：
 
 - [`docs/bugfixes/2026-05-22_case_center_script_code_execution_chain_fix.md`](docs/bugfixes/2026-05-22_case_center_script_code_execution_chain_fix.md)
