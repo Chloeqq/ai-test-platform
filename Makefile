@@ -46,6 +46,19 @@ help:
 	@echo "  make allure-open        Open the generated Allure HTML report"
 	@echo "  make allure-summary     Build report_summary.txt from artifacts analysis files"
 
+# 一键启动本地开发环境（postgres + redis + orchestrator + web）
+# 需要 .env 文件（参考 .env.example）
+dev:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+	@sleep 3
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d orchestrator
+	@sleep 2
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d web
+	@echo "Dev ready: http://localhost:8013 (web)  http://localhost:8000 (orchestrator)"
+
+dev-down:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+
 venv:
 	python3 -m venv .venv
 
