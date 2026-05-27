@@ -78,8 +78,8 @@ Router → Facade → Service → Repository → DB
 ### 前端本地开发需手动 build ✅ 已处理
 `make install-dev` 和 `make dev` 现在自动 `npm install && npm run build`。`frontend-build` 也内置了 `npm install` 检查。
 
-### `app.py` 和 `app/` 包冲突
-orchestrator 的 `apps/ai-orchestrator/src/app.py` 和 web-ui 的 `apps/web-ui-service/app/` 包在同一个 PYTHONPATH 中会冲突（`.py` 先于 package/）。`verify_core_chain.py` 已 workaround。CI 和本地开发应通过 `docker compose` 隔离两个服务，不要混在同一个 PYTHONPATH。
+### `app.py` 和 `app/` 包冲突 ✅ 已处理
+orchestrator: `app.py` → `main.py`。两个服务不再有 PYTHONPATH 冲突。
 
 ### ORM 无 relationship 定义
 所有模型只有 `mapped_column`，没有 `relationship()`。TestCase 和 TestCaseExecution 之间的关联只能通过 Repository 方法手动查询。不要尝试用 `case.executions` 等 ORM 懒加载——不存在。
