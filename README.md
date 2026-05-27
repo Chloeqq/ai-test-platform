@@ -91,6 +91,10 @@ OrchestrationFlowSupport                facade.generate_cases_from_test_point_as
   └─ (可选) run_case → 执行链路
 ```
 
+**V1.1 契约双重保障：** 两条路径在 pipeline 汇聚后，`selected_candidate` 是否为 None 决定走哪条校验链路。非空走 pipeline Step 3 严格校验（`source_asset_id + intent_id` 完整性），为 None 则由 orchestrator 的 `ContractValidator.validate_full()` 兜底。不是缺口，是有意设计。
+
+```
+
 ### 2.2 执行链路（YAML 用例 → Playwright → 报告）
 
 ```text
@@ -98,7 +102,7 @@ facade.run_case()
   │
   ├─ 1. 校验 case_id 在 case center 中
   ├─ 2. 从 DB 加载 TestCase，获取 script_code
-  │     (script_code 为空时回退 YAML)
+  │     (script_code 为空 → 422，不再回退 YAML)
   ├─ 3. 构建运行时上下文:
   │     _build_run_command      → pytest 命令
   │     _build_runtime_execution_record
