@@ -1,6 +1,3 @@
-"""WSGI 部署入口：导出 Flask 应用实例供 gunicorn/uwsgi 加载。"""
+"""向后兼容入口：从 app.py 重新导出 FastAPI 应用实例。"""
 
-from app import create_app  # type: ignore[import-not-found]
-
-
-app = create_app()
+from app import app  # noqa: E402, F401
