@@ -21,6 +21,24 @@ on:
           - all
 
 jobs:
+  unit-tests:
+    if: github.event_name != 'workflow_dispatch' || inputs.suite == 'static-baseline' || inputs.suite == 'all'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install root dev dependencies
+        run: make install-dev
+
+      - name: Run unit tests (两批: facade/precheck + 其余)
+        run: make test-unit
+
   static-baseline:
     if: github.event_name != 'workflow_dispatch' || inputs.suite == 'static-baseline' || inputs.suite == 'all'
     runs-on: ubuntu-latest
