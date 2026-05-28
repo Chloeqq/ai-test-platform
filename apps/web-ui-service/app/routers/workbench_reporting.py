@@ -6,7 +6,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.workbench.facade import build_workbench_facade
@@ -15,6 +14,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.test_case import TestCase, TestCaseExecution
+from app.repositories.test_case_repository import TestCaseRepository
 from shared_backend.observability import get_request_id, summarize_http_context
 
 _logger = logging.getLogger(__name__)
@@ -80,15 +80,12 @@ def report_execution_detail(
     db: Session = Depends(get_db),
     _user: Any = Depends(get_current_user),
 ) -> dict[str, Any]:
-    execution = db.execute(
-        select(TestCaseExecution).where(TestCaseExecution.id == execution_id)
-    ).scalar_one_or_none()
+    repo = TestCaseRepository(db)
+    execution = repo.get_execution_by_id(execution_id)
     if not execution:
         raise HTTPException(status_code=404, detail="execution report not found")
 
-    case = db.execute(
-        select(TestCase).where(TestCase.id == execution.case_id)
-    ).scalar_one_or_none()
+    case = repo.get_by_id(execution.case_id)
     return {
         "item": {
             "execution_id": execution.id,

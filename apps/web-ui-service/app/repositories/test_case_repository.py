@@ -84,10 +84,43 @@ class TestCaseRepository(BaseRepository):
             ).all()
         )
 
+    def list_case_id_and_id_pairs_by_case_ids(
+        self, project_code: str, case_ids: list[str]
+    ) -> list[tuple[int, str]]:
+        """返回 [(id, case_id), ...] 按 project_code + case_id 字符串筛选。"""
+        if not case_ids:
+            return []
+        return list(
+            self.db.execute(
+                select(TestCase.id, TestCase.case_id)
+                .where(TestCase.project_code == project_code)
+                .where(TestCase.case_id.in_(case_ids))
+                .order_by(TestCase.id.asc())
+            ).all()
+        )
+
+    def list_all_case_id_pairs_by_project(self, project_code: str) -> list[tuple[int, str]]:
+        """返回某个项目所有 TestCase 的 [(id, case_id), ...] 映射。"""
+        return list(
+            self.db.execute(
+                select(TestCase.id, TestCase.case_id)
+                .where(TestCase.project_code == project_code)
+                .order_by(TestCase.id.asc())
+            ).all()
+        )
+
     def count_all(self) -> int:
         return self.db.execute(
             select(func.count()).select_from(TestCase)
         ).scalar_one()
+
+    def count_grouped_by(self, column: Any) -> list[tuple[Any, int]]:
+        """按指定列分组统计，返回 [(value, count), ...]。"""
+        return list(
+            self.db.execute(
+                select(column, func.count()).select_from(TestCase).group_by(column)
+            ).all()
+        )
 
     def exists_by_case_id(self, case_id: str) -> bool:
         return self.db.execute(
@@ -103,6 +136,7 @@ class TestCaseRepository(BaseRepository):
         page_code: str | None = None,
         priority: str | None = None,
         status: str | None = None,
+        exclude_status: str | None = None,
         case_type: str | None = None,
         source: str | None = None,
         creator: str | None = None,
@@ -124,6 +158,8 @@ class TestCaseRepository(BaseRepository):
             stmt = stmt.where(TestCase.priority == priority)
         if status:
             stmt = stmt.where(TestCase.status == status)
+        if exclude_status:
+            stmt = stmt.where(TestCase.status != exclude_status)
         if case_type:
             stmt = stmt.where(TestCase.case_type == case_type)
         if source:
@@ -156,6 +192,11 @@ class TestCaseRepository(BaseRepository):
         return [str(row[0] or "") for row in rows if row[0]]
 
     # ---- TestCaseExecution ----
+
+    def get_execution_by_id(self, execution_id: int) -> TestCaseExecution | None:
+        return self.db.execute(
+            select(TestCaseExecution).where(TestCaseExecution.id == execution_id)
+        ).scalar_one_or_none()
 
     def list_executions_by_case_ids(
         self, case_ids: list[int], *, order_desc: bool = True

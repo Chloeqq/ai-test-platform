@@ -1992,18 +1992,18 @@ class WorkbenchFacade:
         normalized_execution_status = _text(execution_status).lower()
         normalized_active_status = _text(active_status).lower() or "active"
         keyword_value = _text(keyword).lower()
-        stmt = select(TestCase).where(TestCase.project_code == normalized_project)
-        if normalized_page:
-            stmt = stmt.where(TestCase.page_code == normalized_page)
-        if normalized_priority:
-            stmt = stmt.where(TestCase.priority == normalized_priority)
-        if normalized_execution_status:
-            stmt = stmt.where(TestCase.last_execution_result == normalized_execution_status)
-        if normalized_active_status == "deprecated":
-            stmt = stmt.where(TestCase.status == "deprecated")
-        elif normalized_active_status == "active":
-            stmt = stmt.where(TestCase.status != "deprecated")
-        cases = db.execute(stmt.order_by(TestCase.case_id.asc(), TestCase.id.asc())).scalars().all()
+        repo = TestCaseRepository(db)
+        status_filter = "deprecated" if normalized_active_status == "deprecated" else None
+        exclude_status_filter = "deprecated" if normalized_active_status == "active" else None
+        cases = repo.list_filtered(
+            project_code=normalized_project,
+            page_code=normalized_page or None,
+            priority=normalized_priority or None,
+            last_execution_result=normalized_execution_status or None,
+            status=status_filter,
+            exclude_status=exclude_status_filter,
+            order_by=TestCase.case_id.asc(),
+        )
         asset_index = _source_asset_index(normalized_project)
         page_url_map = _page_object_url_map(
             db,
@@ -2172,17 +2172,9 @@ class WorkbenchFacade:
         case = detail.case
         source_asset_hit = _source_asset_for_case(case, _source_asset_index(_text(case.project_code) or normalized_project))
         page_url_map = _page_object_url_map(db, project=_text(case.project_code) or normalized_project, page_codes=[_text(case.page_code)])
-        executions = (
-            db.execute(
-                select(TestCaseExecution)
-                .where(TestCaseExecution.case_id == int(case.id))
-                .order_by(TestCaseExecution.executed_at.desc(), TestCaseExecution.id.desc())
-                .limit(5)
-            )
-            .scalars()
-            .all()
-        )
-        versions = TestCaseRepository(db).list_versions_by_case_id(int(case.id), limit=10)
+        repo = TestCaseRepository(db)
+        executions = repo.list_executions_by_case_ids([int(case.id)])[:5]
+        versions = repo.list_versions_by_case_id(int(case.id), limit=10)
         latest_execution = executions[0] if executions else None
         requirement_metadata = _structured_requirement_metadata_from_case(case)
         item = _workbench_test_case_list_item(
@@ -2252,10 +2244,11 @@ class WorkbenchFacade:
                 detail="case_ids must not be empty",
             )
 
-        stmt = select(TestCase.id, TestCase.case_id).where(TestCase.project_code == normalized_project)
-        if not delete_all:
-            stmt = stmt.where(TestCase.case_id.in_(normalized_case_ids))
-        rows = db.execute(stmt.order_by(TestCase.id.asc())).all()
+        repo = TestCaseRepository(db)
+        if delete_all:
+            rows = repo.list_all_case_id_pairs_by_project(normalized_project)
+        else:
+            rows = repo.list_case_id_and_id_pairs_by_case_ids(normalized_project, normalized_case_ids)
         found_case_ids = {_text(row_case_id) for _row_id, row_case_id in rows if _text(row_case_id)}
         missing_case_ids = [case_id for case_id in normalized_case_ids if case_id not in found_case_ids]
 
@@ -3016,8 +3009,7 @@ class WorkbenchFacade:
                 )
             finally:
                 final_job = store.get_run_job(_text(job.get("run_id"))) or job
-                with SessionLocal() as worker_db:
-                    _persist_runtime_run_to_case_center(worker_db, final_job)
+                _persist_runtime_run_to_case_center(db, final_job)
 
         job = workbench_runtime_service.start_run(
             project=normalized_project,

@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import create_access_token, get_current_user, hash_password, verify_password
 from app.models.user import User
+from app.repositories.user_repository import UserRepository
 from app.schemas.auth import LoginRequest, Token
 from app.schemas.user import UserCreate, UserRead
 
@@ -30,7 +30,8 @@ def _build_token_response(user: User) -> Token:
     "Admin accounts must be provisioned via bootstrap or direct DB insert.",
 )
 def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserRead:
-    existing = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
+    repo = UserRepository(db)
+    existing = repo.get_by_username(payload.username)
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="username already exists")
 
@@ -48,7 +49,8 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserRead:
 
 @router.post("/login", response_model=Token)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> Token:
-    user = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
+    repo = UserRepository(db)
+    user = repo.get_by_username(payload.username)
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid username or password")
     if not user.is_active:
@@ -58,7 +60,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> Token:
 
 @router.post("/token", response_model=Token)
 def issue_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Token:
-    user = db.execute(select(User).where(User.username == form_data.username)).scalar_one_or_none()
+    repo = UserRepository(db)
+    user = repo.get_by_username(form_data.username)
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid username or password")
     if not user.is_active:

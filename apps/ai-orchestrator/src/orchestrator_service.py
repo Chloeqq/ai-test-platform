@@ -320,7 +320,7 @@ class OrchestratorService:
             return default
         try:
             return float(str(raw).strip())
-        except Exception:
+        except (TypeError, ValueError):
             return default
 
     def _load_runtime_module(self, *, cache_key: str, module_path: Path) -> Any:
@@ -368,7 +368,7 @@ class OrchestratorService:
             return default
         try:
             return int(str(raw).strip())
-        except Exception:
+        except (TypeError, ValueError):
             return default
 
     @staticmethod
@@ -1010,7 +1010,7 @@ class OrchestratorService:
         if asset_path.exists():
             try:
                 raw = yaml.safe_load(asset_path.read_text(encoding="utf-8")) or {}
-            except Exception as exc:
+            except (yaml.YAMLError, OSError, ValueError) as exc:
                 raise OrchestratorValidationError(
                     "failed to resolve page object from assets",
                     details={
@@ -1046,17 +1046,16 @@ class OrchestratorService:
                         return {"page": normalized_page, "elements": elements}
         try:
             from shared_backend.db import get_db_session
-            from sqlalchemy import text
+            from shared_backend.page_object_queries import (
+                fetch_page_object_id,
+                fetch_page_elements,
+            )
 
             with get_db_session() as db:
-                page_object_row = db.execute(
-                    text(
-                        "select id from page_objects "
-                        "where project_code = :project and client = :client and page_code = :page"
-                    ),
-                    {"project": normalized_project, "client": "web", "page": normalized_page},
-                ).fetchone()
-                if page_object_row is None:
+                po_id = fetch_page_object_id(
+                    db, project=normalized_project, client="web", page=normalized_page,
+                )
+                if po_id is None:
                     raise OrchestratorValidationError(
                         "page object not found",
                         details={
@@ -1065,13 +1064,7 @@ class OrchestratorService:
                             "page": normalized_page,
                         },
                     )
-                element_rows = db.execute(
-                    text(
-                        "select element_code, locator_type, locator_value, role "
-                        "from page_elements where page_object_id = :po_id order by id asc"
-                    ),
-                    {"po_id": int(page_object_row[0])},
-                ).fetchall()
+                element_rows = fetch_page_elements(db, page_object_id=po_id)
             if not element_rows:
                 raise OrchestratorValidationError(
                     "page object has no elements",
@@ -1082,15 +1075,15 @@ class OrchestratorService:
                     },
                 )
             elements: dict[str, dict[str, str]] = {}
-            for element in element_rows:
-                code = str(element[0] if len(element) > 0 else "").strip()
-                selector = str(element[2] if len(element) > 2 else "").strip()
+            for el in element_rows:
+                code = el["element_code"]
+                selector = el["locator_value"]
                 if not code or not selector:
                     continue
                 elements[code] = {
                     "selector": selector,
-                    "type": str(element[1] if len(element) > 1 else "").strip() or "css",
-                    "role": str(element[3] if len(element) > 3 else "").strip(),
+                    "type": el["locator_type"] or "css",
+                    "role": el["role"],
                 }
             if not elements:
                 raise OrchestratorValidationError(
@@ -1801,8 +1794,10 @@ class OrchestratorService:
                 ).all()
                 if rows:
                     return sorted(r.code for r in rows if r.code)
-        except Exception:
-            pass
+        except (ImportError, AttributeError) as exc:
+            self.logger.debug("unable to load available targets for page %s: %s", page_name, exc)
+        except Exception as exc:
+            self.logger.warning("unexpected error loading available targets for page %s: %s", page_name, exc)
         return []
 
     @staticmethod

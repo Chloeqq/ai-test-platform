@@ -10,11 +10,12 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.core.database import get_db
 from app.core.pagination import Page, paginate
 from app.models.test_case import TestCase
+from app.repositories.test_case_repository import TestCaseRepository
 router = APIRouter(prefix="/api/test-cases", tags=["test-cases"])
 
 
@@ -113,6 +114,7 @@ def list_test_cases(
     )
     
     # 获取筛选器选项（用于前端下拉框）
+    # tags 是 JSON 数组列，需在内存中展开扁平化去重，无法用 DB 层 DISTINCT
     tags = sorted({
         tag_item
         for case in db.execute(select(TestCase.tags)).all()
@@ -120,23 +122,10 @@ def list_test_cases(
         if str(tag_item).strip()
     })
     
-    creators = sorted({
-        item[0] 
-        for item in db.execute(select(TestCase.creator)).all() 
-        if item[0]
-    })
-    
-    priorities = sorted({
-        item[0] 
-        for item in db.execute(select(TestCase.priority)).all() 
-        if item[0]
-    })
-    
-    last_results = sorted({
-        item[0] 
-        for item in db.execute(select(TestCase.last_execution_result)).all() 
-        if item[0]
-    })
+    repo = TestCaseRepository(db)
+    creators = sorted(repo.list_distinct_values(TestCase.creator))
+    priorities = sorted(repo.list_distinct_values(TestCase.priority))
+    last_results = sorted(repo.list_distinct_values(TestCase.last_execution_result))
     
     # 应用标签筛选（在内存中，因为 tags 是数组类型）
     items = [_to_list_item(case) for case in page_obj.items]
@@ -173,19 +162,10 @@ def get_case_stats(
     
     用于仪表盘展示，不需要分页
     """
-    total = db.execute(select(func.count(TestCase.id))).scalar_one() or 0
-    
-    # 按优先级统计
-    priority_stats = db.execute(
-        select(TestCase.priority, func.count(TestCase.id))
-        .group_by(TestCase.priority)
-    ).all()
-    
-    # 按执行结果统计
-    result_stats = db.execute(
-        select(TestCase.last_execution_result, func.count(TestCase.id))
-        .group_by(TestCase.last_execution_result)
-    ).all()
+    repo = TestCaseRepository(db)
+    total = repo.count_all()
+    priority_stats = repo.count_grouped_by(TestCase.priority)
+    result_stats = repo.count_grouped_by(TestCase.last_execution_result)
     
     return {
         "total": total,

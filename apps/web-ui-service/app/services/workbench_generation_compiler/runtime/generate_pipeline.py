@@ -1773,6 +1773,7 @@ def _load_cross_page_data_testid_element(
     preferred_pages: tuple[str, ...],
 ) -> dict[str, Any] | None:
     """登录成功后会跳到首页，成功态断言允许引用首页的已治理 data-testid。"""
+    # 合法例外：生成管线无 db Session 可透传，需独立 Session 做跨页 data-testid 查询
     normalized_code = _normalized_text(element_code)
     if not normalized_code:
         return None
@@ -1820,6 +1821,7 @@ def _load_cross_page_data_testid_element(
 
 
 def _load_page_object_from_db(project: str, page: str) -> tuple[PageObject | None, list[PageElement]]:
+    # 合法例外：生成管线无 db Session 可透传，回退到 YAML asset 前的 DB 查询需独立 Session
     with SessionLocal() as db:
         repo = PageObjectRepository(db)
         page_object = repo.get_by_identity(project, "web", page)

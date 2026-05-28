@@ -300,6 +300,7 @@ def _sync_stage_b_workbench_gate(*args: Any, **kwargs: Any) -> None:
 
 
 def _build_run_command(case_path: Path) -> tuple[list[str], dict[str, str]]:
+    # 合法例外：后台执行线程无 db Session，需短暂创建独立 Session 获取数据池快照
     runner_environ = os.environ.copy()
     with SessionLocal() as db:
         runner_environ["DSL_DATA_POOL_JSON"] = test_data_pool_service.serialize_runner_data_pool_snapshot(db)

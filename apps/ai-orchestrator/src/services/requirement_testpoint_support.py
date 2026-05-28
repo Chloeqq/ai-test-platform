@@ -19,35 +19,28 @@ def _fetch_page_object_elements(page: str, project: str = "atp", client: str = "
     """Fetch page object elements from DB or YAML for PO Store validation."""
     try:
         from shared_backend.db import get_db_session
-        from sqlalchemy import text
+        from shared_backend.page_object_queries import (
+            fetch_page_object_id,
+            fetch_page_elements,
+        )
 
         with get_db_session() as db:
-            row = db.execute(
-                text(
-                    "select id from page_objects "
-                    "where project_code = :project and client = :client and page_code = :page"
-                ),
-                {"project": project, "client": client, "page": page},
-            ).fetchone()
-            if row is None:
+            po_id = fetch_page_object_id(
+                db, project=project, client=client, page=page,
+            )
+            if po_id is None:
                 raise LookupError("page object not found in DB")
-            items = db.execute(
-                text(
-                    "select element_code, locator_type, locator_value, role, coalesce(element_name, '') "
-                    "from page_elements where page_object_id = :po_id order by id asc"
-                ),
-                {"po_id": int(row[0])},
-            ).fetchall()
+            items = fetch_page_elements(db, page_object_id=po_id)
             elements: dict[str, dict[str, str]] = {}
             for item in items:
-                code = str(item[0]).strip()
+                code = item["element_code"]
                 if not code:
                     continue
                 elements[code] = {
-                    "selector": str(item[2]).strip(),
-                    "type": str(item[1]).strip() or "css",
-                    "role": str(item[3]).strip(),
-                    "name": str(item[4]).strip(),
+                    "selector": item["locator_value"],
+                    "type": item["locator_type"] or "css",
+                    "role": item["role"],
+                    "name": item["element_name"],
                     "aliases": [],
                 }
             if elements:
