@@ -39,7 +39,7 @@ FUNC_SIZE_FAIL = 200
 SHARED_FUNCS = {
     "dict_value", "list_value", "int_value", "float_value", "str_value",
     "dedup_keep_order", "bounded_score", "json_dict", "json_list",
-    "now_iso", "normalize_project_code", "normalize_project_code_strict",
+    "now_iso", "normalize_project_code",
 }
 
 # 分层导入黑名单（模块名 → 禁止导入的模式列表）
@@ -201,7 +201,7 @@ def main() -> int:
 
     # Baseline: 已知的历史遗留违规(44 violations, 61 warnings)
     # CI 只拦截新增违规。降低 baseline 会导致 CI 失败。
-    BASELINE_VIOLATIONS = 44
+    BASELINE_VIOLATIONS = 40
     BASELINE_WARNINGS = 61
 
     print(f"\n{'='*40}")

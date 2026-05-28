@@ -38,8 +38,8 @@ _RUN_LOCK = threading.Lock()
 _RUN_JOBS: dict[str, dict[str, Any]] = {}
 
 
-def now_iso() -> str:
-    return state_store.now_iso()
+from shared_backend.type_utils import now_iso  # noqa: F401 — 重新导出为模块级函数
+now_iso = state_store.now_iso  # 保持兼容
 
 
 def ensure_dirs() -> None:
