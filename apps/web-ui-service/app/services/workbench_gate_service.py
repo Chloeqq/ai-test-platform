@@ -22,15 +22,7 @@ def _settings() -> Any:
     return get_settings()
 
 
-def _dedup_keep_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for item in items:
-        if item in seen:
-            continue
-        seen.add(item)
-        ordered.append(item)
-    return ordered
+from shared_backend.type_utils import dedup_keep_order as _dedup_keep_order
 
 
 def _normalize_page_slug(value: str) -> str:

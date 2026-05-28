@@ -62,16 +62,7 @@ def _safe_case_id(raw: str) -> str:
     return normalize_case_id(text) if text else "atp-web-common-core-fn-ai-0001"
 
 
-def _dedup_keep_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for item in items:
-        value = str(item).strip()
-        if not value or value in seen:
-            continue
-        seen.add(value)
-        ordered.append(value)
-    return ordered
+from shared_backend.type_utils import dedup_keep_order as _dedup_keep_order
 
 
 _SOURCE_TYPE_LABELS = {

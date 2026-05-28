@@ -16,16 +16,7 @@ from shared_backend.type_utils import dict_value as _dict_value, list_value as _
 LOGGER = logging.getLogger(__name__)
 
 
-def _dedup_keep_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    output: list[str] = []
-    for item in items:
-        key = str(item).strip()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        output.append(key)
-    return output
+from shared_backend.type_utils import dedup_keep_order as _dedup_keep_order
 
 
 def _surface_summary(surface: dict[str, Any]) -> dict[str, Any]:

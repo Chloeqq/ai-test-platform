@@ -326,8 +326,7 @@ def _normalize_binary_health_status(value: int) -> int:
     return normalized
 
 
-def _json_list(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
+from shared_backend.type_utils import json_list as _json_list
 
 
 def _json_safe(value: Any) -> Any:
@@ -342,8 +341,7 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def _bounded_score(value: int | None) -> int:
-    return max(0, min(100, int(value or 0)))
+from shared_backend.type_utils import bounded_score as _bounded_score
 
 
 def _element_governance_payload(element: PageElement) -> dict[str, Any]:
