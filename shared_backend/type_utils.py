@@ -46,6 +46,12 @@ def dedup_keep_order(items: list[str]) -> list[str]:
     return result
 
 
+def normalized_key(value: Any) -> str:
+    """将值规范化为仅含字母数字的 key（用于 alias/element 匹配）。"""
+    text = str_value(value).lower()
+    return "".join(ch for ch in text if ch.isalnum())
+
+
 def bounded_score(value: int | None, *, min_val: int = 0, max_val: int = 100) -> int:
     """将分数限制在 [min_val, max_val] 范围内。"""
     if value is None:

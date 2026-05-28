@@ -35,7 +35,6 @@ from .state_machines import (
 )
 from .execution_compiler import (
     ExecutionCompilerError,
-    PreviewTestPointsCompiler,
     compile_execution_steps,
 )
 from .element_binding import (
@@ -65,7 +64,6 @@ __all__ = [
     "normalize_case_id",
     "normalize_run_status",
     "load_page_object_yaml",
-    "PreviewTestPointsCompiler",
     "merge_page_object_elements",
     "merge_page_object_with_yaml",
     "resolve_explicit_step",

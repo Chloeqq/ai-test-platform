@@ -11,6 +11,7 @@ import yaml
 
 from app.models.test_case import TestCase, TestCaseDefect, TestCaseExecution, TestCaseVersion
 from app.schemas.test_case import TestCaseDataConfig
+from shared_backend.type_utils import str_value as _text
 
 DataConfigValue: TypeAlias = bool | list[str] | list[list[str]]
 DataConfigPayload: TypeAlias = dict[str, DataConfigValue]
@@ -47,9 +48,6 @@ def _string_list_value(value: object) -> list[str]:
     text = str(value or "").strip()
     return [text] if text else []
 
-
-def _text(value: object) -> str:
-    return str(value or "").strip()
 
 
 def _clean_inline_item(value: str) -> str:

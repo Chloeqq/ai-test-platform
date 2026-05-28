@@ -4,15 +4,12 @@ from typing import Any
 
 from app.services import workbench_generation_service
 from shared_backend.execution_compiler import (
-    _extract_quality_gate,
-    _normalize_page_slug,
-    _render_requirement_spec_markdown,
-    _build_system_requirement,
-    _has_multisource_inputs,
-    _list_value,
-    _dict_value,
+    extract_quality_gate,
+    normalize_page_slug,
+    render_requirement_spec_markdown,
+    build_system_requirement,
+    has_multisource_inputs,
 )
-
 from .orchestrator_client_factory import build_orchestrator_client
 
 
@@ -23,7 +20,7 @@ class preview_usecase:
     def execute(self, payload: Any) -> dict[str, Any]:
         project = str(getattr(payload, "project", "") or "").strip() or "mall"
         page = str(getattr(payload, "page", "") or "").strip()
-        normalized_page = _normalize_page_slug(page) if page else ""
+        normalized_page = normalize_page_slug(page) if page else ""
         requirement_text = str(getattr(payload, "requirement", "") or "").strip()
         source = str(getattr(payload, "source", "") or "").strip() or "manual"
         input_sources = [
@@ -32,7 +29,7 @@ class preview_usecase:
         ]
         openapi_spec = getattr(payload, "openapi_spec", None)
         openapi_spec = openapi_spec if isinstance(openapi_spec, dict) else {}
-        multisource_enabled = _has_multisource_inputs(
+        multisource_enabled = has_multisource_inputs(
             input_sources=input_sources,
             openapi_spec=openapi_spec,
             prd_text=getattr(payload, "prd_text", ""),
@@ -46,7 +43,7 @@ class preview_usecase:
         )
         effective_requirement = (
             requirement_text
-            or _build_system_requirement(page=normalized_page, has_multisource_inputs=multisource_enabled)
+            or build_system_requirement(page=normalized_page, has_multisource_inputs=multisource_enabled)
         )
 
         return workbench_generation_service.build_preview_response(

@@ -4,15 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from .element_binding import resolve_element_code
-
-
-def _normalized_text(value: Any) -> str:
-    return str(value or "").strip()
-
-
-def _normalized_key(value: Any) -> str:
-    text = _normalized_text(value).lower()
-    return "".join(ch for ch in text if ch.isalnum())
+from shared_backend.type_utils import str_value as _normalized_text, normalized_key as _normalized_key
 
 
 def _normalize_action(value: Any) -> str:

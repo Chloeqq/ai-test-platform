@@ -7,9 +7,9 @@ from fastapi import HTTPException, status
 from app.core.config import get_settings
 from app.services import workbench_orchestrator_service
 from shared_backend.execution_compiler import (
-    _extract_quality_gate,
-    _is_quality_gate_blocked,
-    _render_requirement_spec_markdown,
+    extract_quality_gate,
+    is_quality_gate_blocked,
+    render_requirement_spec_markdown,
 )
 
 from .orchestrator_client import OrchestratorClient
@@ -86,7 +86,7 @@ def build_orchestrator_client() -> OrchestratorClient:
     return OrchestratorClient(
         run_generate=_run_generate,
         run_parse=_run_parse,
-        extract_quality_gate=_extract_quality_gate,
-        is_quality_gate_blocked=_is_quality_gate_blocked,
-        render_requirement_spec_markdown=_render_requirement_spec_markdown,
+        extract_quality_gate=extract_quality_gate,
+        is_quality_gate_blocked=is_quality_gate_blocked,
+        render_requirement_spec_markdown=render_requirement_spec_markdown,
     )

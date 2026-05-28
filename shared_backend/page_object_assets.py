@@ -6,11 +6,10 @@ from typing import Any
 
 import yaml
 
+from shared_backend.type_utils import str_value as _normalized_text
+
 _PAGE_OBJECT_ROOT = Path(__file__).resolve().parents[1] / "assets" / "page-objects" / "web"
 
-
-def _normalized_text(value: Any) -> str:
-    return str(value or "").strip()
 
 
 def _normalized_page_slug(page: str) -> str:

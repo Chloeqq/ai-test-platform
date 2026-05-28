@@ -6,9 +6,9 @@ import re
 from typing import Any
 
 from .element_binding import build_element_alias_map, resolve_element_code
+from shared_backend.type_utils import dedup_keep_order, dict_value, list_value
 
 _LOGGER = logging.getLogger(__name__)
-
 
 _DSL_ACTIONS = {"input", "click", "assert", "navigate", "wait", "login", "assert_metric"}
 _ASSERTION_TYPES = {"url", "visible", "text"}
@@ -841,9 +841,6 @@ def compile_execution_steps(
     return rendered
 
 
-# Deprecated: use ExecutionCompilerError directly. Kept for backward compatibility.
-ExecutionCompileError = ExecutionCompilerError
-
 
 _PAGE_ALIAS_MAP = {
     "addprouct": "addproduct",
@@ -857,32 +854,13 @@ _PAGE_FRIENDLY_NAME = {
 }
 
 
-def _dedup_keep_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    ordered: list[str] = []
-    for item in items:
-        if item in seen:
-            continue
-        seen.add(item)
-        ordered.append(item)
-    return ordered
-
-
-def _normalize_page_slug(value: str) -> str:
+def normalize_page_slug(value: str) -> str:
     normalized = "".join(ch for ch in str(value).strip().lower() if ch.isalnum() or ch in {"-", "_"})
     normalized = _PAGE_ALIAS_MAP.get(normalized, normalized)
     return normalized or "product"
 
 
-def _dict_value(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
-def _list_value(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
-
-
-def _has_multisource_inputs(
+def has_multisource_inputs(
     *,
     input_sources: list[dict[str, Any]],
     openapi_spec: dict[str, Any],
@@ -911,8 +889,8 @@ def _has_multisource_inputs(
     )
 
 
-def _build_system_requirement(*, page: str, page_url: str = "", has_multisource_inputs: bool = False) -> str:
-    normalized_page = _normalize_page_slug(page) if str(page).strip() else ""
+def build_system_requirement(*, page: str, page_url: str = "", has_multisource_inputs: bool = False) -> str:
+    normalized_page = normalize_page_slug(page) if str(page).strip() else ""
     if has_multisource_inputs:
         return "多输入源需求驱动的页面核心流程验证"
     page_label = _PAGE_FRIENDLY_NAME.get(normalized_page, normalized_page or "目标页面")
@@ -922,7 +900,7 @@ def _build_system_requirement(*, page: str, page_url: str = "", has_multisource_
     return f"自动生成的页面测试目标：验证 {page_label} 页面可访问、关键区域可见、核心基础交互可执行。"
 
 
-def _extract_quality_gate(payload: Any) -> dict[str, Any] | None:
+def extract_quality_gate(payload: Any) -> dict[str, Any] | None:
     if not isinstance(payload, dict):
         return None
     direct = payload.get("quality_gate")
@@ -935,14 +913,14 @@ def _extract_quality_gate(payload: Any) -> dict[str, Any] | None:
             return nested
     error = payload.get("error")
     if isinstance(error, dict):
-        nested = _extract_quality_gate(error)
+        nested = extract_quality_gate(error)
         if isinstance(nested, dict):
             return nested
     return None
 
 
-def _is_quality_gate_blocked(payload: Any) -> tuple[bool, dict[str, Any] | None]:
-    gate = _extract_quality_gate(payload)
+def is_quality_gate_blocked(payload: Any) -> tuple[bool, dict[str, Any] | None]:
+    gate = extract_quality_gate(payload)
     if not isinstance(gate, dict):
         return False, None
     decision = str(gate.get("decision", "")).strip().lower()
@@ -954,15 +932,15 @@ def _is_quality_gate_blocked(payload: Any) -> tuple[bool, dict[str, Any] | None]
     return False, gate
 
 
-def _render_requirement_spec_markdown(requirement_spec: dict[str, Any]) -> str:
+def render_requirement_spec_markdown(requirement_spec: dict[str, Any]) -> str:
     spec = requirement_spec if isinstance(requirement_spec, dict) else {}
     page = str(spec.get("page", "")).strip() or "-"
     priority = str(spec.get("priority", "")).strip() or "P1"
     parse_confidence = spec.get("parse_confidence", 0)
-    test_intents: list[Any] = _list_value(spec.get("test_intents"))
-    ambiguities: list[Any] = _list_value(spec.get("ambiguities"))
-    business_rules: list[Any] = _list_value(spec.get("business_rules"))
-    quality_gate = _dict_value(spec.get("quality_gate"))
+    test_intents: list[Any] = list_value(spec.get("test_intents"))
+    ambiguities: list[Any] = list_value(spec.get("ambiguities"))
+    business_rules: list[Any] = list_value(spec.get("business_rules"))
+    quality_gate = dict_value(spec.get("quality_gate"))
     lines = [
         "# 需求测试点分析",
         "",
@@ -974,7 +952,7 @@ def _render_requirement_spec_markdown(requirement_spec: dict[str, Any]) -> str:
         f"- 消歧数量: `{len(ambiguities)}`",
     ]
     if quality_gate:
-        blockers = _list_value(quality_gate.get("blockers"))
+        blockers = list_value(quality_gate.get("blockers"))
         lines.extend(
             [
                 "",
@@ -995,158 +973,6 @@ def _render_requirement_spec_markdown(requirement_spec: dict[str, Any]) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-class PreviewTestPointsCompiler:
-    """DEPRECATED: Use run_preview_pipeline from preview_pipeline.py instead.
-
-    This class is kept for backward compatibility. New code should use
-    the canonical preview path: build_preview_response -> run_preview_pipeline.
-    """
-
-    def __init__(self, *, orchestrator_client: Any) -> None:
-        import warnings
-        warnings.warn(
-            "PreviewTestPointsCompiler is deprecated; use run_preview_pipeline instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self._orchestrator_client = orchestrator_client
-
-    def _resolve_effective_requirement(self, *, requirement_text: str, normalized_page: str, multisource_enabled: bool) -> str:
-        requirement = str(requirement_text or "").strip()
-        if requirement:
-            return requirement
-        return _build_system_requirement(page=normalized_page, has_multisource_inputs=multisource_enabled)
-
-    def compile_preview(self, payload: Any) -> dict[str, Any]:
-        from shared_backend.mapping_engine import build_preview_payload
-
-        request = build_preview_payload(payload)
-        requirement_text = str(request.get("requirement", "")).strip()
-        page = str(request.get("page", "")).strip()
-        normalized_page = _normalize_page_slug(page) if page else ""
-        if not normalized_page:
-            raise ExecutionCompilerError(
-                code="preview_missing_page",
-                message="page must not be empty",
-                reason="page is empty after normalization",
-                stage="compile_preview",
-            )
-
-        input_sources = [item for item in _list_value(request.get("input_sources")) if isinstance(item, dict)]
-        openapi_spec = _dict_value(request.get("openapi_spec"))
-        multisource_enabled = _has_multisource_inputs(
-            input_sources=input_sources,
-            openapi_spec=openapi_spec,
-            prd_text=request.get("prd_text", ""),
-            prd_url=request.get("prd_url", ""),
-            user_story=request.get("user_story", ""),
-            git_diff=request.get("git_diff", ""),
-            git_diff_path=request.get("git_diff_path", ""),
-            openapi_url=request.get("openapi_url", ""),
-            defect_ticket=request.get("defect_ticket", ""),
-            runtime_logs=request.get("runtime_logs", ""),
-        )
-        effective_requirement = self._resolve_effective_requirement(
-            requirement_text=requirement_text,
-            normalized_page=normalized_page,
-            multisource_enabled=multisource_enabled,
-        )
-        if not effective_requirement and not multisource_enabled and not normalized_page:
-            raise ExecutionCompilerError(
-                code="preview_missing_requirement",
-                message="requirement must not be empty when no page or additional input sources are provided",
-                reason="missing requirement without multisource inputs",
-                stage="compile_preview",
-            )
-
-        parse_result = self._orchestrator_client.parse(
-            requirement=effective_requirement,
-            page=normalized_page,
-            source=str(request.get("source", "")).strip() or "manual",
-            input_sources=input_sources,
-            openapi_spec=openapi_spec,
-            prd_text=request.get("prd_text", ""),
-            prd_url=request.get("prd_url", ""),
-            user_story=request.get("user_story", ""),
-            git_diff=request.get("git_diff", ""),
-            git_diff_path=request.get("git_diff_path", ""),
-            openapi_url=request.get("openapi_url", ""),
-            defect_ticket=request.get("defect_ticket", ""),
-            runtime_logs=request.get("runtime_logs", ""),
-        )
-        if not isinstance(parse_result, dict):
-            parse_result = {}
-
-        requirement_spec = parse_result.get("requirement_spec")
-        if not isinstance(requirement_spec, dict):
-            requirement_spec = parse_result
-        if not isinstance(requirement_spec, dict):
-            requirement_spec = {}
-
-        requirement_analysis_markdown = str(parse_result.get("requirement_analysis_markdown", "")).strip()
-        if not requirement_analysis_markdown:
-            requirement_analysis_markdown = _render_requirement_spec_markdown(requirement_spec)
-
-        quality_gate = _extract_quality_gate(requirement_spec)
-        test_intents = _list_value(requirement_spec.get("test_intents"))
-        ambiguities = _list_value(requirement_spec.get("ambiguities"))
-        business_rules = _list_value(requirement_spec.get("business_rules"))
-        parser_runtime = _dict_value(requirement_spec.get("parser_runtime"))
-        source_summary = _dict_value(parser_runtime.get("source_summary"))
-        source_inputs = _list_value(requirement_spec.get("source_inputs"))
-        source_count = int(
-            source_summary.get(
-                "source_count",
-                parser_runtime.get("source_count", len(source_inputs)),
-            )
-            or 0
-        )
-        source_types = _list_value(source_summary.get("source_types"))
-        if not source_types:
-            source_types = [
-                str(item.get("source_type", "")).strip()
-                for item in source_inputs
-                if isinstance(item, dict) and str(item.get("source_type", "")).strip()
-            ]
-        deduped_source_types = _dedup_keep_order([str(item).strip() for item in source_types if str(item).strip()])
-        change_impact = _dict_value(requirement_spec.get("change_impact"))
-
-        intent_type_distribution: dict[str, int] = {}
-        for item in test_intents:
-            if not isinstance(item, dict):
-                continue
-            intent_type = str(item.get("intent_type", "unknown")).strip() or "unknown"
-            intent_type_distribution[intent_type] = intent_type_distribution.get(intent_type, 0) + 1
-
-        item = {
-            "page": str(requirement_spec.get("page", "")).strip() or normalized_page,
-            "priority": str(requirement_spec.get("priority", "")).strip() or "P1",
-            "parse_confidence": requirement_spec.get("parse_confidence", 0),
-            "intent_count": len(test_intents),
-            "intent_type_distribution": intent_type_distribution,
-            "ambiguity_count": len(ambiguities),
-            "rule_count": len(business_rules),
-            "source_count": source_count,
-            "source_types": deduped_source_types,
-            "change_impact": {
-                "impact_score": change_impact.get("impact_score", 0),
-                "changed_areas": _list_value(change_impact.get("changed_areas")),
-                "risk_signal_count": len(_list_value(change_impact.get("risk_signals"))),
-                "top_factor": _dict_value(change_impact.get("top_factor")),
-                "recommended_regression_scope": _list_value(change_impact.get("recommended_regression_scope")),
-            },
-            "quality_gate": quality_gate,
-            "requirement_spec": requirement_spec,
-            "requirement_analysis_markdown": requirement_analysis_markdown,
-            "output_contract": {
-                "machine_schema": "RequirementSpecV1",
-                "human_render": "RequirementAnalysisMarkdownV1",
-                "rendered_by": "web-ui-service",
-            },
-        }
-        return {"item": item}
-
-
 def compile_playwright_python(ir: dict[str, Any], page_object: dict[str, Any]) -> str:
     """将 IR 映射为 Playwright sync API 的 Python 脚本字符串。"""
     from shared_backend.mapping_engine import map_ir_to_selectors
@@ -1154,7 +980,7 @@ def compile_playwright_python(ir: dict[str, Any], page_object: dict[str, Any]) -
     mapped = map_ir_to_selectors(ir, page_object, preserve_target=True)
     steps = mapped.get("steps")
     if not isinstance(steps, list):
-        raise ExecutionCompileError(
+        raise ExecutionCompilerError(
             code="execution_compile_invalid_steps",
             message="mapped ir steps is invalid",
             reason="mapped ir does not contain valid steps array",
@@ -1176,7 +1002,7 @@ def compile_playwright_python(ir: dict[str, Any], page_object: dict[str, Any]) -
         selector = str(step.get("selector", "")).strip()
         value = step.get("value")
         if not action or not selector:
-            raise ExecutionCompileError(
+            raise ExecutionCompilerError(
                 code="execution_compile_missing_action_or_selector",
                 message="mapped step requires action and selector",
                 reason="action/selector missing in mapped step",
@@ -1196,7 +1022,7 @@ def compile_playwright_python(ir: dict[str, Any], page_object: dict[str, Any]) -
             escaped_value = str(value if value is not None else "").replace("\\", "\\\\").replace("'", "\\'")
             lines.append(f"    expect(page.locator('{escaped_selector}')).to_have_text('{escaped_value}')")
         else:
-            raise ExecutionCompileError(
+            raise ExecutionCompilerError(
                 code="execution_compile_unsupported_action",
                 message="unsupported action for playwright compiler",
                 reason=f"unsupported action: {action}",
