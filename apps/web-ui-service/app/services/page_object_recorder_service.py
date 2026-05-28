@@ -33,7 +33,28 @@ from app.schemas.page_object_recorder import (
 from app.schemas.test_case import TestCaseCreate
 from app.services.page_object_source_semantics import SourceSemanticCatalog, build_source_semantic_catalog
 from app.services import page_object_service, test_case_service, test_project_service
-from app.services.page_object_locator_scoring import *  # noqa: F403
+from app.services.page_object_locator_scoring import (
+    _ParsedLocator,
+    _ParsedStep,
+    _build_element_candidates,
+    _business_domain_guess,
+    _candidate_key_for_locator,
+    _derive_page_url,
+    _derive_precondition_state,
+    _group_key_for_locator,
+    _infer_locator_category,
+    _is_locator_blocked_for_ingest,
+    _locator_key,
+    _locator_source,
+    _looks_dynamic_text_locator,
+    _normalize_business_element_code,
+    _normalize_metric_text_locator,
+    _normalize_page_route,
+    _probe_availability,
+    _score_to_tier,
+    _short_hash,
+    _source_enhanced_candidate_semantics,
+)
 
 SESSION_STATUS_VALUES = {"active", "stopped", "failed"}
 _PROCESS_REGISTRY: dict[int, subprocess.Popen[bytes]] = {}

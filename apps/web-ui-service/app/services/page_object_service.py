@@ -36,7 +36,10 @@ from app.schemas.page_object import (
 from app.repositories.page_object_repository import PageObjectRepository
 from app.services import test_project_service
 
-from app.services.page_object_normalizers import *
+from app.services.page_object_normalizers import (
+    CANDIDATE_PROMOTION_STATUS_VALUES,
+    CANDIDATE_STATUS_VALUES,
+)
 
 _RECORDER_ROOT = (Path(__file__).resolve().parents[4] / "artifacts" / "page-recorder").resolve()
 _RECORDER_CLEANABLE_STATUSES = {"stopped", "failed"}
