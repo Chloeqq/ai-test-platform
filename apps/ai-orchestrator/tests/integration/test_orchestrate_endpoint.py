@@ -1,7 +1,6 @@
 import importlib.util
 import json
 import sys
-import threading
 import uuid
 from pathlib import Path
 from types import ModuleType
@@ -9,6 +8,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
+from fastapi.testclient import TestClient
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -22,7 +22,7 @@ def _load_orchestrator_app_module() -> ModuleType:
     existing = sys.modules.get(module_name)
     if isinstance(existing, ModuleType):
         return existing
-    spec = importlib.util.spec_from_file_location(module_name, SRC_ROOT / "app.py")
+    spec = importlib.util.spec_from_file_location(module_name, SRC_ROOT / "main.py")
     if spec is None or spec.loader is None:
         raise ImportError("unable to load ai-orchestrator app module")
     module = importlib.util.module_from_spec(spec)
@@ -33,7 +33,6 @@ def _load_orchestrator_app_module() -> ModuleType:
 
 _APP_MODULE = _load_orchestrator_app_module()
 create_app = _APP_MODULE.create_app
-create_server = _APP_MODULE.create_server
 
 from orchestrator_service import OrchestratorValidationError, RunnerExecutionError  # noqa: E402
 
@@ -1111,24 +1110,10 @@ class FakeAssetService:
 def orchestrator_server():
     fake_service = FakeService()
     fake_asset_service = FakeAssetService()
-    server = None
-    thread = None
-    base_url = ""
-    try:
-        server = create_server(
-            host="127.0.0.1",
-            port=0,
-            service=fake_service,
-            asset_service=fake_asset_service,
-        )
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        host, port = server.server_address
-        base_url = f"http://{host}:{port}"
-    except SystemExit:
-        client = create_app(service=fake_service, asset_service=fake_asset_service).test_client()
-        base_url = f"inmemory://{uuid.uuid4().hex}"
-        _IN_MEMORY_CLIENTS[base_url] = client
+    app = create_app(service=fake_service, asset_service=fake_asset_service)
+    client = TestClient(app)
+    base_url = f"inmemory://{uuid.uuid4().hex}"
+    _IN_MEMORY_CLIENTS[base_url] = client
 
     yield {
         "service": fake_service,
@@ -1136,11 +1121,6 @@ def orchestrator_server():
         "base_url": base_url,
     }
 
-    if server is not None:
-        server.shutdown()
-        server.server_close()
-    if thread is not None:
-        thread.join(timeout=5)
     _IN_MEMORY_CLIENTS.pop(base_url, None)
 
 
@@ -1158,13 +1138,13 @@ def _request_json(base_url: str, method: str, path: str, payload: dict):
 def _request_raw(base_url: str, method: str, path: str, body: bytes, content_type: str):
     if base_url.startswith("inmemory://"):
         client = _IN_MEMORY_CLIENTS[base_url]
-        response = client.open(
-            path=path,
+        response = client.request(
             method=method,
-            data=body,
+            url=path,
+            content=body,
             headers={"Content-Type": content_type},
         )
-        return response.status_code, json.loads(response.get_data(as_text=True))
+        return response.status_code, response.json()
     request = Request(
         url=f"{base_url}{path}",
         data=body,

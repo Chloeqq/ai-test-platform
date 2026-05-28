@@ -486,4 +486,18 @@ def _render_markdown(svc: OrchestratorService, requirement_spec: dict[str, objec
 # 模块级应用
 # ---------------------------------------------------------------------------
 
+def create_server(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    service: Any = None,
+    asset_service: Any = None,
+):
+    """创建 uvicorn 多线程 HTTP 服务器（集成测试使用）。"""
+    import uvicorn
+
+    _app = create_app(service=service, asset_service=asset_service)
+    config = uvicorn.Config(_app, host=host, port=port, log_level="error")
+    return uvicorn.Server(config)
+
+
 app = create_app()

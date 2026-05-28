@@ -13,6 +13,9 @@ from shared_backend.schemas.validator import ContractValidator
 class OrchestrationFlowSupport:
     """实现 orchestrate 主流程，通过注入的回调与 OrchestratorService 解耦。"""
 
+    _TIMEOUT_CIRCUIT_BREAKER_MAX = 3
+    _TIMEOUT_CIRCUIT_RESET_SECONDS = 300  # 5 分钟后重置
+
     def __init__(
         self,
         *,
@@ -67,6 +70,34 @@ class OrchestrationFlowSupport:
         self._build_evidence_manifest = build_evidence_manifest
         self._build_and_save_report = build_and_save_report
         self._build_report_summary_path = build_report_summary_path
+        # 熔断状态
+        self._circuit_open = False
+        self._consecutive_timeouts = 0
+        self._last_timeout_at = None
+
+    def _record_timeout(self) -> None:
+        import time
+        self._consecutive_timeouts += 1
+        self._last_timeout_at = time.time()
+        if self._consecutive_timeouts >= self._TIMEOUT_CIRCUIT_BREAKER_MAX:
+            self._circuit_open = True
+
+    def _record_success(self) -> None:
+        self._consecutive_timeouts = 0
+        self._circuit_open = False
+
+    def _check_circuit(self) -> None:
+        import time
+        if self._circuit_open and self._last_timeout_at:
+            elapsed = time.time() - self._last_timeout_at
+            if elapsed >= self._TIMEOUT_CIRCUIT_RESET_SECONDS:
+                self._circuit_open = False
+                self._consecutive_timeouts = 0
+        if self._circuit_open:
+            raise self._validation_error_cls(
+                "orchestrator circuit breaker open: too many consecutive timeouts",
+                details={"reason_code": "circuit_breaker_open", "retry_after_seconds": self._TIMEOUT_CIRCUIT_RESET_SECONDS},
+            )
 
     @staticmethod
     def _build_generated_script_shell(*, case: dict[str, Any], runner_profile: dict[str, Any]) -> dict[str, Any]:
@@ -180,6 +211,7 @@ class OrchestrationFlowSupport:
         runner: str = "playwright",
     ):
         """执行完整编排流水线并返回 OrchestrationResult。"""
+        self._check_circuit()
         normalized_requirement = requirement.strip()
         normalized_page = page.strip()
         if not normalized_page:
@@ -474,4 +506,5 @@ class OrchestrationFlowSupport:
         if not execute:
             result.execution_record = report_payload["execution_record"]
 
+        self._record_success()
         return result
