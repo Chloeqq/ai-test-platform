@@ -82,6 +82,17 @@ Router → Facade → Service → Repository → DB
 | 单个函数 | 200 行（超 100 行警告） |
 超过必须在 commit message 中说明原因，并计划拆分。
 
+## 已知陷阱
+
+### N+1 查询风险
+项目已定义 `TestCase.executions`、`PageObject.elements` 等 ORM relationship（`lazy="select"`）。
+直接访问 `case.executions` 或 `page_object.elements` 会触发隐式查询——在循环中会导致 N+1。
+**批量场景必须走 Repository 方法**（`repo.list_executions_by_case_ids(case_ids)` 等），不要依赖 ORM 懒加载。
+
+### pytest -q 直接跑会失败
+`pytest apps/web-ui-service/tests/unit/ apps/ai-orchestrator/tests/unit/ -q` 会有 15 个假失败。
+这是 monkeypatch 状态污染（非代码 bug）。用 `make test` 或 `make test-unit`（已分两批）。
+
 ## AI 代码生成模板
 
 ### 新建 service 函数

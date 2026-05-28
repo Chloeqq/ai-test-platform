@@ -104,7 +104,14 @@ db-upgrade:
 db-revision:
 	cd apps/web-ui-service && ../../.venv/bin/alembic revision -m "$(MSG)"
 
+# 默认 test 使用分两批方式，避免 monkeypatch 污染
+# 单独跑 pytest -q 会有 15 个假失败，不是代码 bug
 test: test-unit test-contracts
+
+# 快速单文件测试（不使用分批）
+test-quick:
+	$(VENV_PYTHON) -m pytest apps/web-ui-service/tests/unit/ apps/ai-orchestrator/tests/unit/ -q --ignore=apps/web-ui-service/tests/unit/test_workbench_facade.py --ignore=apps/web-ui-service/tests/unit/test_precheck_selected_intents_service.py
+	$(VENV_PYTHON) -m pytest apps/web-ui-service/tests/unit/test_workbench_facade.py apps/web-ui-service/tests/unit/test_precheck_selected_intents_service.py -q
 
 verify-core-chain:
 	$(VENV_PYTHON) scripts/verify_core_chain.py
