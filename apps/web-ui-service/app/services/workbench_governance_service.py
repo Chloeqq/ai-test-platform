@@ -7,11 +7,11 @@ from typing import Any
 from urllib.parse import urlencode
 
 from datetime_compat import UTC
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.workbench._helpers import default_overview, to_utc
 from app.models.test_case import TestCase, TestCaseExecution
+from app.repositories.test_case_repository import TestCaseRepository
 from app.services import test_case_service
 from shared_backend.type_utils import dict_value as _dict_value, float_value as _float_value, int_value as _int_value, list_value as _list_value
 
@@ -1241,8 +1241,9 @@ def build_dashboard_overview(db: Session) -> dict[str, Any]:
     now = datetime.now(UTC)
     try:
         test_case_service.ensure_seed_data(db)
-        cases = db.execute(select(TestCase).order_by(TestCase.id.asc())).scalars().all()
-        executions = db.execute(select(TestCaseExecution).order_by(TestCaseExecution.executed_at.desc())).scalars().all()
+        repo = TestCaseRepository(db)
+        cases = repo.list_all()
+        executions = repo.list_all_executions_ordered()
         case_map = {item.id: item for item in cases}
 
         base = (now - timedelta(hours=23)).replace(minute=0, second=0, microsecond=0)
