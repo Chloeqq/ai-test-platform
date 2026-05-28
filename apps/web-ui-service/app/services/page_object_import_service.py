@@ -198,7 +198,6 @@ _ELEMENT_SUFFIX_LABELS = {
     "link": "链接",
 }
 
-
 @dataclass(frozen=True)
 class ParsedTestIdElement:
     testid: str
@@ -213,10 +212,8 @@ class ParsedTestIdElement:
     match_strategy: str
     semantic_tags: list[str]
 
-
 def _hash_bytes(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
-
 
 def _import_path(import_id: str) -> Path:
     normalized = re.sub(r"[^a-zA-Z0-9_-]+", "", str(import_id or "").strip())
@@ -224,19 +221,16 @@ def _import_path(import_id: str) -> Path:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="import_id is required")
     return _IMPORT_ROOT / f"{normalized}.json"
 
-
 def _read_import(import_id: str) -> dict[str, Any]:
     path = _import_path(import_id)
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"page object import not found: {import_id}")
     return json.loads(path.read_text(encoding="utf-8"))
 
-
 def _write_import(payload: dict[str, Any]) -> None:
     _IMPORT_ROOT.mkdir(parents=True, exist_ok=True)
     path = _import_path(str(payload.get("import_id") or ""))
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
 
 def _extract_source_path(text: str) -> str:
     for value in _BACKTICK_RE.findall(text):
@@ -244,7 +238,6 @@ def _extract_source_path(text: str) -> str:
         if _SOURCE_PATH_RE.match(normalized):
             return normalized
     return ""
-
 
 def _is_testid_token(value: str) -> bool:
     normalized = str(value or "").strip()
@@ -254,10 +247,8 @@ def _is_testid_token(value: str) -> bool:
         return False
     return "-" in normalized and not normalized.startswith(":data-testid")
 
-
 def _title_without_source(value: str) -> str:
     return _BACKTICK_RE.sub("", str(value or "")).strip(" ：:")
-
 
 def _source_name(source_path: str, fallback: str) -> str:
     title = _title_without_source(fallback)
@@ -268,7 +259,6 @@ def _source_name(source_path: str, fallback: str) -> str:
         if stem:
             return stem[:120]
     return "页面对象"
-
 
 def _route_shell_page_name(page_code: str, section: str) -> str:
     if "add/update" not in str(section or "").lower():
@@ -287,10 +277,8 @@ def _route_shell_page_name(page_code: str, section: str) -> str:
     label = _ROUTE_SHELL_PAGE_LABELS.get(base, "")
     return f"{label}{action_label}页" if label else ""
 
-
 def _contains_cjk(value: str) -> bool:
     return bool(re.search(r"[\u4e00-\u9fff]", str(value or "")))
-
 
 def _should_replace_page_name(existing_name: str, next_name: str, page_code: str) -> bool:
     current = str(existing_name or "").strip()
@@ -305,7 +293,6 @@ def _should_replace_page_name(existing_name: str, next_name: str, page_code: str
         return True
     return False
 
-
 def _template_safe_code(testid: str) -> str:
     def replace(match: re.Match[str]) -> str:
         value = match.group(1) or match.group(2) or "var"
@@ -313,7 +300,6 @@ def _template_safe_code(testid: str) -> str:
         return value or "var"
 
     return _TEMPLATE_TOKEN_RE.sub(replace, testid).strip("-")
-
 
 def _derive_prefix(testid: str) -> str:
     safe = _template_safe_code(testid)
@@ -327,11 +313,9 @@ def _derive_prefix(testid: str) -> str:
             return "-".join(parts[:index])
     return parts[0]
 
-
 def _normalize_page_code_for_testid(page_code: str) -> str:
     normalized = str(page_code or "").strip().lower()
     return "layout" if normalized in _SHARED_LAYOUT_PREFIXES else normalized
-
 
 def _dominant_page_code(tokens: list[str]) -> str:
     for token in tokens:
@@ -341,7 +325,6 @@ def _dominant_page_code(tokens: list[str]) -> str:
     if tokens:
         return _normalize_page_code_for_testid(_derive_prefix(tokens[0]))
     return ""
-
 
 def _business_type(testid: str) -> str:
     safe = _template_safe_code(testid)
@@ -368,7 +351,6 @@ def _business_type(testid: str) -> str:
         return "container"
     return "container"
 
-
 def _business_domain(testid: str) -> str:
     safe = _template_safe_code(testid)
     if safe.startswith("login-"):
@@ -385,7 +367,6 @@ def _business_domain(testid: str) -> str:
         return "form"
     return "common"
 
-
 def _is_key_element(testid: str, business_type: str) -> bool:
     safe = _template_safe_code(testid)
     if safe.endswith(tuple(f"-{suffix}" for suffix in _CONTAINER_SUFFIXES)):
@@ -393,7 +374,6 @@ def _is_key_element(testid: str, business_type: str) -> bool:
     if business_type in {"button", "input", "switch", "radio", "checkbox", "link"}:
         return True
     return safe.endswith(tuple(f"-{suffix}" for suffix in _ACTION_SUFFIXES))
-
 
 def parse_data_testid_guidelines(markdown_text: str, *, page_code_filter: str = "") -> list[ParsedTestIdElement]:
     in_landed_section = False
@@ -478,7 +458,6 @@ def parse_data_testid_guidelines(markdown_text: str, *, page_code_filter: str = 
             )
     return rows
 
-
 def _element_name(row: ParsedTestIdElement) -> str:
     safe = _template_safe_code(row.testid)
     exact_name = _ELEMENT_EXACT_NAMES.get(safe)
@@ -505,7 +484,6 @@ def _element_name(row: ParsedTestIdElement) -> str:
         return "".join(labels)[:120]
     return safe[:120]
 
-
 def _should_replace_element_name(existing_name: str, next_name: str, element_code: str, testid: str) -> bool:
     current = str(existing_name or "").strip()
     candidate = str(next_name or "").strip()
@@ -518,7 +496,6 @@ def _should_replace_element_name(existing_name: str, next_name: str, element_cod
     if not _contains_cjk(current) and _contains_cjk(candidate):
         return True
     return False
-
 
 def _primary_locator_upsert(db: Session, *, element: PageElement, operator: str) -> None:
     locator_value = str(element.locator_value or "").strip()[:512]
@@ -547,7 +524,6 @@ def _primary_locator_upsert(db: Session, *, element: PageElement, operator: str)
     existing.is_primary = True
     existing.locator_source = element.locator_source
     db.add(existing)
-
 
 def _cleanup_legacy_layout_pages(
     db: Session,
@@ -615,7 +591,6 @@ def _cleanup_legacy_layout_pages(
         if deleted_element_ids:
             page_object_service._sync_page_object_metrics(db, page_object_id=layout_page.id)
     return result
-
 
 def _build_preview(
     db: Session,
@@ -705,7 +680,6 @@ def _build_preview(
         },
     }
 
-
 def create_import_preview(
     db: Session,
     *,
@@ -771,10 +745,8 @@ def create_import_preview(
     _write_import(payload)
     return payload
 
-
 def get_import(import_id: str) -> dict[str, Any]:
     return _read_import(import_id)
-
 
 def apply_import(
     db: Session,
