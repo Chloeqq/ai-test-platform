@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from shared_backend.case_ids import match_case_id, normalize_case_id
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+
+from app.repositories.test_case_repository import TestCaseRepository
 
 from app.models.test_case import TestCase
 
@@ -27,7 +28,7 @@ def normalize_business_case_id(value: Any) -> str:
 
 def load_case_center_case_ids(db: Session) -> set[str] | None:
     try:
-        rows = db.execute(select(TestCase.case_id)).scalars().all()
+        rows = TestCaseRepository(db).list_case_ids()
     except SQLAlchemyError:
         return None
     case_ids: set[str] = set()

@@ -113,9 +113,17 @@ def check_sizes(filepath: Path) -> None:
 
 # ---- 2. Repository 强制 ----
 
+_REPO_EXEMPT_FILES = {
+    "app/core/security.py",      # User 认证(无 UserRepository)
+    "app/routers/auth.py",       # User 认证(无 UserRepository)
+    "app/services/workbench_generation_api/repository.py",  # 本身是 repository
+}
+
 def check_repository_enforcement(filepath: Path) -> None:
     rel = str(filepath.relative_to(ROOT))
     if "/repositories/" in rel:
+        return
+    if any(rel.endswith(exempt) for exempt in _REPO_EXEMPT_FILES):
         return
     content = filepath.read_text()
     if "db.execute(select(" in content:
@@ -201,7 +209,7 @@ def main() -> int:
 
     # Baseline: 已知的历史遗留违规(44 violations, 61 warnings)
     # CI 只拦截新增违规。降低 baseline 会导致 CI 失败。
-    BASELINE_VIOLATIONS = 35
+    BASELINE_VIOLATIONS = 31
     BASELINE_WARNINGS = 61
 
     print(f"\n{'='*40}")
