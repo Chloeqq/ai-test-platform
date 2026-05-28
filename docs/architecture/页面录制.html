@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>录制即执行 - 原型</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font:14px/1.6 -apple-system,sans-serif;background:#f0f2f5;color:#1f2937;padding:24px}
+h1{margin-bottom:24px;font-size:20px}
+.state{margin-bottom:32px;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);overflow:hidden}
+.state-title{padding:12px 20px;font-weight:600;font-size:13px;color:#6b7280;border-bottom:1px solid #f3f4f6;background:#fafafa}
+.state-body{padding:20px}
+.grid{display:grid;gap:12px}
+.grid-2{grid-template-columns:1fr 1fr}
+.grid-4{grid-template-columns:repeat(4,1fr)}
+
+/* 按钮 */
+.btn{padding:8px 20px;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:#2563eb;color:#fff}
+.btn-danger{background:#ef4444;color:#fff}
+.btn-secondary{background:#f3f4f6;color:#374151;border:1px solid #d1d5db}
+.btn-success{background:#10b981;color:#fff}
+.btn-ghost{background:transparent;color:#6b7280;border:1px solid #d1d5db}
+.btn-sm{padding:4px 12px;font-size:12px;border-radius:6px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* 表单 */
+.input{padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;width:100%}
+.select{padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;background:#fff}
+.label{font-size:12px;color:#6b7280;margin-bottom:4px;display:block}
+
+/* 状态指示器 */
+.recording-dot{width:10px;height:10px;background:#ef4444;border-radius:50%;animation:pulse 1.5s infinite;display:inline-block}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.status-badge{padding:2px 10px;border-radius:12px;font-size:12px;font-weight:500}
+.status-passed{background:#d1fae5;color:#065f46}
+.status-failed{background:#fee2e2;color:#991b1b}
+.status-running{background:#dbeafe;color:#1e40af}
+.status-timeout{background:#fef3c7;color:#92400e}
+
+/* 进度条 */
+.progress-bar{height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;margin:12px 0}
+.progress-fill{height:100%;background:#2563eb;border-radius:4px;transition:width .5s ease}
+.progress-fill.success{background:#10b981}
+.progress-fill.failed{background:#ef4444}
+
+/* 步骤 */
+.step{display:flex;align-items:center;gap:10px;padding:8px 0}
+.step-icon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px}
+.step-done{background:#d1fae5;color:#065f46}
+.step-active{background:#dbeafe;color:#1e40af}
+.step-pending{background:#f3f4f6;color:#9ca3af}
+.step-failed{background:#fee2e2;color:#991b1b}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 12px;background:#f9fafb;border-bottom:2px solid #e5e7eb;font-weight:500;color:#6b7280}
+td{padding:8px 12px;border-bottom:1px solid #f3f4f6}
+
+/* 卡片 */
+.card{border:1px solid #e5e7eb;border-radius:8px;padding:16px}
+.card-title{font-weight:600;margin-bottom:8px}
+.card-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px}
+
+/* 结果卡片 */
+.result-card{border-radius:10px;padding:20px;margin-bottom:16px}
+.result-passed{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #a7f3d0}
+.result-failed{background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fecaca}
+.result-timeout{background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1px solid #fde68a}
+
+/* tooltip */
+.tooltip{position:relative;display:inline-block}
+.tooltip-text{visibility:hidden;background:#1f2937;color:#fff;padding:6px 12px;border-radius:6px;font-size:12px;position:absolute;bottom:120%;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:10}
+.tooltip:hover .tooltip-text{visibility:visible}
+
+/* collapse */
+.collapse{max-height:0;overflow:hidden;transition:max-height .3s ease}
+.collapse.open{max-height:500px}
+
+/* 布局辅助 */
+.flex{display:flex}
+.flex-between{justify-content:space-between}
+.gap-8{gap:8px}
+.gap-12{gap:12px}
+.gap-16{gap:16px}
+.mt-12{margin-top:12px}
+.mt-16{margin-top:16px}
+.mb-12{margin-bottom:12px}
+.mb-16{margin-bottom:16px}
+.text-sm{font-size:12px}
+.text-muted{color:#6b7280}
+.text-green{color:#065f46}
+.text-red{color:#991b1b}
+.text-blue{color:#1e40af}
+.font-mono{font-family:monospace}
+.w-full{width:100%}
+</style>
+</head>
+<body>
+
+<h1>录制即执行 — 交互原型（7个状态）</h1>
+
+<!-- 状态1: 空闲 -->
+<div class="state">
+<div class="state-title">状态 1：空闲</div>
+<div class="state-body">
+<div class="grid grid-2 mb-16">
+<div><label class="label">目标 URL</label><input class="input" value="https://example.com/login" readonly></div>
+<div><label class="label">客户端</label><select class="select w-full" disabled><option>web</option></select></div>
+<div><label class="label">项目</label><select class="select w-full" disabled><option>mall</option></select></div>
+<div><label class="label">页面编码</label><input class="input" value="login" readonly></div>
+</div>
+<div class="flex gap-8">
+<button class="btn btn-primary">▶ 开始录制</button>
+</div>
+<div class="mt-16">
+<div class="card-title mb-12">📋 录制历史</div>
+<table>
+<thead><tr><th>页面</th><th>状态</th><th>候选</th><th>最后执行</th><th>时间</th><th></th></tr></thead>
+<tbody>
+<tr><td>login</td><td><span class="status-badge status-passed">已停止</span></td><td>12</td><td><span class="status-badge status-passed">✅</span></td><td>05-28 14:30</td><td><button class="btn btn-sm btn-primary">▶ 重跑</button></td></tr>
+<tr><td>product</td><td><span class="status-badge status-failed">已停止</span></td><td>5</td><td><span class="status-badge status-failed">❌</span></td><td>05-28 12:15</td><td><button class="btn btn-sm btn-primary">▶ 重跑</button></td></tr>
+<tr><td>order</td><td><span class="status-badge status-running">录制中</span></td><td>-</td><td>-</td><td>05-28 15:00</td><td></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<!-- 状态2: 录制中 -->
+<div class="state">
+<div class="state-title">状态 2：录制中</div>
+<div class="state-body">
+<div class="flex align-items gap-16 mb-16">
+<span class="recording-dot"></span>
+<span style="font-size:18px;font-weight:600">录制中 · login 页面</span>
+</div>
+<div class="text-muted mb-16">已检测到 <strong class="text-blue">8</strong> 个元素</div>
+<div class="flex gap-8">
+<div class="tooltip"><button class="btn btn-danger">■ 停止</button><span class="tooltip-text">停止并查看候选元素</span></div>
+<div class="tooltip"><button class="btn btn-primary">■ 停止并执行 ▶</button><span class="tooltip-text">直接生成临时用例并执行，不经过候选审核</span></div>
+</div>
+</div>
+</div>
+
+<!-- 状态3: 已停止(现有) -->
+<div class="state">
+<div class="state-title">状态 3：已停止（现有流程，不变）</div>
+<div class="state-body">
+<div class="card mb-16" style="background:#f9fafb">
+<div class="status-badge status-passed mb-12">已停止</div>
+<div class="grid grid-4 text-sm">
+<div><span class="text-muted">候选总数</span><br><strong>12</strong></div>
+<div><span class="text-muted">候选分组</span><br><strong>3</strong></div>
+<div><span class="text-muted">推荐可提升</span><br><strong>5</strong></div>
+<div><span class="text-muted">页面元素</span><br><strong>23</strong></div>
+</div>
+</div>
+<div class="flex gap-8">
+<button class="btn btn-primary">📋 查看候选元素</button>
+<button class="btn btn-secondary">📋 页面元素管理</button>
+</div>
+</div>
+</div>
+
+<!-- 状态4: 执行中 -->
+<div class="state">
+<div class="state-title">状态 4：执行中</div>
+<div class="state-body">
+<div class="card mb-16">
+<div class="card-title">📋 录制用例</div>
+<div class="card-row"><span class="text-muted">步骤</span><span>5 步</span></div>
+<div class="card-row"><span class="text-muted">候选元素</span><span>8 个</span></div>
+</div>
+
+<div class="card mb-16">
+<div class="card-title">⚡ 执行进度</div>
+<div class="progress-bar"><div class="progress-fill" style="width:60%"></div></div>
+<div class="text-sm text-muted mb-12">预计剩余 ~20 秒</div>
+
+<div class="step"><span class="step-icon step-done">✓</span><span>生成用例</span><span class="text-sm text-muted">已完成 (1.2s)</span></div>
+<div class="step"><span class="step-icon step-active">◌</span><span>Playwright 执行</span><span class="text-sm text-blue">运行中... (18s)</span></div>
+<div class="step"><span class="step-icon step-pending">○</span><span>生成报告</span><span class="text-sm text-muted">等待中</span></div>
+</div>
+
+<button class="btn btn-ghost">✕ 取消执行</button>
+</div>
+</div>
+
+<!-- 状态5: 通过 -->
+<div class="state">
+<div class="state-title">状态 5：执行完成 - 通过 ✅</div>
+<div class="state-body">
+<div class="result-card result-passed">
+<div class="flex flex-between mb-12">
+<div><strong style="font-size:18px">✅ PASSED</strong></div>
+<div class="text-sm text-muted">耗时 24.3s</div>
+</div>
+<div class="text-sm mb-16">
+<span class="text-green">📊 步骤 5/5 通过</span>
+<span class="text-muted" style="margin:0 12px">|</span>
+<span>🖼 截图 ×3</span>
+<span class="text-muted" style="margin:0 12px">|</span>
+<span>📹 视频</span>
+<span class="text-muted" style="margin:0 12px">|</span>
+<span>📋 日志</span>
+</div>
+</div>
+
+<div class="card mb-16" id="candidates-card">
+<div class="flex flex-between mb-12 cursor-pointer" onclick="document.getElementById('candidates-table').classList.toggle('open')">
+<div class="card-title">📋 候选元素 (8 个, 5 个可提升)</div>
+<span class="text-sm text-muted">点击展开/折叠 ▼</span>
+</div>
+<div class="collapse" id="candidates-table">
+<table>
+<thead><tr><th><input type="checkbox"></th><th>元素</th><th>定位器</th><th>评分</th><th>状态</th><th>操作</th></tr></thead>
+<tbody>
+<tr><td><input type="checkbox" checked></td><td>用户名</td><td><span class="font-mono text-sm">data-testid: username</span></td><td><span class="text-green">S/95</span></td><td>新建</td><td><button class="btn btn-sm btn-success">提升</button></td></tr>
+<tr><td><input type="checkbox" checked></td><td>密码</td><td><span class="font-mono text-sm">data-testid: password</span></td><td><span class="text-green">S/92</span></td><td>新建</td><td><button class="btn btn-sm btn-success">提升</button></td></tr>
+<tr><td><input type="checkbox"></td><td>登录按钮</td><td><span class="font-mono text-sm">role: button</span></td><td><span class="text-blue">A/78</span></td><td>已存在</td><td><button class="btn btn-sm btn-secondary">合并</button></td></tr>
+<tr><td><input type="checkbox"></td><td>记住密码</td><td><span class="font-mono text-sm">css: .remember-me</span></td><td><span class="text-muted">B/55</span></td><td>新建</td><td><button class="btn btn-sm btn-secondary">审核</button></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div class="flex gap-8">
+<button class="btn btn-success">📊 Allure 详细报告</button>
+<button class="btn btn-primary">🔄 重跑</button>
+<button class="btn btn-danger">🗑 丢弃</button>
+</div>
+</div>
+</div>
+
+<!-- 状态6: 失败 -->
+<div class="state">
+<div class="state-title">状态 6：执行完成 - 失败 ❌</div>
+<div class="state-body">
+<div class="result-card result-failed">
+<div class="flex flex-between mb-12">
+<div><strong style="font-size:18px">❌ FAILED</strong></div>
+<div class="text-sm text-muted">耗时 18.2s</div>
+</div>
+<div class="card" style="background:#fff;margin-bottom:12px">
+<div class="card-title text-red">失败步骤</div>
+<div class="step"><span class="step-icon step-failed">✕</span><span>步骤 3/5: 点击登录按钮</span></div>
+<div class="text-sm text-red mt-12 mb-12">定位器 <span class="font-mono">css:.login-btn</span> 未找到<br>截图显示页面仍在加载中</div>
+<div>
+<span>🖼 失败截图</span>
+<span class="text-muted" style="margin:0 12px">|</span>
+<span>📋 日志</span>
+</div>
+</div>
+</div>
+
+<div class="card mb-16" style="background:#fefce8;border:1px solid #fde68a">
+<div class="card-title">💡 建议</div>
+<div class="text-sm">• 更换定位器为 data-testid</div>
+<div class="text-sm">• 增加 waitFor 等待页面加载</div>
+</div>
+
+<div class="flex gap-8">
+<button class="btn btn-secondary">🔧 自愈建议</button>
+<button class="btn btn-primary">🔄 重跑</button>
+<button class="btn btn-danger">🗑 丢弃</button>
+</div>
+</div>
+</div>
+
+<!-- 状态7: 超时 -->
+<div class="state">
+<div class="state-title">状态 7：执行超时 ⏱</div>
+<div class="state-body">
+<div class="result-card result-timeout">
+<div class="flex flex-between mb-12">
+<div><strong style="font-size:18px">⏱ TIMEOUT</strong></div>
+<div class="text-sm text-muted">120s 超时</div>
+</div>
+<div class="text-sm text-muted mb-16">
+执行超过 2 分钟，已自动终止
+</div>
+<div class="card mb-12" style="background:#fff">
+<div class="text-sm text-muted">可能原因：</div>
+<div class="text-sm mt-8">· 页面加载慢</div>
+<div class="text-sm">· 网络问题</div>
+<div class="text-sm">· 录制的操作步骤过多</div>
+</div>
+</div>
+<div class="flex gap-8">
+<button class="btn btn-primary">🔄 重跑（增加超时）</button>
+<button class="btn btn-danger">🗑 丢弃</button>
+</div>
+</div>
+</div>
+
+<!-- 状态转换图 -->
+<div class="state">
+<div class="state-title">状态转换图</div>
+<div class="state-body">
+<pre style="font-size:12px;line-height:2;background:#f9fafb;padding:16px;border-radius:8px">
+空闲 ──[开始录制]──→ 录制中
+                      ├──[停止]──→ 已停止 ──→ 候选审核页（现有流程）
+                      └──[停止并执行]──→ 执行中
+                                            ├──→ 通过 ✅ ──→ [提升] 或 [重跑] 或 [丢弃]
+                                            ├──→ 失败 ❌ ──→ [自愈] 或 [重跑] 或 [丢弃]
+                                            └──→ 超时 ⏱ ──→ [重跑+增加超时] 或 [丢弃]
+
+[提升] → 候选→正式元素（单向门，不可逆）
+[重跑] → 执行中（回到状态4）
+[丢弃] → 空闲（删除临时用例和候选）
+[自愈] → 弹窗显示预览，用户选择是否应用
+</pre>
+</div>
+</div>
+
+<!-- 错误处理表 -->
+<div class="state">
+<div class="state-title">错误处理</div>
+<div class="state-body">
+<table>
+<thead><tr><th>场景</th><th>用户看到</th><th>下一步</th></tr></thead>
+<tbody>
+<tr><td>Codegen 未正常启动</td><td>"录制启动失败：Playwright Codegen 未响应" + [重试]</td><td>重试或手动启动</td></tr>
+<tr><td>浏览器崩溃</td><td>"录制中断" + 已录制步骤保留</td><td>重新录制或基于已录制步骤执行</td></tr>
+<tr><td>用例生成失败</td><td>"用例生成失败：步骤无法转换" + 原因</td><td>检查录制步骤</td></tr>
+<tr><td>run_case 调度失败</td><td>"执行调度失败：运行队列不可用" + [重试]</td><td>重试</td></tr>
+<tr><td>网络断开</td><td>"连接中断，执行仍在进行" + [刷新状态]</td><td>手动刷新</td></tr>
+<tr><td>promote 失败</td><td>"提升失败：元素已存在"</td><td>逐个检查</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+</body>
+</html>
