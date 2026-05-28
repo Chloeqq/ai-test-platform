@@ -54,7 +54,9 @@ FILE_LOCK = threading.Lock()
 from shared_backend.type_utils import now_iso as _now_iso
 
 
-# now_iso 从 shared_backend.type_utils 导入
+def now_iso() -> str:
+    """返回当前 UTC ISO 时间字符串（委托 shared_backend.type_utils）。"""
+    return _now_iso()
 
 
 def _resolve_state_backend() -> str:

@@ -39,7 +39,7 @@ FUNC_SIZE_FAIL = 200
 SHARED_FUNCS = {
     "dict_value", "list_value", "int_value", "float_value", "str_value",
     "dedup_keep_order", "bounded_score", "json_dict", "json_list",
-    "now_iso", "normalize_project_code",
+    "normalize_project_code",
 }
 
 # 分层导入黑名单（模块名 → 禁止导入的模式列表）
