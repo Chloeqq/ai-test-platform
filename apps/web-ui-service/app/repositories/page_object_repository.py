@@ -193,6 +193,13 @@ class PageObjectRepository(BaseRepository):
             )
         ).scalar_one_or_none()
 
+    def count_refs_by_element_id(self, element_id: int) -> int:
+        return self.db.execute(
+            select(func.count()).select_from(PageObjectRef).where(
+                PageObjectRef.page_element_id == element_id
+            )
+        ).scalar_one() or 0
+
     def delete_refs_by_element_ids(self, element_ids: list[int]) -> None:
         if not element_ids:
             return

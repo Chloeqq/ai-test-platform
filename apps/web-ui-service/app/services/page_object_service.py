@@ -1149,10 +1149,7 @@ def get_page_element(
         or 0
     )
     latest_version_no = max(latest_version_no, int(element.version if element.version is not None else 1))
-    reference_count = int(
-        db.execute(select(func.count()).select_from(PageObjectRef).where(PageObjectRef.page_element_id == element.id)).scalar_one()
-        or 0
-    )
+    reference_count = PageObjectRepository(db).count_refs_by_element_id(element.id)
     return _serialize_page_element(
         element,
         latest_version_no=latest_version_no,
@@ -1466,10 +1463,7 @@ def update_page_element(
             or 0,
         )
 
-    reference_count = int(
-        db.execute(select(func.count()).select_from(PageObjectRef).where(PageObjectRef.page_element_id == element.id)).scalar_one()
-        or 0
-    )
+    reference_count = PageObjectRepository(db).count_refs_by_element_id(element.id)
     return _serialize_page_element(element, latest_version_no=version_no, reference_count=reference_count)
 
 
