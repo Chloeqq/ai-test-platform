@@ -34,7 +34,7 @@ from .generate_pipeline import (
     _candidate_identity, _direct_candidate_requirement_lines,
     _scope_points_to_selected_intents, _filter_requirement_spec_by_selected_intents,
     _is_precondition_point, _looks_like_password_toggle_element,
-    SessionLocal,
+    _intent_product_metadata, SessionLocal,
 )
 from .generate_pipeline_format import (  # noqa: E402
     _product_description, _product_page_load_expected, _product_element_name,
