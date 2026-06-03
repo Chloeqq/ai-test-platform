@@ -102,6 +102,12 @@ import logging
 LOGGER = logging.getLogger(__name__)
 _RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
 
+# 从 facade 导入模块级 helper 函数
+from .facade import (  # noqa: E402
+    _settings, _build_runtime_view_from_entry, _resolve_history_project_code,
+    _attach_test_point_asset_summary, _point_review_status,
+)
+
 
 class WorkbenchFacadeReportingMixin:
     """报表、仪表盘、调度器的混入类。"""

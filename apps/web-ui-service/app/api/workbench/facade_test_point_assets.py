@@ -102,6 +102,25 @@ import logging
 LOGGER = logging.getLogger(__name__)
 _RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
 
+# 从 facade 导入模块级 helper 函数（facade 在导入本混入前已定义这些函数）
+from .facade import (  # noqa: E402
+    _settings, _build_runtime_view_from_entry, _attach_test_point_asset_summary,
+    _review_status_from_point, _review_status_from_candidate, _review_summary_from_points,
+    _test_point_asset_state_paths, _is_generation_qualified_element,
+    _page_object_generation_context, _test_point_generation_state,
+    _normalize_points_involved_elements, _review_history_from_point,
+    _build_test_point_script_preview, _source_identity_from_case,
+    _structured_requirement_metadata_from_case, _existing_case_id_for_source_intent,
+    _case_family_prefix, _point_title, _point_review_status, _generated_case_plan_items,
+    _generation_failure_summary, _record_generation_failure, _generation_failure_index,
+    _build_generation_diagnostics_for_asset, _source_asset_index, _source_asset_for_case,
+    _asset_title_index, _intent_type_from_case, _active_state_from_case,
+    _page_object_url_map, _latest_execution_map, _persist_runtime_run_to_case_center,
+    _workbench_test_case_list_item, _steps_from_candidate, _candidate_snapshot_from_candidate,
+    _manual_point_from_candidate, _point_step_texts, _steps_hint_from_current_steps,
+    _candidate_from_asset_point,
+)
+
 
 class WorkbenchFacadeTestPointAssetsMixin:
     """测试点资产管理的混入类。"""
