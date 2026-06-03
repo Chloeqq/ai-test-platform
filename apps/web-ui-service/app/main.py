@@ -21,11 +21,14 @@ from app.routers.auth import router as auth_router
 from app.routers.dashboard import router as dashboard_router
 from app.routers.health import router as health_router
 from app.routers.page_objects import router as page_objects_router
+from app.routers.page_objects_candidates import router as page_objects_candidates_router
+from app.routers.page_objects_elements import router as page_objects_elements_router
 from app.routers.page_objects_recorder import router as page_objects_recorder_router
 from app.routers.test_cases import router as test_cases_router
 from app.routers.test_data_pools import router as test_data_pools_router
 from app.routers.test_projects import router as test_projects_router
 from app.routers.workbench_assets import router as workbench_assets_router
+from app.routers.workbench_assets_cases import router as workbench_assets_cases_router
 from app.routers.workbench_gate import router as workbench_gate_router
 from app.routers.workbench_generation import router as workbench_generation_router
 from app.routers.workbench_reporting import router as workbench_reporting_router
@@ -98,6 +101,7 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(dashboard_router, dependencies=_jwt_required)
 app.include_router(workbench_assets_router, dependencies=_jwt_required)
+app.include_router(workbench_assets_cases_router, dependencies=_jwt_required)
 app.include_router(workbench_gate_router, dependencies=_jwt_required)
 app.include_router(workbench_generation_router, dependencies=_jwt_required)
 app.include_router(workbench_reporting_router, dependencies=_jwt_required)
@@ -109,6 +113,8 @@ app.include_router(test_cases_router, dependencies=_jwt_required)
 app.include_router(test_data_pools_router, dependencies=_jwt_required)
 app.include_router(test_projects_router, dependencies=_jwt_required)
 app.include_router(page_objects_router, dependencies=_jwt_required)
+app.include_router(page_objects_candidates_router, dependencies=_jwt_required)
+app.include_router(page_objects_elements_router, dependencies=_jwt_required)
 app.include_router(page_objects_recorder_router, dependencies=_jwt_required)
 
 
