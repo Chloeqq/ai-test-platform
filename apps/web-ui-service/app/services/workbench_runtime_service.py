@@ -1124,12 +1124,9 @@ def persist_runtime_run_to_case_center(db: Session, run_item: dict[str, Any]) ->
     duration_ms = _duration_ms_from_run(run_item, execution_record)
     existing: TestCaseExecution | None = None
     if run_id:
-        existing = db.execute(
-            select(TestCaseExecution).where(
-                TestCaseExecution.case_id == int(case.id),
-                TestCaseExecution.report_url.like(f"%run_id={run_id}%"),
-            )
-        ).scalar_one_or_none()
+        existing = TestCaseRepository(db).get_execution_by_report_url_like(
+            int(case.id), f"%run_id={run_id}%"
+        )
     if existing is None:
         existing = TestCaseExecution(
             case_id=int(case.id),

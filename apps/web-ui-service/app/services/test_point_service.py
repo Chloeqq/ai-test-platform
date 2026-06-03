@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.test_point import TestPoint
+from app.repositories.test_point_repository import TestPointRepository
 
 
 def _normalize_text(value: Any) -> str:
@@ -68,13 +68,7 @@ def sync_requirement_test_points(
         priority = _normalize_text(raw.get("priority")) or "P1"
         test_data_type = _normalize_text(raw.get("test_data_type"))
         expect_result = _normalize_text(raw.get("expect_result"))
-        existing = db.execute(
-            select(TestPoint).where(
-                TestPoint.project_code == project,
-                TestPoint.page_code == page,
-                TestPoint.point_id == point_id,
-            )
-        ).scalar_one_or_none()
+        existing = TestPointRepository(db).get_by_point_id(project, page, point_id)
         if existing is None:
             db.add(
                 TestPoint(

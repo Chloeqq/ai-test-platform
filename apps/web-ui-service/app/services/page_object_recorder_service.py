@@ -21,7 +21,10 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.page_object import PageObject, PageObjectCandidateElement, PageObjectCandidateGroup, PageObjectRecorderSession
+from app.repositories.page_object_repository import PageObjectRepository
 from app.repositories.recorder_repository import RecorderRepository
+from app.repositories.recorder_session_repository import RecorderSessionRepository
+from app.repositories.test_project_repository import TestProjectRepository
 from app.models.test_project import TestProject
 from app.schemas.page_object import PageObjectCreate, PageObjectRefCreate
 from app.schemas.page_object_recorder import (
@@ -535,17 +538,8 @@ def _sync_candidate_group(
     latest_session_id: str,
     source_catalog: SourceSemanticCatalog,
 ) -> None:
-    rows = (
-        db.execute(
-            select(PageObjectCandidateElement).where(
-                PageObjectCandidateElement.project_code == project_code,
-                PageObjectCandidateElement.client == client,
-                PageObjectCandidateElement.page_code == page_code,
-                PageObjectCandidateElement.group_key == group_key,
-            )
-        )
-        .scalars()
-        .all()
+    rows = RecorderRepository(db).list_candidates_by_group(
+        project_code, client, page_code, group_key
     )
     if not rows:
         return
@@ -618,9 +612,7 @@ def _persist_candidate_elements(
     element_code_by_key: dict[tuple[str, str, str], str],
 ) -> dict[str, object]:
     route = _normalize_page_route(session.url)
-    project = db.execute(
-        select(TestProject).where(TestProject.project_code == session.project_code)
-    ).scalar_one_or_none()
+    project = TestProjectRepository(db).get_by_code(session.project_code)
     configured_source_roots = list(project.source_roots_json or []) if project is not None else []
     configured_source_terms = dict(project.source_terms_json or {}) if project is not None else {}
     source_catalog = build_source_semantic_catalog(
@@ -1076,16 +1068,13 @@ def list_recorder_sessions(
         )
         or 0
     )
-    rows = (
-        db.execute(
-            select(PageObjectRecorderSession)
-            .where(*conditions)
-            .order_by(PageObjectRecorderSession.started_at.desc(), PageObjectRecorderSession.id.desc())
-            .offset(normalized_offset)
-            .limit(normalized_limit)
-        )
-        .scalars()
-        .all()
+    rows = RecorderSessionRepository(db).list_sessions_paginated(
+        project_code=normalized_project_code,
+        client=normalized_client,
+        page_code=normalized_page_code or None,
+        status=normalized_status or None,
+        offset=normalized_offset,
+        limit=normalized_limit,
     )
     items: list[dict[str, object]] = []
     candidate_summaries = _candidate_summaries_for_sessions(
@@ -1148,14 +1137,8 @@ def _sync_page_metrics_for_recorder_pages(
 ) -> None:
     if not page_codes:
         return
-    page_objects = list(
-        db.execute(
-            select(PageObject).where(
-                PageObject.project_code == project_code,
-                PageObject.client == client,
-                PageObject.page_code.in_(sorted(page_codes)),
-            )
-        ).scalars().all()
+    page_objects = PageObjectRepository(db).list_by_project_and_page_codes(
+        project_code, client, sorted(page_codes)
     )
     for page_object in page_objects:
         page_object_service._sync_page_object_metrics(db, page_object_id=int(page_object.id))
@@ -1183,15 +1166,11 @@ def batch_delete_recorder_sessions(
     if not normalized_session_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session_ids cannot be empty")
 
-    sessions = list(
-        db.execute(
-            select(PageObjectRecorderSession).where(
-                PageObjectRecorderSession.project_code == normalized_project_code,
-                PageObjectRecorderSession.client == normalized_client,
-                PageObjectRecorderSession.session_id.in_(normalized_session_ids),
-            )
-        ).scalars().all()
+    sessions = RecorderRepository(db).list_sessions(
+        project_code=normalized_project_code,
+        client=normalized_client,
     )
+    sessions = [s for s in sessions if str(s.session_id or "") in set(normalized_session_ids)]
     deleted_session_ids = [str(item.session_id or "") for item in sessions]
     affected_page_codes = {str(item.page_code or "") for item in sessions if str(item.page_code or "").strip()}
     artifact_deleted_count = 0
@@ -1201,15 +1180,7 @@ def batch_delete_recorder_sessions(
         if delete_artifacts:
             artifact_deleted_count += _safe_delete_recorder_artifacts(str(item.script_path or ""))
 
-    candidate_rows = list(
-        db.execute(
-            select(PageObjectCandidateElement).where(
-                PageObjectCandidateElement.project_code == normalized_project_code,
-                PageObjectCandidateElement.client == normalized_client,
-                PageObjectCandidateElement.session_id.in_(deleted_session_ids),
-            )
-        ).scalars().all()
-    )
+    candidate_rows = RecorderRepository(db).list_candidates_by_sessions(deleted_session_ids)
     affected_group_keys = {
         (str(row.page_code or ""), str(row.group_key or ""))
         for row in candidate_rows
@@ -1225,28 +1196,16 @@ def batch_delete_recorder_sessions(
         db.flush()
 
         empty_group_keys: list[tuple[str, str]] = []
+        _rec_repo = RecorderRepository(db)
         for page_code, group_key in sorted(affected_group_keys):
-            remaining_count = int(
-                db.execute(
-                    select(func.count()).select_from(PageObjectCandidateElement).where(
-                        PageObjectCandidateElement.project_code == normalized_project_code,
-                        PageObjectCandidateElement.client == normalized_client,
-                        PageObjectCandidateElement.page_code == page_code,
-                        PageObjectCandidateElement.group_key == group_key,
-                    )
-                ).scalar_one()
-                or 0
+            remaining_count = _rec_repo.count_candidates_by_group(
+                normalized_project_code, normalized_client, page_code, group_key
             )
             if remaining_count == 0:
                 empty_group_keys.append((page_code, group_key))
         for page_code, group_key in empty_group_keys:
-            db.execute(
-                delete(PageObjectCandidateGroup).where(
-                    PageObjectCandidateGroup.project_code == normalized_project_code,
-                    PageObjectCandidateGroup.client == normalized_client,
-                    PageObjectCandidateGroup.page_code == page_code,
-                    PageObjectCandidateGroup.group_key == group_key,
-                )
+            _rec_repo.delete_empty_groups(
+                normalized_project_code, normalized_client, page_code, group_key
             )
         db.commit()
         _sync_page_metrics_for_recorder_pages(

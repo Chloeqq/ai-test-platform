@@ -26,6 +26,7 @@ from app.models.workbench_state import (
     WorkbenchReviewDecision,
     WorkbenchRuntimeRun,
 )
+from app.repositories.workbench_state_repository import WorkbenchStateRepository
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 WEB_UI_STATE_ROOT = REPO_ROOT / "web-ui" / "state"
@@ -117,9 +118,7 @@ def _upsert_db_item(path: Path, item: dict[str, Any], db: Any = None) -> None:
             run_id = str(payload.get("run_id", "")).strip()
             if not run_id:
                 return
-            existing_run = db.execute(
-                select(WorkbenchRuntimeRun).where(WorkbenchRuntimeRun.run_id == run_id)
-            ).scalar_one_or_none()
+            existing_run = WorkbenchStateRepository(db).get_runtime_run_by_run_id(run_id)
             if existing_run is None:
                 existing_run = WorkbenchRuntimeRun(run_id=run_id)
                 db.add(existing_run)
@@ -134,14 +133,9 @@ def _upsert_db_item(path: Path, item: dict[str, Any], db: Any = None) -> None:
             review_type = str(payload.get("review_type", "")).strip()
             if not review_type:
                 return
-            existing_review = db.execute(
-                select(WorkbenchReviewDecision).where(
-                    WorkbenchReviewDecision.project == project,
-                    WorkbenchReviewDecision.run_id == run_id,
-                    WorkbenchReviewDecision.page == page,
-                    WorkbenchReviewDecision.review_type == review_type,
-                )
-            ).scalar_one_or_none()
+            existing_review = WorkbenchStateRepository(db).get_review_decision(
+                project, run_id, page, review_type
+            )
             if existing_review is None:
                 existing_review = WorkbenchReviewDecision(
                     project=project,
@@ -156,13 +150,9 @@ def _upsert_db_item(path: Path, item: dict[str, Any], db: Any = None) -> None:
             project = str(payload.get("project", "mall")).strip() or "mall"
             run_id = str(payload.get("run_id", "")).strip()
             page = str(payload.get("page", "")).strip()
-            existing_gate = db.execute(
-                select(WorkbenchExecutionGateDecision).where(
-                    WorkbenchExecutionGateDecision.project == project,
-                    WorkbenchExecutionGateDecision.run_id == run_id,
-                    WorkbenchExecutionGateDecision.page == page,
-                )
-            ).scalar_one_or_none()
+            existing_gate = WorkbenchStateRepository(db).get_execution_gate_decision(
+                project, run_id, page
+            )
             if existing_gate is None:
                 existing_gate = WorkbenchExecutionGateDecision(
                     project=project,
@@ -188,12 +178,7 @@ def _upsert_db_item(path: Path, item: dict[str, Any], db: Any = None) -> None:
             defect_id = str(payload.get("defect_id", "")).strip()
             if not case_id or not defect_id:
                 return
-            existing_link = db.execute(
-                select(WorkbenchDefectLink).where(
-                    WorkbenchDefectLink.case_id == case_id,
-                    WorkbenchDefectLink.defect_id == defect_id,
-                )
-            ).scalar_one_or_none()
+            existing_link = WorkbenchStateRepository(db).get_defect_link(case_id, defect_id)
             if existing_link is None:
                 existing_link = WorkbenchDefectLink(case_id=case_id, defect_id=defect_id)
                 db.add(existing_link)
@@ -203,11 +188,7 @@ def _upsert_db_item(path: Path, item: dict[str, Any], db: Any = None) -> None:
             sample_id = str(payload.get("sample_id", "")).strip()
             if not sample_id:
                 return
-            existing_sample = db.execute(
-                select(WorkbenchFailureSourceCalibration).where(
-                    WorkbenchFailureSourceCalibration.sample_id == sample_id
-                )
-            ).scalar_one_or_none()
+            existing_sample = WorkbenchStateRepository(db).get_calibration_by_sample_id(sample_id)
             if existing_sample is None:
                 existing_sample = WorkbenchFailureSourceCalibration(sample_id=sample_id)
                 db.add(existing_sample)
@@ -234,7 +215,7 @@ def _replace_db_items(path: Path, items: list[dict[str, Any]], db: Any = None) -
     if _owns_db:
         db = SessionLocal()
     try:
-        db.execute(delete(model))
+        WorkbenchStateRepository(db).delete_all(model)
         db.commit()
         for item in items:
             payload = _normalize_payload(item)
@@ -319,42 +300,24 @@ def _read_db_items(path: Path, db: Any = None) -> list[dict[str, Any]]:
     if _owns_db:
         db = SessionLocal()
     try:
+        repo = WorkbenchStateRepository(db)
         if model is WorkbenchRuntimeRun:
-            runtime_rows = db.execute(
-                select(WorkbenchRuntimeRun).order_by(WorkbenchRuntimeRun.updated_at.desc(), WorkbenchRuntimeRun.id.desc())
-            ).scalars().all()
+            runtime_rows = repo.list_all_runtime_runs()
             return [dict(row.payload) for row in runtime_rows if isinstance(row.payload, dict)]
         elif model is WorkbenchReviewDecision:
-            review_rows = db.execute(
-                select(WorkbenchReviewDecision).order_by(
-                    WorkbenchReviewDecision.updated_at.desc(), WorkbenchReviewDecision.id.desc()
-                )
-            ).scalars().all()
+            review_rows = repo.list_all_review_decisions()
             return [dict(row.payload) for row in review_rows if isinstance(row.payload, dict)]
         elif model is WorkbenchExecutionGateDecision:
-            gate_rows = db.execute(
-                select(WorkbenchExecutionGateDecision).order_by(
-                    WorkbenchExecutionGateDecision.updated_at.desc(), WorkbenchExecutionGateDecision.id.desc()
-                )
-            ).scalars().all()
+            gate_rows = repo.list_all_execution_gate_decisions()
             return [dict(row.payload) for row in gate_rows if isinstance(row.payload, dict)]
         elif model is WorkbenchDefectLink:
-            defect_rows = db.execute(
-                select(WorkbenchDefectLink).order_by(WorkbenchDefectLink.updated_at.desc(), WorkbenchDefectLink.id.desc())
-            ).scalars().all()
+            defect_rows = repo.list_all_defect_links()
             return [dict(row.payload) for row in defect_rows if isinstance(row.payload, dict)]
         elif model is WorkbenchFailureSourceCalibration:
-            calibration_rows = db.execute(
-                select(WorkbenchFailureSourceCalibration).order_by(
-                    WorkbenchFailureSourceCalibration.updated_at.desc(),
-                    WorkbenchFailureSourceCalibration.id.desc(),
-                )
-            ).scalars().all()
+            calibration_rows = repo.list_all_calibrations()
             return [dict(row.payload) for row in calibration_rows if isinstance(row.payload, dict)]
         else:
-            history_rows = db.execute(
-                select(WorkbenchHistoryEvent).order_by(WorkbenchHistoryEvent.id.desc())
-            ).scalars().all()
+            history_rows = repo.list_all_history_events()
             return [dict(row.payload) for row in history_rows if isinstance(row.payload, dict)]
     finally:
         if _owns_db:

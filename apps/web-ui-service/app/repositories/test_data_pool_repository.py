@@ -1,6 +1,8 @@
 """TestDataPool Repository。"""
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import func, select
 
 from app.models.test_data_pool import TestDataPool, TestDataPoolItem
@@ -48,3 +50,24 @@ class TestDataPoolRepository(BaseRepository):
                 TestDataPoolItem.pool_id == pool_id
             )
         ).scalar_one()
+
+    # ---- Extended queries ----
+
+    def list_active_items_with_pool_name(
+        self,
+    ) -> list[tuple[str, str, Any]]:
+        """返回 [(pool_name, item_key, item_value), ...]"""
+        return list(
+            self.db.execute(
+                select(
+                    TestDataPool.pool_name,
+                    TestDataPoolItem.item_key,
+                    TestDataPoolItem.item_value,
+                )
+                .join(TestDataPoolItem, TestDataPoolItem.pool_id == TestDataPool.id)
+                .where(
+                    TestDataPool.status == "active",
+                    TestDataPoolItem.status == "active",
+                )
+            ).all()
+        )

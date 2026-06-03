@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.test_case import (
     TestCase,
+    TestCaseDefect,
     TestCaseExecution,
     TestCaseStep,
     TestCaseVersion,
@@ -285,6 +286,139 @@ class TestCaseRepository(BaseRepository):
 
     def delete_steps_by_case_id(self, case_id: int) -> None:
         self.db.execute(delete(TestCaseStep).where(TestCaseStep.case_id == case_id))
+
+    # ---- TestCaseDefect ----
+
+    def list_defects_by_case_id(self, case_id: int) -> list[TestCaseDefect]:
+        return list(
+            self.db.execute(
+                select(TestCaseDefect)
+                .where(TestCaseDefect.case_id == case_id)
+                .order_by(TestCaseDefect.created_at.desc())
+            ).scalars().all()
+        )
+
+    # ---- Execution (extended) ----
+
+    def list_executions_by_case_id(
+        self, case_id: int, limit: int | None = None
+    ) -> list[TestCaseExecution]:
+        stmt = (
+            select(TestCaseExecution)
+            .where(TestCaseExecution.case_id == case_id)
+            .order_by(
+                TestCaseExecution.executed_at.desc(),
+                TestCaseExecution.id.desc(),
+            )
+        )
+        if limit is not None:
+            stmt = stmt.limit(limit)
+        return list(self.db.execute(stmt).scalars().all())
+
+    def get_execution_by_report_url_like(
+        self, case_id: int, url_pattern: str
+    ) -> TestCaseExecution | None:
+        return self.db.execute(
+            select(TestCaseExecution).where(
+                TestCaseExecution.case_id == case_id,
+                TestCaseExecution.report_url.like(url_pattern),
+            )
+        ).scalar_one_or_none()
+
+    def get_latest_execution_ids_grouped_by_case(
+        self, case_ids: list[int] | None = None
+    ) -> list[tuple[int, int]]:
+        """返回 [(case_id, max_execution_id), ...]"""
+        stmt = select(
+            TestCaseExecution.case_id,
+            func.max(TestCaseExecution.id),
+        )
+        if case_ids:
+            stmt = stmt.where(TestCaseExecution.case_id.in_(case_ids))
+        stmt = stmt.group_by(TestCaseExecution.case_id)
+        return list(self.db.execute(stmt).all())
+
+    def list_executions_by_ids(
+        self, execution_ids: list[int]
+    ) -> list[TestCaseExecution]:
+        if not execution_ids:
+            return []
+        return list(
+            self.db.execute(
+                select(TestCaseExecution).where(
+                    TestCaseExecution.id.in_(execution_ids)
+                )
+            ).scalars().all()
+        )
+
+    # ---- Tags ----
+
+    def list_all_tags(self) -> list[str]:
+        """展开所有 TestCase 的 tags JSON 数组，返回去重列表。"""
+        rows = self.db.execute(select(TestCase.tags)).all()
+        result: list[str] = []
+        seen: set[str] = set()
+        for row in rows:
+            for tag in row[0] or []:
+                tag_str = str(tag).strip()
+                if tag_str and tag_str not in seen:
+                    seen.add(tag_str)
+                    result.append(tag_str)
+        return result
+
+    # ---- Version (extended) ----
+
+    def get_version_by_case_id_and_no(
+        self, case_id: int, version_no: int
+    ) -> TestCaseVersion | None:
+        return self.db.execute(
+            select(TestCaseVersion).where(
+                TestCaseVersion.case_id == case_id,
+                TestCaseVersion.version_no == version_no,
+            )
+        ).scalar_one_or_none()
+
+    # ---- ID mapping ----
+
+    def list_id_by_case_ids(
+        self, case_ids: list[str]
+    ) -> list[tuple[str, int]]:
+        """返回 [(case_id, id), ...]"""
+        if not case_ids:
+            return []
+        return list(
+            self.db.execute(
+                select(TestCase.case_id, TestCase.id).where(
+                    TestCase.case_id.in_(case_ids)
+                )
+            ).all()
+        )
+
+    def list_by_ids_ordered(self, ids: list[int]) -> list[TestCase]:
+        if not ids:
+            return []
+        return list(
+            self.db.execute(
+                select(TestCase)
+                .where(TestCase.id.in_(ids))
+                .order_by(TestCase.id.asc())
+            ).scalars().all()
+        )
+
+    def list_id_and_case_id_by_project_and_product_line(
+        self,
+        *,
+        project_code: str,
+        product_line: str,
+        module: str | None = None,
+    ) -> list[tuple[int, str]]:
+        stmt = select(TestCase.id, TestCase.case_id).where(
+            TestCase.project_code == project_code,
+            TestCase.product_line == product_line,
+        )
+        if module:
+            stmt = stmt.where(TestCase.module == module)
+        return list(self.db.execute(stmt).all())
 
     # ---- TestCaseTreeNode ----
 

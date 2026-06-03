@@ -106,12 +106,7 @@ def get_project_status(db: Session, project_code: str) -> str:
 
 
 def _count_test_cases(db: Session, project_code: str) -> int:
-    return int(
-        db.execute(
-            select(func.count()).select_from(TestCase).where(TestCase.project_code == project_code)
-        ).scalar_one()
-        or 0
-    )
+    return TestProjectRepository(db).count_test_cases_by_project(project_code)
 
 
 def _table_exists(db: Session, table_name: str) -> bool:
@@ -124,9 +119,7 @@ def _count_project_rows_if_table_exists(
     table_name: str,
     stmt: Select[tuple[int]],
 ) -> int:
-    if not _table_exists(db, table_name):
-        return 0
-    return int(db.execute(stmt).scalar_one() or 0)
+    return TestProjectRepository(db).count_rows_if_table_exists(stmt)
 
 
 def _count_workbench_state_refs(db: Session, project_code: str) -> int:

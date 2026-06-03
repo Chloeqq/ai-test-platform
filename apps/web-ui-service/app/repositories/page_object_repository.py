@@ -218,6 +218,115 @@ class PageObjectRepository(BaseRepository):
             )
         )
 
+    # ---- PageElementVersion queries ----
+
+    def get_max_version_no(self, element_id: int) -> int | None:
+        return self.db.execute(
+            select(func.max(PageElementVersion.version_no)).where(
+                PageElementVersion.page_element_id == element_id
+            )
+        ).scalar_one()
+
+    def get_max_version_nos_by_element_ids(
+        self, element_ids: list[int]
+    ) -> dict[int, int]:
+        if not element_ids:
+            return {}
+        rows = self.db.execute(
+            select(
+                PageElementVersion.page_element_id,
+                func.max(PageElementVersion.version_no),
+            )
+            .where(PageElementVersion.page_element_id.in_(element_ids))
+            .group_by(PageElementVersion.page_element_id)
+        ).all()
+        return {int(eid): int(vn) for eid, vn in rows}
+
+    def get_version_by_element_id_and_no(
+        self, element_id: int, version_no: int
+    ) -> PageElementVersion | None:
+        return self.db.execute(
+            select(PageElementVersion).where(
+                PageElementVersion.page_element_id == element_id,
+                PageElementVersion.version_no == version_no,
+            )
+        ).scalar_one_or_none()
+
+    def list_versions_by_element_id(
+        self, element_id: int
+    ) -> list[PageElementVersion]:
+        return list(
+            self.db.execute(
+                select(PageElementVersion)
+                .where(PageElementVersion.page_element_id == element_id)
+                .order_by(
+                    PageElementVersion.version_no.desc(),
+                    PageElementVersion.id.desc(),
+                )
+            ).scalars().all()
+        )
+
+    # ---- Element listing helpers ----
+
+    def list_element_ids_by_page_object_id(self, page_object_id: int) -> list[int]:
+        return list(
+            self.db.execute(
+                select(PageElement.id).where(
+                    PageElement.page_object_id == page_object_id
+                )
+            ).scalars().all()
+        )
+
+    def get_element_by_code_excluding_id(
+        self, page_object_id: int, element_code: str, exclude_id: int
+    ) -> PageElement | None:
+        return self.db.execute(
+            select(PageElement).where(
+                PageElement.page_object_id == page_object_id,
+                PageElement.element_code == element_code,
+                PageElement.id != exclude_id,
+            )
+        ).scalar_one_or_none()
+
+    def list_elements_by_codes(
+        self, page_object_id: int, element_codes: list[str]
+    ) -> list[PageElement]:
+        if not element_codes:
+            return []
+        return list(
+            self.db.execute(
+                select(PageElement).where(
+                    PageElement.page_object_id == page_object_id,
+                    PageElement.element_code.in_(element_codes),
+                )
+            ).scalars().all()
+        )
+
+    def list_elements_by_page_object_id_ordered(
+        self, page_object_id: int
+    ) -> list[PageElement]:
+        return list(
+            self.db.execute(
+                select(PageElement)
+                .where(PageElement.page_object_id == page_object_id)
+                .order_by(PageElement.updated_at.desc(), PageElement.id.desc())
+            ).scalars().all()
+        )
+
+    # ---- PageObjectRef grouped counts ----
+
+    def count_refs_grouped_by_element_ids(
+        self, element_ids: list[int]
+    ) -> dict[int, int]:
+        if not element_ids:
+            return {}
+        rows = self.db.execute(
+            select(PageObjectRef.page_element_id, func.count())
+            .where(PageObjectRef.page_element_id.in_(element_ids))
+            .group_by(PageObjectRef.page_element_id)
+        ).all()
+        return {int(eid): int(cnt) for eid, cnt in rows}
+
     # ---- 级联删除 ----
 
     def cascade_delete_element(self, element_id: int) -> None:

@@ -3,10 +3,11 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 import yaml
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.page_object import PageElement, PageObject
+from app.repositories.page_object_governance_repository import PageObjectGovernanceRepository
+from app.repositories.page_object_repository import PageObjectRepository
 from app.services.test_case_data_service import normalize_optional_text
 from app.services.test_case_service import (
     _env_flag,
@@ -30,26 +31,13 @@ def _load_page_elements_for_step_repair(
     normalized_page = str(page_code or "").strip().lower()
     if not normalized_page:
         return []
-    page_object = db.execute(
-        select(PageObject).where(
-            PageObject.project_code == normalized_project,
-            PageObject.client == normalized_client,
-            PageObject.page_code == normalized_page,
-        )
-    ).scalar_one_or_none()
+    _po_repo = PageObjectRepository(db)
+    page_object = _po_repo.get_by_identity(normalized_project, normalized_client, normalized_page)
     if page_object is None:
-        page_object = db.execute(
-            select(PageObject)
-            .where(PageObject.page_code == normalized_page)
-            .order_by(PageObject.updated_at.desc())
-        ).scalars().first()
+        page_object = _po_repo.get_by_page_code_fallback(normalized_page)
     if page_object is None:
         return []
-    elements = db.execute(
-        select(PageElement)
-        .where(PageElement.page_object_id == int(page_object.id))
-        .order_by(PageElement.id.asc())
-    ).scalars().all()
+    elements = _po_repo.list_elements_by_page_object_id(int(page_object.id), order_by_id=True)
     if normalized_page == "login":
         elements = list(elements) + _load_login_success_data_testid_elements(
             db,
@@ -66,21 +54,12 @@ def _load_login_success_data_testid_elements(
     client: str,
 ) -> list[PageElement]:
     """登录成功态会进入首页，保存层修复时允许引用首页已治理 data-testid。"""
-    return list(
-        db.execute(
-            select(PageElement)
-            .join(PageObject, PageElement.page_object_id == PageObject.id)
-            .where(
-                PageObject.project_code == project_code,
-                PageObject.client == client,
-                PageObject.page_code.in_(["home", "layout"]),
-                PageElement.element_code == "home-page",
-                PageElement.locator_type == "data-testid",
-            )
-            .order_by(PageElement.id.asc())
-        )
-        .scalars()
-        .all()
+    return PageObjectGovernanceRepository(db).list_elements_join_pageobject(
+        project_code=project_code,
+        client=client,
+        page_codes=["home", "layout"],
+        locator_type="data-testid",
+        element_code="home-page",
     )
 
 

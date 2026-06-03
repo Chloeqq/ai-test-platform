@@ -114,13 +114,7 @@ def list_test_cases(
     )
     
     # 获取筛选器选项（用于前端下拉框）
-    # tags 是 JSON 数组列，需在内存中展开扁平化去重，无法用 DB 层 DISTINCT
-    tags = sorted({
-        tag_item
-        for case in db.execute(select(TestCase.tags)).all()
-        for tag_item in (case[0] or [])
-        if str(tag_item).strip()
-    })
+    tags = TestCaseRepository(db).list_all_tags()
     
     repo = TestCaseRepository(db)
     creators = sorted(repo.list_distinct_values(TestCase.creator))

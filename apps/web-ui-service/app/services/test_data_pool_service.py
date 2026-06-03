@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.test_case import TestCase
 from app.models.test_data_pool import TestDataPool, TestDataPoolAuditLog, TestDataPoolItem
+from app.repositories.test_case_repository import TestCaseRepository
 from app.repositories.test_data_pool_repository import TestDataPoolRepository
 from app.services.test_case_data_service import normalize_optional_text
 
@@ -279,9 +280,8 @@ def find_pool_item_references(
     if not normalized_pool_name or not normalized_item_key:
         return []
     refs: list[dict[str, Any]] = []
-    rows = db.execute(
-        select(TestCase.id, TestCase.case_id, TestCase.project_code, TestCase.name, TestCase.script_code)
-    ).all()
+    all_cases = TestCaseRepository(db).list_all()
+    rows = [(c.id, c.case_id, c.project_code, c.name, c.script_code) for c in all_cases]
     for case_id, case_business_id, project_code, case_name, script_code in rows:
         case_yaml = _load_case_yaml(script_code)
         pool_refs = _extract_pool_refs_from_case_yaml(case_yaml)
@@ -342,14 +342,7 @@ def serialize_runner_data_pool_snapshot(db: Session) -> str:
         db_inspector = inspect(conn)
         if not db_inspector.has_table("test_data_pools") or not db_inspector.has_table("test_data_pool_items"):
             return "{}"
-        rows = db.execute(
-            select(TestDataPool.pool_name, TestDataPoolItem.item_key, TestDataPoolItem.item_value)
-            .join(TestDataPoolItem, TestDataPoolItem.pool_id == TestDataPool.id)
-            .where(
-                TestDataPool.status == "active",
-                TestDataPoolItem.status == "active",
-            )
-        ).all()
+        rows = TestDataPoolRepository(db).list_active_items_with_pool_name()
     except SQLAlchemyError as exc:
         LOGGER.warning("serialize_runner_data_pool_snapshot skipped due to database error: %s", exc)
         return "{}"

@@ -25,6 +25,7 @@ from app.models.test_case import (
 from app.models.test_point import TestPoint
 from app.models.test_project import TestProject
 from app.repositories.test_case_repository import TestCaseRepository
+from app.repositories.test_project_repository import TestProjectRepository
 from app.services.test_case_data_service import (
     normalize_status,
     normalize_test_case_type,
@@ -293,9 +294,7 @@ def ensure_test_cases_schema_compatibility(db: Session) -> None:
 
 def ensure_project_seed(db: Session) -> None:
     TestProject.__table__.create(bind=db.get_bind(), checkfirst=True)
-    existing = db.execute(
-        select(TestProject).where(TestProject.project_code == DEFAULT_PROJECT_CODE)
-    ).scalar_one_or_none()
+    existing = TestProjectRepository(db).get_by_code(DEFAULT_PROJECT_CODE)
     if existing:
         current_terms = dict(existing.source_terms_json or {})
         missing_terms = {
@@ -326,18 +325,11 @@ def backfill_test_case_metadata(db: Session) -> None:
     if not cases:
         return
     case_id_repository = WorkbenchGenerationRepository(db)
-    execution_rows = db.execute(
-        select(
-            TestCaseExecution.case_id,
-            func.max(TestCaseExecution.id),
-        ).group_by(TestCaseExecution.case_id)
-    ).all()
+    execution_rows = TestCaseRepository(db).get_latest_execution_ids_grouped_by_case()
     latest_execution_ids = [int(row[1]) for row in execution_rows if row[1] is not None]
     latest_report_urls: dict[int, str] = {}
     if latest_execution_ids:
-        executions = db.execute(
-            select(TestCaseExecution).where(TestCaseExecution.id.in_(latest_execution_ids))
-        ).scalars().all()
+        executions = TestCaseRepository(db).list_executions_by_ids(latest_execution_ids)
         latest_report_urls = {int(item.case_id): str(item.report_url or "").strip() for item in executions}
 
     existing_case_ids = _existing_asset_case_ids()
@@ -721,7 +713,7 @@ def get_module_tree_items(
     if test_type_filter:
         stmt = stmt.where(TestCase.test_type == normalize_test_case_type(test_type_filter))
 
-    case_rows = list(db.execute(stmt).scalars().all())
+    case_rows = TestCaseRepository(db).list_all()
     tag_filter = str(tag or "").strip()
     if tag_filter:
         case_rows = [item for item in case_rows if tag_filter in (item.tags or [])]

@@ -34,6 +34,9 @@ from app.schemas.page_object import (
     PageObjectUpdate,
 )
 from app.repositories.page_object_repository import PageObjectRepository
+from app.repositories.page_object_governance_repository import PageObjectGovernanceRepository
+from app.repositories.recorder_repository import RecorderRepository
+from app.repositories.recorder_session_repository import RecorderSessionRepository
 from app.services import test_project_service
 
 from app.services.page_object_normalizers import (
@@ -130,39 +133,15 @@ def _write_governance_log(
 
 def _page_object_governance_counts(db: Session, page_object: PageObject) -> dict[str, Any]:
     _po_repo = PageObjectRepository(db)
+    _rec_repo = RecorderRepository(db)
     formal_element_count = int(
         _po_repo.count_elements_by_page_object_id(page_object.id)
         or 0
     )
-    approved_element_count = int(
-        db.execute(
-            select(func.count()).select_from(PageElement).where(
-                PageElement.page_object_id == page_object.id,
-                PageElement.status == "active",
-                PageElement.review_status == "approved",
-            )
-        ).scalar_one()
-        or 0
-    )
-    key_element_count = int(
-        db.execute(
-            select(func.count()).select_from(PageElement).where(
-                PageElement.page_object_id == page_object.id,
-                PageElement.is_key_element.is_(True),
-            )
-        ).scalar_one()
-        or 0
-    )
-    pending_candidate_group_count = int(
-        db.execute(
-            select(func.count()).select_from(PageObjectCandidateGroup).where(
-                PageObjectCandidateGroup.project_code == page_object.project_code,
-                PageObjectCandidateGroup.client == page_object.client,
-                PageObjectCandidateGroup.page_code == page_object.page_code,
-                PageObjectCandidateGroup.promotion_status == "pending",
-            )
-        ).scalar_one()
-        or 0
+    approved_element_count = _po_repo.count_approved_elements(page_object.id)
+    key_element_count = _po_repo.count_key_elements(page_object.id)
+    pending_candidate_group_count = _rec_repo.count_pending_candidate_groups(
+        page_object.project_code, page_object.client, page_object.page_code
     )
     return {
         "formal_element_count": formal_element_count,
@@ -206,14 +185,8 @@ def _cleanup_page_recorder_assets(
     client: str,
     page_code: str,
 ) -> dict[str, int]:
-    sessions = list(
-        db.execute(
-            select(PageObjectRecorderSession).where(
-                PageObjectRecorderSession.project_code == project_code,
-                PageObjectRecorderSession.client == client,
-                PageObjectRecorderSession.page_code == page_code,
-            )
-        ).scalars().all()
+    sessions = RecorderSessionRepository(db).list_sessions_by_page_identity(
+        project_code, client, page_code
     )
     if not sessions:
         return {"recorder_sessions_removed_count": 0, "recorder_artifacts_removed_count": 0}
@@ -260,14 +233,9 @@ def _candidate_group_or_404(
     page_code: str,
     group_key: str,
 ) -> PageObjectCandidateGroup:
-    item = db.execute(
-        select(PageObjectCandidateGroup).where(
-            PageObjectCandidateGroup.project_code == project_code,
-            PageObjectCandidateGroup.client == client,
-            PageObjectCandidateGroup.page_code == page_code,
-            PageObjectCandidateGroup.group_key == group_key,
-        )
-    ).scalar_one_or_none()
+    item = RecorderRepository(db).get_group(
+        project_code, client, page_code, group_key
+    )
     if item is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -284,14 +252,9 @@ def _candidate_element_or_404(
     page_code: str,
     candidate_key: str,
 ) -> PageObjectCandidateElement:
-    item = db.execute(
-        select(PageObjectCandidateElement).where(
-            PageObjectCandidateElement.project_code == project_code,
-            PageObjectCandidateElement.client == client,
-            PageObjectCandidateElement.page_code == page_code,
-            PageObjectCandidateElement.candidate_key == candidate_key,
-        )
-    ).scalar_one_or_none()
+    item = RecorderRepository(db).get_candidate_by_key(
+        project_code, client, page_code, candidate_key
+    )
     if item is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -329,9 +292,7 @@ def _page_element_or_404(db: Session, *, page_object_id: int, element_code: str)
 
 
 def _next_element_version_no(db: Session, *, page_element_id: int) -> int:
-    latest = db.execute(
-        select(func.max(PageElementVersion.version_no)).where(PageElementVersion.page_element_id == page_element_id)
-    ).scalar_one()
+    latest = PageObjectRepository(db).get_max_version_no(page_element_id)
     return int(latest or 0) + 1
 
 
@@ -368,15 +329,7 @@ def _sync_page_object_metrics(db: Session, *, page_object_id: int) -> None:
         return
     governance_counts = _page_object_governance_counts(db, page_object)
     next_element_count = int(governance_counts["formal_element_count"])
-    unhealthy_count = int(
-        db.execute(
-            select(func.count()).select_from(PageElement).where(
-                PageElement.page_object_id == page_object_id,
-                PageElement.health_status == 0,
-            )
-        ).scalar_one()
-        or 0
-    )
+    unhealthy_count = PageObjectGovernanceRepository(db).count_unhealthy_elements(page_object_id)
     next_health_status = 0 if unhealthy_count > 0 else 1
     approved_count = int(governance_counts["approved_element_count"])
     key_count = int(governance_counts["key_element_count"])
@@ -403,13 +356,7 @@ def _sync_page_object_metrics(db: Session, *, page_object_id: int) -> None:
 
 
 def _purge_duplicate_page_elements(db: Session, *, page_object_id: int) -> dict[str, int]:
-    rows = list(
-        db.execute(
-            select(PageElement)
-            .where(PageElement.page_object_id == page_object_id)
-            .order_by(PageElement.updated_at.desc(), PageElement.id.desc())
-        ).scalars().all()
-    )
+    rows = PageObjectRepository(db).list_elements_by_page_object_id_ordered(page_object_id)
     if not rows:
         return {"kept_count": 0, "duplicate_deleted_count": 0}
 
@@ -484,36 +431,20 @@ def list_page_objects(
     if normalized_status:
         normalized_status = _normalize_page_object_status(normalized_status)
         stmt = stmt.where(PageObject.status == normalized_status)
-    rows = list(db.execute(stmt).scalars().all())
+    rows = PageObjectGovernanceRepository(db).list_page_objects_filtered(
+        project_code=normalized_project_code,
+        client=normalized_client,
+        status_value=normalized_status,
+    )
     if not rows:
         return []
     object_ids = [item.id for item in rows]
-    element_counts = {
-        int(page_object_id): int(count or 0)
-        for page_object_id, count in db.execute(
-            select(PageElement.page_object_id, func.count())
-            .where(PageElement.page_object_id.in_(object_ids))
-            .group_by(PageElement.page_object_id)
-        ).all()
-    }
-    recorder_stmt = (
-        select(
-            PageObjectRecorderSession.project_code,
-            PageObjectRecorderSession.client,
-            PageObjectRecorderSession.page_code,
-            func.max(PageObjectRecorderSession.stopped_at),
-        )
-        .where(PageObjectRecorderSession.page_code.in_([item.page_code for item in rows]))
-        .group_by(PageObjectRecorderSession.project_code, PageObjectRecorderSession.client, PageObjectRecorderSession.page_code)
+    element_counts = PageObjectGovernanceRepository(db).count_elements_grouped_by_page_object_ids(object_ids)
+    latest_recorded_at_by_page = RecorderSessionRepository(db).get_latest_recorded_at_by_page(
+        project_code=normalized_project_code or None,
+        client=normalized_client or None,
+        page_codes=[item.page_code for item in rows] if rows else None,
     )
-    if normalized_project_code:
-        recorder_stmt = recorder_stmt.where(PageObjectRecorderSession.project_code == normalized_project_code)
-    if normalized_client:
-        recorder_stmt = recorder_stmt.where(PageObjectRecorderSession.client == normalize_client_code(normalized_client))
-    latest_recorded_at_by_page = {
-        (str(project or ""), str(client_value or ""), str(page_code or "")): latest_recorded_at
-        for project, client_value, page_code, latest_recorded_at in db.execute(recorder_stmt).all()
-    }
     serialized: list[dict[str, Any]] = []
     for item in rows:
         governance_counts = _page_object_governance_counts(db, item)
@@ -532,14 +463,12 @@ def deduplicate_page_elements(
     project_code: str = "",
     client: str = "",
 ) -> dict[str, Any]:
-    stmt = select(PageObject)
     normalized_project_code = str(project_code or "").strip().lower()
-    if normalized_project_code:
-        stmt = stmt.where(PageObject.project_code == _normalize_project_code(normalized_project_code))
     normalized_client = str(client or "").strip().lower()
-    if normalized_client:
-        stmt = stmt.where(PageObject.client == normalize_client_code(normalized_client))
-    rows = list(db.execute(stmt).scalars().all())
+    rows = PageObjectGovernanceRepository(db).list_page_objects_filtered(
+        project_code=normalized_project_code if normalized_project_code else "",
+        client=normalized_client if normalized_client else "",
+    )
     scanned_page_count = len(rows)
     affected_page_count = 0
     duplicate_deleted_count = 0
@@ -745,9 +674,9 @@ def delete_page_object(
         client=normalize_client_code(client),
         page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
-    element_ids = [int(value) for value in db.execute(
-        select(PageElement.id).where(PageElement.page_object_id == item.id)
-    ).scalars().all()]
+    _po_repo = PageObjectRepository(db)
+    _rec_repo = RecorderRepository(db)
+    element_ids = _po_repo.list_element_ids_by_page_object_id(item.id)
     if element_ids and not cascade_elements:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -755,28 +684,15 @@ def delete_page_object(
         )
     deleted_element_count = len(element_ids)
     if element_ids:
-        repo = PageObjectRepository(db)
-        repo.bulk_cascade_delete_elements(element_ids)
-    db.execute(
-        delete(PageObjectCandidateElement).where(
-            PageObjectCandidateElement.project_code == item.project_code,
-            PageObjectCandidateElement.client == item.client,
-            PageObjectCandidateElement.page_code == item.page_code,
-        )
+        _po_repo.bulk_cascade_delete_elements(element_ids)
+    _rec_repo.delete_candidates_by_page_identity(
+        item.project_code, item.client, item.page_code
     )
-    db.execute(
-        delete(PageObjectCandidateGroup).where(
-            PageObjectCandidateGroup.project_code == item.project_code,
-            PageObjectCandidateGroup.client == item.client,
-            PageObjectCandidateGroup.page_code == item.page_code,
-        )
+    _rec_repo.delete_groups_by_page_identity(
+        item.project_code, item.client, item.page_code
     )
-    db.execute(
-        delete(PageObjectGovernanceLog).where(
-            PageObjectGovernanceLog.project_code == item.project_code,
-            PageObjectGovernanceLog.client == item.client,
-            PageObjectGovernanceLog.page_code == item.page_code,
-        )
+    PageObjectGovernanceRepository(db).delete_governance_logs_by_page_identity(
+        item.project_code, item.client, item.page_code
     )
     db.delete(item)
     db.commit()
@@ -810,34 +726,15 @@ def list_page_elements(
         client=normalize_client_code(client),
         page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
+    _po_repo = PageObjectRepository(db)
     if purge_duplicates:
         _purge_duplicate_page_elements(db, page_object_id=int(page_object.id))
-    rows = list(
-        db.execute(
-            select(PageElement)
-            .where(PageElement.page_object_id == page_object.id)
-            .order_by(PageElement.updated_at.desc(), PageElement.id.desc())
-        ).scalars().all()
-    )
+    rows = _po_repo.list_elements_by_page_object_id_ordered(page_object.id)
     if not rows:
         return []
     element_ids = [item.id for item in rows]
-    version_map = {
-        int(element_id): int(version_no or 0)
-        for element_id, version_no in db.execute(
-            select(PageElementVersion.page_element_id, func.max(PageElementVersion.version_no))
-            .where(PageElementVersion.page_element_id.in_(element_ids))
-            .group_by(PageElementVersion.page_element_id)
-        ).all()
-    }
-    ref_count_map = {
-        int(element_id): int(count or 0)
-        for element_id, count in db.execute(
-            select(PageObjectRef.page_element_id, func.count())
-            .where(PageObjectRef.page_element_id.in_(element_ids))
-            .group_by(PageObjectRef.page_element_id)
-        ).all()
-    }
+    version_map = _po_repo.get_max_version_nos_by_element_ids(element_ids)
+    ref_count_map = _po_repo.count_refs_grouped_by_element_ids(element_ids)
     return [
         _serialize_page_element(
             item,
@@ -868,10 +765,7 @@ def get_page_element(
         element_code=_normalize_identifier(element_code, field_name="element_code"),
     )
     latest_version_no = int(
-        db.execute(
-            select(func.max(PageElementVersion.version_no)).where(PageElementVersion.page_element_id == element.id)
-        ).scalar_one()
-        or 0
+        PageObjectRepository(db).get_max_version_no(element.id) or 0
     )
     latest_version_no = max(latest_version_no, int(element.version if element.version is not None else 1))
     reference_count = PageObjectRepository(db).count_refs_by_element_id(element.id)
@@ -1008,13 +902,9 @@ def update_page_element(
             testid_value=target_testid_value,
         )
         if element.element_code != next_value:
-            existing = db.execute(
-                select(PageElement).where(
-                    PageElement.page_object_id == page_object.id,
-                    PageElement.element_code == next_value,
-                    PageElement.id != element.id,
-                )
-            ).scalar_one_or_none()
+            existing = PageObjectRepository(db).get_element_by_code_excluding_id(
+                page_object.id, next_value, element.id
+            )
             if existing is not None:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -1182,10 +1072,7 @@ def update_page_element(
     else:
         version_no = max(
             int(element.version if element.version is not None else 1),
-            db.execute(
-                select(func.max(PageElementVersion.version_no)).where(PageElementVersion.page_element_id == element.id)
-            ).scalar_one()
-            or 0,
+            PageObjectRepository(db).get_max_version_no(element.id) or 0,
         )
 
     reference_count = PageObjectRepository(db).count_refs_by_element_id(element.id)
@@ -1267,14 +1154,7 @@ def batch_delete_page_elements(
     ]
     if not normalized_codes:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="element_codes cannot be empty")
-    rows = list(
-        db.execute(
-            select(PageElement).where(
-                PageElement.page_object_id == page_object.id,
-                PageElement.element_code.in_(normalized_codes),
-            )
-        ).scalars().all()
-    )
+    rows = PageObjectRepository(db).list_elements_by_codes(page_object.id, normalized_codes)
     element_ids = [int(item.id) for item in rows]
     deleted_codes = [str(item.element_code or "") for item in rows]
     if element_ids:
@@ -1301,14 +1181,9 @@ def _refresh_or_delete_candidate_group_after_physical_delete(
     page_code: str,
     group_key: str,
 ) -> bool:
-    group = db.execute(
-        select(PageObjectCandidateGroup).where(
-            PageObjectCandidateGroup.project_code == project_code,
-            PageObjectCandidateGroup.client == client,
-            PageObjectCandidateGroup.page_code == page_code,
-            PageObjectCandidateGroup.group_key == group_key,
-        )
-    ).scalar_one_or_none()
+    group = RecorderRepository(db).get_group(
+        project_code, client, page_code, group_key
+    )
     if group is None:
         return False
     rows = _candidate_rows_for_group(
@@ -1347,44 +1222,24 @@ def batch_delete_candidate_groups(
     normalized_keys = _unique_non_empty(group_keys)
     if not normalized_keys:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="group_keys cannot be empty")
-    existing_keys = {
-        str(item or "")
-        for item in db.execute(
-            select(PageObjectCandidateGroup.group_key).where(
-                PageObjectCandidateGroup.project_code == page_object.project_code,
-                PageObjectCandidateGroup.client == page_object.client,
-                PageObjectCandidateGroup.page_code == page_object.page_code,
-                PageObjectCandidateGroup.group_key.in_(normalized_keys),
-            )
-        ).scalars().all()
-    }
-    candidate_count = int(
-        db.execute(
-            select(func.count()).select_from(PageObjectCandidateElement).where(
-                PageObjectCandidateElement.project_code == page_object.project_code,
-                PageObjectCandidateElement.client == page_object.client,
-                PageObjectCandidateElement.page_code == page_object.page_code,
-                PageObjectCandidateElement.group_key.in_(list(existing_keys)),
-            )
-        ).scalar_one()
-        or 0
-    ) if existing_keys else 0
+    _rec_repo = RecorderRepository(db)
+    existing_keys_list = _rec_repo.list_group_keys_by_page_identity(
+        page_object.project_code, page_object.client, page_object.page_code, normalized_keys
+    )
+    existing_keys = set(existing_keys_list)
+    candidate_count = 0
     if existing_keys:
-        db.execute(
-            delete(PageObjectCandidateElement).where(
-                PageObjectCandidateElement.project_code == page_object.project_code,
-                PageObjectCandidateElement.client == page_object.client,
-                PageObjectCandidateElement.page_code == page_object.page_code,
-                PageObjectCandidateElement.group_key.in_(list(existing_keys)),
+        for gk in existing_keys:
+            candidate_count += _rec_repo.count_candidates_by_group(
+                page_object.project_code, page_object.client, page_object.page_code, gk
             )
+    if existing_keys:
+        key_list = list(existing_keys)
+        _rec_repo.delete_candidates_by_group_keys(
+            page_object.project_code, page_object.client, page_object.page_code, key_list
         )
-        db.execute(
-            delete(PageObjectCandidateGroup).where(
-                PageObjectCandidateGroup.project_code == page_object.project_code,
-                PageObjectCandidateGroup.client == page_object.client,
-                PageObjectCandidateGroup.page_code == page_object.page_code,
-                PageObjectCandidateGroup.group_key.in_(list(existing_keys)),
-            )
+        _rec_repo.delete_groups_by_keys(
+            page_object.project_code, page_object.client, page_object.page_code, key_list
         )
         db.commit()
         _sync_page_object_metrics(db, page_object_id=page_object.id)
@@ -1417,22 +1272,16 @@ def batch_delete_candidate_elements(
     normalized_keys = _unique_non_empty(candidate_keys)
     if not normalized_keys:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="candidate_keys cannot be empty")
-    rows = list(
-        db.execute(
-            select(PageObjectCandidateElement).where(
-                PageObjectCandidateElement.project_code == page_object.project_code,
-                PageObjectCandidateElement.client == page_object.client,
-                PageObjectCandidateElement.page_code == page_object.page_code,
-                PageObjectCandidateElement.candidate_key.in_(normalized_keys),
-            )
-        ).scalars().all()
+    _rec_repo = RecorderRepository(db)
+    rows = _rec_repo.list_candidates_by_keys(
+        page_object.project_code, page_object.client, page_object.page_code, normalized_keys
     )
     row_ids = [int(item.id) for item in rows]
     deleted_keys = [str(item.candidate_key or "") for item in rows]
     affected_group_keys = sorted({str(item.group_key or "") for item in rows if str(item.group_key or "").strip()})
     empty_group_count = 0
     if row_ids:
-        db.execute(delete(PageObjectCandidateElement).where(PageObjectCandidateElement.id.in_(row_ids)))
+        _rec_repo.delete_candidates_by_ids(row_ids)
         db.flush()
         for group_key in affected_group_keys:
             if _refresh_or_delete_candidate_group_after_physical_delete(
@@ -1486,12 +1335,9 @@ def create_page_element_version(
         changed_by=payload.changed_by,
         change_summary=payload.change_summary,
     )
-    version = db.execute(
-        select(PageElementVersion).where(
-            PageElementVersion.page_element_id == element.id,
-            PageElementVersion.version_no == version_no,
-        )
-    ).scalar_one()
+    version = PageObjectRepository(db).get_version_by_element_id_and_no(
+        element.id, version_no
+    )
     db.commit()
     return _serialize_element_version(version)
 
@@ -1515,13 +1361,7 @@ def list_page_element_versions(
         page_object_id=page_object.id,
         element_code=_normalize_identifier(element_code, field_name="element_code"),
     )
-    rows = list(
-        db.execute(
-            select(PageElementVersion)
-            .where(PageElementVersion.page_element_id == element.id)
-            .order_by(PageElementVersion.version_no.desc(), PageElementVersion.id.desc())
-        ).scalars().all()
-    )
+    rows = PageObjectRepository(db).list_versions_by_element_id(element.id)
     return [_serialize_element_version(item) for item in rows]
 
 
@@ -1588,13 +1428,7 @@ def list_page_object_refs(
         page_object_id=page_object.id,
         element_code=_normalize_identifier(element_code, field_name="element_code"),
     )
-    rows = list(
-        db.execute(
-            select(PageObjectRef)
-            .where(PageObjectRef.page_element_id == element.id)
-            .order_by(PageObjectRef.created_at.desc(), PageObjectRef.id.desc())
-        ).scalars().all()
-    )
+    rows = PageObjectRepository(db).list_refs_by_element_id(element.id)
     return [_serialize_ref(item) for item in rows]
 
 
@@ -1642,10 +1476,13 @@ def list_candidate_groups(
             PageObjectCandidateElement.session_id == normalized_session_id,
         )
         stmt = stmt.where(PageObjectCandidateGroup.group_key.in_(group_keys))
-    rows = list(
-        db.execute(
-            stmt.order_by(PageObjectCandidateGroup.updated_at.desc(), PageObjectCandidateGroup.id.desc())
-        ).scalars().all()
+    rows = RecorderRepository(db).list_candidate_groups_filtered(
+        project_code=normalized_project_code,
+        client=normalized_client,
+        page_code=normalized_page_code,
+        promotion_status=normalized_status or None,
+        quality_tier=normalized_quality or None,
+        session_id=normalized_session_id or None,
     )
     return [_serialize_candidate_group(item) for item in rows]
 
@@ -1688,10 +1525,13 @@ def list_candidate_elements(
                 detail=f"candidate_status must be one of: {', '.join(sorted(CANDIDATE_STATUS_VALUES))}",
             )
         stmt = stmt.where(PageObjectCandidateElement.candidate_status == normalized_status)
-    rows = list(
-        db.execute(
-            stmt.order_by(PageObjectCandidateElement.quality_score.desc(), PageObjectCandidateElement.id.desc())
-        ).scalars().all()
+    rows = RecorderRepository(db).list_candidates_filtered(
+        project_code=normalized_project_code,
+        client=normalized_client,
+        page_code=normalized_page_code,
+        group_key=normalized_group_key or None,
+        session_id=normalized_session_id or None,
+        status=normalized_status or None,
     )
     return [_serialize_candidate_element(item) for item in rows]
 
@@ -1739,17 +1579,8 @@ def _candidate_rows_for_group(
     page_code: str,
     group_key: str,
 ) -> list[PageObjectCandidateElement]:
-    return list(
-        db.execute(
-            select(PageObjectCandidateElement)
-            .where(
-                PageObjectCandidateElement.project_code == project_code,
-                PageObjectCandidateElement.client == client,
-                PageObjectCandidateElement.page_code == page_code,
-                PageObjectCandidateElement.group_key == group_key,
-            )
-            .order_by(PageObjectCandidateElement.quality_score.desc(), PageObjectCandidateElement.id.desc())
-        ).scalars().all()
+    return RecorderRepository(db).list_candidates_by_group(
+        project_code, client, page_code, group_key
     )
 
 

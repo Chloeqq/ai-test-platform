@@ -154,3 +154,236 @@ class RecorderRepository(BaseRepository):
                 PageObjectCandidateGroup.candidate_count == 0,
             )
         )
+
+    # ---- Candidate Elements (extended) ----
+
+    def list_candidates_by_group(
+        self, project_code: str, client: str, page_code: str, group_key: str
+    ) -> list[PageObjectCandidateElement]:
+        return list(
+            self.db.execute(
+                select(PageObjectCandidateElement)
+                .where(
+                    PageObjectCandidateElement.project_code == project_code,
+                    PageObjectCandidateElement.client == client,
+                    PageObjectCandidateElement.page_code == page_code,
+                    PageObjectCandidateElement.group_key == group_key,
+                )
+                .order_by(
+                    PageObjectCandidateElement.quality_score.desc(),
+                    PageObjectCandidateElement.id.desc(),
+                )
+            ).scalars().all()
+        )
+
+    def count_candidates_by_group(
+        self, project_code: str, client: str, page_code: str, group_key: str
+    ) -> int:
+        return self.db.execute(
+            select(func.count()).select_from(PageObjectCandidateElement).where(
+                PageObjectCandidateElement.project_code == project_code,
+                PageObjectCandidateElement.client == client,
+                PageObjectCandidateElement.page_code == page_code,
+                PageObjectCandidateElement.group_key == group_key,
+            )
+        ).scalar_one() or 0
+
+    def list_candidates_by_keys(
+        self,
+        project_code: str,
+        client: str,
+        page_code: str,
+        candidate_keys: list[str],
+    ) -> list[PageObjectCandidateElement]:
+        if not candidate_keys:
+            return []
+        return list(
+            self.db.execute(
+                select(PageObjectCandidateElement).where(
+                    PageObjectCandidateElement.project_code == project_code,
+                    PageObjectCandidateElement.client == client,
+                    PageObjectCandidateElement.page_code == page_code,
+                    PageObjectCandidateElement.candidate_key.in_(candidate_keys),
+                )
+            ).scalars().all()
+        )
+
+    def get_candidate_by_key(
+        self, project_code: str, client: str, page_code: str, candidate_key: str
+    ) -> PageObjectCandidateElement | None:
+        return self.db.execute(
+            select(PageObjectCandidateElement).where(
+                PageObjectCandidateElement.project_code == project_code,
+                PageObjectCandidateElement.client == client,
+                PageObjectCandidateElement.page_code == page_code,
+                PageObjectCandidateElement.candidate_key == candidate_key,
+            )
+        ).scalar_one_or_none()
+
+    def delete_candidates_by_ids(self, candidate_ids: list[int]) -> None:
+        if not candidate_ids:
+            return
+        self.db.execute(
+            delete(PageObjectCandidateElement).where(
+                PageObjectCandidateElement.id.in_(candidate_ids)
+            )
+        )
+
+    def delete_candidates_by_group_keys(
+        self,
+        project_code: str,
+        client: str,
+        page_code: str,
+        group_keys: list[str],
+    ) -> None:
+        if not group_keys:
+            return
+        self.db.execute(
+            delete(PageObjectCandidateElement).where(
+                PageObjectCandidateElement.project_code == project_code,
+                PageObjectCandidateElement.client == client,
+                PageObjectCandidateElement.page_code == page_code,
+                PageObjectCandidateElement.group_key.in_(group_keys),
+            )
+        )
+
+    def delete_candidates_by_page_identity(
+        self, project_code: str, client: str, page_code: str
+    ) -> None:
+        self.db.execute(
+            delete(PageObjectCandidateElement).where(
+                PageObjectCandidateElement.project_code == project_code,
+                PageObjectCandidateElement.client == client,
+                PageObjectCandidateElement.page_code == page_code,
+            )
+        )
+
+    # ---- Candidate Groups (extended) ----
+
+    def list_group_keys_by_page_identity(
+        self,
+        project_code: str,
+        client: str,
+        page_code: str,
+        group_keys: list[str] | None = None,
+    ) -> list[str]:
+        stmt = select(PageObjectCandidateGroup.group_key).where(
+            PageObjectCandidateGroup.project_code == project_code,
+            PageObjectCandidateGroup.client == client,
+            PageObjectCandidateGroup.page_code == page_code,
+        )
+        if group_keys:
+            stmt = stmt.where(
+                PageObjectCandidateGroup.group_key.in_(group_keys)
+            )
+        return [
+            str(row) for row in self.db.execute(stmt).scalars().all() if row
+        ]
+
+    def delete_groups_by_keys(
+        self,
+        project_code: str,
+        client: str,
+        page_code: str,
+        group_keys: list[str],
+    ) -> None:
+        if not group_keys:
+            return
+        self.db.execute(
+            delete(PageObjectCandidateGroup).where(
+                PageObjectCandidateGroup.project_code == project_code,
+                PageObjectCandidateGroup.client == client,
+                PageObjectCandidateGroup.page_code == page_code,
+                PageObjectCandidateGroup.group_key.in_(group_keys),
+            )
+        )
+
+    def delete_groups_by_page_identity(
+        self, project_code: str, client: str, page_code: str
+    ) -> None:
+        self.db.execute(
+            delete(PageObjectCandidateGroup).where(
+                PageObjectCandidateGroup.project_code == project_code,
+                PageObjectCandidateGroup.client == client,
+                PageObjectCandidateGroup.page_code == page_code,
+            )
+        )
+
+    def count_pending_candidate_groups(
+        self, project_code: str, client: str, page_code: str
+    ) -> int:
+        return self.db.execute(
+            select(func.count()).select_from(PageObjectCandidateGroup).where(
+                PageObjectCandidateGroup.project_code == project_code,
+                PageObjectCandidateGroup.client == client,
+                PageObjectCandidateGroup.page_code == page_code,
+                PageObjectCandidateGroup.promotion_status == "pending",
+            )
+        ).scalar_one() or 0
+
+    def list_candidate_groups_filtered(
+        self,
+        *,
+        project_code: str,
+        client: str,
+        page_code: str,
+        promotion_status: str | None = None,
+        quality_tier: str | None = None,
+        session_id: str | None = None,
+    ) -> list[PageObjectCandidateGroup]:
+        stmt = select(PageObjectCandidateGroup).where(
+            PageObjectCandidateGroup.project_code == project_code,
+            PageObjectCandidateGroup.client == client,
+            PageObjectCandidateGroup.page_code == page_code,
+        )
+        if promotion_status:
+            stmt = stmt.where(
+                PageObjectCandidateGroup.promotion_status == promotion_status
+            )
+        if quality_tier:
+            stmt = stmt.where(
+                PageObjectCandidateGroup.quality_tier == quality_tier
+            )
+        if session_id:
+            stmt = stmt.where(
+                PageObjectCandidateGroup.session_id == session_id
+            )
+        stmt = stmt.order_by(
+            PageObjectCandidateGroup.updated_at.desc(),
+            PageObjectCandidateGroup.id.desc(),
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
+    def list_candidates_filtered(
+        self,
+        *,
+        project_code: str,
+        client: str,
+        page_code: str,
+        group_key: str | None = None,
+        session_id: str | None = None,
+        status: str | None = None,
+    ) -> list[PageObjectCandidateElement]:
+        stmt = select(PageObjectCandidateElement).where(
+            PageObjectCandidateElement.project_code == project_code,
+            PageObjectCandidateElement.client == client,
+            PageObjectCandidateElement.page_code == page_code,
+        )
+        if group_key:
+            stmt = stmt.where(
+                PageObjectCandidateElement.group_key == group_key
+            )
+        if session_id:
+            stmt = stmt.where(
+                PageObjectCandidateElement.session_id == session_id
+            )
+        if status:
+            stmt = stmt.where(
+                PageObjectCandidateElement.status == status
+            )
+        stmt = stmt.order_by(
+            PageObjectCandidateElement.quality_score.desc(),
+            PageObjectCandidateElement.id.desc(),
+        )
+        return list(self.db.execute(stmt).scalars().all())
+

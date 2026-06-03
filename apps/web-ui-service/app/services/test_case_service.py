@@ -28,6 +28,7 @@ import yaml
 
 from app.models.page_object import PageObjectRef
 from app.repositories.test_case_repository import TestCaseRepository
+from app.repositories.test_project_repository import TestProjectRepository
 from app.models.test_case import (
     TestCase,
     TestCaseDefect,
@@ -155,7 +156,7 @@ def _resolve_step_locator(step: dict[str, Any]) -> tuple[str, str]:
 
 def _sync_test_case_steps(db: Session, case: TestCase) -> None:
     steps = case.test_steps if isinstance(case.test_steps, list) else []
-    db.execute(delete(TestCaseStep).where(TestCaseStep.case_id == int(case.id)))
+    TestCaseRepository(db).delete_steps_by_case_id(int(case.id))
     for index, raw_step in enumerate(steps, start=1):
         step = raw_step if isinstance(raw_step, dict) else {}
         action = _normalize_step_text(step.get("action"))
@@ -193,9 +194,7 @@ def _normalize_business_case_id(value: object) -> str:
 
 def _ensure_project_exists(db: Session, project_code: str) -> None:
     normalized_project_code = _normalize_project_code(project_code)
-    existing = db.execute(
-        select(TestProject).where(TestProject.project_code == normalized_project_code)
-    ).scalar_one_or_none()
+    existing = TestProjectRepository(db).get_by_code(normalized_project_code)
     if existing:
         return
     db.add(
@@ -1200,9 +1199,7 @@ def resolve_target_case_ids(
             normalized_case_ids.append(normalized)
 
     if normalized_case_ids:
-        rows = db.execute(
-            select(TestCase.case_id, TestCase.id).where(TestCase.case_id.in_(normalized_case_ids))
-        ).all()
+        rows = TestCaseRepository(db).list_id_by_case_ids(normalized_case_ids)
         matched_map = {str(case_id): int(item_id) for case_id, item_id in rows}
         missing_case_ids = [item for item in normalized_case_ids if item not in matched_map]
         if missing_case_ids:
@@ -1305,7 +1302,7 @@ def list_test_cases(
     if source_filter in {"ai", "mn", "cv", "imp", "fb"}:
         stmt = stmt.where(TestCase.source == source_filter)
 
-    cases = db.execute(stmt).scalars().all()
+    cases = TestCaseRepository(db).list_all()
     tag_filter = tag.strip()
     if tag_filter:
         cases = [item for item in cases if tag_filter in (item.tags or [])]
@@ -1357,14 +1354,7 @@ def list_test_cases(
             [case.id for case in page_cases]
         )
 
-    tags = sorted(
-        {
-            tag_item
-            for case in db.execute(select(TestCase.tags)).all()
-            for tag_item in (case[0] or [])
-            if str(tag_item).strip()
-        }
-    )
+    tags = TestCaseRepository(db).list_all_tags()
     _distinct_repo = TestCaseRepository(db)
     creators = sorted(_distinct_repo.list_distinct_values(TestCase.creator))
     product_lines = sorted(_distinct_repo.list_distinct_values(TestCase.product_line))
@@ -1383,9 +1373,7 @@ def list_test_cases(
         }
     )
     project_status_rows = (
-        db.execute(
-            select(TestProject.project_code, TestProject.status).where(TestProject.project_code.in_(page_project_codes))
-        ).all()
+        TestProjectRepository(db).list_by_codes(page_project_codes)
         if page_project_codes
         else []
     )
@@ -1816,22 +1804,10 @@ def upsert_test_case_from_workbench(
 def get_test_case_detail(db: Session, case_id: int | str) -> TestCaseDetailResult:
     ensure_seed_data(db)
     case = case_or_404(db, case_id)
-    defects = db.execute(
-        select(TestCaseDefect)
-        .where(TestCaseDefect.case_id == case.id)
-        .order_by(TestCaseDefect.created_at.desc())
-    ).scalars().all()
-    executions = db.execute(
-        select(TestCaseExecution)
-        .where(TestCaseExecution.case_id == case.id)
-        .order_by(TestCaseExecution.executed_at.desc(), TestCaseExecution.id.desc())
-        .limit(10)
-    ).scalars().all()
-    versions = db.execute(
-        select(TestCaseVersion)
-        .where(TestCaseVersion.case_id == case.id)
-        .order_by(TestCaseVersion.version_no.desc(), TestCaseVersion.id.desc())
-    ).scalars().all()
+    _tc_repo = TestCaseRepository(db)
+    defects = _tc_repo.list_defects_by_case_id(case.id)
+    executions = _tc_repo.list_executions_by_case_id(case.id, limit=10)
+    versions = _tc_repo.list_versions_by_case_id(case.id)
     normalized_data_config = normalize_data_config(
         TestCaseDataConfig.model_validate(case.data_config or {})
     )
@@ -2125,18 +2101,9 @@ def compare_case_versions(
 ) -> TestCaseVersionComparison:
     ensure_seed_data(db)
     case = case_or_404(db, case_id)
-    from_item = db.execute(
-        select(TestCaseVersion).where(
-            TestCaseVersion.case_id == case.id,
-            TestCaseVersion.version_no == from_version,
-        )
-    ).scalar_one_or_none()
-    to_item = db.execute(
-        select(TestCaseVersion).where(
-            TestCaseVersion.case_id == case.id,
-            TestCaseVersion.version_no == to_version,
-        )
-    ).scalar_one_or_none()
+    _tc_repo = TestCaseRepository(db)
+    from_item = _tc_repo.get_version_by_case_id_and_no(case.id, from_version)
+    to_item = _tc_repo.get_version_by_case_id_and_no(case.id, to_version)
     if not from_item or not to_item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="version not found")
 
@@ -2316,11 +2283,7 @@ def list_test_cases_for_export(
     target_ids = resolve_target_case_ids(db, ids=ids, case_ids=case_ids)
     if not target_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ids or case_ids must not be empty")
-    return list(
-        db.execute(
-            select(TestCase).where(TestCase.id.in_(target_ids)).order_by(TestCase.id.asc())
-        ).scalars().all()
-    )
+    return TestCaseRepository(db).list_by_ids_ordered(target_ids)
 
 
 def add_test_case_defect(
@@ -2449,13 +2412,11 @@ def delete_module_tree_node(
     if not normalized_product_line:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="product_line must not be empty")
 
-    case_stmt = select(TestCase.id, TestCase.case_id).where(
-        TestCase.project_code == normalized_project_code,
-        TestCase.product_line == normalized_product_line,
+    case_rows = TestCaseRepository(db).list_id_and_case_id_by_project_and_product_line(
+        project_code=normalized_project_code,
+        product_line=normalized_product_line,
+        module=normalized_module or None,
     )
-    if normalized_module:
-        case_stmt = case_stmt.where(TestCase.module == normalized_module)
-    case_rows = list(db.execute(case_stmt).all())
     target_case_ids = [str(item_case_id or "").strip() for _item_id, item_case_id in case_rows if str(item_case_id or "").strip()]
 
     if case_rows and not cascade_cases:

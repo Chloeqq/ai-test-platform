@@ -2,7 +2,6 @@ from typing import Any
 
 from shared_backend.type_utils import json_dict as _json_dict
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.page_object import (
@@ -14,6 +13,7 @@ from app.models.page_object import (
     PageObjectCandidateGroup,
     PageObjectRef,
 )
+from app.repositories.page_object_governance_repository import PageObjectGovernanceRepository
 from app.services.page_element_code_policy import suggest_business_element_code
 
 
@@ -137,13 +137,7 @@ def _serialize_element_locator(item: PageElementLocator) -> dict[str, Any]:
 
 
 def _element_locators_for_serialization(db: Session, *, page_element_id: int) -> list[PageElementLocator]:
-    return list(
-        db.execute(
-            select(PageElementLocator)
-            .where(PageElementLocator.page_element_id == page_element_id)
-            .order_by(PageElementLocator.is_primary.desc(), PageElementLocator.priority.asc(), PageElementLocator.id.asc())
-        ).scalars().all()
-    )
+    return PageObjectGovernanceRepository(db).list_locators_by_element_id(page_element_id)
 
 
 def _serialize_element_version(item: PageElementVersion) -> dict[str, Any]:
