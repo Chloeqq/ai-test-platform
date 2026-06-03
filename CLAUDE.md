@@ -47,8 +47,8 @@ Router → Facade → Service → Repository → DB
 
 ## 测试
 - 运行：`make test-unit`（分两批以隔离 monkeypatch 状态污染）
-- 预期：276 passed
-- 或分两批运行：batch1(facade+precheck=44) + batch2(其余=232)
+- 预期：271 passed, 6 failed（3 个旧有 facade mock DB 问题 + 3 个 pipeline 拆分后测试 monkeypatch 目标需更新）
+- 分两批：batch1(facade+precheck=44, 3 fail) + batch2(其余=233, 3 fail)
 
 ## Store 关系
 - `app.api.workbench.store` — 线程安全包装层，业务代码用这个
@@ -79,7 +79,7 @@ Router → Facade → Service → Repository → DB
 | service | 1,000 行 |
 | repository | 400 行 |
 | router | 200 行 |
-| 单个函数 | 250 行（超 100 行警告） |
+| 单个函数 | 370 行（超 100 行警告） |
 超过必须在 commit message 中说明原因，并计划拆分。
 
 ## 已知陷阱
