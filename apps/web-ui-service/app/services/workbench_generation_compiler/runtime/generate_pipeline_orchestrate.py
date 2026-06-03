@@ -24,7 +24,7 @@ from shared_backend.type_utils import str_value as _normalized_text
 
 # 从上游模块导入（无循环：File 1→File 2→File 3 单向依赖）
 from .generate_pipeline import (
-    SessionLocal as _SessionLocal,  # noqa: E402
+    SessionLocal,  # noqa: E402
     _normalized_text, _LOGGER, _YAML_PAGE_OBJECT_ROOT,
     _normalized_key, _normalize_json_list, _is_qualified_formal_element,
     _element_display_name, _infer_element_aliases, _list_text,
@@ -34,7 +34,7 @@ from .generate_pipeline import (
     _candidate_identity, _direct_candidate_requirement_lines,
     _scope_points_to_selected_intents, _filter_requirement_spec_by_selected_intents,
     _is_precondition_point, _looks_like_password_toggle_element,
-    _intent_product_metadata, SessionLocal,
+    _intent_product_metadata,
 )
 from .generate_pipeline_format import (  # noqa: E402
     _product_description, _product_page_load_expected, _product_element_name,
@@ -528,7 +528,7 @@ def _load_cross_page_data_testid_element(
     if not normalized_code:
         return None
     try:
-        with _SessionLocal() as db:
+        with _svc().SessionLocal() as db:
             repo = PageObjectRepository(db)
             row = repo.find_element_by_testid_across_pages(
                 project, list(preferred_pages), normalized_code
@@ -572,7 +572,7 @@ def _load_cross_page_data_testid_element(
 
 def _load_page_object_from_db(project: str, page: str) -> tuple[PageObject | None, list[PageElement]]:
     # 合法例外：生成管线无 db Session 可透传，回退到 YAML asset 前的 DB 查询需独立 Session
-    with _SessionLocal() as db:
+    with _svc().SessionLocal() as db:
         repo = PageObjectRepository(db)
         page_object = repo.get_by_identity(project, "web", page)
         if page_object is None:
