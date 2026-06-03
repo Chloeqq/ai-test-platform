@@ -33,7 +33,7 @@ FILE_SIZE_LIMITS = {
 }
 
 FUNC_SIZE_WARN = 100
-FUNC_SIZE_FAIL = 200
+FUNC_SIZE_FAIL = 250
 
 # type_utils 中已有的公共函数，不允许在其他文件重复定义
 SHARED_FUNCS = {

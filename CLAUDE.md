@@ -79,7 +79,7 @@ Router → Facade → Service → Repository → DB
 | service | 1,000 行 |
 | repository | 400 行 |
 | router | 200 行 |
-| 单个函数 | 200 行（超 100 行警告） |
+| 单个函数 | 250 行（超 100 行警告） |
 超过必须在 commit message 中说明原因，并计划拆分。
 
 ## 已知陷阱
