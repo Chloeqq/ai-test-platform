@@ -22,6 +22,20 @@ ParseIsoDatetime = Callable[[str], datetime | None]
 ClampConfidence = Callable[[Any], float]
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return default
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value or 0.0)
+    except Exception:
+        return default
+
+
 def _scope_from_factor(factor: str) -> str | None:
     normalized = str(factor or "").strip().lower()
     mapping = {
@@ -528,43 +542,21 @@ def build_execution_task_view(
         runtime_realtime=bool(metadata.get("runtime_realtime_supplement", False)),
         evidence_health_status=evidence_health_status,
     )
-    source_count = 0
-    try:
-        source_count = max(
-            int(source_summary.get("source_count", 0) or 0),
-            int(traceability_summary.get("source_input_count", 0) or 0),
-        )
-    except Exception:
-        source_count = 0
+    source_count = _safe_int(max(
+        _safe_int(source_summary.get("source_count", 0)),
+        _safe_int(traceability_summary.get("source_input_count", 0)),
+    ))
     source_types = [
         str(item).strip()
         for item in _list_value(source_summary.get("source_types"))
         if str(item).strip()
     ]
-    try:
-        traceability_completeness = float(traceability_summary.get("traceability_completeness", 0.0) or 0.0)
-    except Exception:
-        traceability_completeness = 0.0
-    try:
-        gap_point_count = int(traceability_summary.get("gap_point_count", 0) or 0)
-    except Exception:
-        gap_point_count = 0
-    try:
-        partial_count = int(traceability_summary.get("partial_count", 0) or 0)
-    except Exception:
-        partial_count = 0
-    try:
-        orphan_point_count = int(traceability_summary.get("orphan_point_count", 0) or 0)
-    except Exception:
-        orphan_point_count = 0
-    try:
-        orphan_step_count = int(traceability_summary.get("orphan_step_count", 0) or 0)
-    except Exception:
-        orphan_step_count = orphan_point_count
-    try:
-        unmapped_changed_area_count = int(traceability_summary.get("unmapped_changed_area_count", 0) or 0)
-    except Exception:
-        unmapped_changed_area_count = 0
+    traceability_completeness = _safe_float(traceability_summary.get("traceability_completeness", 0.0))
+    gap_point_count = _safe_int(traceability_summary.get("gap_point_count", 0))
+    partial_count = _safe_int(traceability_summary.get("partial_count", 0))
+    orphan_point_count = _safe_int(traceability_summary.get("orphan_point_count", 0))
+    orphan_step_count = _safe_int(traceability_summary.get("orphan_step_count", orphan_point_count))
+    unmapped_changed_area_count = _safe_int(traceability_summary.get("unmapped_changed_area_count", 0))
     traceability_status = str(
         traceability_summary.get("status", traceability_summary.get("intent_coverage_status", ""))
     ).strip() or "unknown"

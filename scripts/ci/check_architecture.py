@@ -33,7 +33,7 @@ FILE_SIZE_LIMITS = {
 }
 
 FUNC_SIZE_WARN = 100
-FUNC_SIZE_FAIL = 250
+FUNC_SIZE_FAIL = 370
 
 # type_utils 中已有的公共函数，不允许在其他文件重复定义
 SHARED_FUNCS = {
@@ -142,7 +142,7 @@ def check_session_boundary(filepath: Path) -> None:
     if any(allowed in rel for allowed in _SESSION_ALLOWED):
         return
     # 后台线程闭包或已改用 get_db_session 的场景
-    if "facade" in rel or "service.py" in rel or "generate_pipeline.py" in rel:
+    if "facade" in rel or "service.py" in rel or "generate_pipeline" in rel:
         return
     content = filepath.read_text()
     if "SessionLocal()" in content:

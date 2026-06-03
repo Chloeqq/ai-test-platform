@@ -190,6 +190,57 @@ class OrchestrationFlowSupport:
             normalized_case["execution"] = execution
         return normalized_case
 
+    def _validate_compile_and_persist_case(
+        self, *, case: dict[str, Any], points: list[dict[str, Any]],
+        project: str, resolved_page: str, requirement_spec: dict[str, Any],
+    ) -> dict[str, Any]:
+        """验证测试点合约、编译执行步骤、持久化生成产物。返回更新后的 case。"""
+        try:
+            page_object = self._resolve_page_object(project, resolved_page)
+        except Exception as exc:
+            if isinstance(exc, self._validation_error_cls):
+                raise
+            raise self._validation_error_cls(
+                "page object resolution failed",
+                details={"reason_code": "page_object_not_found", "project": project,
+                         "page": resolved_page, "upstream_error": str(exc)[:500]}) from exc
+        try:
+            from shared_backend.schemas.contracts import normalize_test_point_plan_v1
+            plan_wrapper = {"version": "TestPointPlanV1", "project": project,
+                            "page": resolved_page, "points": points}
+            normalized_plan, _warnings = normalize_test_point_plan_v1(plan_wrapper)
+            points = normalized_plan.get("points", points)
+        except Exception:
+            pass
+        validation_result = ContractValidator().validate_full(
+            requirement_spec if isinstance(requirement_spec, dict) else None,
+            points, page_object, strict=True)
+        if not validation_result.valid:
+            raise self._validation_error_cls(
+                "test point contract validation failed",
+                details={"reason_code": "test_point_contract_validation_failed",
+                         "errors": validation_result.errors, "warnings": validation_result.warnings})
+        try:
+            compiled_steps = compile_execution_steps(points, page_object)
+        except ExecutionCompilerError as exc:
+            raise self._validation_error_cls(
+                "execution compiler failed", details=exc.to_detail()) from exc
+        case = self._materialize_compiled_steps(case=case, compiled_steps=compiled_steps)
+        try:
+            case = self._prepare_generated_case_for_assets(case)
+        except Exception as exc:
+            raise self._validation_error_cls(
+                "generated case failed asset validation",
+                details={"reason_code": "asset_validation_failed", "upstream_error": str(exc)[:500]}) from exc
+        try:
+            case_path = self._save_case(case)
+        except Exception as exc:
+            raise self._validation_error_cls(
+                "generated case asset persist failed",
+                details={"reason_code": "asset_persist_failed", "upstream_error": str(exc)[:500]}) from exc
+        case["id"] = str(case_path.stem).strip()
+        return case
+
     def orchestrate(
         self,
         *,
@@ -316,82 +367,9 @@ class OrchestrationFlowSupport:
                 details={"reason_code": "execution_compiler_missing_test_points"},
             )
         project = str(case.get("project", "")).strip() or str(requirement_spec.get("project", "")).strip() or "mall"
-        try:
-            page_object = self._resolve_page_object(project, resolved_page)
-        except Exception as exc:
-            if isinstance(exc, self._validation_error_cls):
-                raise
-            raise self._validation_error_cls(
-                "page object resolution failed",
-                details={
-                    "reason_code": "page_object_not_found",
-                    "project": project,
-                    "page": resolved_page,
-                    "upstream_error": str(exc)[:500],
-                },
-            ) from exc
-        # Normalize test points to DSL V1.1 contract before validation.
-        # This mirrors the pipeline path's _normalize_and_scope_test_points step.
-        try:
-            from shared_backend.schemas.contracts import normalize_test_point_plan_v1
-
-            plan_wrapper = {
-                "version": "TestPointPlanV1",
-                "project": project,
-                "page": resolved_page,
-                "points": points,
-            }
-            normalized_plan, _warnings = normalize_test_point_plan_v1(plan_wrapper)
-            points = normalized_plan.get("points", points)
-        except Exception:
-            pass  # normalization is best-effort; validation will catch real issues
-
-        validation_result = ContractValidator().validate_full(
-            requirement_spec if isinstance(requirement_spec, dict) else None,
-            points,
-            page_object,
-            strict=True,
-        )
-        if not validation_result.valid:
-            raise self._validation_error_cls(
-                "test point contract validation failed",
-                details={
-                    "reason_code": "test_point_contract_validation_failed",
-                    "errors": validation_result.errors,
-                    "warnings": validation_result.warnings,
-                },
-            )
-        try:
-            compiled_steps = compile_execution_steps(points, page_object)
-        except ExecutionCompilerError as exc:
-            raise self._validation_error_cls(
-                "execution compiler failed",
-                details=exc.to_detail(),
-            ) from exc
-        case = self._materialize_compiled_steps(case=case, compiled_steps=compiled_steps)
-        try:
-            case = self._prepare_generated_case_for_assets(case)
-        except Exception as exc:
-            raise self._validation_error_cls(
-                "generated case failed asset validation",
-                details={
-                    "reason_code": "asset_validation_failed",
-                    "upstream_error": str(exc)[:500],
-                },
-            ) from exc
-        try:
-            case_path = self._save_case(case)
-        except Exception as exc:
-            raise self._validation_error_cls(
-                "generated case asset persist failed",
-                details={
-                    "reason_code": "asset_persist_failed",
-                    "upstream_error": str(exc)[:500],
-                },
-            ) from exc
-        # save_test_case() may normalize/reallocate case id during persistence.
-        # Keep runtime identity consistent with the persisted asset so TEST_CASE_ID filtering is accurate.
-        case["id"] = str(case_path.stem).strip()
+        case = self._validate_compile_and_persist_case(
+            case=case, points=points, project=project,
+            resolved_page=resolved_page, requirement_spec=requirement_spec)
         started_at = self._now()
 
         result = self._orchestration_result_cls(

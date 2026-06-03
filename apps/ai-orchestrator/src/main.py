@@ -196,20 +196,8 @@ def _read_int_query(value: str, *, default: int, min_value: int, max_value: int)
 # 应用创建
 # ---------------------------------------------------------------------------
 
-def create_app(
-    service: OrchestratorService | None = None,
-    asset_service: AssetService | None = None,
-) -> FastAPI:
-    global _orchestrator_svc, _asset_svc
-    if service is not None:
-        _orchestrator_svc = service
-    if asset_service is not None:
-        _asset_svc = asset_service
-
-    app = FastAPI(title="AI Orchestrator", version="1.0")
-    app.add_middleware(_RequestLoggingMiddleware)
-
-    # ---- Exception handlers ----
+def _register_core_routes(app: FastAPI) -> None:
+    """注册异常处理器、健康检查、控制台路由。"""
 
     @app.exception_handler(OrchestratorError)
     async def _handle_orchestrator_error(request: Request, exc: OrchestratorError) -> JSONResponse:
@@ -219,8 +207,6 @@ def create_app(
     async def _handle_validation_error(request: Request, exc: OrchestratorValidationError) -> JSONResponse:
         return JSONResponse(status_code=exc.status_code, content=exc.to_response())
 
-    # ---- Health ----
-
     @app.get("/health", dependencies=[])
     async def health() -> dict:
         return {"status": "ok"}
@@ -229,8 +215,6 @@ def create_app(
     async def llm_health(probe: str = Query("true")) -> dict:
         probe_bool = probe.lower() not in {"0", "false", "off", "no"}
         return _get_orchestrator_service().get_llm_health(probe=probe_bool)
-
-    # ---- Console ----
 
     @app.get("/", include_in_schema=False)
     @app.get("/console", include_in_schema=False)
@@ -245,7 +229,9 @@ def create_app(
     async def console_css() -> PlainTextResponse:
         return PlainTextResponse(_CONSOLE_CSS, media_type="text/css")
 
-    # ---- Orchestrate ----
+
+def _register_api_routes(app: FastAPI) -> None:
+    """注册编排、解析、风险、分诊、遥测、自愈、报表、运行器、聚类路由。"""
 
     @app.post("/orchestrate", status_code=201)
     async def orchestrate(
@@ -406,7 +392,8 @@ def create_app(
     ) -> dict:
         return svc.get_failure_cluster(cluster_id=cluster_id, limit=limit)
 
-    # ---- Asset Tooling ----
+def _register_asset_routes(app: FastAPI) -> None:
+    """注册资产工具路由与鉴权中间件。"""
 
     @app.get("/assets/scaffold/templates")
     async def list_scaffold_templates(asset: AssetService = Depends(_get_asset_service)) -> dict:
@@ -419,50 +406,52 @@ def create_app(
     @app.post("/assets/page-objects", status_code=201)
     async def create_page_object(payload: dict[str, Any], asset: AssetService = Depends(_get_asset_service)) -> dict:
         return asset.create_page_object(
-            page=payload.get("page", ""),
-            description=payload.get("description", ""),
-        )
+            page=payload.get("page", ""), description=payload.get("description", ""))
 
     @app.post("/assets/page-objects/{page}/elements", status_code=201)
     async def add_page_element(page: str, payload: dict[str, Any], asset: AssetService = Depends(_get_asset_service)) -> dict:
         return asset.add_page_element(
-            page=page,
-            element_name=payload.get("name", ""),
-            locator_type=payload.get("locator_type", ""),
-            locator_value=payload.get("locator_value", ""),
-            role=payload.get("role"),
-            description=payload.get("description"),
-        )
+            page=page, element_name=payload.get("name", ""),
+            locator_type=payload.get("locator_type", ""), locator_value=payload.get("locator_value", ""),
+            role=payload.get("role"), description=payload.get("description"))
 
     @app.post("/assets/test-cases/sync")
     async def sync_test_case(payload: dict[str, Any], asset: AssetService = Depends(_get_asset_service)) -> dict:
         return asset.sync_test_case(
-            file_path=payload.get("file", ""),
-            menu_target=payload.get("menu_target"),
-            assert_target=payload.get("assert_target"),
-        )
+            file_path=payload.get("file", ""), menu_target=payload.get("menu_target"),
+            assert_target=payload.get("assert_target"))
 
     @app.post("/assets/scaffold", status_code=201)
     async def scaffold_assets(payload: dict[str, Any], asset: AssetService = Depends(_get_asset_service)) -> dict:
         return asset.scaffold_page_assets(
-            page=payload.get("page", ""),
-            title=payload.get("title", ""),
-            requirement=payload.get("requirement", ""),
-            description=payload.get("description", ""),
-            priority=payload.get("priority", "P1"),
-            menu_label=payload.get("menu_label"),
-            assert_label=payload.get("assert_label"),
-            template=payload.get("template"),
-            elements=payload.get("elements") if payload.get("elements") is not None else None,
-        )
-
-    # ---- 鉴权中间件（最后注册，优先级最低） ----
+            page=payload.get("page", ""), title=payload.get("title", ""),
+            requirement=payload.get("requirement", ""), description=payload.get("description", ""),
+            priority=payload.get("priority", "P1"), menu_label=payload.get("menu_label"),
+            assert_label=payload.get("assert_label"), template=payload.get("template"),
+            elements=payload.get("elements") if payload.get("elements") is not None else None)
 
     @app.middleware("http")
     async def _auth_middleware(request: Request, call_next):
         await _require_api_key(request)
         return await call_next(request)
 
+
+def create_app(
+    service: OrchestratorService | None = None,
+    asset_service: AssetService | None = None,
+) -> FastAPI:
+    """创建 FastAPI 应用，注册所有路由。"""
+    global _orchestrator_svc, _asset_svc
+    if service is not None:
+        _orchestrator_svc = service
+    if asset_service is not None:
+        _asset_svc = asset_service
+
+    app = FastAPI(title="AI Orchestrator", version="1.0")
+    app.add_middleware(_RequestLoggingMiddleware)
+    _register_core_routes(app)
+    _register_api_routes(app)
+    _register_asset_routes(app)
     return app
 
 
