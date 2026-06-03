@@ -265,7 +265,7 @@ class TestListTestPointAssets:
         self, facade: WorkbenchFacade, mock_db: MagicMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "app.api.workbench.facade.store.ensure_dirs",
+            "app.api.workbench.facade_helpers.store.ensure_dirs",
             lambda: None,
         )
         monkeypatch.setattr(
@@ -299,55 +299,59 @@ class TestUpsertTestPointAsset:
         self, facade: WorkbenchFacade, mock_db: MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
     ) -> None:
         monkeypatch.setattr(
-            "app.api.workbench.facade.store.ensure_dirs",
+            "app.api.workbench.facade_helpers.store.ensure_dirs",
             lambda: None,
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.test_project_service.ensure_project_active_for_write",
+            "app.api.workbench.facade_test_point_assets.test_project_service.ensure_project_active_for_write",
             lambda db, project: MagicMock(project_code=project),
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade._test_point_asset_state_paths",
+            "app.api.workbench.facade_helpers._test_point_asset_state_paths",
             lambda project, asset_id: (tmp_path / "asset.json", tmp_path / "plan.json"),
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade._read_json_file",
+            "app.api.workbench._helpers.read_json_file",
             lambda path: {},
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade._page_object_generation_context",
+            "app.api.workbench.facade_helpers._page_object_generation_context",
             lambda db, project, page: {"page": page, "elements": {}, "page_url": ""},
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade._normalize_points_involved_elements",
+            "app.api.workbench.facade_helpers._normalize_points_involved_elements",
             lambda points, page_context: points,
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade._write_json_file",
+            "app.api.workbench._helpers.write_json_file",
             lambda path, payload: None,
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.workbench_asset_service.upsert_test_point_asset_snapshot",
+            "app.api.workbench.facade_helpers.workbench_asset_service.upsert_test_point_asset_snapshot",
             lambda **kwargs: {"asset_id": "asset-001"},
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.workbench_asset_service.build_test_point_asset_detail",
+            "app.api.workbench.facade_helpers.workbench_asset_service.build_test_point_asset_detail",
             lambda **kwargs: {"item": {"asset_id": "asset-001", "title": "测试"}},
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade._build_generation_diagnostics_for_asset",
+            "app.api.workbench.facade_helpers._build_generation_diagnostics_for_asset",
             lambda project, asset: {},
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.store.append_history",
+            "app.api.workbench.facade_helpers.store.read_history_items",
+            lambda: [],
+        )
+        monkeypatch.setattr(
+            "app.api.workbench.facade_helpers.store.append_history",
             lambda item, db=None: None,
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.store.now_iso",
+            "app.api.workbench.facade_helpers.store.now_iso",
             lambda: "2026-01-01T00:00:00Z",
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.workbench_gate_service.normalize_page_slug",
+            "app.api.workbench.facade_helpers.workbench_gate_service.normalize_page_slug",
             lambda value: str(value or "").strip().lower(),
         )
 
@@ -356,7 +360,7 @@ class TestUpsertTestPointAsset:
         payload.page = "login"
         payload.source_type = "manual"
         payload.asset_id = "asset-001"
-        payload.title = "测试"
+        payload.title = "テスト"
         payload.priority = ""
         payload.requirement = ""
         payload.selected_candidates = []
@@ -375,11 +379,15 @@ class TestGetTestPointAsset:
         self, facade: WorkbenchFacade, mock_db: MagicMock, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
-            "app.api.workbench.facade.store.ensure_dirs",
+            "app.api.workbench.facade_helpers.store.ensure_dirs",
             lambda: None,
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.workbench_asset_service.build_test_point_asset_detail",
+            "app.api.workbench.facade_helpers.store.read_history_items",
+            lambda: [],
+        )
+        monkeypatch.setattr(
+            "app.api.workbench.facade_helpers.workbench_asset_service.build_test_point_asset_detail",
             lambda **kwargs: {
                 "item": {
                     "asset_id": "asset-001", "title": "test",
@@ -389,7 +397,7 @@ class TestGetTestPointAsset:
             },
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade._build_generation_diagnostics_for_asset",
+            "app.api.workbench.facade_helpers._build_generation_diagnostics_for_asset",
             lambda project, asset: {},
         )
 
@@ -407,26 +415,26 @@ class TestDeleteTestPointAsset:
         self, facade: WorkbenchFacade, mock_db: MagicMock, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
     ) -> None:
         monkeypatch.setattr(
-            "app.api.workbench.facade.store.ensure_dirs",
+            "app.api.workbench.facade_helpers.store.ensure_dirs",
             lambda: None,
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.test_project_service.ensure_project_active_for_write",
+            "app.api.workbench.facade_test_point_assets.test_project_service.ensure_project_active_for_write",
             lambda db, project: MagicMock(project_code=project),
         )
         project_dir = tmp_path / "atp"
         project_dir.mkdir()
         (project_dir / "asset-001.json").write_text("{}")
         monkeypatch.setattr(
-            "app.api.workbench.facade.workbench_asset_service.state_project_dir",
+            "app.api.workbench.facade_helpers.workbench_asset_service.state_project_dir",
             lambda project, state_root: project_dir,
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.store.append_history",
+            "app.api.workbench.facade_helpers.store.append_history",
             lambda item, db=None: None,
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade.store.now_iso",
+            "app.api.workbench.facade_helpers.store.now_iso",
             lambda: "2026-01-01T00:00:00Z",
         )
 
@@ -454,12 +462,19 @@ class TestPreviewTestPointScript:
             }
 
         monkeypatch.setattr(
-            "app.api.workbench.facade.workbench_asset_service.load_test_point_asset_with_root",
+            "app.api.workbench.facade_helpers.workbench_asset_service.load_test_point_asset_with_root",
             _mock_load,
         )
         monkeypatch.setattr(
-            "app.api.workbench.facade._page_object_generation_context",
-            lambda db, project, page: {"page": "login", "elements": {}, "page_url": ""},
+            "app.api.workbench.facade_test_point_assets._page_object_generation_context",
+            lambda db, project, page: {
+                "page_object_found": True, "page_url": "",
+                "page_object": {"page": "login", "page_url": "", "elements": {
+                    "btn": {"selector": "#btn", "type": "css",
+                        "status": "active", "review_status": "approved", "stability_level": "high"},
+                }},
+                "base_blockers": [],
+            },
         )
 
         result = facade.preview_test_point_script(
