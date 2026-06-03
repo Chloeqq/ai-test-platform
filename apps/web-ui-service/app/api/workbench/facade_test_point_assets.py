@@ -103,7 +103,7 @@ LOGGER = logging.getLogger(__name__)
 _RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
 
 # 从 facade 导入模块级 helper 函数（facade 在导入本混入前已定义这些函数）
-from .facade import (  # noqa: E402
+from .facade_helpers import (  # noqa: E402
     _settings, _build_runtime_view_from_entry, _attach_test_point_asset_summary,
     _review_status_from_point, _review_status_from_candidate, _review_summary_from_points,
     _test_point_asset_state_paths, _is_generation_qualified_element,
