@@ -16,6 +16,7 @@ from shared_backend.case_ids import normalize_case_id
 from shared_backend.case_rules import enrich_case_metadata, validate_case_payload
 from shared_backend.datetime_compat import UTC
 from shared_backend.type_utils import (
+    dedup_keep_order as _dedup_keep_order,
     dict_value as _dict_value,
     float_value as _float_value,
     int_value as _int_value,

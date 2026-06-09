@@ -195,5 +195,7 @@ class PageObjectGovernanceLog(Base):
     entity_type: Mapped[str] = mapped_column(String(40), default="")
     entity_key: Mapped[str] = mapped_column(String(160), default="")
     action: Mapped[str] = mapped_column(String(40), default="")
+    operator: Mapped[str] = mapped_column(String(60), default="system", index=True)
     before_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     after_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
