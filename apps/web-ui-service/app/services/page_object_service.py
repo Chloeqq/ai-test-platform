@@ -42,6 +42,7 @@ from app.services import test_project_service
 from app.services.page_object_normalizers import (
     CANDIDATE_PROMOTION_STATUS_VALUES,
     CANDIDATE_STATUS_VALUES,
+    _normalize_page_object_status,
 )
 
 _RECORDER_ROOT = (Path(__file__).resolve().parents[4] / "artifacts" / "page-recorder").resolve()
@@ -133,13 +134,14 @@ def _write_governance_log(
 
 def _page_object_governance_counts(db: Session, page_object: PageObject) -> dict[str, Any]:
     _po_repo = PageObjectRepository(db)
+    _gov_repo = PageObjectGovernanceRepository(db)
     _rec_repo = RecorderRepository(db)
     formal_element_count = int(
         _po_repo.count_elements_by_page_object_id(page_object.id)
         or 0
     )
-    approved_element_count = _po_repo.count_approved_elements(page_object.id)
-    key_element_count = _po_repo.count_key_elements(page_object.id)
+    approved_element_count = _gov_repo.count_approved_elements(page_object.id)
+    key_element_count = _gov_repo.count_key_elements(page_object.id)
     pending_candidate_group_count = _rec_repo.count_pending_candidate_groups(
         page_object.project_code, page_object.client, page_object.page_code
     )
