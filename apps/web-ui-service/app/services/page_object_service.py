@@ -590,6 +590,48 @@ def get_page_object_governance_summary(
     }
 
 
+def _find_stale_url(obj: Any, new_url: str) -> str:
+    """在 dict/list 中找第一个不是 new_url 的 HTTP URL。"""
+    import re
+    if isinstance(obj, dict):
+        for v in obj.values():
+            result = _find_stale_url(v, new_url)
+            if result:
+                return result
+    elif isinstance(obj, list):
+        for item in obj:
+            result = _find_stale_url(item, new_url)
+            if result:
+                return result
+    elif isinstance(obj, str):
+        urls = re.findall(r'https?://[^\s"\']+', obj)
+        for u in urls:
+            if u != new_url:
+                return u
+    return ""
+
+
+def _url_in_steps(obj: Any, new_url: str) -> bool:
+    """检查步骤中是否存在 URL（即是否有 URL 需要更新）。"""
+    return bool(_find_stale_url(obj, new_url))
+
+
+def _replace_url_in_obj(obj: Any, old_url: str, new_url: str) -> None:
+    """递归替换 dict/list 中所有字符串里出现的旧 URL。"""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(v, str) and old_url in v:
+                obj[k] = v.replace(old_url, new_url)
+            elif isinstance(v, (dict, list)):
+                _replace_url_in_obj(v, old_url, new_url)
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if isinstance(item, str) and old_url in item:
+                obj[i] = item.replace(old_url, new_url)
+            elif isinstance(item, (dict, list)):
+                _replace_url_in_obj(item, old_url, new_url)
+
+
 def _sync_page_url_to_cases(project_code: str, page_code: str, new_url: str) -> list[str]:
     """同步页面对象 URL 到关联测试用例 YAML。返回受影响的用例文件列表。"""
     import yaml
@@ -609,9 +651,13 @@ def _sync_page_url_to_cases(project_code: str, page_code: str, new_url: str) -> 
             continue
         if (str(data.get("project", "")).strip() == project_code
                 and str(execution.get("page", "")).strip() == page_code):
-            old_url = str(execution.get("page_url", "")).strip()
-            if old_url != new_url:
+            existing_url = str(execution.get("page_url", "")).strip()
+            if existing_url != new_url or _url_in_steps(execution, new_url):
+                # 找出步骤中残留的旧 URL（不是 new_url 的 URL）
+                old_url = _find_stale_url(execution, new_url) or existing_url
                 execution["page_url"] = new_url
+                if old_url and old_url != new_url:
+                    _replace_url_in_obj(execution, old_url, new_url)
                 yaml_file.write_text(
                     yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
                     encoding="utf-8",
