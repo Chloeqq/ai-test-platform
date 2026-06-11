@@ -56,6 +56,7 @@ from app.services.page_object_normalizers import (
     _normalize_project_code,
     _normalize_binary_health_status,
     _normalize_business_domain,
+    _validate_formal_element_governance_qualification,
 )
 
 _RECORDER_ROOT = (Path(__file__).resolve().parents[4] / "artifacts" / "page-recorder").resolve()
