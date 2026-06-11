@@ -136,6 +136,7 @@ def update_page_object(
     payload: PageObjectUpdate,
     project_code: str = Query(default="mall"),
     client: str = Query(default="web"),
+    sync_url_to_cases: bool = Query(default=False),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     item = page_object_service.update_page_object(
@@ -144,8 +145,18 @@ def update_page_object(
         project_code=project_code,
         client=client,
         payload=payload,
+        sync_url_to_cases=sync_url_to_cases,
     )
     return {"item": item}
+
+
+@router.get("/{page_code}/affected-cases")
+def get_affected_cases(
+    page_code: str,
+    project_code: str = Query(default="mall"),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return page_object_service.count_affected_cases(project_code, page_code)
 
 
 @router.delete("/{page_code}")

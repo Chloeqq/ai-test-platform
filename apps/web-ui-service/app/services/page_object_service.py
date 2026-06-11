@@ -590,6 +590,59 @@ def get_page_object_governance_summary(
     }
 
 
+def _sync_page_url_to_cases(project_code: str, page_code: str, new_url: str) -> list[str]:
+    """同步页面对象 URL 到关联测试用例 YAML。返回受影响的用例文件列表。"""
+    import yaml
+    cases_root = Path(__file__).resolve().parents[4] / "assets" / "test-cases"
+    if not cases_root.exists():
+        return []
+    affected: list[str] = []
+    for yaml_file in cases_root.rglob("*.yaml"):
+        try:
+            data = yaml.safe_load(yaml_file.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        execution = data.get("execution")
+        if not isinstance(execution, dict):
+            continue
+        if (str(data.get("project", "")).strip() == project_code
+                and str(execution.get("page", "")).strip() == page_code):
+            old_url = str(execution.get("page_url", "")).strip()
+            if old_url != new_url:
+                execution["page_url"] = new_url
+                yaml_file.write_text(
+                    yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                    encoding="utf-8",
+                )
+                affected.append(str(yaml_file.name))
+    return affected
+
+
+def count_affected_cases(project_code: str, page_code: str) -> dict[str, Any]:
+    """查询受页面对象 URL 变更影响的用例数量。"""
+    import yaml
+    cases_root = Path(__file__).resolve().parents[4] / "assets" / "test-cases"
+    matching: list[str] = []
+    if not cases_root.exists():
+        return {"count": 0, "cases": []}
+    for yaml_file in cases_root.rglob("*.yaml"):
+        try:
+            data = yaml.safe_load(yaml_file.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            continue
+        if not isinstance(data, dict):
+            continue
+        execution = data.get("execution")
+        if not isinstance(execution, dict):
+            continue
+        if (str(data.get("project", "")).strip() == project_code
+                and str(execution.get("page", "")).strip() == page_code):
+            matching.append(str(yaml_file.name))
+    return {"count": len(matching), "cases": sorted(matching)}
+
+
 def update_page_object(
     db: Session,
     *,
@@ -597,6 +650,7 @@ def update_page_object(
     project_code: str,
     client: str,
     payload: PageObjectUpdate,
+    sync_url_to_cases: bool = False,
 ) -> dict[str, Any]:
     normalized_project_code = _normalize_project_code(project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
@@ -612,11 +666,16 @@ def update_page_object(
         if next_name and item.page_name != next_name:
             item.page_name = next_name
             changed = True
+    url_synced_cases: list[str] = []
     if payload.page_url is not None:
         next_page_url = str(payload.page_url or "").strip()
         if item.page_url != next_page_url:
             item.page_url = next_page_url
             changed = True
+            if sync_url_to_cases and next_page_url:
+                url_synced_cases = _sync_page_url_to_cases(
+                    normalized_project_code, item.page_code, next_page_url
+                )
     if payload.precondition_state is not None:
         next_precondition_state = str(payload.precondition_state or "").strip()
         if item.precondition_state != next_precondition_state:
@@ -673,7 +732,11 @@ def update_page_object(
         db.refresh(item)
     repo = PageObjectRepository(db)
     element_count = int(repo.count_elements_by_page_object_id(item.id) or 0)
-    return _serialize_page_object(item, element_count=element_count)
+    result = _serialize_page_object(item, element_count=element_count)
+    if url_synced_cases:
+        result["synced_cases_count"] = len(url_synced_cases)
+        result["synced_cases"] = url_synced_cases
+    return result
 
 
 def delete_page_object(
