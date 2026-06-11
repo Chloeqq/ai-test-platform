@@ -590,6 +590,48 @@ def get_page_object_governance_summary(
     }
 
 
+def _sync_case_urls_in_db(
+    db: Session, project_code: str, page_code: str, new_url: str
+) -> None:
+    """同步页面对象 URL 到 DB 中关联用例的 test_steps 和 script_code。"""
+    from app.repositories.test_case_repository import TestCaseRepository  # noqa: E402
+    from sqlalchemy.orm.attributes import flag_modified
+    import re
+    repo = TestCaseRepository(db)
+    cases = repo.list_filtered(project_code=project_code, page_code=page_code)
+    for case in cases:
+        _replace_url_in_steps(case, new_url)
+        if case.script_code:
+            old_urls = set(re.findall(r'https?://[^\s"\']+', case.script_code))
+            for old_url in old_urls:
+                if old_url != new_url:
+                    case.script_code = case.script_code.replace(old_url, new_url)
+                    flag_modified(case, "script_code")
+        db.add(case)
+    db.commit()
+
+
+def _replace_url_in_steps(case: Any, new_url: str) -> None:
+    """替换 test_steps JSON 列中残留的旧 URL。"""
+    import re
+    from sqlalchemy.orm.attributes import flag_modified
+    if not isinstance(case.test_steps, list):
+        return
+    changed = False
+    for step in case.test_steps:
+        if not isinstance(step, dict):
+            continue
+        for key in ("value", "expected_result", "expected"):
+            val = str(step.get(key, "") or "")
+            old_urls = re.findall(r'https?://[^\s"\']+', val)
+            for old_url in old_urls:
+                if old_url != new_url:
+                    step[key] = val.replace(old_url, new_url)
+                    changed = True
+    if changed:
+        flag_modified(case, "test_steps")
+
+
 def _find_stale_url(obj: Any, new_url: str) -> str:
     """在 dict/list 中找第一个不是 new_url 的 HTTP URL。"""
     import re
@@ -723,6 +765,10 @@ def update_page_object(
         if target_url:
             url_synced_cases = _sync_page_url_to_cases(
                 normalized_project_code, item.page_code, target_url
+            )
+            # 同时更新 DB 中 test_cases 的 script_code
+            _sync_case_urls_in_db(
+                db, normalized_project_code, item.page_code, target_url
             )
     if payload.precondition_state is not None:
         next_precondition_state = str(payload.precondition_state or "").strip()
