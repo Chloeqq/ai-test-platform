@@ -79,15 +79,17 @@ def build_case_detail(
     read_case_yaml: ReadCaseYaml,
 ) -> dict[str, Any]:
     normalized_case_id = _svc()._safe_case_id(case_id)
-    case_path = _state_svc().resolve_case_yaml_path(project, normalized_case_id)
+    case_path = resolve_case_yaml_path(project, normalized_case_id)
     payload, content = read_case_yaml(case_path)
+    execution = payload.get("execution") or {}
     return {
         "item": {
             "case_id": normalized_case_id,
             "project": project,
             "path": str(case_path.resolve()),
             "title": str(payload.get("title", normalized_case_id)).strip() or normalized_case_id,
-            "page": str((payload.get("execution") or {}).get("page", payload.get("module", "product"))).strip() or "product",
+            "page": str(execution.get("page", payload.get("module", "product"))).strip() or "product",
+            "page_url": str(execution.get("page_url", "")).strip(),
             "priority": str(payload.get("priority", "P1")).strip() or "P1",
             "yaml_content": content,
             "updated_at": datetime.fromtimestamp(case_path.stat().st_mtime, tz=UTC).isoformat(),
