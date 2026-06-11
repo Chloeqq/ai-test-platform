@@ -129,10 +129,10 @@ def _load_page_object_snapshot(
 
 
 def create_recorder_session(db: Session, payload: RecorderSessionCreate) -> dict[str, object]:
-    project_code = _normalize_project_code(payload.project_code)
+    project_code = _svc()._normalize_project_code(payload.project_code)
     test_project_service.ensure_project_active_for_write(db, project_code)
     client = normalize_client_code(payload.client)
-    page_code = _normalize_page_code(payload.page_code)
+    page_code = _svc()._normalize_page_code(payload.page_code)
     page_name = str(payload.page_name or "").strip()
     started_by = str(payload.started_by or "").strip() or "system"
     if not page_name:
@@ -196,9 +196,9 @@ def list_recorder_sessions(
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, object]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     normalized_client = normalize_client_code(client)
-    normalized_page_code = _normalize_page_code(page_code) if str(page_code or "").strip() else ""
+    normalized_page_code = _svc()._normalize_page_code(page_code) if str(page_code or "").strip() else ""
     normalized_status = str(status_text or "").strip().lower()
     if normalized_status and normalized_status not in SESSION_STATUS_VALUES:
         raise HTTPException(
@@ -311,7 +311,7 @@ def batch_delete_recorder_sessions(
     session_ids: list[str],
     delete_artifacts: bool = True,
 ) -> dict[str, object]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     normalized_client = normalize_client_code(client)
     normalized_session_ids: list[str] = []
     seen: set[str] = set()
