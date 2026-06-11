@@ -236,7 +236,7 @@ def list_recorder_sessions(
         limit=normalized_limit,
     )
     items: list[dict[str, object]] = []
-    candidate_summaries = _candidate_summaries_for_sessions(
+    candidate_summaries = _svc()._candidate_summaries_for_sessions(
         db,
         [str(row.session_id or "") for row in rows],
     )

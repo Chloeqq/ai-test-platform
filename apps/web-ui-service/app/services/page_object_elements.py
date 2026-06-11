@@ -62,18 +62,18 @@ def update_page_element(
     client: str,
     payload: PageElementUpdate,
 ) -> dict[str, Any]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     page_object = _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
         client=normalize_client_code(client),
-        page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
+        page_code=_svc()._normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
     element = _svc()._page_element_or_404(
         db,
         page_object_id=page_object.id,
-        element_code=_normalize_identifier(element_code, field_name="element_code"),
+        element_code=_svc()._normalize_identifier(element_code, field_name="element_code"),
     )
     governance_before = _svc()._element_governance_payload(element)
     changed = False
@@ -284,14 +284,14 @@ def delete_page_element(
 ) -> dict[str, Any]:
     page_object = _svc()._page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=_svc()._normalize_project_code(project_code),
         client=normalize_client_code(client),
-        page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
+        page_code=_svc()._normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
     element = _svc()._page_element_or_404(
         db,
         page_object_id=page_object.id,
-        element_code=_normalize_identifier(element_code, field_name="element_code"),
+        element_code=_svc()._normalize_identifier(element_code, field_name="element_code"),
     )
     repo =  PageObjectRepository(db)
     repo.cascade_delete_element(element.id)
@@ -339,12 +339,12 @@ def batch_delete_page_elements(
 ) -> dict[str, Any]:
     page_object = _svc()._page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=_svc()._normalize_project_code(project_code),
         client=normalize_client_code(client),
-        page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
+        page_code=_svc()._normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
     normalized_codes = [
-        _normalize_identifier(item, field_name="element_code")
+        _svc()._normalize_identifier(item, field_name="element_code")
         for item in _unique_non_empty(element_codes)
     ]
     if not normalized_codes:
@@ -410,9 +410,9 @@ def batch_delete_candidate_groups(
 ) -> dict[str, Any]:
     page_object = _svc()._page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=_svc()._normalize_project_code(project_code),
         client=normalize_client_code(client),
-        page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
+        page_code=_svc()._normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
     normalized_keys = _unique_non_empty(group_keys)
     if not normalized_keys:
@@ -460,9 +460,9 @@ def batch_delete_candidate_elements(
 ) -> dict[str, Any]:
     page_object = _svc()._page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=_svc()._normalize_project_code(project_code),
         client=normalize_client_code(client),
-        page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
+        page_code=_svc()._normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
     normalized_keys = _unique_non_empty(candidate_keys)
     if not normalized_keys:
@@ -511,18 +511,18 @@ def create_page_element_version(
     client: str,
     payload: PageElementVersionCreate,
 ) -> dict[str, Any]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     page_object = _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
         client=normalize_client_code(client),
-        page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
+        page_code=_svc()._normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
     element = _svc()._page_element_or_404(
         db,
         page_object_id=page_object.id,
-        element_code=_normalize_identifier(element_code, field_name="element_code"),
+        element_code=_svc()._normalize_identifier(element_code, field_name="element_code"),
     )
     version_no = _svc()._snapshot_element(
         db,
@@ -547,14 +547,14 @@ def list_page_element_versions(
 ) -> list[dict[str, Any]]:
     page_object = _svc()._page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=_svc()._normalize_project_code(project_code),
         client=normalize_client_code(client),
-        page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
+        page_code=_svc()._normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
     element = _svc()._page_element_or_404(
         db,
         page_object_id=page_object.id,
-        element_code=_normalize_identifier(element_code, field_name="element_code"),
+        element_code=_svc()._normalize_identifier(element_code, field_name="element_code"),
     )
     rows =  PageObjectRepository(db).list_versions_by_element_id(element.id)
     return [_serialize_element_version(item) for item in rows]
@@ -569,18 +569,18 @@ def create_page_object_ref(
     client: str,
     payload: PageObjectRefCreate,
 ) -> dict[str, Any]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     page_object = _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
         client=normalize_client_code(client),
-        page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
+        page_code=_svc()._normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
     element = _svc()._page_element_or_404(
         db,
         page_object_id=page_object.id,
-        element_code=_normalize_identifier(element_code, field_name="element_code"),
+        element_code=_svc()._normalize_identifier(element_code, field_name="element_code"),
     )
     normalized_reference_type = _normalize_reference_type(payload.reference_type)
     normalized_reference_key = str(payload.reference_key or "").strip()
@@ -614,14 +614,14 @@ def list_page_object_refs(
 ) -> list[dict[str, Any]]:
     page_object = _svc()._page_object_or_404(
         db,
-        project_code=_normalize_project_code(project_code),
+        project_code=_svc()._normalize_project_code(project_code),
         client=normalize_client_code(client),
-        page_code=_normalize_identifier(page_code, field_name="page_code", max_length=40),
+        page_code=_svc()._normalize_identifier(page_code, field_name="page_code", max_length=40),
     )
     element = _svc()._page_element_or_404(
         db,
         page_object_id=page_object.id,
-        element_code=_normalize_identifier(element_code, field_name="element_code"),
+        element_code=_svc()._normalize_identifier(element_code, field_name="element_code"),
     )
     rows =  PageObjectRepository(db).list_refs_by_element_id(element.id)
     return [_serialize_ref(item) for item in rows]

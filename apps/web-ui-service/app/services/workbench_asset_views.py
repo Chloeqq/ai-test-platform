@@ -49,7 +49,7 @@ def build_cases_payload(
     collect_case_items: CollectCaseItems,
     paginate_case_items: PaginateCaseItems,
 ) -> dict[str, Any]:
-    items = _state_svc().collect_case_items(project)
+    items = collect_case_items(project)
     focus_value = _svc()._safe_case_id(focus_case_id) if str(focus_case_id).strip() else ""
     page_items, pagination = paginate_case_items(
         items,

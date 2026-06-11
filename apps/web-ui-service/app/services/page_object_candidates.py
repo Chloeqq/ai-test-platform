@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from shared_backend.case_ids import normalize_client_code
 from shared_backend.type_utils import json_dict as _json_dict
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.page_object import (
@@ -83,9 +84,9 @@ def list_candidate_groups(
     quality_tier: str = "",
     session_id: str = "",
 ) -> list[dict[str, Any]]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     normalized_client = normalize_client_code(client)
-    normalized_page_code = _normalize_identifier(page_code, field_name="page_code", max_length=40)
+    normalized_page_code = _svc()._normalize_identifier(page_code, field_name="page_code", max_length=40)
     _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
@@ -138,9 +139,9 @@ def list_candidate_elements(
     session_id: str = "",
     candidate_status: str = "",
 ) -> list[dict[str, Any]]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     normalized_client = normalize_client_code(client)
-    normalized_page_code = _normalize_identifier(page_code, field_name="page_code", max_length=40)
+    normalized_page_code = _svc()._normalize_identifier(page_code, field_name="page_code", max_length=40)
     _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
@@ -185,9 +186,9 @@ def get_candidate_group(
     project_code: str = "mall",
     client: str = "web",
 ) -> dict[str, Any]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     normalized_client = normalize_client_code(client)
-    normalized_page_code = _normalize_identifier(page_code, field_name="page_code", max_length=40)
+    normalized_page_code = _svc()._normalize_identifier(page_code, field_name="page_code", max_length=40)
     _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
@@ -267,10 +268,10 @@ def promote_candidate_group(
     client: str,
     payload: CandidateGroupPromotePayload,
 ) -> dict[str, Any]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     normalized_client = normalize_client_code(client)
-    normalized_page_code = _normalize_identifier(page_code, field_name="page_code", max_length=40)
+    normalized_page_code = _svc()._normalize_identifier(page_code, field_name="page_code", max_length=40)
     page_object = _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
@@ -438,10 +439,10 @@ def merge_candidate_group(
     client: str,
     payload: CandidateGroupMergePayload,
 ) -> dict[str, Any]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     normalized_client = normalize_client_code(client)
-    normalized_page_code = _normalize_identifier(page_code, field_name="page_code", max_length=40)
+    normalized_page_code = _svc()._normalize_identifier(page_code, field_name="page_code", max_length=40)
     page_object = _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
@@ -458,7 +459,7 @@ def merge_candidate_group(
     target = _svc()._page_element_or_404(
         db,
         page_object_id=page_object.id,
-        element_code=_normalize_identifier(payload.target_element_code, field_name="target_element_code"),
+        element_code=_svc()._normalize_identifier(payload.target_element_code, field_name="target_element_code"),
     )
     candidate_rows = _svc()._candidate_rows_for_group(
         db,
@@ -602,10 +603,10 @@ def reject_candidate_group(
     client: str,
     payload: CandidateRejectPayload,
 ) -> dict[str, Any]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     normalized_client = normalize_client_code(client)
-    normalized_page_code = _normalize_identifier(page_code, field_name="page_code", max_length=40)
+    normalized_page_code = _svc()._normalize_identifier(page_code, field_name="page_code", max_length=40)
     page_object = _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
@@ -671,10 +672,10 @@ def reject_candidate_element(
     client: str,
     payload: CandidateRejectPayload,
 ) -> dict[str, Any]:
-    normalized_project_code = _normalize_project_code(project_code)
+    normalized_project_code = _svc()._normalize_project_code(project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     normalized_client = normalize_client_code(client)
-    normalized_page_code = _normalize_identifier(page_code, field_name="page_code", max_length=40)
+    normalized_page_code = _svc()._normalize_identifier(page_code, field_name="page_code", max_length=40)
     page_object = _svc()._page_object_or_404(
         db,
         project_code=normalized_project_code,
