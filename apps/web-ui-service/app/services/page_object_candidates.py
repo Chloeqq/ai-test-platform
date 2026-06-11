@@ -295,22 +295,22 @@ def promote_candidate_group(
     if not candidate_rows:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="candidate group has no candidate elements")
 
-    business_type = _normalize_business_type(payload.business_type, group.business_type_guess)
-    business_domain = _normalize_business_domain(payload.business_domain, group.business_domain_guess)
+    business_type = _svc()._normalize_business_type(payload.business_type, group.business_type_guess)
+    business_domain = _svc()._normalize_business_domain(payload.business_domain, group.business_domain_guess)
     fallback_locator_type, fallback_locator_value, fallback_role, top_candidate = _svc()._primary_candidate_locator(group, candidate_rows)
-    locator_type = _normalize_locator_type(str(payload.locator_type or fallback_locator_type))
+    locator_type = _svc()._normalize_locator_type(str(payload.locator_type or fallback_locator_type))
     locator_value = str(payload.locator_value or fallback_locator_value or "").strip()
     if not locator_value:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="locator_value cannot be empty")
     role = str(payload.role or fallback_role or "").strip()
-    locator_source = _normalize_locator_source(payload.locator_source or group.top_locator_source or _locator_source_from_type(locator_type))
+    locator_source = _svc()._normalize_locator_source(payload.locator_source or group.top_locator_source or _svc()._locator_source_from_type(locator_type))
     testid_value = str(payload.testid_value or "").strip()
     qa_value = str(payload.qa_value or "").strip()
     if locator_type == "data-testid" and not testid_value:
         testid_value = locator_value
     if locator_type == "data-qa" and not qa_value:
         qa_value = locator_value
-    element_code = _normalize_formal_element_code(
+    element_code = _svc()._normalize_formal_element_code(
         payload.element_code,
         page_code=normalized_page_code,
         business_type=business_type,
@@ -328,7 +328,7 @@ def promote_candidate_group(
             detail="key element promotion requires testid_value or qa_value",
         )
 
-    stability_level = _stability_from_locator_source(locator_source, review_status="approved")
+    stability_level = _svc()._stability_from_locator_source(locator_source, review_status="approved")
     operator = str(payload.operator or "").strip() or "admin"
     item = PageElement(
         page_object_id=page_object.id,
@@ -500,7 +500,7 @@ def merge_candidate_group(
                         locator_type=primary_locator_type,
                         locator_value=primary_locator_value[:512],
                         role=primary_role,
-                        locator_source=target.locator_source or _locator_source_from_type(primary_locator_type),
+                        locator_source=target.locator_source or _svc()._locator_source_from_type(primary_locator_type),
                         priority=1,
                         is_primary=True,
                         health_status="unknown",
@@ -526,7 +526,7 @@ def merge_candidate_group(
                         locator_type=locator_type,
                         locator_value=locator_value[:512],
                         role=role,
-                        locator_source=_locator_source_from_type(locator_type),
+                        locator_source=_svc()._locator_source_from_type(locator_type),
                         priority=100 + locator_count,
                         is_primary=False,
                         health_status="unknown",

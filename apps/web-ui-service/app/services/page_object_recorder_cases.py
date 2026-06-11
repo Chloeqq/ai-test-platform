@@ -201,10 +201,10 @@ def list_recorder_sessions(
     normalized_client = normalize_client_code(client)
     normalized_page_code = _svc()._normalize_page_code(page_code) if str(page_code or "").strip() else ""
     normalized_status = str(status_text or "").strip().lower()
-    if normalized_status and normalized_status not in SESSION_STATUS_VALUES:
+    if normalized_status and normalized_status not in _svc().SESSION_STATUS_VALUES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"status must be one of {sorted(SESSION_STATUS_VALUES)}",
+            detail=f"status must be one of {sorted(_svc().SESSION_STATUS_VALUES)}",
         )
     normalized_limit = max(1, min(int(limit or 50), 200))
     normalized_offset = max(0, int(offset or 0))

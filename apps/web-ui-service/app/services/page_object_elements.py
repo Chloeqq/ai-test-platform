@@ -79,7 +79,7 @@ def update_page_element(
     changed = False
     if payload.element_code is not None:
         target_business_type = (
-            _normalize_business_type(payload.business_type)
+            _svc()._normalize_business_type(payload.business_type)
             if payload.business_type is not None
             else str(element.business_type or "").strip().lower()
         )
@@ -88,7 +88,7 @@ def update_page_element(
         target_testid_value = payload.testid_value if payload.testid_value is not None else element.testid_value
         if str(target_locator_type or "").strip().lower() == "data-testid" and not str(target_testid_value or "").strip():
             target_testid_value = payload.locator_value if payload.locator_value is not None else element.locator_value
-        next_value = _normalize_formal_element_code(
+        next_value = _svc()._normalize_formal_element_code(
             payload.element_code,
             page_code=page_object.page_code,
             business_type=target_business_type,
@@ -113,7 +113,7 @@ def update_page_element(
             element.element_name = next_value
             changed = True
     if payload.locator_type is not None:
-        next_value = _normalize_locator_type(payload.locator_type)
+        next_value = _svc()._normalize_locator_type(payload.locator_type)
         if element.locator_type != next_value:
             element.locator_type = next_value
             changed = True
@@ -128,8 +128,8 @@ def update_page_element(
             element.backup_locator = next_value
             changed = True
     if payload.business_type is not None:
-        next_value = _normalize_business_type(payload.business_type)
-        _normalize_formal_element_code(
+        next_value = _svc()._normalize_business_type(payload.business_type)
+        _svc()._normalize_formal_element_code(
             element.element_code,
             page_code=page_object.page_code,
             business_type=next_value,
@@ -141,7 +141,7 @@ def update_page_element(
             element.business_type = next_value
             changed = True
     if payload.business_domain is not None:
-        next_value = _normalize_business_domain(payload.business_domain)
+        next_value = _svc()._normalize_business_domain(payload.business_domain)
         if element.business_domain != next_value:
             element.business_domain = next_value
             changed = True
@@ -156,24 +156,24 @@ def update_page_element(
             element.semantic_tags_json = next_value
             changed = True
     if payload.locator_source is not None:
-        next_value = _normalize_locator_source(payload.locator_source)
+        next_value = _svc()._normalize_locator_source(payload.locator_source)
         if element.locator_source != next_value:
             element.locator_source = next_value
             changed = True
     if payload.match_strategy is not None:
-        next_value = _normalize_match_strategy(payload.match_strategy)
+        next_value = _svc()._normalize_match_strategy(payload.match_strategy)
         if element.match_strategy != next_value:
             element.match_strategy = next_value
             changed = True
     if payload.stability_level is not None:
-        next_value = _normalize_stability_level(payload.stability_level)
+        next_value = _svc()._normalize_stability_level(payload.stability_level)
         if element.stability_level != next_value:
             element.stability_level = next_value
             changed = True
     if payload.review_status is not None:
-        next_value = _normalize_review_status(payload.review_status)
+        next_value = _svc()._normalize_review_status(payload.review_status)
         if next_value == "approved":
-            _normalize_formal_element_code(
+            _svc()._normalize_formal_element_code(
                 element.element_code,
                 page_code=page_object.page_code,
                 business_type=element.business_type,
@@ -216,7 +216,7 @@ def update_page_element(
             element.governance_note = next_value
             changed = True
     if payload.health_status is not None:
-        next_health_status = _normalize_binary_health_status(payload.health_status)
+        next_health_status = _svc()._normalize_binary_health_status(payload.health_status)
         if int(element.health_status if element.health_status is not None else 1) != next_health_status:
             element.health_status = next_health_status
             changed = True
@@ -226,7 +226,7 @@ def update_page_element(
             element.role = next_value
             changed = True
     if payload.status is not None:
-        next_value = _normalize_page_element_status(payload.status)
+        next_value = _svc()._normalize_page_element_status(payload.status)
         if element.status != next_value:
             element.status = next_value
             changed = True
@@ -240,7 +240,7 @@ def update_page_element(
             changed = True
 
     if changed:
-        _validate_formal_element_governance_qualification(element)
+        _svc()._validate_formal_element_governance_qualification(element)
         db.add(element)
         db.flush()
         version_no = _svc()._snapshot_element(
@@ -582,7 +582,7 @@ def create_page_object_ref(
         page_object_id=page_object.id,
         element_code=_svc()._normalize_identifier(element_code, field_name="element_code"),
     )
-    normalized_reference_type = _normalize_reference_type(payload.reference_type)
+    normalized_reference_type = _svc()._normalize_reference_type(payload.reference_type)
     normalized_reference_key = str(payload.reference_key or "").strip()
     repo =  PageObjectRepository(db)
     existing = repo.get_ref(element.id, normalized_reference_type, normalized_reference_key)
