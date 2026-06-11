@@ -37,7 +37,7 @@ def _svc():
     return _svc_mod
 
 def _load_recorded_steps(script_path: Path) -> list[dict[str, object]]:
-    artifact_path = _recorded_steps_path(script_path)
+    artifact_path = _svc()._recorded_steps_path(script_path)
     if not artifact_path.exists():
         return []
     try:
@@ -157,13 +157,13 @@ def create_recorder_session(db: Session, payload: RecorderSessionCreate) -> dict
     db.add(item)
     db.commit()
     db.refresh(item)
-    item = _sync_active_session_runtime_state(db, item)
+    item = _svc()._sync_active_session_runtime_state(db, item)
     if str(item.status or "").strip().lower() == "failed":
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(item.error_message or "").strip() or "录制启动失败",
         )
-    return _serialize_session(item)
+    return _svc()._serialize_session(item)
 
 
 def heartbeat_recorder_session(
@@ -172,19 +172,19 @@ def heartbeat_recorder_session(
     session_id: str,
     payload: RecorderSessionHeartbeatPayload,
 ) -> dict[str, object]:
-    item = _sync_active_session_runtime_state(db, _get_session_or_404(db, session_id))
+    item = _svc()._sync_active_session_runtime_state(db, _svc()._get_session_or_404(db, session_id))
     if item.status != "active":
-        return _serialize_session(item)
+        return _svc()._serialize_session(item)
     item.heartbeat_at = datetime.now(UTC)
     db.add(item)
     db.commit()
     db.refresh(item)
-    return _serialize_session(item)
+    return _svc()._serialize_session(item)
 
 
 def get_recorder_session(db: Session, *, session_id: str) -> dict[str, object]:
-    item = _sync_active_session_runtime_state(db, _get_session_or_404(db, session_id))
-    return _serialize_session(item)
+    item = _svc()._sync_active_session_runtime_state(db, _svc()._get_session_or_404(db, session_id))
+    return _svc()._serialize_session(item)
 
 
 def list_recorder_sessions(
@@ -241,9 +241,9 @@ def list_recorder_sessions(
         [str(row.session_id or "") for row in rows],
     )
     for row in rows:
-        synced = _sync_active_session_runtime_state(db, row)
+        synced = _svc()._sync_active_session_runtime_state(db, row)
         items.append(
-            _serialize_session_summary(
+            _svc()._serialize_session_summary(
                 synced,
                 candidate_summary=candidate_summaries.get(str(synced.session_id or "")),
             )
@@ -277,7 +277,7 @@ def _safe_delete_recorder_artifacts(raw_script_path: str) -> int:
     except (OSError, ValueError):
         return 0
     deleted_count = 0
-    for path in (script_path, _recorded_steps_path(script_path), _stderr_log_path(script_path)):
+    for path in (script_path, _svc()._recorded_steps_path(script_path), _stderr_log_path(script_path)):
         try:
             if path.exists():
                 path.unlink()
@@ -335,9 +335,9 @@ def batch_delete_recorder_sessions(
     artifact_deleted_count = 0
     for item in sessions:
         if str(item.status or "").strip().lower() == "active":
-            _stop_codegen_process(item.process_pid)
+            _svc()._stop_codegen_process(item.process_pid)
         if delete_artifacts:
-            artifact_deleted_count += _safe_delete_recorder_artifacts(str(item.script_path or ""))
+            artifact_deleted_count += _svc()._safe_delete_recorder_artifacts(str(item.script_path or ""))
 
     candidate_rows = RecorderRepository(db).list_candidates_by_sessions(deleted_session_ids)
     affected_group_keys = {
@@ -367,7 +367,7 @@ def batch_delete_recorder_sessions(
                 normalized_project_code, normalized_client, page_code, group_key
             )
         db.commit()
-        _sync_page_metrics_for_recorder_pages(
+        _svc()._sync_page_metrics_for_recorder_pages(
             db,
             project_code=normalized_project_code,
             client=normalized_client,
@@ -386,7 +386,7 @@ def batch_delete_recorder_sessions(
 
 
 def get_recorder_session_playback(db: Session, *, session_id: str) -> dict[str, object]:
-    item = _sync_active_session_runtime_state(db, _get_session_or_404(db, session_id))
+    item = _svc()._sync_active_session_runtime_state(db, _svc()._get_session_or_404(db, session_id))
     script_path = Path(item.script_path)
     recorded_steps = _load_recorded_steps(script_path)
     if not recorded_steps:
@@ -395,30 +395,30 @@ def get_recorder_session_playback(db: Session, *, session_id: str) -> dict[str, 
     if script_path.exists():
         script_code = script_path.read_text(encoding="utf-8", errors="ignore")
     return {
-        "session": _serialize_session_summary(item, db),
+        "session": _svc()._serialize_session_summary(item, db),
         "recorded_step_count": len(recorded_steps),
         "recorded_steps": recorded_steps,
         "script_code": script_code,
         "stderr_tail": _tail_text_file(_stderr_log_path(script_path), max_chars=4000),
         "can_replay": len(recorded_steps) > 0,
-        "candidate_summary": _candidate_summary_for_session(db, item),
+        "candidate_summary": _svc()._candidate_summary_for_session(db, item),
     }
 
 
 def replay_recorder_session(db: Session, *, session_id: str, timeout_seconds: int = 120) -> dict[str, object]:
-    item = _sync_active_session_runtime_state(db, _get_session_or_404(db, session_id))
+    item = _svc()._sync_active_session_runtime_state(db, _svc()._get_session_or_404(db, session_id))
     if str(item.status or "").strip().lower() == "active":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="录制会话仍在进行中，请先停止后再回放。")
-    script_path = _resolve_recorder_script_path(str(item.script_path or ""))
+    script_path = _svc()._resolve_recorder_script_path(str(item.script_path or ""))
     recorded_steps = _load_recorded_steps(script_path)
     if not recorded_steps:
         recorded_steps = _serialize_recorded_steps(_parse_codegen_steps(script_path))
     if not recorded_steps:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="录制会话没有可回放步骤。")
 
-    result = _run_recorder_script(script_path, timeout_seconds=timeout_seconds)
+    result = _svc()._run_recorder_script(script_path, timeout_seconds=timeout_seconds)
     return {
-        "session": _serialize_session_summary(item, db),
+        "session": _svc()._serialize_session_summary(item, db),
         "recorded_step_count": len(recorded_steps),
         "script_path": str(script_path),
         "timeout_seconds": max(5, min(int(timeout_seconds or 120), 600)),
@@ -441,7 +441,7 @@ def cleanup_orphan_recorder_artifacts(db: Session) -> dict[str, object]:
         if session_id in active_session_ids:
             continue
         orphan_files.append(str(artifact_path))
-        steps_path = _recorded_steps_path(artifact_path)
+        steps_path = _svc()._recorded_steps_path(artifact_path)
         if artifact_path.exists():
             artifact_path.unlink()
             cleaned_files.append(str(artifact_path))
@@ -601,7 +601,7 @@ def create_test_case_draft_from_session(
     session_id: str,
     payload: RecorderSessionCreateCasePayload,
 ) -> dict[str, object]:
-    session_item = _get_session_or_404(db, session_id)
+    session_item = _svc()._get_session_or_404(db, session_id)
     if str(session_item.status or "").strip().lower() == "active":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -693,7 +693,7 @@ def stop_recorder_session(
     session_id: str,
     payload: RecorderSessionStopPayload,
 ) -> dict[str, object]:
-    item = _sync_active_session_runtime_state(db, _get_session_or_404(db, session_id))
+    item = _svc()._sync_active_session_runtime_state(db, _svc()._get_session_or_404(db, session_id))
     script_path = Path(item.script_path)
     parsed_steps = _parse_codegen_steps(script_path)
     parsed_locators_all = _parse_codegen_script(script_path, include_dynamic_text=True)
@@ -714,15 +714,15 @@ def stop_recorder_session(
         )
 
     if item.status in {"stopped", "failed"}:
-        session_payload = _serialize_session(item)
+        session_payload = _svc()._serialize_session(item)
         page_object_item, current_elements = _load_page_object_snapshot(
             db,
             project_code=item.project_code,
             client=item.client,
             page_code=item.page_code,
         )
-        element_candidates = _candidate_elements_for_session(db, item)
-        candidate_summary = _candidate_summary_for_session(db, item)
+        element_candidates = _svc()._candidate_elements_for_session(db, item)
+        candidate_summary = _svc()._candidate_summary_for_session(db, item)
         if int(candidate_summary["candidate_count"]) <= 0:
             element_candidates = _build_element_candidates(
                 parsed_locators_all,
@@ -748,7 +748,7 @@ def stop_recorder_session(
             **candidate_summary,
         }
 
-    _stop_codegen_process(item.process_pid)
+    _svc()._stop_codegen_process(item.process_pid)
     element_code_by_key: dict[tuple[str, str, str], str] = {}
     ingested_keys: set[tuple[str, str, str]] = set()
     page_object_item, page_object_action = _ensure_page_object(
@@ -771,7 +771,7 @@ def stop_recorder_session(
         probe_by_key=probe_by_key,
         probe_status=probe_status,
     )
-    candidate_summary = _persist_candidate_elements(
+    candidate_summary = _svc()._persist_candidate_elements(
         db,
         session=item,
         element_candidates=element_candidates,
@@ -798,7 +798,7 @@ def stop_recorder_session(
         first_element_code = str(snapshot_elements[0].get("element_code") or "")
 
     return {
-        "session": _serialize_session(item),
+        "session": _svc()._serialize_session(item),
         "ingested_count": len(ingested),
         "elements": ingested,
         "steps": serialized_steps,
