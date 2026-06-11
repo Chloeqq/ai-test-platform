@@ -42,7 +42,16 @@ from app.services import test_project_service
 from app.services.page_object_normalizers import (
     CANDIDATE_PROMOTION_STATUS_VALUES,
     CANDIDATE_STATUS_VALUES,
+    _normalize_business_type,
+    _normalize_formal_element_code,
+    _normalize_governance_status,
+    _normalize_identifier,
+    _normalize_locator_source,
+    _normalize_locator_type,
+    _normalize_match_strategy,
+    _normalize_page_element_status,
     _normalize_page_object_status,
+    _normalize_project_code,
 )
 
 _RECORDER_ROOT = (Path(__file__).resolve().parents[4] / "artifacts" / "page-recorder").resolve()

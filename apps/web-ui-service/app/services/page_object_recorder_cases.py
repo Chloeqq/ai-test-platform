@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.models.page_object import PageObjectCandidateElement, PageObjectRecorderSession
 from app.repositories.page_object_repository import PageObjectRepository
 from app.repositories.recorder_repository import RecorderRepository
+from app.repositories.recorder_session_repository import RecorderSessionRepository
 from app.schemas.page_object import PageObjectRefCreate
 from app.schemas.page_object_recorder import RecorderSessionCreateCasePayload
 from app.schemas.test_case import TestCaseCreate
