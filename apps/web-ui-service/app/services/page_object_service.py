@@ -672,10 +672,12 @@ def update_page_object(
         if item.page_url != next_page_url:
             item.page_url = next_page_url
             changed = True
-            if sync_url_to_cases and next_page_url:
-                url_synced_cases = _sync_page_url_to_cases(
-                    normalized_project_code, item.page_code, next_page_url
-                )
+    if sync_url_to_cases:
+        target_url = item.page_url if payload.page_url is None else str(payload.page_url or "").strip()
+        if target_url:
+            url_synced_cases = _sync_page_url_to_cases(
+                normalized_project_code, item.page_code, target_url
+            )
     if payload.precondition_state is not None:
         next_precondition_state = str(payload.precondition_state or "").strip()
         if item.precondition_state != next_precondition_state:
