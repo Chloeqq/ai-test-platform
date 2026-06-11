@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 import {
   createPageObject,
+  getAffectedCases,
   getPageObject,
   updatePageObject,
 } from "../api/assets";
@@ -57,6 +58,8 @@ export function PageObjectEditPage({ mode }: PageObjectEditPageProps) {
   const [saving, setSaving] = useState<boolean>(false);
   const [feedback, setFeedback] = useState<string>("");
   const [errorText, setErrorText] = useState<string>("");
+  const [syncUrlToCases, setSyncUrlToCases] = useState<boolean>(false);
+  const [affectedCasesCount, setAffectedCasesCount] = useState<number>(0);
 
   const editing = mode === "edit";
   const normalizedPageCode = String(pageCode || editor.pageCode || "").trim();
@@ -115,6 +118,26 @@ export function PageObjectEditPage({ mode }: PageObjectEditPageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectCode, pageCode, mode]);
 
+  // 查询受影响用例数
+  useEffect(() => {
+    if (!editing) {
+      setAffectedCasesCount(0);
+      return;
+    }
+    let cancelled = false;
+    async function fetchAffected() {
+      try {
+        const result = await getAffectedCases(normalizedPageCode, { project_code: projectCode });
+        if (!cancelled) setAffectedCasesCount(result.count);
+      } catch {
+        if (!cancelled) setAffectedCasesCount(0);
+      }
+    }
+    void fetchAffected();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectCode, normalizedPageCode, editing]);
+
   async function submitEditor() {
     const nextPageCode = String(editor.pageCode || "").trim();
     const nextPageName = String(editor.pageName || "").trim();
@@ -132,6 +155,8 @@ export function PageObjectEditPage({ mode }: PageObjectEditPageProps) {
     setFeedback("");
     try {
       if (editing) {
+        const queryParams: Record<string, string> = { project_code: projectCode, client: "web" };
+        if (syncUrlToCases) queryParams.sync_url_to_cases = "true";
         const response = await updatePageObject(
           nextPageCode,
           {
@@ -142,7 +167,7 @@ export function PageObjectEditPage({ mode }: PageObjectEditPageProps) {
             description: String(editor.description || "").trim(),
             status: String(editor.status || "draft").trim() || "draft",
           },
-          { project_code: projectCode, client: "web" },
+          queryParams as { project_code?: string; client?: string },
         );
         const savedItem = response.item || {};
         setEditor((prev) => ({
@@ -151,7 +176,10 @@ export function PageObjectEditPage({ mode }: PageObjectEditPageProps) {
           pageName: String(savedItem.page_name ?? nextPageName).trim(),
           status: String(savedItem.status ?? prev.status).trim() || "draft",
         }));
-        setFeedback(`页面对象已更新，当前 URL：${text(savedItem.page_url || nextPageUrl)}`);
+        const syncMsg = savedItem.synced_cases_count
+          ? `，已同步 ${savedItem.synced_cases_count} 个关联用例`
+          : "";
+        setFeedback(`页面对象已更新，当前 URL：${text(savedItem.page_url || nextPageUrl)}${syncMsg}`);
       } else {
         const response = await createPageObject({
           project_code: projectCode,
@@ -252,6 +280,22 @@ export function PageObjectEditPage({ mode }: PageObjectEditPageProps) {
                 disabled={saving}
               />
             </label>
+            {editing && affectedCasesCount > 0 && (
+              <label className="span-2 checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={syncUrlToCases}
+                  onChange={(e) => setSyncUrlToCases(e.target.checked)}
+                  disabled={saving}
+                />
+                <span>同步更新到关联用例（{affectedCasesCount} 个）</span>
+              </label>
+            )}
+            {editing && affectedCasesCount === 0 && (
+              <small className="hint" style={{ color: "#666" }}>
+                暂无关联用例，更新 URL 不会影响其他资产。
+              </small>
+            )}
             <label>
               模块
               <input

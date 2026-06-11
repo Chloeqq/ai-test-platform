@@ -835,14 +835,26 @@ export async function createPageObject(payload: PageObjectCreatePayload): Promis
 export async function updatePageObject(
   pageCode: string,
   payload: PageObjectUpdatePayload,
-  params?: { project_code?: string; client?: string },
+  params?: { project_code?: string; client?: string; sync_url_to_cases?: string },
 ): Promise<PageObjectDetailResponse> {
   const query = new URLSearchParams();
   query.set("project_code", params?.project_code || DEFAULT_PROJECT_CODE);
   query.set("client", params?.client || "web");
+  if (params?.sync_url_to_cases) query.set("sync_url_to_cases", params.sync_url_to_cases);
   return putJson<PageObjectDetailResponse>(
     `/api/page-objects/${encodeURIComponent(pageCode)}?${query.toString()}`,
     payload,
+  );
+}
+
+export async function getAffectedCases(
+  pageCode: string,
+  params?: { project_code?: string },
+): Promise<{ count: number; cases: string[] }> {
+  const query = new URLSearchParams();
+  query.set("project_code", params?.project_code || DEFAULT_PROJECT_CODE);
+  return getJson<{ count: number; cases: string[] }>(
+    `/api/page-objects/${encodeURIComponent(pageCode)}/affected-cases?${query.toString()}`,
   );
 }
 
