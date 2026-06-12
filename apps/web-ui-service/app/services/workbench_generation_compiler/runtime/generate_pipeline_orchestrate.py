@@ -144,7 +144,73 @@ def _format_product_case_yaml(
     product_yaml = _enrich_product_case_yaml_v1_1(product_yaml, page=page)
     if not product_yaml["requirement"]["precondition"]:
         product_yaml["requirement"].pop("precondition", None)
+    # 确保 data 中每个有值的字段都有对应的 input 步骤和变量绑定
+    _ensure_data_steps_and_variables(product_yaml, page, page_object)
     return product_yaml
+
+
+def _ensure_data_steps_and_variables(
+    product_yaml: dict[str, Any], page: str, page_object: dict[str, Any],
+) -> None:
+    """保证 data 里每个有值的字段都在 steps 中有对应 input 步骤。"""
+    data = product_yaml.get("data") if isinstance(product_yaml.get("data"), dict) else {}
+    if not data:
+        return
+    exec_block = product_yaml.get("execution")
+    if not isinstance(exec_block, dict):
+        return
+    steps = exec_block.get("steps") if isinstance(exec_block.get("steps"), list) else []
+    variables = exec_block.get("variables") if isinstance(exec_block.get("variables"), dict) else {}
+    elements = page_object.get("elements") if isinstance(page_object, dict) else {}
+
+    step_targets = {
+        _normalized_text(s.get("target", "")).removeprefix("element:") if isinstance(s, dict) else ""
+        for s in steps
+    }
+
+    for data_key, raw_entry in data.items():
+        if not isinstance(raw_entry, dict):
+            continue
+        raw_value = raw_entry.get("value")
+        if raw_value is None or str(raw_value).strip() == "":
+            continue
+
+        element_code = _infer_element_code_from_data_key(data_key)
+        var_name = f"login_{data_key}"
+
+        if element_code in step_targets:
+            continue  # 步骤已存在
+        if element_code not in elements:
+            continue  # 无对应页面元素
+        if var_name in variables:
+            continue  # 变量已存在
+
+        em = elements[element_code]
+        loc_type = _normalized_text(em.get("type") or em.get("locator_type"))
+        loc_val = _normalized_text(em.get("selector") or em.get("locator_value"))
+        if not loc_type or not loc_val:
+            continue
+
+        # 在 goto 之后插入 input 步骤
+        goto_idx = next((i for i, s in enumerate(steps) if isinstance(s, dict) and _normalized_text(s.get("action", "")).lower() == "goto"), -1)
+        insert_at = goto_idx + 1 if goto_idx >= 0 else 0
+        new_step = {
+            "action": "input",
+            "target": f"element:{element_code}",
+            "locator_type": loc_type,
+            "locator_value": loc_val,
+            "target_name": _normalized_text(em.get("name") or element_code),
+            "value": f"{{{{{var_name}}}}}",
+            "expected_result": "",
+        }
+        steps.insert(insert_at, new_step)
+        variables[var_name] = f"{{{{{data_key}}}}}"
+
+    exec_block["variables"] = variables
+
+
+def _infer_element_code_from_data_key(data_key: str) -> str:
+    return {"username": "username_input", "password": "password_input"}.get(data_key, data_key)
 
 
 def _attach_point_expected_results(compiled_steps: list[dict[str, Any]], test_points: list[dict[str, Any]]) -> list[dict[str, Any]]:
