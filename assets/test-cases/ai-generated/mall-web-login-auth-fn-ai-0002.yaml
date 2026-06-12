@@ -1,0 +1,40 @@
+version: v1.1
+id: mall-web-login-auth-fn-ai-0002
+project: mall
+module: login
+title: 已登录态访问首页保持可用
+priority: P0
+tags:
+- ai-generated
+owner: qa-team
+status: automated
+description: 已登录态访问首页保持可用 — 页面刷新后仍处于首页，且首页菜单可见
+requirement:
+  intent_id: intent-02
+  title: 已登录态访问首页保持可用
+  type: functional
+  precondition: 用户已使用正确账号密码登录成功，处于首页
+  source_asset_id: mall-web-login-auth-fn-ai-0001
+data: {}
+execution:
+  runner: playwright
+  page: login
+  page_url: http://host.docker.internal:5174/#/login
+  variables: {}
+  steps:
+  - action: goto
+    value: http://host.docker.internal:5174/#/login
+    expected_result: 登录页面加载完成，显示账号输入框、密码输入框、登录按钮
+  - action: goto
+    value: '#/home'
+    expected_result: 登录页面加载完成，显示账号输入框、密码输入框、登录按钮
+  - action: assert_visible
+    target: element:home_menu
+    locator_type: data-testid
+    locator_value: home-page
+    target_name: 首页关键元素
+    expected_result: 页面刷新后仍处于首页，且首页菜单可见
+  selected_intent_ids:
+  - intent-02
+expected_result: 页面刷新后仍处于首页，且首页菜单可见
+assertions: []

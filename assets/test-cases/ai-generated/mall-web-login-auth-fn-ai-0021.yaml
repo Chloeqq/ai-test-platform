@@ -1,34 +1,34 @@
 version: v1.1
-id: mall-web-login-auth-fn-ai-0017
+id: mall-web-login-auth-fn-ai-0021
 project: mall
 module: login
-title: 密码包含非法字符登录
+title: 账号禁用时登录提示错误
 priority: P1
 tags:
 - ai-generated
 owner: qa-team
 status: automated
-description: 密码包含非法字符登录 — 弹出提示框，显示密码包含非法字符
+description: 账号禁用时登录提示错误 — 弹出提示框，显示账号已禁用
 requirement:
-  intent_id: intent-17
-  title: 密码包含非法字符登录
-  type: format
-  precondition: 用户未登录，处于登录页面
+  intent_id: intent-21
+  title: 账号禁用时登录提示错误
+  type: negative
+  precondition: 用户账号处于禁用状态，处于登录页面
   source_asset_id: mall-web-login-auth-fn-ai-0001
 data:
-  username:
-    source_type: inline
-    value: admin
   password:
     source_type: inline
-    value: pass'--DROP
+    value: macro123
+  username:
+    source_type: inline
+    value: disabled_user
 execution:
   runner: playwright
   page: login
   page_url: http://host.docker.internal:5174/#/login
   variables:
-    login_username: '{{username}}'
     login_password: '{{password}}'
+    login_username: '{{username}}'
   steps:
   - action: goto
     value: http://host.docker.internal:5174/#/login
@@ -39,7 +39,7 @@ execution:
     locator_value: login-username-input
     target_name: 用户名输入框
     value: '{{login_username}}'
-    expected_result: 用户名输入框内容显示为 admin
+    expected_result: 用户名输入框内容显示为 disabled_user
   - action: input
     target: element:password_input
     locator_type: data-testid
@@ -59,8 +59,8 @@ execution:
     locator_value: ''
     target_name: ''
     value: '#/login'
-    expected_result: 弹出提示框，显示密码包含非法字符
+    expected_result: 弹出提示框，显示账号已禁用
   selected_intent_ids:
-  - intent-17
-expected_result: 弹出提示框，显示密码包含非法字符
+  - intent-21
+expected_result: 弹出提示框，显示账号已禁用
 assertions: []

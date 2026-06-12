@@ -28,10 +28,18 @@ execution:
   page_url: http://host.docker.internal:5174/#/login
   variables:
     login_password: '{{password}}'
+    login_username: '{{username}}'
   steps:
   - action: goto
     value: http://host.docker.internal:5174/#/login
     expected_result: 登录页面加载完成，显示账号输入框、密码输入框、登录按钮
+  - action: input
+    target: element:username_input
+    locator_type: data-testid
+    locator_value: login-username-input
+    target_name: 用户名输入框
+    value: '{{login_username}}'
+    expected_result: 用户名输入框内容显示为非法字符
   - action: input
     target: element:password_input
     locator_type: data-testid

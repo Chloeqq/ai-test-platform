@@ -1,18 +1,18 @@
 version: v1.1
-id: mall-web-login-auth-fn-ai-0017
+id: mall-web-login-auth-fn-ai-0004
 project: mall
 module: login
-title: 密码包含非法字符登录
+title: 密码空时点击登录提示错误
 priority: P1
 tags:
 - ai-generated
 owner: qa-team
 status: automated
-description: 密码包含非法字符登录 — 弹出提示框，显示密码包含非法字符
+description: 密码空时点击登录提示错误 — 弹出提示框，显示请输入密码
 requirement:
-  intent_id: intent-17
-  title: 密码包含非法字符登录
-  type: format
+  intent_id: intent-04
+  title: 密码空时点击登录提示错误
+  type: negative
   precondition: 用户未登录，处于登录页面
   source_asset_id: mall-web-login-auth-fn-ai-0001
 data:
@@ -21,7 +21,7 @@ data:
     value: admin
   password:
     source_type: inline
-    value: pass'--DROP
+    value: ''
 execution:
   runner: playwright
   page: login
@@ -59,8 +59,8 @@ execution:
     locator_value: ''
     target_name: ''
     value: '#/login'
-    expected_result: 弹出提示框，显示密码包含非法字符
+    expected_result: 弹出提示框，显示请输入密码
   selected_intent_ids:
-  - intent-17
-expected_result: 弹出提示框，显示密码包含非法字符
+  - intent-04
+expected_result: 弹出提示框，显示请输入密码
 assertions: []

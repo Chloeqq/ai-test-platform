@@ -1,34 +1,30 @@
 version: v1.1
-id: mall-web-login-auth-fn-ai-0017
+id: mall-web-login-auth-fn-ai-0015
 project: mall
 module: login
-title: 密码包含非法字符登录
+title: 密码长度大于最大边界值登录
 priority: P1
 tags:
 - ai-generated
 owner: qa-team
 status: automated
-description: 密码包含非法字符登录 — 弹出提示框，显示密码包含非法字符
+description: 密码长度大于最大边界值登录 — 弹出提示框，显示密码长度不符合要求
 requirement:
-  intent_id: intent-17
-  title: 密码包含非法字符登录
-  type: format
+  intent_id: intent-15
+  title: 密码长度大于最大边界值登录
+  type: boundary
   precondition: 用户未登录，处于登录页面
   source_asset_id: mall-web-login-auth-fn-ai-0001
 data:
   username:
     source_type: inline
     value: admin
-  password:
-    source_type: inline
-    value: pass'--DROP
 execution:
   runner: playwright
   page: login
   page_url: http://host.docker.internal:5174/#/login
   variables:
     login_username: '{{username}}'
-    login_password: '{{password}}'
   steps:
   - action: goto
     value: http://host.docker.internal:5174/#/login
@@ -40,13 +36,6 @@ execution:
     target_name: 用户名输入框
     value: '{{login_username}}'
     expected_result: 用户名输入框内容显示为 admin
-  - action: input
-    target: element:password_input
-    locator_type: data-testid
-    locator_value: login-password-input
-    target_name: 密码输入框
-    value: '{{login_password}}'
-    expected_result: 密码输入框内容以掩码形式显示
   - action: click
     target: element:login_button
     locator_type: data-testid
@@ -59,8 +48,8 @@ execution:
     locator_value: ''
     target_name: ''
     value: '#/login'
-    expected_result: 弹出提示框，显示密码包含非法字符
+    expected_result: 弹出提示框，显示密码长度不符合要求
   selected_intent_ids:
-  - intent-17
-expected_result: 弹出提示框，显示密码包含非法字符
+  - intent-15
+expected_result: 弹出提示框，显示密码长度不符合要求
 assertions: []

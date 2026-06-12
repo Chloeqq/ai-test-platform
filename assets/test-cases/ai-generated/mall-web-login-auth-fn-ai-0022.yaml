@@ -1,18 +1,18 @@
 version: v1.1
-id: mall-web-login-auth-fn-ai-0017
+id: mall-web-login-auth-fn-ai-0022
 project: mall
 module: login
-title: 密码包含非法字符登录
-priority: P1
+title: 重复点击登录按钮
+priority: P2
 tags:
 - ai-generated
 owner: qa-team
 status: automated
-description: 密码包含非法字符登录 — 弹出提示框，显示密码包含非法字符
+description: 重复点击登录按钮 — 只进行一次登录操作，成功登录后跳转到首页
 requirement:
-  intent_id: intent-17
-  title: 密码包含非法字符登录
-  type: format
+  intent_id: intent-22
+  title: 重复点击登录按钮
+  type: interaction_exception
   precondition: 用户未登录，处于登录页面
   source_asset_id: mall-web-login-auth-fn-ai-0001
 data:
@@ -21,7 +21,7 @@ data:
     value: admin
   password:
     source_type: inline
-    value: pass'--DROP
+    value: macro123
 execution:
   runner: playwright
   page: login
@@ -53,14 +53,13 @@ execution:
     locator_value: login-submit-btn
     target_name: 登录按钮
     expected_result: 已点击登录按钮
-  - action: assert_url
-    target: ''
-    locator_type: ''
-    locator_value: ''
-    target_name: ''
-    value: '#/login'
-    expected_result: 弹出提示框，显示密码包含非法字符
+  - action: assert_visible
+    target: element:home_menu
+    locator_type: data-testid
+    locator_value: home-page
+    target_name: 首页关键元素
+    expected_result: 只进行一次登录操作，成功登录后跳转到首页
   selected_intent_ids:
-  - intent-17
-expected_result: 弹出提示框，显示密码包含非法字符
+  - intent-22
+expected_result: 只进行一次登录操作，成功登录后跳转到首页
 assertions: []

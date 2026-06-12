@@ -1,19 +1,19 @@
 version: v1.1
-id: mall-web-login-auth-fn-ai-0017
+id: mall-web-login-auth-fn-ai-0023
 project: mall
 module: login
-title: 密码包含非法字符登录
-priority: P1
+title: 登录超时测试
+priority: P2
 tags:
 - ai-generated
 owner: qa-team
 status: automated
-description: 密码包含非法字符登录 — 弹出提示框，显示密码包含非法字符
+description: 登录超时测试 — 弹出提示框，显示登录超时
 requirement:
-  intent_id: intent-17
-  title: 密码包含非法字符登录
-  type: format
-  precondition: 用户未登录，处于登录页面
+  intent_id: intent-23
+  title: 登录超时测试
+  type: interaction_exception
+  precondition: 用户未登录，处于登录页面，模拟弱网环境
   source_asset_id: mall-web-login-auth-fn-ai-0001
 data:
   username:
@@ -21,7 +21,7 @@ data:
     value: admin
   password:
     source_type: inline
-    value: pass'--DROP
+    value: macro123
 execution:
   runner: playwright
   page: login
@@ -59,8 +59,8 @@ execution:
     locator_value: ''
     target_name: ''
     value: '#/login'
-    expected_result: 弹出提示框，显示密码包含非法字符
+    expected_result: 弹出提示框，显示登录超时
   selected_intent_ids:
-  - intent-17
-expected_result: 弹出提示框，显示密码包含非法字符
+  - intent-23
+expected_result: 弹出提示框，显示登录超时
 assertions: []
