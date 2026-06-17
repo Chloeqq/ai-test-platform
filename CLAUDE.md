@@ -65,6 +65,9 @@ Router → Facade → Service → Repository → DB
 ### 🚫 永远不要 `git add -A`
 磁盘上存在大量未被跟踪的历史遗留文件（旧测试、生成产物、缓存）。`git add -A` 会把它们全部提交，污染仓库。**只 `git add <具体文件>` 或用 `git add -u`（只添加已跟踪文件的修改）。**
 
+### 🚫 永远不要删除 Postgres 数据卷
+`docker compose down postgres -v` 中的 `-v` 会**永久删除数据库**，导致所有用户、用例、页面对象、执行记录丢失。**严禁**在任何情况下使用 `-v` 标志。如果必须重建数据库，用 `docker compose down postgres`（不带 `-v`），然后 `docker compose up -d postgres`。
+
 ## 修改代码前检查
 1. 改 DB 查询 → 用 Repository 方法，不要写 `db.execute(select(...))`
 2. 改异常处理 → 用具体类型，不要加 `except Exception`
