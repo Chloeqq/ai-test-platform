@@ -22,9 +22,11 @@ from app.models.test_case import (
     TestCaseTreeNode,
     TestCaseVersion,
 )
+from app.models.test_data_pool import TestDataPool, TestDataPoolItem
 from app.models.test_point import TestPoint
 from app.models.test_project import TestProject
 from app.repositories.test_case_repository import TestCaseRepository
+from app.repositories.test_data_pool_repository import TestDataPoolRepository
 from app.repositories.test_project_repository import TestProjectRepository
 from app.services.test_case_data_service import (
     normalize_status,
@@ -382,12 +384,132 @@ def ensure_seed_data(db: Session) -> None:
     return
 
 
+# ---------------------------------------------------------------------------
+# 测试数据池种子数据
+# ---------------------------------------------------------------------------
+
+_DEFAULT_DATA_POOLS: list[dict] = [
+    {
+        "pool_name": "login_credentials",
+        "description": "登录凭据池——存放不同角色的测试账号与密码",
+        "items": [
+            {
+                "item_key": "admin_user",
+                "item_value": '{"username": "admin", "password": "Admin@123456", "role": "admin"}',
+            },
+            {
+                "item_key": "test_user",
+                "item_value": '{"username": "testuser", "password": "Test@123456", "role": "user"}',
+            },
+            {
+                "item_key": "vip_user",
+                "item_value": '{"username": "vipuser", "password": "Vip@123456", "role": "vip"}',
+            },
+        ],
+    },
+    {
+        "pool_name": "payment_methods",
+        "description": "支付方式池——存放微信/支付宝/银行卡等支付工具信息",
+        "items": [
+            {
+                "item_key": "wechat_pay",
+                "item_value": '{"method": "wechat", "account": "wx_test_001", "balance": 5000}',
+            },
+            {
+                "item_key": "alipay",
+                "item_value": '{"method": "alipay", "account": "ali_test_001", "balance": 3000}',
+            },
+            {
+                "item_key": "bank_card",
+                "item_value": '{"method": "bank_card", "bank": "招商银行", "card_number": "6222***1234"}',
+            },
+        ],
+    },
+    {
+        "pool_name": "address_data",
+        "description": "收货地址池——覆盖多城市的标准收货地址",
+        "items": [
+            {
+                "item_key": "default_address",
+                "item_value": (
+                    '{"name": "张三", "phone": "13800138000", "province": "广东省",'
+                    ' "city": "深圳市", "district": "南山区", "detail": "科技园路1号"}'
+                ),
+            },
+            {
+                "item_key": "beijing_address",
+                "item_value": (
+                    '{"name": "李四", "phone": "13900139000", "province": "北京市",'
+                    ' "city": "北京市", "district": "朝阳区", "detail": "望京街道100号"}'
+                ),
+            },
+        ],
+    },
+    {
+        "pool_name": "product_queries",
+        "description": "商品查询关键词池——搜索类用例的标准输入",
+        "items": [
+            {
+                "item_key": "keyword_phone",
+                "item_value": '{"keyword": "手机", "category": "电子产品", "min_results": 10}',
+            },
+            {
+                "item_key": "keyword_headphone",
+                "item_value": '{"keyword": "耳机", "category": "电子产品", "min_results": 5}',
+            },
+            {
+                "item_key": "keyword_shirt",
+                "item_value": '{"keyword": "衬衫", "category": "服装", "min_results": 8}',
+            },
+        ],
+    },
+]
+
+
+def ensure_data_pool_seed(db: Session) -> None:
+    """幂等插入测试数据池种子数据。
+
+    若 pool_name 已存在则跳过该池（不更新、不覆盖），
+    保证多次调用安全且不产生重复数据。
+    """
+    repo = TestDataPoolRepository(db)
+    for pool_def in _DEFAULT_DATA_POOLS:
+        pool_name = pool_def["pool_name"]
+        existing = repo.get_by_name(pool_name)
+        if existing is not None:
+            continue
+        pool = TestDataPool(
+            pool_name=pool_name,
+            description=pool_def["description"],
+            status="active",
+            created_by="system",
+            updated_by="system",
+        )
+        db.add(pool)
+        db.flush()  # 拿 pool.id 给子条目用
+
+        for item_def in pool_def["items"]:
+            db.add(
+                TestDataPoolItem(
+                    pool_id=pool.id,
+                    item_key=item_def["item_key"],
+                    item_value=item_def["item_value"],
+                    status="active",
+                    created_by="system",
+                    updated_by="system",
+                )
+            )
+
+    db.commit()
+
+
 def ensure_demo_seed_data(db: Session) -> None:
     TestCaseTreeNode.__table__.create(bind=db.get_bind(), checkfirst=True)
     TestCaseStep.__table__.create(bind=db.get_bind(), checkfirst=True)
     TestPoint.__table__.create(bind=db.get_bind(), checkfirst=True)
     ensure_test_cases_schema_compatibility(db)
     ensure_project_seed(db)
+    ensure_data_pool_seed(db)
     case_id_repository = WorkbenchGenerationRepository(db)
     existing_count = TestCaseRepository(db).count_all()
     if existing_count and existing_count > 0:

@@ -13,7 +13,7 @@ import app.models.test_data_pool  # noqa: F401
 import app.models.test_project  # noqa: F401
 import app.schemas.test_case as test_case_schema
 import app.schemas.test_project as test_project_schema
-from app.services import test_case_service, test_data_pool_service, test_project_service
+from app.services import test_case_bootstrap_service, test_case_service, test_data_pool_service, test_project_service
 
 
 @pytest.fixture()
@@ -189,3 +189,32 @@ def test_list_pool_items_masks_item_value_by_default(db_session: Session) -> Non
         reveal_secret=True,
     )
     assert revealed[0]["item_value"] == "macro"
+
+
+def test_ensure_data_pool_seed_creates_all_four_pools_once(db_session: Session) -> None:
+    """首次调用应创建 4 个种子池及其条目；再次调用应幂等不重复。"""
+    test_case_bootstrap_service.ensure_data_pool_seed(db_session)
+
+    pools = test_data_pool_service.list_data_pools(db_session)
+    pool_names = {p["pool_name"] for p in pools}
+    assert pool_names == {"login_credentials", "payment_methods", "address_data", "product_queries"}
+
+    # 每个池都应有 active 状态和条目
+    for p in pools:
+        assert p["status"] == "active"
+        items = test_data_pool_service.list_data_pool_items(
+            db_session, pool_name=p["pool_name"], reveal_secret=True
+        )
+        assert len(items) > 0
+
+    # 验证具体条目值
+    login_items = test_data_pool_service.list_data_pool_items(
+        db_session, pool_name="login_credentials", reveal_secret=True
+    )
+    login_keys = {item["item_key"] for item in login_items}
+    assert login_keys == {"admin_user", "test_user", "vip_user"}
+
+    # 幂等调用不重复插入
+    test_case_bootstrap_service.ensure_data_pool_seed(db_session)
+    pools_after = test_data_pool_service.list_data_pools(db_session)
+    assert len(pools_after) == 4
