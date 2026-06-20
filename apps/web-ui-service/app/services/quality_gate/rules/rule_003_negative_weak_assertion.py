@@ -74,7 +74,7 @@ def _is_redirect_expected(expected_result: Any) -> bool:
     rule_id="RULE_003",
     rule_name="NEGATIVE_WEAK_ASSERTION",
     category=RuleCategory.ASSERTION,
-    severity=Severity.ERROR,
+    severity=Severity.FATAL,
     description="负向/安全/边界用例的最后断言为 assert_url，缺少元素级断言验证实际错误状态",
 )
 class NegativeWeakAssertionRule(Rule):
