@@ -1,8 +1,12 @@
-"""ASSERTION_TARGET_INVALID — 断言引用的目标元素无效。
+"""ASSERTION_TARGET_INVALID — 断言引用的目标元素类型不兼容。
 
-检查 assert_visible / assert_text / assert_url 步骤的 target 引用：
-1. 元素是否在 page object 中注册
-2. assert_text 引用的元素 business_type 是否兼容（能展示文本内容）
+只检查 assert_text 引用的元素 business_type 是否与文本断言兼容。
+元素存在性由 RULE_006 (UNKNOWN_ELEMENT) 负责，本规则不重复检查。
+
+边界说明：
+- RULE_006：检查所有步骤引用的 element code 是否在 page object 中注册
+- RULE_009：仅检查 assert_text 的元素 business_type 是否能承载文本内容
+  （assert_visible 适用于所有元素类型，无需类型检查）
 
 详见 docs/architecture/2026-06-17_Rule Catalog 规则目录.md
 """
@@ -20,12 +24,15 @@ from shared_backend.quality_gate import (
     register_rule,
 )
 
-# assert_text 不兼容的 business_type：这些元素不展示可读文本内容
+# assert_text 明确不兼容的 business_type：纯视觉/交互控件，完全不承载可读文本。
+# 使用白名单思路——只拦截确定不可能有文本的类型，其余默认放行，降低误报。
+# 注意：button 可含文本("登录")、input 应使用 assert_value 但 assert_text 可能
+#       读 aria-label 等可访问性文本 → 不放行也不拦截，规则不做判断。
 _TEXT_INCOMPATIBLE_TYPES: frozenset[str] = frozenset({
-    "button", "input", "text_input", "searchbox", "textarea",
-    "password", "password_input", "checkbox", "radio", "switch",
-    "password_toggle", "image", "icon", "spinbutton", "combobox",
-    "slider", "progressbar", "scrollbar", "tab", "separator",
+    "slider",
+    "scrollbar",
+    "separator",
+    "progressbar",
 })
 
 
@@ -40,19 +47,15 @@ def _extract_element_code(target: Any) -> str:
     return ""
 
 
-def _step_element_code(step: dict[str, Any]) -> str:
-    return _extract_element_code(step.get("target", ""))
-
-
 @register_rule(
     rule_id="RULE_009",
     rule_name="ASSERTION_TARGET_INVALID",
     category=RuleCategory.ASSERTION,
     severity=Severity.ERROR,
-    description="断言引用的目标元素不存在或类型不兼容",
+    description="assert_text 引用的元素 business_type 不兼容",
 )
 class AssertionTargetInvalidRule(Rule):
-    """检查断言步骤的 target 引用是否有效。"""
+    """检查 assert_text 的 target 元素 business_type 是否兼容。"""
 
     def validate(self, context: GateContext) -> RuleResult:
         case = context.case_yaml
@@ -62,36 +65,33 @@ class AssertionTargetInvalidRule(Rule):
         elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
 
         issues: list[str] = []
+        checked = 0  # 实际被检查的断言步骤数（带 element 引用 + assert_text）
 
         for i, step in enumerate(steps, start=1):
             if not isinstance(step, dict):
                 continue
 
             action = _normalized(step.get("action"))
-            if action not in {"assert_visible", "assert_text", "assert_url"}:
-                continue
+            if action != "assert_text":
+                continue  # assert_visible 适用于所有类型；assert_url 不绑定 element
 
-            element_code = _step_element_code(step)
+            element_code = _extract_element_code(step.get("target", ""))
             if not element_code:
                 continue  # 无 element 引用，跳过
 
-            # 检查 1：元素是否在 page object 中注册
+            # 元素存在性由 RULE_006 负责，此处不重复检查
             element_def = elements.get(element_code)
             if not isinstance(element_def, dict):
-                issues.append(
-                    f"步骤{i} ({action}): 元素 '{element_code}' 不在 page object 中"
-                )
                 continue
 
-            # 检查 2：assert_text 的元素 business_type 是否兼容
-            if action == "assert_text":
-                business_type = _normalized(element_def.get("business_type", ""))
-                if business_type in _TEXT_INCOMPATIBLE_TYPES:
-                    issues.append(
-                        f"步骤{i} (assert_text): 元素 '{element_code}' "
-                        f"business_type='{business_type}' 不支持文本断言，"
-                        f"建议改用 assert_visible"
-                    )
+            checked += 1
+            business_type = _normalized(element_def.get("business_type", ""))
+            if business_type in _TEXT_INCOMPATIBLE_TYPES:
+                issues.append(
+                    f"步骤{i} (assert_text): 元素 '{element_code}' "
+                    f"business_type='{business_type}' 为纯视觉控件，"
+                    f"不支持文本断言，建议改用 assert_visible"
+                )
 
         if issues:
             return RuleResult(
@@ -100,21 +100,16 @@ class AssertionTargetInvalidRule(Rule):
                 severity=self.severity,
                 category=self.category,
                 message=f"发现 {len(issues)} 个无效的断言目标",
-                suggestion="请检查断言步骤的 element 引用是否在 page object 中注册，"
-                           "以及 assert_text 是否用于合适的元素类型",
+                suggestion="请检查 assert_text 步骤的 element business_type 是否兼容",
                 evidence={"issues": issues},
                 passed=False,
             )
 
-        assertion_count = sum(
-            1 for s in steps
-            if isinstance(s, dict) and _normalized(s.get("action")) in {"assert_visible", "assert_text", "assert_url"}
-        )
         return RuleResult(
             rule_id=self.rule_id,
             rule_name=self.rule_name,
             severity=self.severity,
             category=self.category,
-            message=f"已检查 {assertion_count} 个断言步骤，所有 target 引用有效",
+            message=f"已检查 {checked} 个 assert_text 步骤，business_type 均兼容",
             passed=True,
         )

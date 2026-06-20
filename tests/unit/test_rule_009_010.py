@@ -18,33 +18,28 @@ PAGE_OBJECT = {
         "login_button": {"business_type": "button", "name": "登录按钮"},
         "error_toast": {"business_type": "message", "name": "错误提示"},
         "home_menu": {"business_type": "menu", "name": "首页菜单"},
+        "volume_slider": {"business_type": "slider", "name": "音量滑块"},
+        "loading_bar": {"business_type": "progressbar", "name": "加载进度条"},
+        "ghost_button": {"business_type": "button", "name": "不存在的按钮"},
     },
 }
 
 
 class TestRule009:
-    def test_element_not_in_page_object(self) -> None:
+    def test_element_not_in_page_object_is_skipped(self) -> None:
+        """元素不存在由 RULE_006 负责，RULE_009 静默跳过不重复报告。"""
         ctx = GateContext(case_yaml={
             "title": "登录成功",
             "execution": {"steps": [
-                {"action": "assert_visible", "target": "element:ghost_button"},
-            ]},
-        }, page_object=PAGE_OBJECT)
-        result = AssertionTargetInvalidRule().validate(ctx)
-        assert result.passed is False
-        assert any("ghost_button" in i for i in result.evidence.get("issues", []))
-
-    def test_element_exists_passes(self) -> None:
-        ctx = GateContext(case_yaml={
-            "title": "登录成功",
-            "execution": {"steps": [
-                {"action": "assert_visible", "target": "element:home_menu"},
+                {"action": "assert_text", "target": "element:nonexistent"},
             ]},
         }, page_object=PAGE_OBJECT)
         result = AssertionTargetInvalidRule().validate(ctx)
         assert result.passed
+        assert "已检查" in result.message
 
-    def test_assert_text_on_button_is_incompatible(self) -> None:
+    def test_assert_text_on_button_is_allowed(self) -> None:
+        """button 可含可读文本("登录")，白名单思路下放行。"""
         ctx = GateContext(case_yaml={
             "title": "验证按钮文本",
             "execution": {"steps": [
@@ -52,14 +47,58 @@ class TestRule009:
             ]},
         }, page_object=PAGE_OBJECT)
         result = AssertionTargetInvalidRule().validate(ctx)
+        assert result.passed
+
+    def test_assert_text_on_slider_is_blocked(self) -> None:
+        """slider 是纯视觉控件，不可能含文本 → 拦截。"""
+        ctx = GateContext(case_yaml={
+            "title": "验证滑块",
+            "execution": {"steps": [
+                {"action": "assert_text", "target": "element:volume_slider"},
+            ]},
+        }, page_object=PAGE_OBJECT)
+        result = AssertionTargetInvalidRule().validate(ctx)
         assert result.passed is False
-        assert any("business_type" in i for i in result.evidence.get("issues", []))
+        assert any("slider" in i for i in result.evidence.get("issues", []))
+
+    def test_assert_text_on_progressbar_is_blocked(self) -> None:
+        """progressbar 是纯视觉控件 → 拦截。"""
+        ctx = GateContext(case_yaml={
+            "title": "验证进度条",
+            "execution": {"steps": [
+                {"action": "assert_text", "target": "element:loading_bar"},
+            ]},
+        }, page_object=PAGE_OBJECT)
+        result = AssertionTargetInvalidRule().validate(ctx)
+        assert result.passed is False
 
     def test_assert_text_on_message_is_compatible(self) -> None:
         ctx = GateContext(case_yaml={
             "title": "验证错误提示",
             "execution": {"steps": [
                 {"action": "assert_text", "target": "element:error_toast"},
+            ]},
+        }, page_object=PAGE_OBJECT)
+        result = AssertionTargetInvalidRule().validate(ctx)
+        assert result.passed
+
+    def test_assert_visible_not_checked(self) -> None:
+        """assert_visible 适用于所有元素类型，不检查 business_type。"""
+        ctx = GateContext(case_yaml={
+            "title": "验证可见性",
+            "execution": {"steps": [
+                {"action": "assert_visible", "target": "element:volume_slider"},
+            ]},
+        }, page_object=PAGE_OBJECT)
+        result = AssertionTargetInvalidRule().validate(ctx)
+        assert result.passed
+
+    def test_assert_url_not_checked(self) -> None:
+        """assert_url 不绑定 element，不在检查范围。"""
+        ctx = GateContext(case_yaml={
+            "title": "验证 URL",
+            "execution": {"steps": [
+                {"action": "assert_url", "target": "element:home_menu"},
             ]},
         }, page_object=PAGE_OBJECT)
         result = AssertionTargetInvalidRule().validate(ctx)
