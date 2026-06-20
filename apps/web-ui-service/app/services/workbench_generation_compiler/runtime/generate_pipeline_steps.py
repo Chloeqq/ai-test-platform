@@ -505,6 +505,29 @@ def _allocate_and_format_case_id(
     }
 
 
+def _evaluate_case_quality_gate(
+    *,
+    case_yaml: dict[str, Any],
+    page_object: dict[str, Any],
+    requirement_spec: dict[str, Any] | None,
+    test_points: list[dict[str, Any]],
+    project: str,
+) -> tuple["ValidationReport", bool]:
+    """调用 CaseQualityGate 对生成的用例执行质量门禁评估。
+
+    返回 (ValidationReport, seed_data_available)。
+    """
+    from app.services.quality_gate.pipeline_gate import evaluate_case_quality
+
+    return evaluate_case_quality(
+        case_yaml=case_yaml,
+        page_object=page_object,
+        requirement_spec=requirement_spec,
+        test_points=test_points,
+        project=project,
+    )
+
+
 def _persist_and_build_response(
     *,
     payload: Any,
@@ -567,6 +590,47 @@ def _persist_and_build_response(
             detail=exc.to_detail(),
         ) from exc
     execution_payload = case_yaml.get("execution") if isinstance(case_yaml.get("execution"), dict) else {}
+
+    # ── Case Quality Gate ──────────────────────────────────────────────
+    gate_report, seed_data_available = _evaluate_case_quality_gate(
+        case_yaml=case_yaml,
+        page_object=page_object,
+        requirement_spec=requirement_spec,
+        test_points=test_points,
+        project=str(getattr(payload, "project", "") or ""),
+    )
+    quality_gate = {
+        "decision": gate_report.decision.value,
+        "score": gate_report.score.total_score,
+        "grade": gate_report.score.grade,
+        "summary": gate_report.summary,
+        "seed_data_available": seed_data_available,
+        "rule_results": [
+            {
+                "rule_id": r.rule_id,
+                "rule_name": r.rule_name,
+                "passed": r.passed,
+                "severity": r.severity.value if r.severity else "",
+                "message": r.message,
+            }
+            for r in gate_report.results
+        ],
+    }
+    _LOGGER.info(
+        "quality_gate: case_id=%s decision=%s score=%s grade=%s seed_data=%s",
+        case_id, gate_report.decision.value, gate_report.score.total_score, gate_report.score.grade,
+        seed_data_available,
+    )
+    if gate_report.is_rejected:
+        raise http_exception_cls(
+            status_code=unprocessable_entity_status,
+            detail={
+                "code": "quality_gate_rejected",
+                "message": f"用例质量门禁不通过: {gate_report.summary}",
+                "quality_gate": quality_gate,
+            },
+        )
+    # ───────────────────────────────────────────────────────────────────
 
     case_path = ai_cases_root / f"{case_id}.yaml"
     final_text = write_case_yaml(case_path, case_yaml)
