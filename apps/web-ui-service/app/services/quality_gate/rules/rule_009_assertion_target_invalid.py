@@ -3,10 +3,20 @@
 只检查 assert_text 引用的元素 business_type 是否与文本断言兼容。
 元素存在性由 RULE_006 (UNKNOWN_ELEMENT) 负责，本规则不重复检查。
 
-边界说明：
-- RULE_006：检查所有步骤引用的 element code 是否在 page object 中注册
-- RULE_009：仅检查 assert_text 的元素 business_type 是否能承载文本内容
-  （assert_visible 适用于所有元素类型，无需类型检查）
+RULE_006 vs RULE_009 职责边界:
+────────────────────────────────────────────────────────────
+             RULE_006                    RULE_009
+────────────────────────────────────────────────────────────
+检查范围     所有步骤 (input/click/     仅 assert_text
+             assert_visible/text/url/..)
+触发条件     element code 不在           element 存在 且
+             page object 中注册           business_type 为纯视觉控件
+问题         "这个元素存在吗?"           "这个元素能承载文本吗?"
+────────────────────────────────────────────────────────────
+互补示例:
+  assert_text target=element:nonexistent → 006 报(不存在), 009 跳过
+  assert_text target=element:slider      → 006 通过, 009 报(不兼容)
+  assert_text target=element:toast       → 006 通过, 009 通过
 
 详见 docs/architecture/2026-06-17_Rule Catalog 规则目录.md
 """
