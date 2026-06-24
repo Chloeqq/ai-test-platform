@@ -20,7 +20,6 @@ PAGE_OBJECT = {
         "home_menu": {"business_type": "menu", "name": "首页菜单"},
         "volume_slider": {"business_type": "slider", "name": "音量滑块"},
         "loading_bar": {"business_type": "progressbar", "name": "加载进度条"},
-        "ghost_button": {"business_type": "button", "name": "不存在的按钮"},
     },
 }
 
@@ -36,7 +35,7 @@ class TestRule009:
         }, page_object=PAGE_OBJECT)
         result = AssertionTargetInvalidRule().validate(ctx)
         assert result.passed
-        assert "已检查" in result.message
+        assert "assert_text" in result.message
 
     def test_assert_text_on_button_is_allowed(self) -> None:
         """button 可含可读文本("登录")，白名单思路下放行。"""
@@ -116,15 +115,15 @@ class TestRule009:
 
 
 class TestRule010:
-    def test_dangling_variable_mapping(self) -> None:
-        """execution.variables 映射到不存在的 data key。"""
+    def test_dangling_var_referenced_by_step_is_error(self) -> None:
+        """被步骤引用的悬挂变量 → ERROR（运行时必然失败）。"""
         ctx = GateContext(case_yaml={
             "title": "登录",
-            "data": {"username": "admin"},  # password key missing
+            "data": {"username": "admin"},
             "execution": {
                 "variables": {
                     "login_username": "{{username}}",
-                    "login_password": "{{password}}",  # ← 悬挂引用
+                    "login_password": "{{password}}",  # ← 悬挂引用，且被步骤使用
                 },
                 "steps": [
                     {"action": "input", "target": "element:username_input", "value": "{{login_username}}"},
@@ -134,7 +133,28 @@ class TestRule010:
         }, page_object=PAGE_OBJECT)
         result = StepDataInconsistencyRule().validate(ctx)
         assert result.passed is False
-        assert any("悬挂引用" in i and "password" in i for i in result.evidence.get("issues", []))
+        assert "ERROR" in result.message or result.severity.value == "error"
+        assert any("login_password" in i for i in result.evidence.get("errors", []))
+
+    def test_dangling_var_unreferenced_is_warning(self) -> None:
+        """声明但未被任何步骤引用的悬挂变量 → WARNING（死代码）。"""
+        ctx = GateContext(case_yaml={
+            "title": "登录",
+            "data": {"username": "admin"},
+            "execution": {
+                "variables": {
+                    "login_username": "{{username}}",
+                    "unused_var": "{{nonexistent}}",  # ← 悬挂且未使用
+                },
+                "steps": [
+                    {"action": "input", "target": "element:username_input", "value": "{{login_username}}"},
+                ],
+            },
+        }, page_object=PAGE_OBJECT)
+        result = StepDataInconsistencyRule().validate(ctx)
+        assert result.passed is False
+        assert len(result.evidence.get("errors", [])) == 0  # 无 ERROR
+        assert any("unused_var" in i for i in result.evidence.get("warnings", []))
 
     def test_clean_chain_passes(self) -> None:
         ctx = GateContext(case_yaml={
@@ -154,18 +174,19 @@ class TestRule010:
         result = StepDataInconsistencyRule().validate(ctx)
         assert result.passed
 
-    def test_no_data_section_passes(self) -> None:
+    def test_no_data_or_variables_passes(self) -> None:
         ctx = GateContext(case_yaml={
-            "title": "无数据用例",
+            "title": "仅点击操作",
             "execution": {"steps": [
                 {"action": "click", "target": "element:login_button"},
             ]},
         }, page_object=PAGE_OBJECT)
         result = StepDataInconsistencyRule().validate(ctx)
         assert result.passed
+        assert "无需检查" in result.message
 
     def test_input_step_count_vs_data_key_imbalance(self) -> None:
-        """3 个 input 步骤但只解析到 1 个 data key → 结构性失衡。"""
+        """3 个 input 步骤但只解析到 1 个 data key → WARNING。"""
         ctx = GateContext(case_yaml={
             "title": "重复输入",
             "data": {"username": "admin"},
@@ -180,4 +201,5 @@ class TestRule010:
         }, page_object=PAGE_OBJECT)
         result = StepDataInconsistencyRule().validate(ctx)
         assert result.passed is False
-        assert any("步骤与数据不匹配" in i for i in result.evidence.get("issues", []))
+        assert any("步骤与数据不匹配" in i or "同 key 合理复用" in i
+                   for i in result.evidence.get("warnings", []))

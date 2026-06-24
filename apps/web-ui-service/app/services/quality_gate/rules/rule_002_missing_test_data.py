@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from shared_backend.quality_gate import (
@@ -20,32 +19,7 @@ from shared_backend.quality_gate import (
     register_rule,
 )
 
-# 匹配 {{ variable_name }} 模板
-_VAR_TEMPLATE_RE = re.compile(r"^\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}$")
-
-
-def _is_template(value: Any) -> bool:
-    """检查值是否为 {{var}} 模板。"""
-    return isinstance(value, str) and bool(_VAR_TEMPLATE_RE.match(value))
-
-
-def _template_key(value: str) -> str:
-    """从 {{var}} 中提取变量名。"""
-    m = _VAR_TEMPLATE_RE.match(value)
-    return m.group(1) if m else ""
-
-
-def _normalized(value: Any) -> str:
-    """标准化字符串。"""
-    return str(value or "").strip().lower()
-
-
-def _step_element_code(step: dict[str, Any]) -> str:
-    """从步骤中提取 element code。"""
-    target = step.get("target", "")
-    if isinstance(target, str) and target.startswith("element:"):
-        return target[len("element:"):]
-    return ""
+from ._common import extract_element_code, is_template, normalized, template_key
 
 
 @register_rule(
@@ -69,8 +43,8 @@ class MissingTestDataRule(Rule):
         # 例: login_username → username (因为 variables 中 login_username: '{{username}}')
         var_to_data: dict[str, str] = {}
         for var_name, template in variables.items():
-            if isinstance(template, str) and _is_template(template):
-                data_key = _template_key(template)
+            if isinstance(template, str) and is_template(template):
+                data_key = template_key(template)
                 if data_key:
                     var_to_data[var_name] = data_key
 
@@ -80,30 +54,30 @@ class MissingTestDataRule(Rule):
             if not isinstance(step, dict):
                 continue
 
-            action = _normalized(step.get("action"))
+            action = normalized(step.get("action"))
             if action not in {"input", "fill"}:
                 continue
 
             value = step.get("value")
             if value is None:
                 # input 步骤完全没有 value 字段
-                element = _step_element_code(step)
+                element = extract_element_code(step)
                 missing.append(
                     f"步骤{i} (element: {element}): input 步骤缺少 value"
                 )
                 continue
 
-            if not _is_template(value):
+            if not is_template(value):
                 # 字面值（如 "admin"），不需要 data key 映射
                 continue
 
             # {{var}} 模板 → 解析变量链
-            var_name = _template_key(value)
+            var_name = template_key(value)
             # 1. 先查 variables 映射: var_name → data_key
             data_key = var_to_data.get(var_name, var_name)
 
             if data_key not in data:
-                element = _step_element_code(step)
+                element = extract_element_code(step)
                 if var_name != data_key:
                     missing.append(
                         f"步骤{i} (element: {element}): 变量 '{{{{{var_name}}}}}' "
@@ -132,6 +106,6 @@ class MissingTestDataRule(Rule):
             rule_name=self.rule_name,
             severity=self.severity,
             category=self.category,
-            message=f"已检查 {sum(1 for s in steps if isinstance(s, dict) and _normalized(s.get('action')) in {'input', 'fill'})} 个 input 步骤，数据完整",
+            message=f"已检查 {sum(1 for s in steps if isinstance(s, dict) and normalized(s.get('action')) in {'input', 'fill'})} 个 input 步骤，数据完整",
             passed=True,
         )
