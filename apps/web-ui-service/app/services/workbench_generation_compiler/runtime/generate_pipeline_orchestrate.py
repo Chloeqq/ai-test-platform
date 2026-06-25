@@ -95,6 +95,12 @@ def _enrich_v3_0_metadata(
             if k in ("business_goal", "test_type", "risk_points") and v
         }
 
+    # V1.1→V3.0 自动升级: requirement.type → scenario.test_type[]
+    if "scenario" not in product_yaml:
+        intent_type = _normalized_text(intent_meta.get("type", ""))
+        if intent_type:
+            product_yaml["scenario"] = {"test_type": [intent_type]}
+
     # ── actors ──
     actors = case_yaml.get("actors") if isinstance(case_yaml, dict) else None
     if isinstance(actors, dict):
