@@ -25,7 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 # RULE_005 也引用此常量，避免重复定义。
 
 _PRECONDITION_TYPES: frozenset[str] = frozenset({
-    "login", "account_state", "sql", "api_call",
+    "login", "account_state", "sql", "api_call", "network",
 })
 
 # 登录流程的标准步骤模板：需要页面对象中的 username_input, password_input, login_button
@@ -69,6 +69,8 @@ def compile_preconditions(
     execution = product_yaml.get("execution") if isinstance(product_yaml.get("execution"), dict) else {}
     variables = execution.get("variables") if isinstance(execution.get("variables"), dict) else {}
 
+    page = _normalized_text(page_object.get("page", ""))
+
     for i, entry in enumerate(preconditions):
         if not isinstance(entry, dict):
             continue
@@ -88,7 +90,6 @@ def compile_preconditions(
                 page_object=page_object,
             )
         elif pc_type == "account_state":
-            page = _normalized_text(page_object.get("page", ""))
             steps = _compile_account_state(
                 entry=entry, data=data,
                 page=page, product_yaml=product_yaml,
@@ -96,6 +97,11 @@ def compile_preconditions(
             )
         elif pc_type == "sql":
             steps = _compile_sql(entry=entry, case_yaml=product_yaml)
+        elif pc_type == "network":
+            steps = _compile_network(
+                entry=entry, page=page, product_yaml=product_yaml,
+                seed_data_provider=seed_data_provider,
+            )
         else:
             steps = []  # api_call: reserved
 
@@ -273,6 +279,94 @@ def _compile_sql(
                 stage="v2_0_precondition_compile",
             )
     return []
+
+
+def _compile_network(
+    *,
+    entry: dict[str, Any],
+    page: str,
+    product_yaml: dict[str, Any],
+    seed_data_provider: Any = None,
+) -> list[dict[str, Any]]:
+    """V3.0: 网络条件预处理。从 {page}_network 池读取配置，应用到步骤。
+
+    profile 可选值: timeout / slow / offline
+    无池或无配置 → 降级：仅注入 wait 步骤。
+    """
+    profile = _normalized_text(entry.get("profile", ""))
+    if not profile:
+        return []
+
+    config = _resolve_network_config(
+        page=page, profile=profile,
+        seed_data_provider=seed_data_provider,
+    )
+
+    if not config:
+        if profile == "timeout":
+            return [{
+                "action": "wait",
+                "timeout_ms": 5000,
+                "expected_result": "等待请求超时（无网络配置池，使用默认 wait）",
+            }]
+        return []
+
+    steps: list[dict[str, Any]] = []
+    if isinstance(config, dict):
+        action = _normalized_text(config.get("action", ""))
+        if action == "set_timeout":
+            timeout_ms = config.get("timeout_ms", 5000)
+            exec_steps = product_yaml.get("execution", {}).get("steps", [])
+            for s in exec_steps:
+                if isinstance(s, dict) and s.get("action") not in ("goto",):
+                    s["timeout_ms"] = timeout_ms
+        elif action in ("set_throttle", "set_offline"):
+            step: dict[str, Any] = {
+                "action": "wait",
+                "network_condition": profile,
+                "expected_result": f"网络条件: {profile}",
+            }
+            if "timeout_ms" in config:
+                step["timeout_ms"] = config["timeout_ms"]
+            steps.append(step)
+        else:
+            steps.append({
+                "action": "wait",
+                "timeout_ms": config.get("timeout_ms", 5000),
+                "expected_result": f"网络预处理: {profile}",
+            })
+        product_yaml.setdefault("_network_config", config)
+
+    return steps
+
+
+def _resolve_network_config(
+    *,
+    page: str,
+    profile: str,
+    seed_data_provider: Any = None,
+) -> dict[str, Any] | None:
+    """从 {page}_network 数据池查找网络配置。"""
+    if seed_data_provider is None or not hasattr(seed_data_provider, "get_item"):
+        return None
+
+    pool_name = f"{page}_network"
+    for candidate in (profile, f"{profile}_config"):
+        item = seed_data_provider.get_item(pool_name, candidate)  # type: ignore[union-attr]
+        if isinstance(item, dict):
+            return item
+        if isinstance(item, str):
+            import json
+            try:
+                return json.loads(item)
+            except (json.JSONDecodeError, ValueError):
+                return {"action": "set_timeout", "timeout_ms": 5000}
+
+    _LOGGER.debug(
+        "precondition network: no config in pool '%s' for profile='%s'",
+        pool_name, profile,
+    )
+    return None
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
