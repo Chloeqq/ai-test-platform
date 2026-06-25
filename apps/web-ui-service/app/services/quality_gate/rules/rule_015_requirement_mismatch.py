@@ -13,10 +13,10 @@ from shared_backend.quality_gate import (
 from ._common import normalized
 
 
-# (intent/requirement 描述关键词, 期望步骤特征, 不匹配描述)
+# (intent/requirement 描述关键词regex, 期望步骤特征, 不匹配描述)
 _CHECKS: list[tuple[list[str], Any, str]] = [
     (
-        ["验证.*提示", "显示.*消息", "错误.*展示", "提示.*信息"],
+        ["提示", "错误信息", "错误提示", "显示", "验证"],
         lambda steps: any(
             normalized(s.get("action")) in {"assert_text", "assert_visible"}
             for s in steps if isinstance(s, dict)
@@ -65,8 +65,7 @@ class RequirementMismatchRule(Rule):
 
         mismatches: list[str] = []
         for keywords, check_fn, desc in _CHECKS:
-            # 用简单子串匹配（keywords 中的纯中文词），不用正则
-            if not any(kw.replace(".*", "") in intent_title for kw in keywords):
+            if not any(kw in intent_title for kw in keywords):
                 continue
             if not check_fn(steps):
                 mismatches.append(desc)
