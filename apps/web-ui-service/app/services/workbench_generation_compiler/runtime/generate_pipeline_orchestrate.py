@@ -44,6 +44,7 @@ from .generate_pipeline_format import (  # noqa: E402
     _product_step_expected, _format_product_execution_steps,
     _append_login_success_assertion, _step_element_code,
     _normalize_dsl_data_sources, _enrich_dsl_v1_1_data_bindings,
+    _normalize_step_locators,
     _normalize_top_level_assertion, _assertion_signature,
     _normalize_dsl_v1_1_assertions, _is_ai_automated_case,
     _validate_dsl_v1_1_minimum_contract, _enrich_product_case_yaml_v1_1,
@@ -162,6 +163,12 @@ def _format_product_case_yaml(
         if setup_steps:
             steps = product_yaml["execution"]["steps"]
             product_yaml["execution"]["steps"] = setup_steps + steps
+
+    # V2.5a: Locator 归一化 — 用 page object 的正式定义覆盖 AI 生成的 locator
+    _normalize_step_locators(
+        steps=product_yaml["execution"]["steps"],
+        page_object=page_object,
+    )
 
     return product_yaml
 
