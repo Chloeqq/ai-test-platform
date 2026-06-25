@@ -575,6 +575,15 @@ def _normalize_data_source_entry(*, key: str, raw_value: Any) -> dict[str, Any]:
                         stage="dsl_v1_3_enrichment",
                     )
                 entry["subtype"] = raw_subtype
+                # V1.3: 检测显式 subtype 与自动推断是否矛盾
+                inferred = _infer_data_subtype(raw_value.get("value"))
+                if inferred and inferred != raw_subtype:
+                    _LOGGER.warning(
+                        "DSL V1.3: data key '%s' explicit subtype='%s' contradicts "
+                        "auto-inferred subtype='%s' from value=%s",
+                        key, raw_subtype, inferred,
+                        str(raw_value.get("value"))[:60],
+                    )
             else:
                 inferred = _infer_data_subtype(raw_value.get("value"))
                 if inferred:
