@@ -34,6 +34,14 @@ from .generate_pipeline import (  # noqa: E402
     _find_candidate_snapshot_by_intent,
 )
 def _product_description(title: str, expected: str) -> str:
+    """
+    生成用例的"产品化描述"（给人类看的标题，不是内部 ID）。
+
+    - 如果标题含"首次登录"且预期里有跳转/首页等词 → 拼接完整登录场景描述
+    - 如果标题和预期标准化后相同 → 说明预期只是标题的重复，直接返回标题
+    - 如果预期有内容 → 拼接成"标题 — 预期"的形式（预期截取前 180 字符）
+    - 兜底：返回原始标题或"AI生成用例"
+    """
     title = _normalized_text(title) or "AI生成用例"
     expected = _normalized_text(expected)
     title_key = _normalized_key(title)
@@ -48,6 +56,13 @@ def _product_description(title: str, expected: str) -> str:
 
 
 def _product_page_load_expected(page: str, page_object: dict[str, Any]) -> str:
+    """
+    生成"页面加载完成"的预期结果文本。
+
+    - 如果是登录页 → 返回固定文本：显示账号/密码/登录按钮
+    - 如果页面对象有元素 → 取前 3 个元素名拼接成"XX页面加载完成，显示A、B、C"
+    - 兜底：返回"XX页面加载完成"
+    """
     normalized_page = _normalized_text(page).lower()
     if normalized_page == "login":
         return "登录页面加载完成，显示账号输入框、密码输入框、登录按钮"
@@ -65,6 +80,12 @@ def _product_page_load_expected(page: str, page_object: dict[str, Any]) -> str:
 
 
 def _product_element_name(page: str, target_code: str, element_meta: dict[str, Any]) -> str:
+    """
+    根据页面和目标 code，生成元素的"产品化中文名称"（用于展示给用户看）。
+
+    登录页的元素有固定中文化映射（因为账号/密码/登录是最常用的页面）。
+    其他页面从 element_meta 的 name/ element_name 取，取不到就用 target_code 本身。
+    """
     normalized_page = _normalized_text(page).lower()
     normalized_code = _normalized_text(target_code)
     if normalized_page == "login":
@@ -86,6 +107,13 @@ def _product_locator(
     locator_type: str,
     locator_value: str,
 ) -> tuple[str, str]:
+    """
+    确定元素的定位方式（locator_type）和定位值（locator_value）。
+
+    优先使用页面对象库已治理的 locator（从参数传入的 type/value）。
+    如果没提供（空值），对登录页的 username_input / password_input 做硬编码 CSS 兜底。
+    （这些是前端通用选择器，覆盖多种框架的命名习惯）
+    """
     normalized_locator_type = _normalized_text(locator_type)
     normalized_locator_value = _normalized_text(locator_value)
     if normalized_locator_type and normalized_locator_value:
@@ -122,7 +150,14 @@ def _product_element_meta(
     target_code: str,
     elements: dict[str, Any],
 ) -> dict[str, Any]:
-    """按语义 target 取页面对象元素；登录页优先桥接到真实 data-testid 元素。"""
+    """
+    按语义 target 取页面对象元素元数据。
+
+    特殊逻辑：对登录页（page="login"），优先从真实 data-testid 代码名获取元素。
+    因为登录页的 username_input 等是语义名，真正的页面代码里有 data-testid="login-username-input"，
+    这个函数充当"语义名 → 真实测试 ID"的桥接。
+    非登录页直接从 elements 字典里按 code 取。
+    """
     normalized_page = _normalized_text(page).lower()
     normalized_code = _normalized_text(target_code)
     if normalized_page == "login":
@@ -134,6 +169,13 @@ def _product_element_meta(
 
 
 def _trusted_page_url(*, payload_page_url: Any, page_object: dict[str, Any]) -> str:
+    """
+    校验并确定最终的 page_url。
+
+    DSL V1.1 要求：如果页面对象库中已治理了 page_url，payload 里的 URL 必须一致。
+    不一致则报错（防止生成器用了错误的页面 URL）。
+    返回：治理的 URL（优先）或 payload 里的 URL。
+    """
     governed_url = _normalized_text(page_object.get("page_url")) if isinstance(page_object, dict) else ""
     requested_url = _normalized_text(payload_page_url)
     if governed_url and requested_url and governed_url != requested_url:
@@ -156,6 +198,17 @@ def _product_step_expected(
     is_last_intent_step: bool,
     existing_expected: str,
 ) -> str:
+    """
+    为单个执行步骤生成"预期的结果"文本（展示在用例报告里给人看）。
+
+    优先级：
+    1. 如果步骤已有 expected_result → 保留原样不动（不覆盖人工写的）
+    2. 如果是意图的最后一步且意图有预期 → 用意图的预期（整个场景的总结）
+    3. 根据 action 类型推测：
+       - input（输入框）→ 密码字段显示"掩码显示"、有值显示"内容为XX"、空显示"已清空"
+       - click → "已点击XX"
+    4. 兜底：空字符串
+    """
     if existing_expected:
         return existing_expected
     if is_last_intent_step and intent_expected:
@@ -182,6 +235,19 @@ def _format_product_execution_steps(
     page_object: dict[str, Any],
     expected_by_intent: dict[str, str],
 ) -> list[dict[str, Any]]:
+    """
+    核心函数：把编译器生成的原始步骤（compiled_steps）"产品化"成最终用例步骤列表。
+
+    做的事：
+    - 统一动作名：fill/type → input
+    - filter 出 goto 动作：从 raw_step 提取 URL，生成加载预期
+    - 对其他动作：从页面对象库取定位信息（locator_type/value）、生成元素中文名、
+      补充 expected_result
+    - 为 fill/input 动作自动绑定 data-testid（如果已治理）
+    - 最后追加登录成功断言（如果适用）
+
+    这是 DSL V1.1 格式化的核心编排逻辑，所有步骤都在这里"变好看"。
+    """
     elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
     last_step_index_by_intent: dict[str, int] = {}
     for index, step in enumerate(compiled_steps):
@@ -271,19 +337,18 @@ def _append_login_success_assertion(
     page_object: dict[str, Any],
     expected_by_intent: dict[str, str],
 ) -> None:
-    if _normalized_text(page).lower() != "login":
-        return
-    if any(_normalized_text(step.get("action")).lower().startswith("assert") for step in product_steps):
-        return
-    expected_text = " ".join(_normalized_text(value) for value in expected_by_intent.values()).lower()
-    if not expected_text:
-        return
-    negative_tokens = ("失败", "错误", "请输入", "不跳转", "未跳转", "停留", "提示")
-    success_tokens = ("登录成功", "跳转至平台工作台首页", "工作台首页", "权限导航菜单")
-    if any(token in expected_text for token in negative_tokens):
-        return
-    if not any(token in expected_text for token in success_tokens):
-        return
+    """
+    在登录场景的步骤末尾追加一个"登录成功断言"（assert_visible home_menu）。
+
+    前提条件（缺一不可）：
+    1. 当前页面是 login 页
+    2. 步骤里还没有任何 assert 动作（避免重复断言）
+    3. 所有意图的预期文本汇总后不包含"失败/错误"等负面词汇
+    4. 预期文本包含"登录成功"或"工作台首页"等成功信号
+    5. 页面对象库中有 home_menu 的完整定位信息
+
+    功能：确认登录后能看到首页菜单 → 证明已离开登录页进入工作台。
+    """
 
     elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
     home_meta = _product_element_meta(page="login", target_code="home_menu", elements=elements)
@@ -306,6 +371,13 @@ def _append_login_success_assertion(
 
 
 def _step_element_code(step: dict[str, Any]) -> str:
+    """
+    从步骤字典中提取元素代码（element code）。
+
+    元素代码有两种格式：
+    - "element:username_input"（V1.1 标准化格式）→ 去掉前缀返回 "username_input"
+    - "username_input"（旧格式）→ 直接返回
+    """
     target = _normalized_text(step.get("target") or step.get("element_code"))
     if target.startswith("element:"):
         target = target.removeprefix("element:").strip()
@@ -313,10 +385,21 @@ def _step_element_code(step: dict[str, Any]) -> str:
 
 
 def _is_variable_template(value: Any) -> bool:
+    """
+    判断一个值是不是 DSL 变量模板，例如 "{{username}}"。
+
+    变量模板的格式由 _VARIABLE_TEMPLATE_RE 正则定义（一般为 "{{key}}" 形式）。
+    """
     return isinstance(value, str) and bool(_VARIABLE_TEMPLATE_RE.fullmatch(value.strip()))
 
 
 def _variable_template_key(value: Any) -> str:
+    """
+    从变量模板中提取 key 值。
+
+    例：输入 "{{username}}" → 返回 "username"
+    用途：当步骤里值是 "{{username}}" 时，知道它的数据来自 data 字典的 username 键。
+    """
     if not isinstance(value, str):
         return ""
     match = _VARIABLE_TEMPLATE_RE.fullmatch(value.strip())
@@ -326,6 +409,12 @@ def _variable_template_key(value: Any) -> str:
 
 
 def _data_key_for_input(*, page: str, element_code: str) -> str:
+    """
+    根据页面名和元素代码，生成输入数据在 data 字典里的 key 名。
+
+    登录页有固定映射：username_input → "username", password_input → "password"
+    其他页面：去掉元素代码末尾的 "_input" 后缀，把非法字符替换为下划线。
+    """
     normalized_page = _normalized_text(page).lower()
     normalized_code = _normalized_text(element_code).lower()
     if normalized_page == "login" and normalized_code == "username_input":
@@ -339,6 +428,12 @@ def _data_key_for_input(*, page: str, element_code: str) -> str:
 
 
 def _variable_name_for_input(*, page: str, element_code: str, data_key: str) -> str:
+    """
+    生成变量名，用于 execution.variables 中引用 data。
+
+    登录页固定映射：→ "login_username" / "login_password"
+    其他页面："{page}_{data_key}"，page 内部的非法字符替换为下划线。
+    """
     normalized_page = re.sub(r"[^a-z0-9_]+", "_", _normalized_text(page).lower()).strip("_")
     normalized_code = _normalized_text(element_code).lower()
     if normalized_page == "login" and normalized_code == "username_input":
@@ -349,6 +444,14 @@ def _variable_name_for_input(*, page: str, element_code: str, data_key: str) -> 
 
 
 def _reserve_data_key(data: dict[str, Any], base_key: str, value: Any) -> str:
+    """
+    往 data 字典插入 key 时，如果 key 已存在且值不同，自动加后缀避免冲突。
+
+    比如 data 里已有 "username"（值是 "admin"），现在要保留 "user"（也是 "admin"），
+    发现已有且值相同 → 复用 "username"
+    发现已有且值不同 → 改为 "username_2"
+    再冲突 → "username_3" 以此类推
+    """
     def _existing_value_matches(raw_entry: Any) -> bool:
         if isinstance(raw_entry, dict):
             source_type = _normalized_data_source_type(raw_entry.get("source_type") or "inline")
@@ -376,6 +479,68 @@ def _reserve_variable_name(variables: dict[str, Any], base_name: str, template: 
     return name
 
 
+# ── DSL V1.3 数据语义标注 ──────────────────────────────────────────────────
+# 每条 data 条目可以声明 subtype，表达这条数据的测试语义。
+# V1.1 兼容：subtype 是可选的，缺失时自动从 value 推断。
+
+_DSL_DATA_SUBTYPES: frozenset[str] = frozenset({
+    "valid", "invalid", "boundary", "empty",
+    "whitespace", "special_chars", "generated", "pool",
+})
+
+# 检测自然语言描述值的模式
+_NL_DESCRIPTION_KEYWORDS: frozenset[str] = frozenset({
+    "最小", "最大", "合法", "非法", "无效", "有效",
+    "边界", "超长", "超短", "空值", "空格",
+})
+
+
+def _infer_data_subtype(value: Any) -> str | None:
+    """根据 value 自动推断 data subtype。仅适用于 inline 数据。
+
+    返回 subtype 字符串，无法推断时返回 None。
+    """
+    if value is None:
+        return "empty"
+    if not isinstance(value, str):
+        return None
+    if value == "":
+        return "empty"
+    if value.strip() == "" and len(value) > 0:
+        return "whitespace"
+    if any(ch in value for ch in ("<", ">", "'", "\"", ";", "|", "&")):
+        return "special_chars"
+    return None  # 普通值，无法自动推断
+
+
+def _is_natural_language_description(value: Any) -> bool:
+    """检测值是否为自然语言描述而非测试数据。
+
+    例："最小长度合法账号" → 是描述，不是能填入输入框的值。
+        "admin"             → 是测试数据。
+
+    返回 True 表示值看起来像描述文本。
+    """
+    if not isinstance(value, str) or not value.strip():
+        return False
+    stripped = value.strip()
+    # 短字符串 (<8 chars) 不太可能是描述
+    if len(stripped) < 8:
+        return False
+    # 含数字或英文字母 → 很可能是实际数据
+    if any(ch.isdigit() for ch in stripped):
+        return False
+    if any(ch.isascii() and ch.isalpha() for ch in stripped):
+        return False
+    # 中文字符占比 > 80% 且含描述性关键词 → 可能是自然语言描述
+    chinese_chars = sum(1 for ch in stripped if '一' <= ch <= '鿿')
+    if len(stripped) >= 8 and chinese_chars / len(stripped) >= 0.8:
+        match_count = sum(1 for kw in _NL_DESCRIPTION_KEYWORDS if kw in stripped)
+        if match_count >= 1:
+            return True
+    return False
+
+
 def _normalized_data_source_type(value: Any) -> str:
     return _normalized_text(value).lower()
 
@@ -398,7 +563,31 @@ def _normalize_data_source_entry(*, key: str, raw_value: Any) -> dict[str, Any]:
                     reason="inline source missing value",
                     stage="dsl_v1_1_enrichment",
                 )
-            return {"source_type": "inline", "value": raw_value.get("value")}
+            raw_subtype = _normalized_text(raw_value.get("subtype", ""))
+            entry: dict[str, Any] = {"source_type": "inline", "value": raw_value.get("value")}
+            # V1.3: subtype 归一化
+            if raw_subtype:
+                if raw_subtype not in _DSL_DATA_SUBTYPES:
+                    raise ExecutionCompilerError(
+                        code="dsl_v1_3_invalid_data_subtype",
+                        message=f"DSL V1.3 data subtype is invalid for key `{key}`",
+                        reason=f"unsupported subtype `{raw_subtype}` (allowed: {sorted(_DSL_DATA_SUBTYPES)})",
+                        stage="dsl_v1_3_enrichment",
+                    )
+                entry["subtype"] = raw_subtype
+            else:
+                inferred = _infer_data_subtype(raw_value.get("value"))
+                if inferred:
+                    entry["subtype"] = inferred
+            # V1.3: 自然语言描述检测
+            if _is_natural_language_description(raw_value.get("value")):
+                _LOGGER.warning(
+                    "DSL V1.3: data key '%s' value looks like a natural language description "
+                    "rather than test data. Consider using typed data with subtype annotation. "
+                    "value=%s",
+                    key, str(raw_value.get("value"))[:80],
+                )
+            return entry
         if source_type == "pool":
             pool_name = _normalized_text(raw_value.get("pool_name"))
             pool_key = _normalized_text(raw_value.get("key"))
@@ -432,6 +621,15 @@ def _normalize_data_source_entry(*, key: str, raw_value: Any) -> dict[str, Any]:
 
 
 def _normalize_dsl_data_sources(product_yaml: dict[str, Any]) -> dict[str, Any]:
+    """
+    标准化 DSL V1.1 的 data 段。
+
+    - 如果 data 不存在 → 创建空字典
+    - 如果 data 不是字典 → 报错（V1.1 要求 data 必须是对象）
+    - 如果 data 是字典 → 逐条标准化每个数据源（inline / pool / env）
+
+    返回标准化后的 data 字典。
+    """
     raw_data = product_yaml.get("data")
     if raw_data is None:
         normalized: dict[str, Any] = {}
@@ -455,7 +653,18 @@ def _normalize_dsl_data_sources(product_yaml: dict[str, Any]) -> dict[str, Any]:
 
 
 def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -> None:
-    """把步骤里已有的输入值提升为 DSL V1.1 data/variables，不在代码层猜测默认值。"""
+    """
+    AI 生成的用例中，input 步骤的 value 是直接写在步骤里的。
+    这个函数把它们抽取为 DSL V1.1 的 data + variables 格式。
+
+    过程：
+    1. 遍历所有 input/fill 步骤
+    2. 如果步骤 value 已经是变量模板（"{{xxx}}"）→ 校验引用链是否有效
+    3. 如果步骤 value 是字面值 → 在 data 里创建条目，在 execution.variables 里创建引用
+    4. 步骤的 value 改为 "{{variable_name}}" 格式（通过变量间接引用 data）
+
+    目的是实现"数据与步骤分离"：步骤只存"数据来自哪里"，不直接存硬编码值。
+    """
     execution_payload = product_yaml.get("execution") if isinstance(product_yaml.get("execution"), dict) else {}
     steps = execution_payload.get("steps") if isinstance(execution_payload.get("steps"), list) else []
     data = _normalize_dsl_data_sources(product_yaml)
@@ -521,6 +730,13 @@ def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -
 
 
 def _normalize_top_level_assertion(step: dict[str, Any]) -> dict[str, Any]:
+    """
+    标准化单条顶层断言：只保留断言相关的 key，补齐 selector/target 字段。
+
+    入参可能是步骤字典或断言字典，只提取 _TOP_LEVEL_ASSERTION_KEYS 中定义的字段。
+    如果 locator_value 为空但步骤里有 selector → 用 selector 补上
+    如果 target 为空但步骤里有 element_code → 用 "element:{code}" 补上
+    """
     assertion = {
         key: value
         for key, value in step.items()
@@ -534,6 +750,12 @@ def _normalize_top_level_assertion(step: dict[str, Any]) -> dict[str, Any]:
 
 
 def _assertion_signature(assertion: dict[str, Any]) -> tuple[str, ...]:
+    """
+    为断言生成"签名"（多个关键字段组成的元组），用于去重判断。
+
+    如果两个断言的 action / target / locator_type / locator_value / value /
+    count / rule / extract_regex 全部相同 → 视为重复断言。
+    """
     return (
         _normalized_text(assertion.get("action")).lower(),
         _normalized_text(assertion.get("target") or assertion.get("element_code")),
@@ -547,7 +769,16 @@ def _assertion_signature(assertion: dict[str, Any]) -> tuple[str, ...]:
 
 
 def _normalize_dsl_v1_1_assertions(product_yaml: dict[str, Any]) -> None:
-    """标准化顶层断言：保留步骤内断言时序，只做顶层补充与去重。"""
+    """
+    标准化顶层断言（product_yaml.assertions）。
+
+    原则：
+    - 步骤内已有的断言（如 assert_visible）保留原位不动（时序敏感）
+    - 顶层 assertions 只做"补充"：不重复步骤已有的断言
+    - 顶层 assertions 内部也去重（同一次接口调用可能重复返回断言条目）
+
+    实现方式：先收集步骤中所有断言的签名，然后过滤顶层断言中签名重复的条目。
+    """
     execution_payload = product_yaml.get("execution") if isinstance(product_yaml.get("execution"), dict) else {}
     steps = execution_payload.get("steps") if isinstance(execution_payload.get("steps"), list) else []
     assertions_raw = product_yaml.get("assertions") if isinstance(product_yaml.get("assertions"), list) else []
@@ -585,6 +816,15 @@ def _normalize_dsl_v1_1_assertions(product_yaml: dict[str, Any]) -> None:
 
 
 def _is_ai_automated_case(product_yaml: dict[str, Any]) -> bool:
+    """
+    判断一个用例是不是"AI 生成的自动化用例"。
+
+    判断条件（同时满足）：
+    - status == "automated"
+    - tags 中有 "ai-generated"，或 case id 包含 "-ai-"
+
+    AI 自动化用例必须包含可执行的断言（见 _validate_dsl_v1_1_minimum_contract）。
+    """
     status = _normalized_text(product_yaml.get("status")).lower()
     tags = product_yaml.get("tags") if isinstance(product_yaml.get("tags"), list) else []
     normalized_tags = {_normalized_text(tag).lower() for tag in tags if _normalized_text(tag)}
@@ -593,7 +833,19 @@ def _is_ai_automated_case(product_yaml: dict[str, Any]) -> bool:
 
 
 def _validate_dsl_v1_1_minimum_contract(product_yaml: dict[str, Any]) -> None:
-    """校验 V1.1 最小契约：来源身份完整，AI 自动化用例必须有真实断言。"""
+    """
+    DSL V1.1 契约校验（写在最后一个 enrichment 步骤之后）。
+
+    检查 2 个条件：
+    1. 来源身份完整：requirement.intent_id、requirement.source_asset_id 必须存在，
+       且 execution.selected_intent_ids 必须只包含 intent_id（不多也不少）
+       → 确保用例能追溯到唯一的来源意图
+    2. AI 自动化用例必须有可执行断言（步骤内的 assert_xxx 或顶层 assertions）
+       → 光有 expected_result（文本述）不够，需要真正的 executable assertion
+         因为 runner 执行时只认 assert_xxx 动作，不读 expected_result
+
+    任何条件不满足 → 直接抛 ExecutionCompilerError，拒绝写入 DB。
+    """
     requirement = product_yaml.get("requirement") if isinstance(product_yaml.get("requirement"), dict) else {}
     execution_payload = product_yaml.get("execution") if isinstance(product_yaml.get("execution"), dict) else {}
     intent_id = _normalized_text(requirement.get("intent_id"))
@@ -627,7 +879,18 @@ def _validate_dsl_v1_1_minimum_contract(product_yaml: dict[str, Any]) -> None:
 
 
 def _enrich_product_case_yaml_v1_1(product_yaml: dict[str, Any], *, page: str) -> dict[str, Any]:
-    """生成器统一出口：写入 DB 的 script_code 必须先满足 DSL V1.1 契约。"""
+    """
+    === DSL V1.1 格式化的统一出口 ===
+
+    所有用例在写入 DB 的 script_code 之前，必须经过此函数。
+
+    执行流程（3 步）：
+    1. _enrich_dsl_v1_1_data_bindings — 把 input 步骤的硬编码值抽出为 data/variables
+    2. _normalize_dsl_v1_1_assertions — 标准化并去重顶层断言
+    3. _validate_dsl_v1_1_minimum_contract — 校验最小契约完整性
+
+    任何一步失败都会抛 ExecutionCompilerError，不会写入错误格式的数据。
+    """
     product_yaml["version"] = "v1.1"
     _enrich_dsl_v1_1_data_bindings(product_yaml, page=page)
     _normalize_dsl_v1_1_assertions(product_yaml)

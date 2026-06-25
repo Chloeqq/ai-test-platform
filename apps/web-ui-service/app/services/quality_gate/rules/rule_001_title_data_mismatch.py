@@ -139,6 +139,26 @@ def _v_wrong(val: str, *, data_key: str, context: GateContext) -> bool:
     return True
 
 
+# ── V1.3 subtype → title pattern 映射 ──
+# 如果 data 条目的 subtype 已声明语义，title 含对应关键词时优先信任 subtype，
+# 跳过值级检查。例如：subtype=whitespace 时标题"空格"不要求值真的含空格。
+_SUBTYPE_CONFIRMS_PATTERN: dict[str, str] = {
+    "whitespace": "空格",
+    "empty": "空",
+    "special_chars": "非法字符",
+    "invalid": "错误",
+}
+
+
+def _subtype_confirms(data_entry: Any, pattern: str) -> bool:
+    """检查 data 条目的 subtype 是否已确认与 title 关键词一致。"""
+    if not isinstance(data_entry, dict):
+        return False
+    subtype = str(data_entry.get("subtype", "")).strip().lower()
+    expected = _SUBTYPE_CONFIRMS_PATTERN.get(subtype)
+    return expected == pattern
+
+
 # (title 关键词模式, 中文描述, 校验函数, 是否为 regex, 是否需要字段级匹配)
 _SEMANTIC_CHECKS: list[tuple[str, str, Callable[..., bool], bool, bool]] = [
     ("空格",     "值含空格",            _v_space,         False, False),
@@ -212,6 +232,9 @@ class TitleDataMismatchRule(Rule):
                 else:
                     ok = validator(value)
                 if not ok:
+                    # V1.3: subtype 已声明语义 → 信任 subtype，跳过值级检查
+                    if _subtype_confirms(data.get(data_key), pattern):
+                        continue
                     mismatches.append(
                         f"标题含'{pattern}'({desc})，"
                         f"但 {data_key}='{value[:30]}' 不满足"
