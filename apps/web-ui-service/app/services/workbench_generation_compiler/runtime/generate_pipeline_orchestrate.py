@@ -156,7 +156,7 @@ def _format_product_case_yaml(
     if isinstance(preconditions, list) and preconditions:
         product_yaml.setdefault("preconditions", preconditions)
         setup_steps = compile_preconditions(
-            case_yaml=product_yaml,
+            product_yaml=product_yaml,
             page_object=page_object,
         )
         if setup_steps:

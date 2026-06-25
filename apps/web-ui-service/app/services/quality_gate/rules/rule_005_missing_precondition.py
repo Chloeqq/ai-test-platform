@@ -186,8 +186,6 @@ class MissingPreconditionRule(Rule):
 
     # ── V2.0: structured precondition validation ──────────────────────────
 
-    _ALLOWED_TYPES: frozenset[str] = frozenset({"login", "account_state", "sql", "api_call"})
-
     def _validate_structured(
         self,
         case: dict,
@@ -195,6 +193,9 @@ class MissingPreconditionRule(Rule):
         execution: dict,
         preconditions: list,
     ) -> RuleResult:
+        from app.services.workbench_generation_compiler.runtime.generate_pipeline_precondition import (
+            _PRECONDITION_TYPES as ALLOWED_TYPES,
+        )
         """V2.0: 验证结构化 preconditions 块。"""
         issues: list[str] = []
 
@@ -205,10 +206,10 @@ class MissingPreconditionRule(Rule):
             pc_type = _normalized(entry.get("type", ""))
             if not pc_type:
                 issues.append(f"preconditions[{i}]: 缺少 type 字段")
-            elif pc_type not in self._ALLOWED_TYPES:
+            elif pc_type not in ALLOWED_TYPES:
                 issues.append(
                     f"preconditions[{i}]: 未知 type '{pc_type}'，"
-                    f"支持: {sorted(self._ALLOWED_TYPES)}"
+                    f"支持: {sorted(ALLOWED_TYPES)}"
                 )
 
             if pc_type == "login" and not isinstance(entry.get("data_ref"), dict):
