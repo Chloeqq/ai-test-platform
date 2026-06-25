@@ -19,7 +19,8 @@ def goto_action(page, locator, step, context, **kwargs):
         resolved_url,
         base_url=str(kwargs.get("base_url", "")),
     )
-    page.goto(normalized_url, wait_until="commit", timeout=30000)
+    timeout_ms = step.get("timeout_ms", 30000)
+    page.goto(normalized_url, wait_until="commit", timeout=int(timeout_ms))
     try:
         page.wait_for_load_state("domcontentloaded", timeout=3000)
     except Exception:

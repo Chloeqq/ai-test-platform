@@ -9,6 +9,7 @@ import time
 import uuid
 import subprocess
 import sys
+import yaml
 from datetime import datetime
 from shared_backend.datetime_compat import UTC
 from pathlib import Path
@@ -16,7 +17,7 @@ from typing import Any, Callable
 
 from shared_backend.case_ids import normalize_case_id
 from shared_backend.type_utils import dict_value as _dict_value
-from sqlalchemy import select
+from sqlalchemy import select, text as _text
 from sqlalchemy.orm import Session
 
 from app.api.workbench._helpers import (
@@ -491,6 +492,7 @@ def start_run(
 ) -> dict[str, Any]:
     run_id = uuid.uuid4().hex
     if str(runtime_case_script or "").strip():
+        runtime_case_script = _resolve_pool_data(runtime_case_script)
         case_path = materialize_runtime_case_yaml(
             run_id=run_id,
             case_id=case_id,
@@ -570,6 +572,44 @@ def wait_run_terminal(
     return last_item, True
 
 
+def _execute_setup_sql(
+    *,
+    case_path: Path,
+    log_fp: Any,
+    run_id: str,
+) -> bool:
+    """V3.0: 执行用例的 setup_sql。返回 True 表示执行失败。"""
+    try:
+        with open(case_path, encoding="utf-8") as fh:
+            case = yaml.safe_load(fh)
+    except (yaml.YAMLError, OSError) as exc:
+        log_fp.write(f"[setup_sql] failed to read case YAML: {exc}\n")
+        return True  # 无法读取 → 失败
+
+    setup_sql = str(case.get("setup_sql", "")).strip() if isinstance(case, dict) else ""
+    if not setup_sql:
+        return False  # 无 setup_sql → 跳过
+
+    log_fp.write(f"[setup_sql] executing: {setup_sql[:200]}\n")
+    log_fp.flush()
+
+    try:
+        from shared_backend.db import get_db_session as SessionLocal
+
+        with SessionLocal() as session:
+            for statement in setup_sql.split(";"):
+                stmt = statement.strip()
+                if not stmt:
+                    continue
+                session.execute(_text(stmt))
+            session.commit()
+        log_fp.write(f"[setup_sql] executed successfully\n")
+        return False
+    except Exception as exc:
+        log_fp.write(f"[setup_sql] execution failed: {exc}\n")
+        return True
+
+
 def execute_run(
     job: dict[str, Any],
     *,
@@ -617,6 +657,11 @@ def execute_run(
         log_fp.write(f"[run] artifacts={artifacts_dir}\n")
         log_fp.write(f"[run] allure_results={allure_results_dir}\n")
         log_fp.flush()
+
+        # V3.0: 在启动 Runner 前执行 setup_sql
+        if _execute_setup_sql(case_path=case_path, log_fp=log_fp, run_id=run_id):
+            update_job(run_id, {"status": "setup_failed", "finished_at": now_iso_fn()})
+            return
 
         process = popen_fn(
             command,
@@ -834,3 +879,35 @@ def persist_runtime_run_to_case_center(db: Session, run_item: dict[str, Any]) ->
     db.commit()
     db.refresh(existing)
     return existing
+
+
+
+def _resolve_pool_data(yaml_text: str) -> str:
+    """解析 YAML 中的 source_type: pool 字段，用数据池的实际值替换。"""
+    data = yaml.safe_load(yaml_text) or {}
+    if not isinstance(data, dict):
+        return yaml_text
+
+    case_data = data.get("data") if isinstance(data.get("data"), dict) else {}
+    resolved = False
+    for key, entry in case_data.items():
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("source_type") != "pool":
+            continue
+        pool_name =str(entry.get("pool_name", "")).strip()
+        item_key = str(entry.get("key", "")).strip()
+        if  not pool_name or not item_key:
+            continue
+        from app.services.test_data_pool_service import resolve_pool_value
+        pool_data = resolve_pool_value(None, pool_name, {"key": item_key})
+        if pool_data:
+            entry["source_type"] = "inline"
+            entry.pop("pool_name", None)
+            entry.pop("key", None)
+            entry["value"] = pool_data.get(key, "")
+            resolved = True
+
+    if resolved:
+        return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+    return yaml_text
