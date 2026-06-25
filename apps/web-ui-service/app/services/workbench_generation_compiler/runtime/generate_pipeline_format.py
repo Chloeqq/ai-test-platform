@@ -755,9 +755,13 @@ def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -
                 )
             entry, field = parsed
             data_key = f"{entry}.{field}"
-            # 如果 data 中没有此 key，创建占位条目（值在 data 段声明）
             if data_key not in data:
-                data[data_key] = {"source_type": "inline", "value": ""}
+                raise ExecutionCompilerError(
+                    code="dsl_v1_1_missing_input_data_source",
+                    message=f"DSL V1.1 input step requires declared data source",
+                    reason=f"input step {index} references $test_data.{entry}.{field} but data key '{data_key}' not found",
+                    stage="dsl_v1_1_enrichment",
+                )
             # 创建变量映射: $test_data.user_001.username → {{user_001.username}}
             variable_name = _variable_name_for_input(page=page, element_code=_step_element_code(step), data_key=data_key)
             variables[variable_name] = f"{{{{{data_key}}}}}"
