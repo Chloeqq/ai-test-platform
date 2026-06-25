@@ -327,6 +327,12 @@ def _format_product_execution_steps(
         page_object=page_object,
         expected_by_intent=expected_by_intent,
     )
+    _append_login_error_assertion(
+        product_steps=product_steps,
+        page=page,
+        page_object=page_object,
+        expected_by_intent=expected_by_intent,
+    )
     return product_steps
 
 
@@ -365,6 +371,57 @@ def _append_login_success_assertion(
         "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
     }
     role = _normalized_text(home_meta.get("role"))
+    if locator_type == "role" and role:
+        assertion_step["role"] = role
+    product_steps.append(assertion_step)
+
+
+def _append_login_error_assertion(
+    *,
+    product_steps: list[dict[str, Any]],
+    page: str,
+    page_object: dict[str, Any],
+    expected_by_intent: dict[str, str],
+) -> None:
+    """V2.5b: 在负向登录场景追加错误提示断言（assert_visible error_message）。
+
+    前提条件（缺一不可）：
+    1. 当前页面是 login 页
+    2. expected_by_intent 中存在负向/安全/异常场景的意图
+       （expected 文本含"错误"/"失败"/"提示"等关键词）
+    3. 步骤中还没有 error_message 的断言（避免重复）
+    4. 页面对象库中有 error_message 的完整定位信息
+    """
+    if page != "login":
+        return
+
+    # 检查是否属于需要 error 断言的场景
+    all_expected = " ".join(expected_by_intent.values()).lower()
+    error_keywords = ("错误", "失败", "提示", "异常", "无效", "非法", "锁定", "禁用")
+    if not any(kw in all_expected for kw in error_keywords):
+        return
+
+    # 避免重复：已有 error_message 断言则跳过
+    for s in product_steps:
+        if isinstance(s, dict) and "error_message" in str(s.get("target", "")):
+            return
+
+    elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
+    error_meta = _product_element_meta(page="login", target_code="error_message", elements=elements)
+    locator_type = _normalized_text(error_meta.get("type") or error_meta.get("locator_type"))
+    locator_value = _normalized_text(error_meta.get("selector") or error_meta.get("locator_value"))
+    if not locator_type or not locator_value:
+        return
+
+    assertion_step: dict[str, Any] = {
+        "action": "assert_visible",
+        "target": "element:error_message",
+        "locator_type": locator_type,
+        "locator_value": locator_value,
+        "target_name": _product_element_name("login", "error_message", error_meta),
+        "expected_result": "应显示错误提示信息",
+    }
+    role = _normalized_text(error_meta.get("role"))
     if locator_type == "role" and role:
         assertion_step["role"] = role
     product_steps.append(assertion_step)

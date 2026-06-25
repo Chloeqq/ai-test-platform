@@ -708,7 +708,7 @@ from .generate_pipeline_format import (  # noqa: E402
     _product_description, _product_page_load_expected, _product_element_name,
     _product_locator, _product_element_meta, _trusted_page_url,
     _product_step_expected, _format_product_execution_steps,
-    _append_login_success_assertion, _step_element_code,
+    _append_login_success_assertion, _append_login_error_assertion, _step_element_code,
     _is_variable_template, _variable_template_key,
     _data_key_for_input, _variable_name_for_input,
     _reserve_data_key, _reserve_variable_name,

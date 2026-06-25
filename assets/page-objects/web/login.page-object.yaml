@@ -53,6 +53,16 @@ elements:
       - 首页
       - 工作台首页
 
+  error_message:
+    locator_type: css
+    locator_value: .el-message--error
+    element_name: 错误提示
+    business_type: message
+    aliases:
+      - 错误信息
+      - 错误提示
+      - 提示信息
+
   logout_option:
     locator_type: text
     locator_value: 退出

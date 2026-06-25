@@ -18,11 +18,7 @@ from shared_backend.quality_gate import (
     Severity,
     register_rule,
 )
-
-
-def _normalized(value: Any) -> str:
-    """标准化文本"""
-    return str(value or "").strip().lower()
+from ._common import normalized
 
 
 # ---------------------------------------------------------------------------
@@ -51,8 +47,8 @@ def _has_login_steps(steps: list[dict[str, Any]]) -> bool:
     for step in steps:
         if not isinstance(step, dict):
             continue
-        action = _normalized(step.get("action"))
-        target = _normalized(step.get("target", ""))
+        action = normalized(step.get("action"))
+        target = normalized(step.get("target", ""))
 
         if action in {"input", "fill"}:
             if any(kw in target for kw in _LOGIN_CREDENTIAL_KEYWORDS):
@@ -119,7 +115,7 @@ class MissingPreconditionRule(Rule):
         if isinstance(preconditions, list) and preconditions:
             return self._validate_structured(case, requirement, execution, preconditions)
 
-        precondition_text = _normalized(requirement.get("precondition", ""))
+        precondition_text = normalized(requirement.get("precondition", ""))
         if not precondition_text:
             return RuleResult(
                 rule_id=self.rule_id,
@@ -201,7 +197,7 @@ class MissingPreconditionRule(Rule):
             if not isinstance(entry, dict):
                 issues.append(f"preconditions[{i}]: 不是有效的字典对象")
                 continue
-            pc_type = _normalized(entry.get("type", ""))
+            pc_type = normalized(entry.get("type", ""))
             if not pc_type:
                 issues.append(f"preconditions[{i}]: 缺少 type 字段")
             elif pc_type not in ALLOWED_TYPES:
@@ -228,7 +224,7 @@ class MissingPreconditionRule(Rule):
                 passed=False,
             )
 
-        types_used = [_normalized(e.get("type", "")) for e in preconditions if isinstance(e, dict)]
+        types_used = [normalized(e.get("type", "")) for e in preconditions if isinstance(e, dict)]
         return RuleResult(
             rule_id=self.rule_id,
             rule_name=self.rule_name,
