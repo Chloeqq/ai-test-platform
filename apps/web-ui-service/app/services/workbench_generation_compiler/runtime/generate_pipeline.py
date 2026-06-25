@@ -708,7 +708,7 @@ from .generate_pipeline_format import (  # noqa: E402
     _product_description, _product_page_load_expected, _product_element_name,
     _product_locator, _product_element_meta, _trusted_page_url,
     _product_step_expected, _format_product_execution_steps,
-    _append_login_success_assertion, _append_login_error_assertion, _step_element_code,
+    _append_login_success_assertion, _step_element_code,
     _is_variable_template, _variable_template_key,
     _data_key_for_input, _variable_name_for_input,
     _reserve_data_key, _reserve_variable_name,
@@ -720,6 +720,8 @@ from .generate_pipeline_format import (  # noqa: E402
     _validate_dsl_v1_1_minimum_contract, _enrich_product_case_yaml_v1_1,
 )
 from .generate_pipeline_locator import _normalize_step_locators  # noqa: E402
+from .generate_pipeline_variable import _is_test_data_ref, _parse_test_data_ref  # noqa: E402
+from .generate_pipeline_assertion import _append_login_error_assertion  # noqa: E402
 from .generate_pipeline_metadata import (  # noqa: E402
     _RISK_LEVELS, _ENVIRONMENTS, _NETWORK_PROFILES, _ACTOR_ROLES, _validate_enum,
 )

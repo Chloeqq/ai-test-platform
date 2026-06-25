@@ -23,6 +23,9 @@ from shared_backend.type_utils import str_value as _normalized_text
 
 
 # 从主模块导入 leaf 工具函数（无循环：主模块的所有定义在线 1-703 已加载）
+from .generate_pipeline_variable import _is_test_data_ref, _parse_test_data_ref  # noqa: E402
+from .generate_pipeline_assertion import _append_login_error_assertion  # noqa: E402
+
 from .generate_pipeline import (  # noqa: E402
     _normalized_text, _LOGGER, _YAML_PAGE_OBJECT_ROOT,
     _COMPILER_ERROR_CODES, _SUPPORTED_TOP_LEVEL_ASSERTIONS,
@@ -387,57 +390,6 @@ def _append_login_success_assertion(
     product_steps.append(assertion_step)
 
 
-def _append_login_error_assertion(
-    *,
-    product_steps: list[dict[str, Any]],
-    page: str,
-    page_object: dict[str, Any],
-    expected_by_intent: dict[str, str],
-) -> None:
-    """V2.5b: 在负向登录场景追加错误提示断言（assert_visible error_message）。
-
-    前提条件（缺一不可）：
-    1. 当前页面是 login 页
-    2. expected_by_intent 中存在负向/安全/异常场景的意图
-       （expected 文本含"错误"/"失败"/"提示"等关键词）
-    3. 步骤中还没有 error_message 的断言（避免重复）
-    4. 页面对象库中有 error_message 的完整定位信息
-    """
-    if page != "login":
-        return
-
-    # 检查是否属于需要 error 断言的场景
-    all_expected = " ".join(expected_by_intent.values()).lower()
-    error_keywords = ("错误", "失败", "提示", "异常", "无效", "非法", "锁定", "禁用")
-    if not any(kw in all_expected for kw in error_keywords):
-        return
-
-    # 避免重复：已有 error_message 断言则跳过
-    for s in product_steps:
-        if isinstance(s, dict) and "error_message" in str(s.get("target", "")):
-            return
-
-    elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
-    error_meta = _product_element_meta(page="login", target_code="error_message", elements=elements)
-    locator_type = _normalized_text(error_meta.get("type") or error_meta.get("locator_type"))
-    locator_value = _normalized_text(error_meta.get("selector") or error_meta.get("locator_value"))
-    if not locator_type or not locator_value:
-        return
-
-    assertion_step: dict[str, Any] = {
-        "action": "assert_visible",
-        "target": "element:error_message",
-        "locator_type": locator_type,
-        "locator_value": locator_value,
-        "target_name": _product_element_name("login", "error_message", error_meta),
-        "expected_result": "应显示错误提示信息",
-    }
-    role = _normalized_text(error_meta.get("role"))
-    if locator_type == "role" and role:
-        assertion_step["role"] = role
-    product_steps.append(assertion_step)
-
-
 def _step_element_code(step: dict[str, Any]) -> str:
     """
     从步骤字典中提取元素代码（element code）。
@@ -779,7 +731,6 @@ def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -
                     reason=f"input step {index} has invalid variable template",
                     stage="dsl_v1_1_enrichment",
                 )
-            # 允许直接引用 data key，也允许先引用 execution.variables 再转到 data key。
             if referenced_key not in data:
                 variable_mapping = variables.get(referenced_key)
                 data_key = _variable_template_key(variable_mapping) if variable_mapping is not None else ""
@@ -790,6 +741,27 @@ def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -
                         reason=f"input step {index} references variable `{referenced_key}` without declared data source",
                         stage="dsl_v1_1_enrichment",
                     )
+            continue
+
+        # V3.0: $test_data.xxx.yyy → 内部转换为 {{var}} 格式
+        if _is_test_data_ref(raw_value):
+            parsed = _parse_test_data_ref(str(raw_value))
+            if not parsed:
+                raise ExecutionCompilerError(
+                    code="dsl_v1_1_missing_input_data_source",
+                    message="DSL V1.1 input step $test_data reference is invalid",
+                    reason=f"input step {index} has invalid $test_data reference",
+                    stage="dsl_v1_1_enrichment",
+                )
+            entry, field = parsed
+            data_key = f"{entry}.{field}"
+            # 如果 data 中没有此 key，创建占位条目（值在 data 段声明）
+            if data_key not in data:
+                data[data_key] = {"source_type": "inline", "value": ""}
+            # 创建变量映射: $test_data.user_001.username → {{user_001.username}}
+            variable_name = _variable_name_for_input(page=page, element_code=_step_element_code(step), data_key=data_key)
+            variables[variable_name] = f"{{{{{data_key}}}}}"
+            step["value"] = f"{{{{{variable_name}}}}}"
             continue
 
         element_code = _step_element_code(step)
