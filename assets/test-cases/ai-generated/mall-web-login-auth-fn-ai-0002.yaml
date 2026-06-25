@@ -15,7 +15,18 @@ requirement:
   type: functional
   precondition: 用户已使用正确账号密码登录成功，处于首页
   source_asset_id: mall-web-login-auth-fn-ai-0001
-data: {}
+data:
+  username:
+    source_type: inline
+    value: admin
+  password:
+    source_type: inline
+    value: macro123
+preconditions:
+- type: login
+  data_ref:
+    username: username
+    password: password
 execution:
   runner: playwright
   page: login

@@ -15,6 +15,9 @@ requirement:
   type: negative
   precondition: 用户账号处于锁定状态，处于登录页面
   source_asset_id: mall-web-login-auth-fn-ai-0001
+preconditions:
+- type: account_state
+  state: locked
 data:
   password:
     source_type: inline

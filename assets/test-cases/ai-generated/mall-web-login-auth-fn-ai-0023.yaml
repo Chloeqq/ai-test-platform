@@ -53,6 +53,9 @@ execution:
     locator_value: login-submit-btn
     target_name: 登录按钮
     expected_result: 已点击登录按钮
+  - action: wait
+    timeout_ms: 5000
+    expected_result: 等待登录请求超时
   - action: assert_url
     target: ''
     locator_type: ''

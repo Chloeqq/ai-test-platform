@@ -14,6 +14,9 @@ requirement:
   title: 账号禁用时登录提示错误
   type: negative
   precondition: 用户账号处于禁用状态，处于登录页面
+preconditions:
+- type: account_state
+  state: disabled
   source_asset_id: mall-web-login-auth-fn-ai-0001
 data:
   password:

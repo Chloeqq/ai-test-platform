@@ -53,6 +53,12 @@ execution:
     locator_value: login-submit-btn
     target_name: 登录按钮
     expected_result: 已点击登录按钮
+  - action: click
+    target: element:login_button
+    locator_type: data-testid
+    locator_value: login-submit-btn
+    target_name: 登录按钮
+    expected_result: 再次点击登录按钮
   - action: assert_visible
     target: element:home_menu
     locator_type: data-testid

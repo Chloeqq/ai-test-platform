@@ -78,6 +78,16 @@ _CHECKS: list[tuple[str, _CheckFn, str, str]] = [
 )
 class ExternalStateDependencyRule(Rule):
     def validate(self, context: GateContext) -> RuleResult:
+        # V2.0: preconditions 块已声明了外部状态依赖的处理方式，跳过文本检查
+        preconditions = context.case_yaml.get("preconditions")
+        if isinstance(preconditions, list) and preconditions:
+            for entry in preconditions:
+                if isinstance(entry, dict) and entry.get("type") == "account_state":
+                    return RuleResult(rule_id=self.rule_id, rule_name=self.rule_name,
+                                      severity=self.severity, category=self.category,
+                                      message="V2.0 preconditions 块已声明 account_state，跳过文本检查",
+                                      passed=True)
+
         requirement = context.case_yaml.get("requirement") or {}
         precondition_text = requirement.get("precondition", "")
         if not precondition_text or not isinstance(precondition_text, str) or not precondition_text.strip():

@@ -34,7 +34,7 @@ execution:
     locator_value: ''
     target_name: ''
     value: '#/login'
-    expected_result: 页面跳转回登录页面
+    expected_result: 访问被拦截，页面停留在登录页
   selected_intent_ids:
   - intent-24
 expected_result: 页面跳转回登录页面
