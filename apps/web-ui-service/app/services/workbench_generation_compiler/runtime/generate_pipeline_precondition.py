@@ -335,8 +335,6 @@ def _compile_network(
                 "timeout_ms": config.get("timeout_ms", 5000),
                 "expected_result": f"网络预处理: {profile}",
             })
-        product_yaml.setdefault("_network_config", config)
-
     return steps
 
 
