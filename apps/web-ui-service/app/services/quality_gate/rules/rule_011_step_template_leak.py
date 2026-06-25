@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from shared_backend.quality_gate import (
@@ -45,28 +44,17 @@ def _has_wait_or_timeout(steps: list[dict[str, Any]]) -> bool:
     return False
 
 
-def _has_network_control(steps: list[dict[str, Any]]) -> bool:
-    """检查是否有弱网/网络控制相关步骤。
-
-    V1.1 中没有专门的网络控制步骤，检查 preconditions 文本中是否提
-    及弱网/网络模拟，以及是否有 Playwright route 相关动作。
-    """
-    for s in steps:
-        if not isinstance(s, dict):
-            continue
-        action = normalized(s.get("action"))
-        if action in {"route", "throttle", "intercept"}:
-            return True
-    return False
-
-
 def _title_contains_any(title: str, keywords: list[str]) -> bool:
     """检查 title 是否包含任意关键词。"""
     lower = title.lower()
     return any(kw in lower for kw in keywords)
 
 
-# (关键词列表, 检查函数, 期望描述, 不匹配描述)
+# 行为关键词 → 期望步骤特征 的检查规则
+# 注：以下按 DSL 版本的可用动作逐步激活。
+#     "并发" — V1.1 无并行标记，待 DSL >= V2.0 后激活。
+#     "弱网" — V1.1 无 route/throttle 动作，待 DSL >= V2.0 后激活。
+#     当前只激活 V1.1 能验证的检查。
 _BEHAVIOR_CHECKS: list[tuple[list[str], Any, str, str]] = [
     (
         ["重复点击", "双击"],
@@ -80,12 +68,19 @@ _BEHAVIOR_CHECKS: list[tuple[list[str], Any, str, str]] = [
         "含 wait 步骤或 timeout 配置",
         "无 wait 步骤或 timeout 配置，标题声称超时但步骤可能瞬间完成",
     ),
-    (
-        ["弱网"],
-        lambda steps: _has_network_control(steps),
-        "含网络控制步骤 (route/throttle)",
-        "无网络控制步骤，标题声称弱网但步骤未模拟网络条件",
-    ),
+    # ── 以下两项待 DSL 升级后激活 ──
+    # (
+    #     ["弱网"],
+    #     lambda steps: _has_network_control(steps),
+    #     "含网络控制步骤 (route/throttle)",
+    #     "无网络控制步骤，标题声称弱网但步骤未模拟网络条件",
+    # ),
+    # (
+    #     ["并发"],
+    #     lambda steps: _has_parallel_steps(steps),
+    #     "含并行执行标记",
+    #     "无并行标记，标题声称并发但步骤为线性序列",
+    # ),
 ]
 
 
