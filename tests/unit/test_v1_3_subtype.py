@@ -9,6 +9,7 @@ from app.services.quality_gate.rules.rule_001_title_data_mismatch import (
     TitleDataMismatchRule,
     _subtype_confirms,
 )
+from app.services.workbench_generation_compiler.runtime import generate_pipeline as gp
 
 # ── 局部测试辅助函数（避免从 generate_pipeline_format 导入导致的循环引用） ──
 
@@ -167,3 +168,28 @@ class TestSubtypeConstants:
         expected = {"valid", "invalid", "boundary", "empty",
                      "whitespace", "special_chars", "generated", "pool"}
         assert _DSL_DATA_SUBTYPES == expected
+
+
+class TestPipelineNLRejection:
+    """验证管线对自然语言描述值抛出 ExecutionCompilerError。"""
+
+    def test_nl_value_raises_execution_compiler_error(self) -> None:
+        from shared_backend.execution_compiler import ExecutionCompilerError
+
+        with pytest.raises(ExecutionCompilerError) as exc_info:
+            gp._normalize_dsl_data_sources({
+                "data": {"u": {"source_type": "inline", "value": "最小长度合法账号名称"}},
+            })
+        assert exc_info.value.code == "dsl_v1_3_natural_language_value"
+
+    def test_normal_value_passes(self) -> None:
+        """普通值不应触发异常。"""
+        case = {"data": {"u": {"source_type": "inline", "value": "admin"}}}
+        gp._normalize_dsl_data_sources(case)
+        assert case["data"]["u"]["value"] == "admin"
+
+    def test_short_chinese_value_passes(self) -> None:
+        """短中文值（非描述）应正常通过。"""
+        case = {"data": {"u": {"source_type": "inline", "value": "测试数据"}}}
+        gp._normalize_dsl_data_sources(case)
+        assert case["data"]["u"]["value"] == "测试数据"

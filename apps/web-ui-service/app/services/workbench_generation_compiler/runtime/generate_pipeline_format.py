@@ -588,13 +588,18 @@ def _normalize_data_source_entry(*, key: str, raw_value: Any) -> dict[str, Any]:
                 inferred = _infer_data_subtype(raw_value.get("value"))
                 if inferred:
                     entry["subtype"] = inferred
-            # V1.3: 自然语言描述检测
+            # V1.3: 自然语言描述检测 — 禁止将描述文本当作测试数据值
             if _is_natural_language_description(raw_value.get("value")):
-                _LOGGER.warning(
-                    "DSL V1.3: data key '%s' value looks like a natural language description "
-                    "rather than test data. Consider using typed data with subtype annotation. "
-                    "value=%s",
-                    key, str(raw_value.get("value"))[:80],
+                raise ExecutionCompilerError(
+                    code="dsl_v1_3_natural_language_value",
+                    message=f"DSL V1.3 data key `{key}` value is a natural language description",
+                    reason=(
+                        f"value='{str(raw_value.get('value'))[:80]}' looks like a description "
+                        f"rather than test data. Use subtype annotation to declare test data "
+                        f"semantics (valid/invalid/boundary/empty/whitespace/special_chars), "
+                        f"and set value to the actual test input."
+                    ),
+                    stage="dsl_v1_3_enrichment",
                 )
             return entry
         if source_type == "pool":
