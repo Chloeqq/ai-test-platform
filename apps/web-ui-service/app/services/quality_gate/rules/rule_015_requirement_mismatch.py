@@ -1,43 +1,60 @@
 """REQUIREMENT_MISMATCH — 步骤未覆盖 requirement 中声明的意图。
 
+与 RULE_012 的边界：
+- RULE_012 检查 case.title vs steps
+- RULE_015 检查 requirement.title/description vs steps
+  两者检查对象不同（标题 vs 需求描述），但检查逻辑共用同一语义模式。
+
 详见 docs/architecture/2026-06-17_Rule Catalog 规则目录.md
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from shared_backend.quality_gate import (
     GateContext, Rule, RuleCategory, RuleResult, Severity, register_rule,
 )
 from ._common import normalized
 
+_CheckFn = Callable[[list[dict[str, Any]]], bool]
 
-# (intent/requirement 描述关键词regex, 期望步骤特征, 不匹配描述)
-_CHECKS: list[tuple[list[str], Any, str]] = [
+
+# (requirement 关键词, 期望步骤特征, 不匹配描述)
+_CHECKS: list[tuple[list[str], _CheckFn, str]] = [
     (
-        ["提示", "错误信息", "错误提示", "显示", "验证"],
+        ["提示", "错误信息", "错误提示"],
         lambda steps: any(
             normalized(s.get("action")) in {"assert_text", "assert_visible"}
+            and any(
+                kw in normalized(s.get("target", ""))
+                or kw in normalized(s.get("expected", ""))
+                for kw in ("error", "toast", "message", "错误", "提示", "失败", "invalid")
+            )
             for s in steps if isinstance(s, dict)
         ),
-        "intent 期望验证提示/消息但步骤缺少 assert_text/assert_visible",
+        "intent 期望验证错误提示但步骤缺少 assert_text/assert_visible（target/expected 不含 error/toast/message 语义）",
     ),
     (
         ["跳转", "重定向"],
         lambda steps: any(
-            normalized(s.get("action")) in {"goto", "assert_url"}
+            normalized(s.get("action")) == "assert_url"
             for s in steps if isinstance(s, dict)
         ),
-        "intent 期望跳转/重定向但步骤缺少 goto/assert_url",
+        "intent 期望跳转/重定向但步骤缺少 assert_url（注：RULE_003 认为负向场景中 assert_url 是弱断言，但在跳转场景中合理）",
     ),
     (
         ["阻止", "拦截"],
         lambda steps: any(
-            normalized(s.get("action")) in {"assert_url", "assert_visible"}
+            normalized(s.get("action")) in {"assert_visible", "assert_text"}
+            and any(
+                kw in normalized(s.get("target", ""))
+                or kw in normalized(s.get("expected", ""))
+                for kw in ("block", "intercept", "forbidden", "拒绝", "拦截", "禁止", "无权")
+            )
             for s in steps if isinstance(s, dict)
         ),
-        "intent 期望阻止/拦截但步骤缺少对应断言",
+        "intent 期望阻止/拦截但缺少对应的拒绝/阻断断言",
     ),
 ]
 
@@ -61,14 +78,16 @@ class RequirementMismatchRule(Rule):
                               severity=self.severity, category=self.category,
                               message="无 requirement 描述，跳过", passed=True)
 
-        steps = (context.case_yaml.get("execution") or {}).get("steps") or []
+        execution = context.case_yaml.get("execution") or {}
+        steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
 
         mismatches: list[str] = []
         for keywords, check_fn, desc in _CHECKS:
-            if not any(kw in intent_title for kw in keywords):
+            matched_kw = next((kw for kw in keywords if kw in intent_title), None)
+            if not matched_kw:
                 continue
             if not check_fn(steps):
-                mismatches.append(desc)
+                mismatches.append(f"requirement 含'{matched_kw}'→{desc}")
 
         if mismatches:
             return RuleResult(
