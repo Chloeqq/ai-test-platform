@@ -1,12 +1,16 @@
-"""STEP_TEMPLATE_LEAK — 步骤与标题行为关键词不匹配。
+"""BEHAVIOR_KEYWORD_MISMATCH — 标题声称的行为关键词在步骤中无对应操作。
 
-检查 title 中的行为关键词（重复点击/超时/弱网/并发）是否在 steps 中有对应操作。
-触发条件来自 Rule Catalog §3.3，详见 docs/architecture/2026-06-17_Rule Catalog 规则目录.md
+检查 title 中的行为关键词是否在 steps 中有对应操作。
+原名 STEP_TEMPLATE_LEAK，2026-06-25 重命名为 BEHAVIOR_KEYWORD_MISMATCH，
+因原名称暗示 AI 模板残留（应归属 RULE_016），实际检查的是标题-步骤行为一致性。
+
+详见 docs/architecture/2026-06-17_Rule Catalog 规则目录.md
 """
 
 from __future__ import annotations
 
-from typing import Any
+from collections import Counter
+from typing import Any, Callable
 
 from shared_backend.quality_gate import (
     GateContext,
@@ -19,21 +23,35 @@ from shared_backend.quality_gate import (
 
 from ._common import normalized
 
+_CheckFn = Callable[[list[dict[str, Any]]], bool]
 
-def _count_clicks(steps: list[dict[str, Any]]) -> int:
-    """统计步骤中 click 动作的数量（含 click + dblclick）。"""
-    count = 0
-    for s in steps:
-        if not isinstance(s, dict):
-            continue
-        action = normalized(s.get("action"))
-        if action in {"click", "dblclick"}:
-            count += 1
-    return count
+
+def _has_repeated_click_on_same_target(steps: list[dict[str, Any]]) -> bool:
+    """检查是否有同一 target 被 click 多次（真正的重复点击）。"""
+    targets = [
+        s.get("target") for s in steps
+        if isinstance(s, dict)
+        and normalized(s.get("action")) == "click"
+        and s.get("target")
+    ]
+    return any(c >= 2 for c in Counter(targets).values())
+
+
+def _has_dblclick(steps: list[dict[str, Any]]) -> bool:
+    """检查是否有 dblclick 动作（双击手势）。"""
+    return any(
+        isinstance(s, dict) and normalized(s.get("action")) == "dblclick"
+        for s in steps
+    )
 
 
 def _has_wait_or_timeout(steps: list[dict[str, Any]]) -> bool:
-    """检查是否有 wait 步骤或超时配置。"""
+    """检查是否有明确的超时等待步骤。
+
+    已知局限：V1.1 的 wait 通常用于等页面渲染，与"模拟接口超时"是不同语义。
+    当前的启发式检查只判断存在性，不验证超时阈值是否合理。
+    精确的超时模拟检测需等 DSL 支持 simulate_timeout/mock_delay 后实现。
+    """
     for s in steps:
         if not isinstance(s, dict):
             continue
@@ -44,55 +62,46 @@ def _has_wait_or_timeout(steps: list[dict[str, Any]]) -> bool:
     return False
 
 
-def _title_contains_any(title: str, keywords: list[str]) -> bool:
-    """检查 title 是否包含任意关键词。"""
-    lower = title.lower()
-    return any(kw in lower for kw in keywords)
-
-
-# 行为关键词 → 期望步骤特征 的检查规则
-# 注：以下按 DSL 版本的可用动作逐步激活。
-#     "并发" — V1.1 无并行标记，待 DSL >= V2.0 后激活。
-#     "弱网" — V1.1 无 route/throttle 动作，待 DSL >= V2.0 后激活。
-#     当前只激活 V1.1 能验证的检查。
-_BEHAVIOR_CHECKS: list[tuple[list[str], Any, str, str]] = [
+# 行为关键词 → 期望步骤特征的检查规则
+# 以下按 DSL 版本的可用动作逐步激活：
+#   已激活 — V1.1 可验证的检查
+#   TODO — 待 DSL >= V2.0 后激活（弱网需 route/throttle 动作，并发需并行标记）
+_BEHAVIOR_CHECKS: list[tuple[list[str], _CheckFn, str, str]] = [
     (
-        ["重复点击", "双击"],
-        lambda steps: _count_clicks(steps) >= 2,
-        "click 步骤 ≥ 2 次",
-        "click 步骤仅 1 次，标题声称重复/双击但步骤未体现多次点击",
+        ["重复点击", "连续点击"],
+        _has_repeated_click_on_same_target,
+        "同 target 被 click ≥ 2 次",
+        "无同 target 多次点击，标题声称重复但步骤未体现",
+    ),
+    (
+        ["双击"],
+        _has_dblclick,
+        "含 dblclick 步骤",
+        "无 dblclick 步骤，标题声称双击但步骤未体现",
     ),
     (
         ["超时"],
-        lambda steps: _has_wait_or_timeout(steps),
+        _has_wait_or_timeout,
         "含 wait 步骤或 timeout 配置",
-        "无 wait 步骤或 timeout 配置，标题声称超时但步骤可能瞬间完成",
+        "无 wait 或 timeout，标题声称超时但步骤未体现（注：V1.1 wait≠接口超时，检查有局限性）",
     ),
-    # ── 以下两项待 DSL 升级后激活 ──
-    # (
-    #     ["弱网"],
-    #     lambda steps: _has_network_control(steps),
-    #     "含网络控制步骤 (route/throttle)",
-    #     "无网络控制步骤，标题声称弱网但步骤未模拟网络条件",
-    # ),
-    # (
-    #     ["并发"],
-    #     lambda steps: _has_parallel_steps(steps),
-    #     "含并行执行标记",
-    #     "无并行标记，标题声称并发但步骤为线性序列",
-    # ),
+    # TODO: 弱网 — 待 DSL 支持 route/throttle 动作后激活
+    # TODO: 并发 — 待 DSL 支持并行标记后激活
 ]
 
 
 @register_rule(
     rule_id="RULE_011",
-    rule_name="STEP_TEMPLATE_LEAK",
+    rule_name="BEHAVIOR_KEYWORD_MISMATCH",
     category=RuleCategory.STEP,
     severity=Severity.WARNING,
-    description="步骤与标题行为关键词不匹配",
+    description="标题声称的行为关键词在步骤中无对应操作",
 )
-class StepTemplateLeakRule(Rule):
-    """检查 title 中的行为关键词是否在 steps 中有对应操作。"""
+class BehaviorKeywordMismatchRule(Rule):
+    """检查 title 中的行为关键词是否在 steps 中有对应操作。
+
+    原名 StepTemplateLeakRule，重命名原因见模块 docstring。
+    """
 
     def validate(self, context: GateContext) -> RuleResult:
         case = context.case_yaml
@@ -110,7 +119,7 @@ class StepTemplateLeakRule(Rule):
         mismatches: list[dict[str, Any]] = []
 
         for keywords, check_fn, expected, fail_msg in _BEHAVIOR_CHECKS:
-            if not _title_contains_any(title, keywords):
+            if not any(kw in title for kw in keywords):
                 continue
 
             if not check_fn(steps):
@@ -131,16 +140,15 @@ class StepTemplateLeakRule(Rule):
                 severity=self.severity,
                 category=self.category,
                 message=f"步骤行为与标题关键词不匹配: {detail}",
-                suggestion="请在步骤中添加标题声称的行为（多次点击/wait/弱网模拟等），"
+                suggestion="请在步骤中添加标题声称的行为（多次点击同元素/dblclick/wait等），"
                            "或修正标题以匹配实际步骤",
                 evidence={"title": title[:120], "mismatches": mismatches},
                 passed=False,
             )
 
-        # check which keywords actually matched
         matched_keywords = [
             kw for kw_set, _, _, _ in _BEHAVIOR_CHECKS
-            if _title_contains_any(title, kw_set)
+            if any(kw in title for kw in kw_set)
             for kw in kw_set
             if kw in title
         ]
