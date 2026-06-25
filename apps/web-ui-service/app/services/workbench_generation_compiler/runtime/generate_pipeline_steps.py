@@ -528,6 +528,42 @@ def _evaluate_case_quality_gate(
     )
 
 
+def _append_quality_gate_attribution(
+    *,
+    append_history: Any,
+    now_iso: Any,
+    case_id: str,
+    quality_gate: dict[str, Any],
+) -> None:
+    """V3.0b: 将质量门结果映射为归因记录，写入 history。
+
+    复用 failure-analysis-agent 的 category/source 分类体系，
+    通过 rule_attribution_map 将触发规则映射到 failure_category/source。
+    """
+    rule_results = quality_gate.get("rule_results")
+    if not isinstance(rule_results, list) or not rule_results:
+        return
+
+    from app.services.quality_gate.rule_attribution_map import resolve_attribution
+
+    attribution = resolve_attribution(rule_results)
+    triggered = attribution.get("triggered_rules", [])
+    if not triggered:
+        return  # 无规则触发 → 无需归因
+
+    append_history({
+        "timestamp": now_iso(),
+        "action": "quality_gate_attribution",
+        "case_id": case_id,
+        "failure_category": attribution["failure_category"],
+        "failure_source": attribution["failure_source"],
+        "confidence": attribution["confidence"],
+        "triggered_rules": triggered,
+        "gate_decision": quality_gate.get("decision", ""),
+        "gate_score": quality_gate.get("score", 0),
+    })
+
+
 def _persist_and_build_response(
     *,
     payload: Any,
@@ -674,6 +710,13 @@ def _persist_and_build_response(
             "orchestrator_error_reason": "",
             "quality_gate": quality_gate,
         }
+    )
+    # V3.0b: 质量门归因记录 — 将规则结果映射到 failure analysis 分类体系
+    _append_quality_gate_attribution(
+        append_history=append_history,
+        now_iso=now_iso,
+        case_id=case_id,
+        quality_gate=quality_gate,
     )
     if debug_enabled():
         append_history(
