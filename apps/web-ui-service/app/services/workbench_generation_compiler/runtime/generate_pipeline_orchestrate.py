@@ -22,6 +22,7 @@ from shared_backend.schemas.validator import ContractValidator
 from shared_backend.type_utils import str_value as _normalized_text
 
 from .generate_pipeline_precondition import compile_preconditions
+from .generate_pipeline_locator import _normalize_step_locators  # noqa: E402
 
 
 # 从上游模块导入（无循环：File 1→File 2→File 3 单向依赖）
@@ -44,7 +45,6 @@ from .generate_pipeline_format import (  # noqa: E402
     _product_step_expected, _format_product_execution_steps,
     _append_login_success_assertion, _step_element_code,
     _normalize_dsl_data_sources, _enrich_dsl_v1_1_data_bindings,
-    _normalize_step_locators,
     _normalize_top_level_assertion, _assertion_signature,
     _normalize_dsl_v1_1_assertions, _is_ai_automated_case,
     _validate_dsl_v1_1_minimum_contract, _enrich_product_case_yaml_v1_1,
@@ -67,7 +67,7 @@ def _enrich_v3_0_metadata(
     所有新字段均为可选——缺失时跳过，非法值时抛 ExecutionCompilerError。
     无硬编码模块名，纯字段透传+枚举校验。
     """
-    from .generate_pipeline_format import (
+    from .generate_pipeline_metadata import (
         _RISK_LEVELS, _ENVIRONMENTS, _NETWORK_PROFILES, _ACTOR_ROLES,
         _validate_enum,
     )

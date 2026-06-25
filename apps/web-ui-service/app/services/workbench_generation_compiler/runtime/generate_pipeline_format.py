@@ -960,26 +960,6 @@ def _validate_dsl_v1_1_minimum_contract(product_yaml: dict[str, Any]) -> None:
             )
 
 
-# ── V3.0 元数据常量 ────────────────────────────────────────────────────────
-# 多项目可扩展：新项目追加枚举值即可，不改逻辑。
-
-_RISK_LEVELS: frozenset[str] = frozenset({"HIGH", "MEDIUM", "LOW"})
-_ENVIRONMENTS: frozenset[str] = frozenset({"test", "staging", "production"})
-_NETWORK_PROFILES: frozenset[str] = frozenset({"normal", "slow", "timeout", "offline"})
-_ACTOR_ROLES: frozenset[str] = frozenset({"normal_user", "admin", "anonymous", "operator"})
-
-
-def _validate_enum(value: str, allowed: frozenset[str], field_name: str) -> None:
-    """校验枚举值，非法则抛出 ExecutionCompilerError。"""
-    if value and value not in allowed:
-        raise ExecutionCompilerError(
-            code="v3_0_invalid_metadata",
-            message=f"V3.0 metadata field '{field_name}' has invalid value '{value}'",
-            reason=f"allowed values: {sorted(allowed)}",
-            stage="v3_0_metadata_enrichment",
-        )
-
-
 def _enrich_product_case_yaml_v1_1(product_yaml: dict[str, Any], *, page: str) -> dict[str, Any]:
     """
     === DSL V1.1 格式化的统一出口 ===
@@ -999,64 +979,6 @@ def _enrich_product_case_yaml_v1_1(product_yaml: dict[str, Any], *, page: str) -
     _validate_dsl_v1_1_minimum_contract(product_yaml)
     return product_yaml
 
-
-# ── V2.5a: Locator 归一化 ─────────────────────────────────────────────────
-
-def _normalize_step_locators(
-    *,
-    steps: list[dict[str, Any]],
-    page_object: dict[str, Any],
-) -> int:
-    """V2.5a: 用 page object 的正式 locator 定义覆盖步骤中的 AI 生成值。
-
-    对每个引用了 element 的步骤，在 page_object 中查找该 element 的定义，
-    用其 locator_type/locator_value 替换步骤中的值。
-    若 element 使用 role 定位，同步 role 字段。
-
-    返回修改的步骤数。
-    """
-    elements = page_object.get("elements") if isinstance(page_object, dict) else None
-    if not isinstance(elements, dict) or not elements:
-        return 0
-
-    normalized_count = 0
-    for step in steps:
-        if not isinstance(step, dict):
-            continue
-
-        target = str(step.get("target", ""))
-        if not target.startswith("element:"):
-            continue
-        element_code = target[len("element:"):].strip()
-        if not element_code:
-            continue
-
-        element_def = elements.get(element_code)
-        if not isinstance(element_def, dict):
-            continue
-
-        po_type = _normalized_text(
-            element_def.get("type") or element_def.get("locator_type") or ""
-        )
-        po_value = _normalized_text(
-            element_def.get("selector") or element_def.get("locator_value") or ""
-        )
-
-        if po_type and po_type != _normalized_text(step.get("locator_type", "")):
-            step["locator_type"] = po_type
-            normalized_count += 1
-        if po_value and po_value != _normalized_text(step.get("locator_value", "")):
-            step["locator_value"] = po_value
-        if po_type == "role" and element_def.get("role"):
-            step["role"] = _normalized_text(element_def.get("role"))
-
-    if normalized_count:
-        _LOGGER.debug(
-            "V2.5a locator normalization: %d steps updated to match page object",
-            normalized_count,
-        )
-
-    return normalized_count
 
 
 

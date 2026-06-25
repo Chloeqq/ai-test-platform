@@ -718,7 +718,9 @@ from .generate_pipeline_format import (  # noqa: E402
     _normalize_top_level_assertion, _assertion_signature,
     _normalize_dsl_v1_1_assertions, _is_ai_automated_case,
     _validate_dsl_v1_1_minimum_contract, _enrich_product_case_yaml_v1_1,
-    _normalize_step_locators,
+)
+from .generate_pipeline_locator import _normalize_step_locators  # noqa: E402
+from .generate_pipeline_metadata import (  # noqa: E402
     _RISK_LEVELS, _ENVIRONMENTS, _NETWORK_PROFILES, _ACTOR_ROLES, _validate_enum,
 )
 from .generate_pipeline_precondition import compile_preconditions  # noqa: E402
