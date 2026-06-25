@@ -714,6 +714,7 @@ from .generate_pipeline_format import (  # noqa: E402
     _reserve_data_key, _reserve_variable_name,
     _normalized_data_source_type, _normalize_data_source_entry,
     _normalize_dsl_data_sources, _enrich_dsl_v1_1_data_bindings,
+    _infer_data_subtype, _is_natural_language_description, _DSL_DATA_SUBTYPES,
     _normalize_top_level_assertion, _assertion_signature,
     _normalize_dsl_v1_1_assertions, _is_ai_automated_case,
     _validate_dsl_v1_1_minimum_contract, _enrich_product_case_yaml_v1_1,
