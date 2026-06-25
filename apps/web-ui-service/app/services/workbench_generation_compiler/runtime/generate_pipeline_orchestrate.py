@@ -21,6 +21,8 @@ from shared_backend.schemas.contracts import normalize_test_point_plan_v1
 from shared_backend.schemas.validator import ContractValidator
 from shared_backend.type_utils import str_value as _normalized_text
 
+from .generate_pipeline_precondition import compile_preconditions
+
 
 # 从上游模块导入（无循环：File 1→File 2→File 3 单向依赖）
 from .generate_pipeline import (
@@ -146,7 +148,47 @@ def _format_product_case_yaml(
         product_yaml["requirement"].pop("precondition", None)
     # 确保 data 中每个有值的字段都有对应的 input 步骤和变量绑定
     _ensure_data_steps_and_variables(product_yaml, page, page_object)
+    # 根据 precondition 关键词自动路由到数据池
+    _apply_pool_routing(product_yaml)
+
+    # V2.0: 编译结构化 preconditions 块为 setup 步骤
+    preconditions = case_yaml.get("preconditions") if isinstance(case_yaml, dict) else None
+    if isinstance(preconditions, list) and preconditions:
+        product_yaml.setdefault("preconditions", preconditions)
+        setup_steps = compile_preconditions(
+            case_yaml=product_yaml,
+            page_object=page_object,
+        )
+        if setup_steps:
+            steps = product_yaml["execution"]["steps"]
+            product_yaml["execution"]["steps"] = setup_steps + steps
+
     return product_yaml
+
+
+def _apply_pool_routing(product_yaml: dict[str, Any]) -> None:
+    """根据 precondition 关键词，自动将 inline data 改为 pool 引用。
+
+    例: precondition 含"锁定" → username/password 路由到 login_accounts:locked_user
+    """
+    precondition = _normalized_text(
+        product_yaml.get("requirement", {}).get("precondition", "")
+    ).lower()
+    if not precondition:
+        return
+    data = product_yaml.get("data") if isinstance(product_yaml.get("data"), dict) else {}
+
+    routing: dict[str, tuple[str, str]] = {}
+    if any(w in precondition for w in ("锁定", "lock", "locked")):
+        routing = {"username": ("login_accounts", "locked_user"),
+                   "password": ("login_accounts", "locked_user")}
+    elif any(w in precondition for w in ("禁用", "disabled", "forbidden")):
+        routing = {"username": ("login_accounts", "disabled_user"),
+                   "password": ("login_accounts", "disabled_user")}
+
+    for key, (pool_name, item_key) in routing.items():
+        if key in data:
+            data[key] = {"source_type": "pool", "pool_name": pool_name, "key": item_key}
 
 
 def _ensure_data_steps_and_variables(

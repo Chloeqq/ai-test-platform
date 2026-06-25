@@ -114,6 +114,11 @@ class MissingPreconditionRule(Rule):
         execution = case.get("execution") if isinstance(case.get("execution"), dict) else {}
         steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
 
+        # ── V2.0: structured preconditions block validation ──
+        preconditions = case.get("preconditions")
+        if isinstance(preconditions, list) and preconditions:
+            return self._validate_structured(case, requirement, execution, preconditions)
+
         precondition_text = _normalized(requirement.get("precondition", ""))
         if not precondition_text:
             return RuleResult(
@@ -176,5 +181,61 @@ class MissingPreconditionRule(Rule):
             category=self.category,
             message=f"前置条件 setup 检查通过: '{precondition_text[:60]}'",
             evidence={"precondition": precondition_text[:120]},
+            passed=True,
+        )
+
+    # ── V2.0: structured precondition validation ──────────────────────────
+
+    _ALLOWED_TYPES: frozenset[str] = frozenset({"login", "account_state", "sql", "api_call"})
+
+    def _validate_structured(
+        self,
+        case: dict,
+        requirement: dict,
+        execution: dict,
+        preconditions: list,
+    ) -> RuleResult:
+        """V2.0: 验证结构化 preconditions 块。"""
+        issues: list[str] = []
+
+        for i, entry in enumerate(preconditions):
+            if not isinstance(entry, dict):
+                issues.append(f"preconditions[{i}]: 不是有效的字典对象")
+                continue
+            pc_type = _normalized(entry.get("type", ""))
+            if not pc_type:
+                issues.append(f"preconditions[{i}]: 缺少 type 字段")
+            elif pc_type not in self._ALLOWED_TYPES:
+                issues.append(
+                    f"preconditions[{i}]: 未知 type '{pc_type}'，"
+                    f"支持: {sorted(self._ALLOWED_TYPES)}"
+                )
+
+            if pc_type == "login" and not isinstance(entry.get("data_ref"), dict):
+                issues.append(
+                    f"preconditions[{i}] (login): 缺少 data_ref，"
+                    f"无法确定登录凭据来源"
+                )
+
+        if issues:
+            return RuleResult(
+                rule_id=self.rule_id,
+                rule_name=self.rule_name,
+                severity=self.severity,
+                category=self.category,
+                message=f"V2.0 preconditions 块有 {len(issues)} 个问题: {'; '.join(issues)}",
+                suggestion="请修正 preconditions 块中的 type 和 data_ref 声明",
+                evidence={"issues": issues, "preconditions": preconditions},
+                passed=False,
+            )
+
+        types_used = [_normalized(e.get("type", "")) for e in preconditions if isinstance(e, dict)]
+        return RuleResult(
+            rule_id=self.rule_id,
+            rule_name=self.rule_name,
+            severity=self.severity,
+            category=self.category,
+            message=f"V2.0 preconditions 块验证通过: {types_used}",
+            evidence={"preconditions": types_used},
             passed=True,
         )
