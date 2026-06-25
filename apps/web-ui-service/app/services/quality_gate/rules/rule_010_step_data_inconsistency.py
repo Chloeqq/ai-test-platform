@@ -15,9 +15,6 @@ RULE_002 检查步骤→data 的单项可达性，本规则补充检查变量声
 """
 
 from __future__ import annotations
-
-from typing import Any
-
 from shared_backend.quality_gate import (
     GateContext,
     Rule,
