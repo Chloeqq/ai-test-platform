@@ -56,6 +56,90 @@ def _svc():
     from . import generate_pipeline as _svc_mod
     return _svc_mod
 
+def _enrich_v3_0_metadata(
+    *,
+    product_yaml: dict[str, Any],
+    case_yaml: dict[str, Any],
+    intent_meta: dict[str, Any],
+) -> None:
+    """V3.0: 从 case_yaml 读取元数据字段，校验后写入 product_yaml。
+
+    所有新字段均为可选——缺失时跳过，非法值时抛 ExecutionCompilerError。
+    无硬编码模块名，纯字段透传+枚举校验。
+    """
+    from .generate_pipeline_format import (
+        _RISK_LEVELS, _ENVIRONMENTS, _NETWORK_PROFILES, _ACTOR_ROLES,
+        _validate_enum,
+    )
+
+    # ── case 元数据 ──
+    case_meta = case_yaml.get("case") if isinstance(case_yaml, dict) else None
+    if isinstance(case_meta, dict):
+        for field in ("domain", "sub_module"):
+            val = _normalized_text(case_meta.get(field, ""))
+            if val:
+                product_yaml.setdefault("case", {})
+                product_yaml["case"][field] = val  # type: ignore[index]
+
+        risk = _normalized_text(case_meta.get("risk_level", ""))
+        if risk:
+            _validate_enum(risk, _RISK_LEVELS, "case.risk_level")
+            product_yaml.setdefault("case", {})
+            product_yaml["case"]["risk_level"] = risk  # type: ignore[index]
+
+    # ── scenario ──
+    scenario = case_yaml.get("scenario") if isinstance(case_yaml, dict) else None
+    if isinstance(scenario, dict):
+        product_yaml["scenario"] = {
+            k: v for k, v in scenario.items()
+            if k in ("business_goal", "test_type", "risk_points") and v
+        }
+
+    # ── actors ──
+    actors = case_yaml.get("actors") if isinstance(case_yaml, dict) else None
+    if isinstance(actors, dict):
+        validated: dict[str, dict[str, str]] = {}
+        for actor_name, actor_def in actors.items():
+            if isinstance(actor_def, dict):
+                role = _normalized_text(actor_def.get("role", ""))
+                if role:
+                    _validate_enum(role, _ACTOR_ROLES, f"actors.{actor_name}.role")
+                    validated[actor_name] = {"role": role}
+        if validated:
+            product_yaml["actors"] = validated
+
+    # ── environment ──
+    env = case_yaml.get("environment") if isinstance(case_yaml, dict) else None
+    if isinstance(env, dict):
+        env_entry: dict[str, Any] = {}
+        env_val = _normalized_text(env.get("env", ""))
+        if env_val:
+            _validate_enum(env_val, _ENVIRONMENTS, "environment.env")
+            env_entry["env"] = env_val
+        net = _normalized_text(env.get("network_profile", ""))
+        if net:
+            _validate_enum(net, _NETWORK_PROFILES, "environment.network_profile")
+            env_entry["network_profile"] = net
+        flags = env.get("feature_flags")
+        if isinstance(flags, list):
+            env_entry["feature_flags"] = [_normalized_text(f) for f in flags if _normalized_text(f)]
+        if env_entry:
+            product_yaml["environment"] = env_entry
+
+    # ── coverage ──
+    coverage = case_yaml.get("coverage") if isinstance(case_yaml, dict) else None
+    if isinstance(coverage, dict):
+        cov_entry: dict[str, Any] = {}
+        for field in ("requirement_ids", "risk_points"):
+            val = coverage.get(field)
+            if isinstance(val, list):
+                cleaned = [_normalized_text(v) for v in val if _normalized_text(v)]
+                if cleaned:
+                    cov_entry[field] = cleaned
+        if cov_entry:
+            product_yaml["coverage"] = cov_entry
+
+
 def _format_product_case_yaml(
     *,
     case_yaml: dict[str, Any],
@@ -144,6 +228,12 @@ def _format_product_case_yaml(
         },
         "expected_result": expected,
     }
+    # V3.0: 元数据增强 — 从 case_yaml/intent_meta 读取并校验
+    _enrich_v3_0_metadata(
+        product_yaml=product_yaml,
+        case_yaml=case_yaml,
+        intent_meta=intent_meta,
+    )
     product_yaml = _enrich_product_case_yaml_v1_1(product_yaml, page=page)
     if not product_yaml["requirement"]["precondition"]:
         product_yaml["requirement"].pop("precondition", None)

@@ -719,10 +719,11 @@ from .generate_pipeline_format import (  # noqa: E402
     _normalize_dsl_v1_1_assertions, _is_ai_automated_case,
     _validate_dsl_v1_1_minimum_contract, _enrich_product_case_yaml_v1_1,
     _normalize_step_locators,
+    _RISK_LEVELS, _ENVIRONMENTS, _NETWORK_PROFILES, _ACTOR_ROLES, _validate_enum,
 )
 from .generate_pipeline_precondition import compile_preconditions  # noqa: E402
 from .generate_pipeline_orchestrate import (  # noqa: E402
-    _format_product_case_yaml, _attach_point_expected_results,
+    _format_product_case_yaml, _enrich_v3_0_metadata, _attach_point_expected_results,
     _build_direct_candidate_orchestrator_result,
     _extract_candidate_snapshots,
     _enrich_test_points_with_candidate_snapshots,
