@@ -356,6 +356,17 @@ def _append_login_success_assertion(
     功能：确认登录后能看到首页菜单 → 证明已离开登录页进入工作台。
     """
 
+    # V2.5b: 负向/异常场景不追加登录成功断言（登录应失败，home_menu 不会出现）
+    all_expected = " ".join(expected_by_intent.values()).lower()
+    error_keywords = ("错误", "失败", "提示", "异常", "无效", "非法", "锁定", "禁用")
+    if any(kw in all_expected for kw in error_keywords):
+        return
+
+    # 避免重复：已有 home_menu 断言则跳过
+    for s in product_steps:
+        if isinstance(s, dict) and "home_menu" in str(s.get("target", "")):
+            return
+
     elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
     home_meta = _product_element_meta(page="login", target_code="home_menu", elements=elements)
     locator_type = _normalized_text(home_meta.get("type") or home_meta.get("locator_type"))
