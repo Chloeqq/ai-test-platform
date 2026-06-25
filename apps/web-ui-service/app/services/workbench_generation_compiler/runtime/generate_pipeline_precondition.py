@@ -88,8 +88,10 @@ def compile_preconditions(
                 page_object=page_object,
             )
         elif pc_type == "account_state":
+            page = _normalized_text(page_object.get("page", ""))
             steps = _compile_account_state(
                 entry=entry, data=data,
+                page=page, product_yaml=product_yaml,
                 seed_data_provider=seed_data_provider,
             )
         elif pc_type == "sql":
@@ -165,49 +167,94 @@ def _compile_account_state(
     *,
     entry: dict[str, Any],
     data: dict[str, Any],
+    page: str,
+    product_yaml: dict[str, Any],
     seed_data_provider: Any = None,
 ) -> list[dict[str, Any]]:
-    """account_state 预处理：将 data 路由到种子数据池中的特定状态。
+    """account_state 预处理：路由数据到池 + 生成 setup_sql。
 
-    修改 data 中身份字段的 source_type（inline → pool），不改 steps。
+    1. 按约定 {page}_setup 池名查找 SQL 模板
+    2. 解析模板中的 {{var}} 占位符
+    3. 写入 product_yaml["setup_sql"]（Runner 执行前运行）
+    4. 路由身份数据到种子数据池
+
+    池不可用或 SQL 模板缺失 → 降级：仅路由数据，不发 SQL。
+    无硬编码池名/键名，多项目按约定扩展。
     """
     state = _normalized_text(entry.get("state", ""))
     if not state:
         return []
 
-    state_routing: dict[str, tuple[str, str]] = {
-        "locked": ("login_accounts", "locked_user"),
-        "disabled": ("login_accounts", "disabled_user"),
-        "active": ("login_accounts", "active_user"),
-    }
-
-    route = state_routing.get(state)
-    if not route:
-        _LOGGER.warning(
-            "precondition account_state: unknown state '%s', skipping pool routing",
-            state,
-        )
-        return []
-
-    pool_name, pool_key = route
-
-    if seed_data_provider is not None and hasattr(seed_data_provider, "has_item"):
-        if not seed_data_provider.has_item(pool_name, pool_key):  # type: ignore[union-attr]
-            _LOGGER.warning(
-                "precondition account_state: pool '%s' key '%s' not found in seed data",
-                pool_name, pool_key,
-            )
-
+    # ── 1. 路由身份数据到数据池 ─────────────────────────────────
     identity_keys = {"username", "password", "user_id", "email"}
     for dk in list(data.keys()):
         if dk in identity_keys and isinstance(data[dk], dict):
             entry_data = data[dk]
             if _normalized_text(entry_data.get("source_type")) == "inline":
                 entry_data["source_type"] = "pool"
-                entry_data["pool_name"] = pool_name
-                entry_data["key"] = f"{dk}_{state}" if dk == "username" else pool_key
+                entry_data["pool_name"] = page  # 按页面对应的池
+                entry_data["key"] = f"{dk}_{state}"
 
-    return []
+    # ── 2. 查找 setup_sql 模板 ──────────────────────────────────
+    sql = _resolve_setup_sql(
+        page=page, state=state,
+        seed_data_provider=seed_data_provider,
+    )
+    if sql:
+        # 解析模板中的 {{var}} 占位符
+        sql = _resolve_sql_template(sql, data)
+        existing = _normalized_text(product_yaml.get("setup_sql", ""))
+        if existing:
+            sql = existing + ";\n" + sql
+        product_yaml["setup_sql"] = sql
+        _LOGGER.info(
+            "precondition account_state: resolved setup_sql for state='%s' page='%s'",
+            state, page,
+        )
+
+    return []  # account_state 不改 steps
+
+
+def _resolve_setup_sql(
+    *,
+    page: str,
+    state: str,
+    seed_data_provider: Any = None,
+) -> str | None:
+    """从数据池查找 setup_sql 模板。按约定 {page}_setup 池名。
+
+    查找优先级：{state}_user → {state} → None（降级）
+    """
+    if seed_data_provider is None or not hasattr(seed_data_provider, "get_item"):
+        return None
+
+    pool_name = f"{page}_setup"
+    # 尝试多种 key 格式
+    for candidate in (f"{state}_user", state):
+        sql = seed_data_provider.get_item(pool_name, candidate)  # type: ignore[union-attr]
+        if isinstance(sql, str) and sql.strip():
+            return sql.strip()
+
+    _LOGGER.debug(
+        "precondition account_state: no setup_sql found in pool '%s' for state='%s'",
+        pool_name, state,
+    )
+    return None
+
+
+def _resolve_sql_template(sql: str, data: dict[str, Any]) -> str:
+    """解析 SQL 模板中的 {{data_key}} 占位符，替换为实际值。"""
+    import re
+    result = sql
+    for match in re.finditer(r"\{\{\s*(\w+)\s*\}\}", sql):
+        var = match.group(1)
+        entry = data.get(var)
+        if isinstance(entry, dict):
+            val = entry.get("value", "")
+        else:
+            val = str(entry) if entry is not None else ""
+        result = result.replace(match.group(0), val)
+    return result
 
 
 def _compile_sql(
