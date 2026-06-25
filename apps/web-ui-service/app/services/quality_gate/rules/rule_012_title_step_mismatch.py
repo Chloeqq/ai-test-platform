@@ -14,7 +14,7 @@ from typing import Any, Callable
 from shared_backend.quality_gate import (
     GateContext, Rule, RuleCategory, RuleResult, Severity, register_rule,
 )
-from ._common import normalized
+from ._common import has_assert_for_block_intercept, has_assert_for_error_message, normalized
 
 _CheckFn = Callable[[list[dict[str, Any]]], bool]
 
@@ -23,29 +23,13 @@ _CheckFn = Callable[[list[dict[str, Any]]], bool]
 _CHECKS: list[tuple[list[str], _CheckFn, str]] = [
     (
         ["验证错误提示", "显示错误", "错误信息", "提示错误"],
-        lambda steps: any(
-            normalized(s.get("action")) in {"assert_text", "assert_visible"}
-            and any(
-                kw in normalized(s.get("target", ""))
-                or kw in normalized(s.get("expected", ""))
-                for kw in ("error", "toast", "message", "错误", "提示", "失败", "invalid")
-            )
-            for s in steps if isinstance(s, dict)
-        ),
+        has_assert_for_error_message(),
         "缺少错误提示相关断言（assert_text/assert_visible 验证 error/toast/message）",
     ),
     (
         ["拦截", "阻止"],
-        lambda steps: any(
-            normalized(s.get("action")) in {"assert_visible", "assert_text"}
-            and any(
-                kw in normalized(s.get("target", ""))
-                or kw in normalized(s.get("expected", ""))
-                for kw in ("block", "intercept", "forbidden", "拒绝", "拦截", "禁止", "无权")
-            )
-            for s in steps if isinstance(s, dict)
-        ),
-        "标题声称拦截/阻止但缺少对应的拒绝/阻断断言（注：assert_url 在此场景为弱断言，RULE_003 也会报告）",
+        has_assert_for_block_intercept(),
+        "标题声称拦截/阻止但缺少对应的拒绝/阻断断言（若RULE_003已FAIL则无需额外处理）",
     ),
 ]
 
@@ -65,7 +49,7 @@ class TitleStepMismatchRule(Rule):
                               severity=self.severity, category=self.category,
                               message="无用例标题", passed=True)
 
-        execution = context.case_yaml.get("execution") or {}
+        execution = context.case_yaml.get("execution") if isinstance(context.case_yaml.get("execution"), dict) else {}
         steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
 
         mismatches: list[str] = []

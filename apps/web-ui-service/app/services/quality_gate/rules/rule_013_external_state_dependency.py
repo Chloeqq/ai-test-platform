@@ -87,7 +87,7 @@ class ExternalStateDependencyRule(Rule):
 
         precondition = normalized(precondition_text)
 
-        execution = context.case_yaml.get("execution") or {}
+        execution = context.case_yaml.get("execution") if isinstance(context.case_yaml.get("execution"), dict) else {}
         steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
 
         issues: list[str] = []

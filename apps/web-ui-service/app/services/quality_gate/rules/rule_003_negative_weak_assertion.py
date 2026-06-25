@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from shared_backend.quality_gate import (
@@ -53,8 +54,8 @@ def _normalized(value: Any) -> str:
 def _is_redirect_expected(expected_result: Any) -> bool:
     """检查 expected_result 是否描述的是 URL 跳转/重定向行为。
 
-    排除否定场景：\"不跳转\"/\"没有跳转\"/\"未跳转\" 表示预期页面保持不变，
-    但 assert_url 无法区分\"故意不跳转\"和\"出错了不跳转\"——仍视为弱断言。
+    对\"不跳转\"/\"没有跳转\"/\"未跳转\"等否定场景同样视为弱断言——
+    assert_url 无法区分\"故意不跳转\"和\"出错了不跳转\"，不给豁免。
     """
     text = _normalized(expected_result)
     if not text:

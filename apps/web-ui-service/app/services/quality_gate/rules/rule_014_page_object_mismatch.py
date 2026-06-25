@@ -43,7 +43,7 @@ class PageObjectMismatchRule(Rule):
                               severity=self.severity, category=self.category,
                               message=msg, passed=True)
 
-        execution = context.case_yaml.get("execution") or {}
+        execution = context.case_yaml.get("execution") if isinstance(context.case_yaml.get("execution"), dict) else {}
         steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
         if not steps:
             return RuleResult(rule_id=self.rule_id, rule_name=self.rule_name,
@@ -75,7 +75,6 @@ class PageObjectMismatchRule(Rule):
             po_role = normalized(element_def.get("role", ""))
 
             if po_role:
-                # page object 用 role 定义，步骤也应使用 role
                 if step_locator_type != "role":
                     mismatches.append({
                         "step_index": i,
@@ -85,7 +84,11 @@ class PageObjectMismatchRule(Rule):
                     })
                 continue
 
-            if po_locator_type and step_locator_type != po_locator_type:
+            if not po_locator_type:
+                # element 定义无 locator_type 也无 role → 定义不完整，跳过但记录
+                continue
+
+            if step_locator_type != po_locator_type:
                 mismatches.append({
                     "step_index": i,
                     "element": element_code,

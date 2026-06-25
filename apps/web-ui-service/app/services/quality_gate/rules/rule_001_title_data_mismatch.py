@@ -160,13 +160,15 @@ def _subtype_confirms(data_entry: Any, pattern: str) -> bool:
 
 
 # (title 关键词模式, 中文描述, 校验函数, 是否为 regex, 是否需要字段级匹配)
-_SEMANTIC_CHECKS: list[tuple[str, str, Callable[..., bool], bool, bool]] = [
+# _v_wrong 签名不同(val, *, data_key, context)，不由通用路径 validator(value) 调用，
+# validate() 中对 "错误" 做特判直接调用 _v_wrong。在 tuple 中注册 None 以保持结构一致。
+_SEMANTIC_CHECKS: list[tuple[str, str, Callable[..., bool] | None, bool, bool]] = [
     ("空格",     "值含空格",            _v_space,         False, False),
     (r"大于.*边界", "超长值(>20字符)",   _v_too_long,      True,  False),
     (r"小于.*边界", "超短值(<5字符)",    _v_too_short,     True,  False),
     ("空",       "空值",               _v_empty,         False, False),
     ("非法字符",  "含特殊字符",          _v_special_chars, False, False),
-    ("错误",     "与正确值不同",         _v_wrong,         False, True),
+    ("错误",     "与正确值不同",         None,             False, True),  # _v_wrong 由特判调用
 ]
 
 
@@ -262,7 +264,7 @@ class TitleDataMismatchRule(Rule):
             )
 
         checked = ", ".join(
-            f"{dk}='{_extract_value(data.get(dk), field=dk, provider=context.seed_data_provider) or ''}'"[:30]
+            f"{dk}='{(_extract_value(data.get(dk), field=dk, provider=context.seed_data_provider) or '')[:26]}'"
             for dk in data_keys
         )
         message = f"标题场景与 data 值一致: {checked}"

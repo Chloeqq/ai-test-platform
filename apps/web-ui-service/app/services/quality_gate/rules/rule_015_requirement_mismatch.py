@@ -15,7 +15,7 @@ from typing import Any, Callable
 from shared_backend.quality_gate import (
     GateContext, Rule, RuleCategory, RuleResult, Severity, register_rule,
 )
-from ._common import normalized
+from ._common import has_assert_for_block_intercept, has_assert_for_error_message, normalized
 
 _CheckFn = Callable[[list[dict[str, Any]]], bool]
 
@@ -24,15 +24,7 @@ _CheckFn = Callable[[list[dict[str, Any]]], bool]
 _CHECKS: list[tuple[list[str], _CheckFn, str]] = [
     (
         ["提示", "错误信息", "错误提示"],
-        lambda steps: any(
-            normalized(s.get("action")) in {"assert_text", "assert_visible"}
-            and any(
-                kw in normalized(s.get("target", ""))
-                or kw in normalized(s.get("expected", ""))
-                for kw in ("error", "toast", "message", "错误", "提示", "失败", "invalid")
-            )
-            for s in steps if isinstance(s, dict)
-        ),
+        has_assert_for_error_message(),
         "intent 期望验证错误提示但步骤缺少 assert_text/assert_visible（target/expected 不含 error/toast/message 语义）",
     ),
     (
@@ -45,15 +37,7 @@ _CHECKS: list[tuple[list[str], _CheckFn, str]] = [
     ),
     (
         ["阻止", "拦截"],
-        lambda steps: any(
-            normalized(s.get("action")) in {"assert_visible", "assert_text"}
-            and any(
-                kw in normalized(s.get("target", ""))
-                or kw in normalized(s.get("expected", ""))
-                for kw in ("block", "intercept", "forbidden", "拒绝", "拦截", "禁止", "无权")
-            )
-            for s in steps if isinstance(s, dict)
-        ),
+        has_assert_for_block_intercept(),
         "intent 期望阻止/拦截但缺少对应的拒绝/阻断断言",
     ),
 ]
@@ -70,15 +54,17 @@ class RequirementMismatchRule(Rule):
     def validate(self, context: GateContext) -> RuleResult:
         requirement = context.case_yaml.get("requirement") or {}
         intent_title = normalized(
-            requirement.get("title")
-            or requirement.get("description", "")
+            " ".join(filter(None, [
+                requirement.get("title", ""),
+                requirement.get("description", ""),
+            ]))
         )
         if not intent_title:
             return RuleResult(rule_id=self.rule_id, rule_name=self.rule_name,
                               severity=self.severity, category=self.category,
                               message="无 requirement 描述，跳过", passed=True)
 
-        execution = context.case_yaml.get("execution") or {}
+        execution = context.case_yaml.get("execution") if isinstance(context.case_yaml.get("execution"), dict) else {}
         steps = execution.get("steps") if isinstance(execution.get("steps"), list) else []
 
         mismatches: list[str] = []

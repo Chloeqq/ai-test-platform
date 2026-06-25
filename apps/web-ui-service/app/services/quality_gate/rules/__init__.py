@@ -14,7 +14,7 @@ from . import rule_007_unused_test_data         # noqa: F401
 from . import rule_008_missing_assertion        # noqa: F401
 from . import rule_009_assertion_target_invalid # noqa: F401
 from . import rule_010_step_data_inconsistency  # noqa: F401
-from . import rule_011_step_template_leak       # noqa: F401
+from . import rule_011_behavior_keyword_mismatch       # noqa: F401
 from . import rule_012_title_step_mismatch      # noqa: F401
 from . import rule_013_external_state_dependency # noqa: F401
 from . import rule_014_page_object_mismatch     # noqa: F401

@@ -193,10 +193,8 @@ class MissingPreconditionRule(Rule):
         execution: dict,
         preconditions: list,
     ) -> RuleResult:
-        from app.services.workbench_generation_compiler.runtime.generate_pipeline_precondition import (
-            _PRECONDITION_TYPES as ALLOWED_TYPES,
-        )
         """V2.0: 验证结构化 preconditions 块。"""
+        from app.services.quality_gate.rules._common import PRECONDITION_TYPES as ALLOWED_TYPES
         issues: list[str] = []
 
         for i, entry in enumerate(preconditions):

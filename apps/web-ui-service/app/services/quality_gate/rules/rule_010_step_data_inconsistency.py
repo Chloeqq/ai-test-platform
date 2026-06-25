@@ -94,6 +94,7 @@ class StepDataInconsistencyRule(Rule):
 
         # ── 2. 检查 input/fill 步骤数与其引用的 data key 数的结构性失衡 ──
         input_step_indices: list[int] = []
+        seen_keys: set[str] = set()
         resolved_data_keys: list[str] = []
 
         for i, step in enumerate(steps, start=1):
@@ -111,11 +112,13 @@ class StepDataInconsistencyRule(Rule):
             input_step_indices.append(i)
             var_name = template_key(str(value))
             data_key = var_to_data.get(var_name, var_name)
-            if data_key not in resolved_data_keys:
+            if data_key not in seen_keys:
+                seen_keys.add(data_key)
                 resolved_data_keys.append(data_key)
 
         input_count = len(input_step_indices)
         data_key_count = len(resolved_data_keys)
+        # 阈值选择：至少2步且差值≥2才告警。差值=1(如2步→1key)可能是同key合理复用。
         if input_count >= 2 and abs(input_count - data_key_count) >= 2:
             warnings.append(
                 f"input/fill 步骤 {input_count} 个 (步骤 {', '.join(str(i) for i in input_step_indices)})，"

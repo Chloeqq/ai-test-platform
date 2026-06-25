@@ -34,6 +34,8 @@ from shared_backend.quality_gate import (
     register_rule,
 )
 
+from ._common import extract_element_code as _extract_element_code
+
 # assert_text 明确不兼容的 business_type：纯视觉/交互控件，完全不承载可读文本。
 # 使用白名单思路——只拦截确定不可能有文本的类型，其余默认放行，降低误报。
 # 注意：button 可含文本("登录")、input 应使用 assert_value 但 assert_text 可能
@@ -48,13 +50,6 @@ _TEXT_INCOMPATIBLE_TYPES: frozenset[str] = frozenset({
 
 def _normalized(value: Any) -> str:
     return str(value or "").strip().lower()
-
-
-def _extract_element_code(target: Any) -> str:
-    """从 target 中提取 element code。支持 'element:xxx' 格式。"""
-    if isinstance(target, str) and target.startswith("element:"):
-        return target[len("element:"):]
-    return ""
 
 
 @register_rule(
