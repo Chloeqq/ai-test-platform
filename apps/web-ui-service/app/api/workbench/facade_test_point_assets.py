@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.workbench import constants, store
+from app.services import test_point_asset_store
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core import page_analysis_rules
@@ -141,6 +142,15 @@ class WorkbenchFacadeTestPointAssetsMixin:
     ) -> dict[str, Any]:
         """WorkbenchFacade.list_test_point_assets 接口实现。"""
         store.ensure_dirs()
+        # DB 事实源:把 DB 中缺失缓存文件的资产回写为缓存,保证文件枚举与 DB 一致。
+        try:
+            test_point_asset_store.sync_cache_from_db(
+                db,
+                project=project,
+                project_dir=workbench_asset_service.state_project_dir(project, state_root=constants.TEST_POINTS_ROOT),
+            )
+        except Exception:  # noqa: BLE001 - 缓存重建降级,不阻断列表
+            LOGGER.warning("test point asset cache sync from DB failed for %s", project, exc_info=True)
         payload = workbench_asset_service.build_test_point_asset_items(
             project=project,
             page=page,
@@ -152,10 +162,13 @@ class WorkbenchFacadeTestPointAssetsMixin:
             selection_state=selection_state,
             state_project_dir=lambda code: workbench_asset_service.state_project_dir(code, state_root=constants.TEST_POINTS_ROOT),
             normalize_page_slug=workbench_gate_service.normalize_page_slug,
-            load_test_point_asset=lambda project_value, case_id_value: workbench_asset_service.load_test_point_asset_with_root(
-                project_value,
-                case_id_value,
-                state_root=constants.TEST_POINTS_ROOT,
+            load_test_point_asset=lambda project_value, case_id_value: (
+                test_point_asset_store.load_asset(db, project=project_value, asset_id=case_id_value)
+                or workbench_asset_service.load_test_point_asset_with_root(
+                    project_value,
+                    case_id_value,
+                    state_root=constants.TEST_POINTS_ROOT,
+                )
             ),
             latest_run_snapshot_for_case=lambda project, case_id, page="": workbench_asset_service.latest_run_snapshot_for_case(
                 project=project,
@@ -801,10 +814,13 @@ class WorkbenchFacadeTestPointAssetsMixin:
         payload = workbench_asset_service.build_test_point_asset_detail(
             project=project,
             asset_id=asset_id,
-            load_test_point_asset=lambda project_value, case_id_value: workbench_asset_service.load_test_point_asset_with_root(
-                project_value,
-                case_id_value,
-                state_root=constants.TEST_POINTS_ROOT,
+            load_test_point_asset=lambda project_value, case_id_value: (
+                test_point_asset_store.load_asset(db, project=project_value, asset_id=case_id_value)
+                or workbench_asset_service.load_test_point_asset_with_root(
+                    project_value,
+                    case_id_value,
+                    state_root=constants.TEST_POINTS_ROOT,
+                )
             ),
             latest_run_snapshot_for_case=lambda project, case_id, page="": workbench_asset_service.latest_run_snapshot_for_case(
                 project=project,
@@ -1009,6 +1025,15 @@ class WorkbenchFacadeTestPointAssetsMixin:
             upsert_test_point_asset_snapshot=_upsert_test_point_asset_snapshot,
             state_root=constants.TEST_POINTS_ROOT,
         )
+        # DB 事实源:把刚写入缓存的资产 bundle 同步为 DB 权威记录(写穿)。
+        try:
+            _bundle = workbench_asset_service.load_test_point_asset_with_root(
+                project, asset_id, state_root=constants.TEST_POINTS_ROOT,
+            )
+            if isinstance(_bundle, dict) and _bundle:
+                test_point_asset_store.save_asset(db, project=project, bundle=_bundle)
+        except Exception:  # noqa: BLE001 - DB 写穿降级,不阻断保存
+            LOGGER.warning("test point asset DB write-through failed for %s/%s", project, asset_id, exc_info=True)
         store.append_history(
             {
                 "timestamp": store.now_iso(),
@@ -1042,6 +1067,12 @@ class WorkbenchFacadeTestPointAssetsMixin:
             normalized_candidate = _text(candidate)
             if normalized_candidate and normalized_candidate not in candidate_asset_ids:
                 candidate_asset_ids.append(normalized_candidate)
+        # DB 事实源:删除权威记录(文件由下方逻辑作为缓存清理)。
+        for _candidate_asset_id in candidate_asset_ids:
+            try:
+                test_point_asset_store.delete_asset(db, project=normalized_project, asset_id=_candidate_asset_id)
+            except Exception:  # noqa: BLE001 - DB 删除降级,不阻断文件清理
+                LOGGER.warning("test point asset DB delete failed for %s/%s", normalized_project, _candidate_asset_id, exc_info=True)
         removed_paths: list[str] = []
         removed_path_set: set[str] = set()
 
