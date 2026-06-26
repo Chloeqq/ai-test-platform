@@ -339,7 +339,8 @@ def _ensure_data_steps_and_variables(
             continue
 
         element_code = _infer_element_code_from_data_key(data_key)
-        var_name = f"login_{data_key}"
+        # avoid double login_ prefix when data_key already has it
+        var_name = f"login_{data_key}" if not data_key.startswith("login_") else data_key
 
         if element_code in step_targets:
             continue  # 步骤已存在
@@ -373,7 +374,17 @@ def _ensure_data_steps_and_variables(
 
 
 def _infer_element_code_from_data_key(data_key: str) -> str:
-    return {"username": "username_input", "password": "password_input"}.get(data_key, data_key)
+    """从 data key 推断页面对象 element_code（旧语义名→规范编码映射）。"""
+    return _SEMANTIC_TO_CANONICAL.get(data_key, data_key)
+
+
+_SEMANTIC_TO_CANONICAL: dict[str, str] = {
+    "username": "login-username-input",
+    "password": "login-password-input",
+    "username_input": "login-username-input",
+    "password_input": "login-password-input",
+    "login_button": "login-submit-btn",
+}
 
 
 def _attach_point_expected_results(compiled_steps: list[dict[str, Any]], test_points: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -728,14 +739,6 @@ def _resolve_page_object_from_db(project: str, page: str) -> dict[str, Any] | No
             "stability_level": _normalized_text(getattr(element, "stability_level", "")).lower(),
             "status": _normalized_text(getattr(element, "status", "")).lower() or "active",
         }
-    if page == "login":
-        success_element = _load_cross_page_data_testid_element(
-            project=project,
-            element_code="home-page",
-            preferred_pages=("home", "layout"),
-        )
-        if success_element is not None and "home-page" not in mapping:
-            mapping["home-page"] = success_element
     # 跨页绑定:合并全局外壳页(layout)的合格元素到当前页绑定上下文。
     # 主页面元素优先(setdefault 不覆盖);外壳页自身不触发,避免递归。
     # 外壳页解析失败不影响主页面(广义捕获后跳过)。
