@@ -505,6 +505,10 @@ def _normalize_asset_involved_elements_on_read(item: dict[str, Any], *, project:
     plan = item.get("plan", {})
     if isinstance(plan.get("points"), list):
         plan["points"] = _normalize_points_involved_elements(plan["points"], page_context=page_context)
+        # Normalize plan-level involved_elements (aggregate from points)
+        plan_elements = plan.get("involved_elements", [])
+        if isinstance(plan_elements, list):
+            plan["involved_elements"] = _canonical_involved_elements_for_page(plan_elements, page_context=page_context)
         item["plan"] = plan
 
 
