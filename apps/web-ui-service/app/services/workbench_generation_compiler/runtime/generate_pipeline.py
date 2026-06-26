@@ -259,7 +259,7 @@ def _infer_element_aliases(
             seen.add(key)
             deduped.append(raw)
     semantic_blob = " ".join([element_code, element_name, locator_value, role, business_type]).lower()
-    if any(token in semantic_blob for token in ["username", "user_name", "account", "账号", "用户名"]):
+    if business_type == "input" and any(token in semantic_blob for token in ["username", "user_name", "account", "账号", "用户名"]):
         for raw in ["账号输入框", "用户名输入框", "用户输入框"]:
             key = _normalized_key(raw)
             if key and key not in seen:
@@ -278,11 +278,12 @@ def _infer_element_aliases(
                 seen.add(key)
                 deduped.append(raw)
     if ("login" in semantic_blob or "登录" in semantic_blob) and "logout" not in semantic_blob and "退出" not in semantic_blob:
-        for raw in ["登录按钮"]:
-            key = _normalized_key(raw)
-            if key and key not in seen:
-                seen.add(key)
-                deduped.append(raw)
+        if business_type == "button":
+            for raw in ["登录按钮"]:
+                key = _normalized_key(raw)
+                if key and key not in seen:
+                    seen.add(key)
+                    deduped.append(raw)
     return deduped
 
 
