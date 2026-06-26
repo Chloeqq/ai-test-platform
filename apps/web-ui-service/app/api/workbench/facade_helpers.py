@@ -7,20 +7,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
+
 import re
-import shutil
-import subprocess
 from collections import defaultdict
-from datetime import datetime, timedelta
-from shared_backend.datetime_compat import UTC
 from functools import partial
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Sequence
 import yaml
-
-from fastapi import status
 from shared_backend.case_ids import match_case_id
 from shared_backend.element_binding import build_element_alias_map, resolve_element_code, resolve_involved_element_codes
 from sqlalchemy.orm import Session
@@ -42,14 +35,10 @@ from app.services import (
 from ._helpers import (
     normalize_optional_project_code as _normalize_optional_project_code,
     normalize_test_point_review_status as _normalize_test_point_review_status,
-    parse_iso_datetime as _parse_iso_datetime,
     python_literal as _python_literal,
     safe_python_identifier as _safe_python_identifier,
     text as _text,
     text_list as _text_list,
-    to_utc as _to_utc,
-    utc_now as _utc_now,
-    write_json_file as _write_json_file,
 )
 from .service import (
     _normalize_execution_record_payload,
@@ -455,9 +444,8 @@ def _canonical_involved_elements_for_page(involved_elements: Any, *, page_contex
                 canonical.append(raw)
             continue
         element_code = resolve_element_code(raw, alias_map)
-        normalized = element_code or raw
-        if normalized and normalized not in canonical:
-            canonical.append(normalized)
+        if element_code and element_code not in canonical:
+            canonical.append(element_code)
     return canonical
 
 
@@ -474,6 +462,27 @@ def _normalize_points_involved_elements(points: list[dict[str, Any]], *, page_co
         copied["involved_elements"] = canonical
         normalized_points.append(copied)
     return normalized_points
+
+
+def _normalize_asset_involved_elements_on_read(item: dict[str, Any], *, project: str, db: Session | None = None) -> None:
+    """读取测试点资产时动态规范化 involved_elements，过滤无法映射到页面对象的 AI 原始名称。"""
+    page = _text(item.get("page", ""))
+    if not page:
+        return
+    if db is None:
+        return
+    page_context = _page_object_generation_context(db, project=project, page=page)
+    if not page_context.get("page_object_found"):
+        return
+    # Normalize asset-level involved_elements
+    raw_asset_elements = item.get("involved_elements", [])
+    if isinstance(raw_asset_elements, list):
+        item["involved_elements"] = _canonical_involved_elements_for_page(raw_asset_elements, page_context=page_context)
+    # Normalize plan.points[].involved_elements
+    plan = item.get("plan", {})
+    if isinstance(plan.get("points"), list):
+        plan["points"] = _normalize_points_involved_elements(plan["points"], page_context=page_context)
+        item["plan"] = plan
 
 
 def _element_bindings_for_review(involved_elements: list[str], *, page_context: dict[str, Any]) -> list[dict[str, Any]]:

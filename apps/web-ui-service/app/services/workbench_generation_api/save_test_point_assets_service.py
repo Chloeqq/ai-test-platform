@@ -155,9 +155,11 @@ def _canonical_login_involved_elements(involved_elements: list[str], involved_co
         if not normalized or normalized in canonical:
             continue
         matched = _login_element_from_text(normalized)
-        if matched is not None and matched[0] in canonical:
+        if matched is None:
             continue
-        _append_unique(canonical, normalized)
+        element_code = matched[0]
+        if element_code not in canonical:
+            canonical.append(element_code)
     return canonical
 
 

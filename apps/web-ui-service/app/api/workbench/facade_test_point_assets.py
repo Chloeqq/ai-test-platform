@@ -109,6 +109,7 @@ from .facade_helpers import (  # noqa: E402
     _test_point_asset_state_paths, _is_generation_qualified_element,
     _page_object_generation_context, _test_point_generation_state,
     _normalize_points_involved_elements, _review_history_from_point,
+    _normalize_asset_involved_elements_on_read,
     _build_test_point_script_preview, _source_identity_from_case,
     _structured_requirement_metadata_from_case, _existing_case_id_for_source_intent,
     _case_family_prefix, _point_title, _point_review_status, _generated_case_plan_items,
@@ -840,6 +841,7 @@ class WorkbenchFacadeTestPointAssetsMixin:
         item = payload.get("item", {}) if isinstance(payload.get("item"), dict) else {}
         if item:
             item["generation_diagnostics"] = _build_generation_diagnostics_for_asset(project, item)
+            _normalize_asset_involved_elements_on_read(item, project=project, db=db)
         return payload
 
     def get_test_point_asset_coverage_matrix(self, *, asset_id: str, project: str, db: Session) -> dict[str, Any]:
