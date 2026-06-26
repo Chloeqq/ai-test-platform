@@ -464,6 +464,24 @@ def _normalize_points_involved_elements(points: list[dict[str, Any]], *, page_co
     return normalized_points
 
 
+_ASSET_ID_LIKE_RE = re.compile(r"^[a-z0-9]+-web-[a-z0-9][a-z0-9-]*-(?:fn|sm|api|e2e)-ai-\d{4}$")
+
+
+def _asset_display_title(incoming_title: str, *, page: str, asset_id: str, candidates: Any = None) -> str:
+    """为测试点资产生成展示标题，避免 asset_id 直接作为标题显示。"""
+    if incoming_title and not _ASSET_ID_LIKE_RE.match(incoming_title) and incoming_title != asset_id:
+        return incoming_title
+    if isinstance(candidates, list):
+        for c in candidates:
+            if isinstance(c, dict):
+                t = _text(c.get("title") or c.get("summary"))
+                if t and t != asset_id:
+                    return t
+    if page:
+        return f"{page} 页面测试点资产集"
+    return "测试点资产集"
+
+
 def _normalize_asset_involved_elements_on_read(item: dict[str, Any], *, project: str, db: Session | None = None) -> None:
     """读取测试点资产时动态规范化 involved_elements，过滤无法映射到页面对象的 AI 原始名称。"""
     page = _text(item.get("page", ""))

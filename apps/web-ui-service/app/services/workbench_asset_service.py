@@ -133,6 +133,9 @@ def _derive_asset_title(asset: dict[str, Any], *, fallback_id: str) -> str:
         title = str(row.get("title") or row.get("summary") or row.get("description") or "").strip()
         if title and not _looks_like_asset_identifier(title, asset_id=fallback_id):
             return title
+    page = str(asset.get("page", "")).strip()
+    if page:
+        return f"{page} 页面测试点资产集"
     return existing_title or fallback_id
 
 

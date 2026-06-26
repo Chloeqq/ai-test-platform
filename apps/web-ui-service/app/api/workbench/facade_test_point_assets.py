@@ -110,6 +110,7 @@ from .facade_helpers import (  # noqa: E402
     _page_object_generation_context, _test_point_generation_state,
     _normalize_points_involved_elements, _review_history_from_point,
     _normalize_asset_involved_elements_on_read,
+    _asset_display_title,
     _build_test_point_script_preview, _source_identity_from_case,
     _structured_requirement_metadata_from_case, _existing_case_id_for_source_intent,
     _case_family_prefix, _point_title, _point_review_status, _generated_case_plan_items,
@@ -862,7 +863,8 @@ class WorkbenchFacadeTestPointAssetsMixin:
         page = workbench_gate_service.normalize_page_slug(_text(getattr(payload, "page", "")))
         if not page:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="page must not be empty")
-        title = _text(getattr(payload, "title", "")) or asset_id
+        incoming_title = _text(getattr(payload, "title", ""))
+        title = _asset_display_title(incoming_title, page=page, asset_id=asset_id, candidates=getattr(payload, "selected_candidates", []))
         priority = _text(getattr(payload, "priority", "")) or "P1"
         source_type = _text(getattr(payload, "source_type", "")) or "manual"
         requirement = _text(getattr(payload, "requirement", "")) or title
