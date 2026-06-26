@@ -56,6 +56,11 @@ from app.services.page_object_normalizers import (
     _normalize_project_code,
     _normalize_binary_health_status,
     _normalize_business_domain,
+    _normalize_reference_type,
+    _normalize_review_status,
+    _normalize_stability_level,
+    _locator_source_from_type,
+    _stability_from_locator_source,
     _validate_formal_element_governance_qualification,
 )
 

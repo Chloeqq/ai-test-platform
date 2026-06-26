@@ -15,6 +15,7 @@ from app.repositories.page_object_repository import PageObjectRepository
 from ..debug import debug_enabled, log_debug_event
 from shared_backend.observability import summarize_http_context
 from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
+from shared_backend.quality_gate.models import NEGATIVE_SCENARIO_KEYWORDS
 from shared_backend.element_binding import build_element_alias_map
 from shared_backend.intent_mapping import resolve_explicit_step
 from shared_backend.schemas.contracts import normalize_test_point_plan_v1
@@ -361,8 +362,7 @@ def _append_login_success_assertion(
 
     # V2.5b: 负向/异常场景不追加登录成功断言（登录应失败，home_menu 不会出现）
     all_expected = " ".join(expected_by_intent.values()).lower()
-    error_keywords = ("错误", "失败", "提示", "异常", "无效", "非法", "锁定", "禁用")
-    if any(kw in all_expected for kw in error_keywords):
+    if any(kw in all_expected for kw in NEGATIVE_SCENARIO_KEYWORDS):
         return
 
     # 避免重复：已有 home_menu 断言则跳过

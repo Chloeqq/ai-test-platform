@@ -39,7 +39,7 @@ from app.services.workbench_generation_api.repository import WorkbenchGeneration
 REPO_ROOT = Path(__file__).resolve().parents[4]
 ASSETS_CASES_ROOT = REPO_ROOT / "assets" / "test-cases"
 AI_CASES_ROOT = ASSETS_CASES_ROOT / "ai-generated"
-DEFAULT_PROJECT_CODE = "mall"
+from app.core.constants import DEFAULT_PROJECT_CODE
 DEFAULT_PROJECT_NAME = "Mall"
 DEFAULT_PROJECT_SOURCE_TERMS = {
     "商品货号": "product_sn",

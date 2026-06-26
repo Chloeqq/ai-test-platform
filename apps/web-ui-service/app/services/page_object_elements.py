@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from shared_backend.case_ids import normalize_client_code
-from shared_backend.type_utils import json_dict as _json_dict
+from shared_backend.type_utils import json_dict as _json_dict, json_list as _json_list
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -46,6 +46,15 @@ from app.services import test_project_service
 from app.services.page_object_normalizers import (
     CANDIDATE_PROMOTION_STATUS_VALUES,
     CANDIDATE_STATUS_VALUES,
+)
+from app.services.page_object_serializers import (
+    _serialize_page_element,
+    _serialize_element_version,
+    _serialize_ref,
+)
+from app.services.page_object_candidates import (
+    _candidate_rows_for_group,
+    _refresh_group_status_from_candidates,
 )
 
 def _svc():

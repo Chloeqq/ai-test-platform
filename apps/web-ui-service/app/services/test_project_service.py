@@ -16,9 +16,9 @@ from app.models.workbench_state import (
     WorkbenchRuntimeRun,
 )
 from app.schemas.test_project import TestProjectCreate, TestProjectUpdate
+from app.core.constants import DEFAULT_PROJECT_CODE
 from app.services.test_case_bootstrap_service import ensure_project_seed
 
-DEFAULT_PROJECT_CODE = "mall"
 PROJECT_STATUS_VALUES = {"active", "inactive"}
 
 

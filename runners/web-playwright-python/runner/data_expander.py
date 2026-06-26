@@ -3,7 +3,18 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 import os
+import sys
+from pathlib import Path
 from typing import Any
+
+try:
+    from shared_backend.data_pool_resolver import PoolResolutionError, resolve_pool_reference
+except Exception:  # pragma: no cover - runner keeps fallback usability
+    # Retry once by adding repo root to import path (mirror asset_toolkit).
+    _repo_root = Path(__file__).resolve().parents[3]
+    if str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
+    from shared_backend.data_pool_resolver import PoolResolutionError, resolve_pool_reference
 
 
 def _text(value: Any) -> str:
@@ -29,22 +40,17 @@ def _load_pool_snapshot() -> dict[str, dict[str, Any]]:
 
 
 def _resolve_pool_value(*, key: str, source: dict[str, Any], pool_snapshot: dict[str, dict[str, Any]]) -> list[Any]:
-    pool_name = _text(source.get("pool_name"))
-    pool_key = _text(source.get("key"))
-    if not pool_name or not pool_key:
-        raise ValueError(
-            f"runtime_data_source_resolve_failed: pool source requires pool_name and key for `{key}`"
+    # 委托共享解析器（生成侧/运行时侧唯一事实源），保留 runtime_ 前缀的错误契约。
+    try:
+        value = resolve_pool_reference(
+            field=key,
+            pool_name=_text(source.get("pool_name")),
+            item_key=_text(source.get("key")),
+            pool_snapshot=pool_snapshot,
         )
-    pool = pool_snapshot.get(pool_name)
-    if not isinstance(pool, dict):
-        raise ValueError(
-            f"runtime_data_source_resolve_failed: pool `{pool_name}` is not available for `{key}`"
-        )
-    if pool_key not in pool:
-        raise ValueError(
-            f"runtime_data_source_resolve_failed: key `{pool_key}` not found in pool `{pool_name}` for `{key}`"
-        )
-    return [pool[pool_key]]
+    except PoolResolutionError as exc:
+        raise ValueError(f"runtime_data_source_resolve_failed: {exc}") from exc
+    return [value]
 
 
 def _resolve_env_value(*, key: str, source: dict[str, Any]) -> list[Any]:

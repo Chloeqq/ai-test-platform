@@ -190,7 +190,10 @@ class MissingPreconditionRule(Rule):
         preconditions: list,
     ) -> RuleResult:
         """V2.0: 验证结构化 preconditions 块。"""
-        from app.services.quality_gate.rules._common import PRECONDITION_TYPES as ALLOWED_TYPES
+        from shared_backend.quality_gate import (
+            PRECONDITION_TYPES as ALLOWED_TYPES,
+            RESERVED_PRECONDITION_TYPES as RESERVED_TYPES,
+        )
         issues: list[str] = []
 
         for i, entry in enumerate(preconditions):
@@ -204,6 +207,12 @@ class MissingPreconditionRule(Rule):
                 issues.append(
                     f"preconditions[{i}]: 未知 type '{pc_type}'，"
                     f"支持: {sorted(ALLOWED_TYPES)}"
+                )
+            elif pc_type in RESERVED_TYPES:
+                # 类型合法但编译器尚无实现 — 编译期会硬失败，提前在质量门 WARNING。
+                issues.append(
+                    f"preconditions[{i}]: type '{pc_type}' 已预留但尚未实现，"
+                    f"编译时会失败（计划 V2.5+）"
                 )
 
             if pc_type == "login" and not isinstance(entry.get("data_ref"), dict):

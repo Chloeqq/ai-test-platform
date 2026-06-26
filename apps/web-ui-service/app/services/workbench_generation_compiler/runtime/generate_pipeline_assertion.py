@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from shared_backend.quality_gate.models import NEGATIVE_SCENARIO_KEYWORDS
+
 
 def _append_login_error_assertion(
     *,
@@ -20,8 +22,7 @@ def _append_login_error_assertion(
         return
 
     all_expected = " ".join(expected_by_intent.values()).lower()
-    error_keywords = ("错误", "失败", "提示", "异常", "无效", "非法", "锁定", "禁用")
-    if not any(kw in all_expected for kw in error_keywords):
+    if not any(kw in all_expected for kw in NEGATIVE_SCENARIO_KEYWORDS):
         return
 
     for s in product_steps:

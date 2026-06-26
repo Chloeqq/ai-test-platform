@@ -61,5 +61,8 @@ fi
 
 cd "${APP_DIR}"
 python apps/web-ui-service/scripts/bootstrap_database.py
-python scripts/tools/seed_page_objects.py --project "${PAGE_OBJECT_SEED_PROJECT:-mall}" --client web --force
+# 页面对象 seed 是可选启动步骤：无种子源（assets/page-objects/web 为空）或 seed
+# 失败都不应阻断服务启动。去掉这层硬依赖，平台可在「空页面对象」状态下正常启动。
+python scripts/tools/seed_page_objects.py --project "${PAGE_OBJECT_SEED_PROJECT:-mall}" --client web --force \
+  || echo "[startup] page object seed skipped (no seed source or seed failed; continuing)"
 exec python -m uvicorn app.main:app --app-dir apps/web-ui-service --host 0.0.0.0 --port 8013

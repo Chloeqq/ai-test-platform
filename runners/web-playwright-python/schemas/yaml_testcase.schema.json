@@ -232,6 +232,15 @@
         ]
       }
     },
+    "preconditions": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "scenario": { "type": "object", "additionalProperties": true },
+    "case": { "type": "object", "additionalProperties": true },
+    "actors": { "type": "object", "additionalProperties": true },
+    "environment": { "type": "object", "additionalProperties": true },
+    "coverage": { "type": "object", "additionalProperties": true },
     "data": {
       "type": "object",
       "additionalProperties": {
@@ -339,7 +348,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": ["login", "click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "goto"]
+                "enum": ["login", "click", "fill", "input", "type", "wait_for", "wait", "assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "goto", "open", "network_condition"]
               },
               "target": {
                 "type": ["string", "null"]
@@ -396,7 +405,11 @@
               },
               "expected_result": {
                 "type": ["string", "null"]
-              }
+              },
+              "url": { "type": ["string", "null"] },
+              "target_url": { "type": ["string", "null"] },
+              "timeout_ms": { "type": ["integer", "number", "string", "null"] },
+              "network_condition": { "type": ["string", "null"] }
             },
             "allOf": [
               {

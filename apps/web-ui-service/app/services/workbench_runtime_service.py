@@ -883,30 +883,50 @@ def persist_runtime_run_to_case_center(db: Session, run_item: dict[str, Any]) ->
 
 
 def _resolve_pool_data(yaml_text: str) -> str:
-    """解析 YAML 中的 source_type: pool 字段，用数据池的实际值替换。"""
+    """解析 YAML 中的 source_type: pool 字段，用数据池的实际值替换。
+
+    与运行时侧（Runner `data_expander`）共用 `resolve_pool_reference`，
+    确保「按 (pool_name, key) 精确解析为标量值」的契约只有一处实现。
+    单条引用解析失败（池/key 缺失）时跳过该字段，把 pool 引用原样留给
+    Runner 处理，而非中断整批替换。
+    """
     data = yaml.safe_load(yaml_text) or {}
     if not isinstance(data, dict):
         return yaml_text
 
     case_data = data.get("data") if isinstance(data.get("data"), dict) else {}
+    pool_refs = [
+        (key, entry)
+        for key, entry in case_data.items()
+        if isinstance(entry, dict) and entry.get("source_type") == "pool"
+    ]
+    if not pool_refs:
+        return yaml_text
+
+    from shared_backend.data_pool_resolver import PoolResolutionError, resolve_pool_reference
+    from app.services.test_data_pool_service import load_runner_data_pool_snapshot
+
+    pool_snapshot = load_runner_data_pool_snapshot(None)
     resolved = False
-    for key, entry in case_data.items():
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("source_type") != "pool":
-            continue
-        pool_name =str(entry.get("pool_name", "")).strip()
+    for key, entry in pool_refs:
+        pool_name = str(entry.get("pool_name", "")).strip()
         item_key = str(entry.get("key", "")).strip()
-        if  not pool_name or not item_key:
+        if not pool_name or not item_key:
             continue
-        from app.services.test_data_pool_service import resolve_pool_value
-        pool_data = resolve_pool_value(None, pool_name, {"key": item_key})
-        if pool_data:
-            entry["source_type"] = "inline"
-            entry.pop("pool_name", None)
-            entry.pop("key", None)
-            entry["value"] = pool_data.get(key, "")
-            resolved = True
+        try:
+            value = resolve_pool_reference(
+                field=key,
+                pool_name=pool_name,
+                item_key=item_key,
+                pool_snapshot=pool_snapshot,
+            )
+        except PoolResolutionError:
+            continue
+        entry["source_type"] = "inline"
+        entry.pop("pool_name", None)
+        entry.pop("key", None)
+        entry["value"] = value
+        resolved = True
 
     if resolved:
         return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)

@@ -81,7 +81,7 @@ StatsPayload: TypeAlias = dict[str, int | float]
 REPO_ROOT = Path(__file__).resolve().parents[4]
 ASSETS_CASES_ROOT = REPO_ROOT / "assets" / "test-cases"
 EXECUTION_REPORTS_ROOT = REPO_ROOT / "reports" / "executions"
-DEFAULT_PROJECT_CODE = "mall"
+from app.core.constants import DEFAULT_PROJECT_CODE
 
 
 @dataclass(frozen=True)

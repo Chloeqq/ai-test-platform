@@ -62,6 +62,59 @@ class RuleCategory(str, Enum):
 
 
 # ---------------------------------------------------------------------------
+# Domain Constants
+# ---------------------------------------------------------------------------
+
+# 结构化 precondition 支持的 type 集合 — 唯一事实源。
+# 生成管线（generate_pipeline_precondition）与 RULE_005 均从此处导入，
+# 避免两侧各自维护字面量导致漂移。
+PRECONDITION_TYPES: frozenset[str] = frozenset({
+    "login", "account_state", "sql", "api_call", "network",
+})
+
+# 已实现编译分支的 precondition 类型子集 — 编译器真正能产出 setup 步骤的类型。
+# 新增编译分支时必须同步加入此集合。
+IMPLEMENTED_PRECONDITION_TYPES: frozenset[str] = frozenset({
+    "login", "account_state", "sql", "network",
+})
+
+# 预留但未实现的 precondition 类型（已进入契约、暂无编译分支）。
+# 编译器遇到这些类型会硬失败（not_implemented），RULE_005 给 WARNING，
+# 杜绝「校验通过却静默不执行」。当前 = {"api_call"}（V2.5+ 实现）。
+RESERVED_PRECONDITION_TYPES: frozenset[str] = PRECONDITION_TYPES - IMPLEMENTED_PRECONDITION_TYPES
+
+
+# 负向/错误场景检测关键词 — 预期文本中出现任一即视为负向用例。
+# 生成管线断言（generate_pipeline_assertion）与格式（generate_pipeline_format）
+# 两侧共用：负向场景不追加登录成功断言，改追加错误提示断言。
+NEGATIVE_SCENARIO_KEYWORDS: tuple[str, ...] = (
+    "错误", "失败", "提示", "异常", "无效", "非法", "锁定", "禁用",
+)
+
+
+# 账号状态检测关键词 → 规范化 state 名。precondition 文本命中后，
+# 生成管线据此把身份字段路由为数据池引用，键名约定 {field}_{state}
+# （如 username_locked / password_disabled）。dict 插入顺序即匹配优先级。
+ACCOUNT_STATE_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "locked": ("锁定", "lock", "locked"),
+    "disabled": ("禁用", "disabled", "forbidden"),
+}
+
+
+def detect_account_state(text: str) -> str:
+    """从文本中检测账号状态，返回规范化 state 名（无命中返回 ""）。
+
+    按 ACCOUNT_STATE_KEYWORDS 的插入顺序匹配（locked 优先于 disabled），
+    与历史 if/elif 行为一致。
+    """
+    lowered = (text or "").lower()
+    for state, keywords in ACCOUNT_STATE_KEYWORDS.items():
+        if any(keyword in lowered for keyword in keywords):
+            return state
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # Data Models
 # ---------------------------------------------------------------------------
 

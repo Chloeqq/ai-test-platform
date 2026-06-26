@@ -15,13 +15,14 @@ from app.repositories.page_object_repository import PageObjectRepository
 from ..debug import debug_enabled, log_debug_event
 from shared_backend.observability import summarize_http_context
 from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
+from shared_backend.quality_gate.models import detect_account_state
 from shared_backend.element_binding import build_element_alias_map
 from shared_backend.intent_mapping import resolve_explicit_step
 from shared_backend.schemas.contracts import normalize_test_point_plan_v1
 from shared_backend.schemas.validator import ContractValidator
 from shared_backend.type_utils import str_value as _normalized_text
 
-from .generate_pipeline_precondition import compile_preconditions
+from .generate_pipeline_precondition import compile_preconditions, route_identity_data_to_pool
 from .generate_pipeline_locator import _normalize_step_locators  # noqa: E402
 
 
@@ -55,6 +56,26 @@ def _svc():
     """惰性查找主模块，支持测试 monkeypatch。"""
     from . import generate_pipeline as _svc_mod
     return _svc_mod
+
+def _source_asset_id_from_preconditions(case_yaml: dict[str, Any]) -> str:
+    """从 preconditions 块兜底提取 source_asset_id。
+
+    部分 AI 候选(尤其 account_state 用例)把 source_asset_id 只写进
+    preconditions[].source_asset_id，导致 requirement.source_asset_id 缺失，
+    进而被 Runner 身份门禁跳过(见 test_case_loader 的来源身份校验)。
+    这里兜底回填，保证 requirement.source_asset_id 始终有值——与 V1.1 身份铁律
+    (project + source_asset_id + intent_id 幂等键)一致。
+    """
+    preconditions = case_yaml.get("preconditions") if isinstance(case_yaml, dict) else None
+    if not isinstance(preconditions, list):
+        return ""
+    for entry in preconditions:
+        if isinstance(entry, dict):
+            candidate = _normalized_text(entry.get("source_asset_id"))
+            if candidate:
+                return candidate
+    return ""
+
 
 def _enrich_v3_0_metadata(
     *,
@@ -95,7 +116,7 @@ def _enrich_v3_0_metadata(
             if k in ("business_goal", "test_type", "risk_points") and v
         }
 
-    # V1.1→V3.0 自动升级: requirement.type → scenario.test_type[]
+    # V1.1→V3.0 自动升级: intent_type → scenario.test_type[]
     if "scenario" not in product_yaml:
         intent_type = _normalized_text(intent_meta.get("type", ""))
         if intent_type:
@@ -215,7 +236,10 @@ def _format_product_case_yaml(
             "title": _normalized_text(intent_meta.get("title")) or title,
             "type": _normalized_text(intent_meta.get("type")) or "functional",
             "precondition": _normalized_text(intent_meta.get("precondition")),
-            "source_asset_id": _normalized_text(intent_meta.get("source_asset_id")),
+            "source_asset_id": (
+                _normalized_text(intent_meta.get("source_asset_id"))
+                or _source_asset_id_from_preconditions(case_yaml)
+            ),
         },
         "data": case_yaml.get("data") if isinstance(case_yaml.get("data"), dict) else {},
         "execution": {
@@ -246,7 +270,7 @@ def _format_product_case_yaml(
     # 确保 data 中每个有值的字段都有对应的 input 步骤和变量绑定
     _ensure_data_steps_and_variables(product_yaml, page, page_object)
     # 根据 precondition 关键词自动路由到数据池
-    _apply_pool_routing(product_yaml)
+    _apply_pool_routing(product_yaml, page=page)
 
     # V2.0: 编译结构化 preconditions 块为 setup 步骤
     preconditions = case_yaml.get("preconditions") if isinstance(case_yaml, dict) else None
@@ -269,10 +293,11 @@ def _format_product_case_yaml(
     return product_yaml
 
 
-def _apply_pool_routing(product_yaml: dict[str, Any]) -> None:
+def _apply_pool_routing(product_yaml: dict[str, Any], *, page: str = "") -> None:
     """根据 precondition 关键词，自动将 inline data 改为 pool 引用。
 
-    例: precondition 含"锁定" → username/password 路由到 login_accounts:locked_user
+    关键词 → state 映射后委托 route_identity_data_to_pool 做实际改写，
+    与 account_state 结构化预处理共用同一套池名/键名约定（见该函数）。
     """
     precondition = _normalized_text(
         product_yaml.get("requirement", {}).get("precondition", "")
@@ -281,17 +306,10 @@ def _apply_pool_routing(product_yaml: dict[str, Any]) -> None:
         return
     data = product_yaml.get("data") if isinstance(product_yaml.get("data"), dict) else {}
 
-    routing: dict[str, tuple[str, str]] = {}
-    if any(w in precondition for w in ("锁定", "lock", "locked")):
-        routing = {"username": ("login_accounts", "locked_user"),
-                   "password": ("login_accounts", "locked_user")}
-    elif any(w in precondition for w in ("禁用", "disabled", "forbidden")):
-        routing = {"username": ("login_accounts", "disabled_user"),
-                   "password": ("login_accounts", "disabled_user")}
+    # 关键词 → state 映射（共用 shared_backend.quality_gate.models 的单一事实源）
+    state = detect_account_state(precondition)
 
-    for key, (pool_name, item_key) in routing.items():
-        if key in data:
-            data[key] = {"source_type": "pool", "pool_name": pool_name, "key": item_key}
+    route_identity_data_to_pool(data, page=page, state=state)
 
 
 def _ensure_data_steps_and_variables(
@@ -624,6 +642,12 @@ def _enrich_test_points_with_candidate_snapshots(
     return enriched
 
 
+# 全局外壳页：登录后存在于所有业务页的导航/用户/登出等(admin 布局壳)。
+# 绑定任意业务页时合并这些页的合格元素,使「操作本页→验证外壳」类跨页测试点可绑定。
+# 单一事实源——新增外壳页在此登记(避免散落硬编码)。
+_SHARED_SHELL_PAGE_CODES: tuple[str, ...] = ("layout",)
+
+
 def _resolve_page_object_from_db(project: str, page: str) -> dict[str, Any] | None:
     """Attempt to load page object elements from the database. Returns None on miss."""
     try:
@@ -712,6 +736,18 @@ def _resolve_page_object_from_db(project: str, page: str) -> dict[str, Any] | No
         )
         if success_element is not None and "home-page" not in mapping:
             mapping["home-page"] = success_element
+    # 跨页绑定:合并全局外壳页(layout)的合格元素到当前页绑定上下文。
+    # 主页面元素优先(setdefault 不覆盖);外壳页自身不触发,避免递归。
+    # 外壳页解析失败不影响主页面(广义捕获后跳过)。
+    if page not in _SHARED_SHELL_PAGE_CODES:
+        for _shell_page in _SHARED_SHELL_PAGE_CODES:
+            try:
+                _shell_obj = _resolve_page_object_from_db(project, _shell_page)
+            except Exception:
+                _shell_obj = None
+            if isinstance(_shell_obj, dict):
+                for _shell_code, _shell_meta in (_shell_obj.get("elements") or {}).items():
+                    mapping.setdefault(_shell_code, _shell_meta)
     if not mapping:
         raise ExecutionCompilerError(
             code="page_object_empty_elements",

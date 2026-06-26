@@ -26,6 +26,14 @@ from app.schemas.page_object import PageObjectRefCreate
 from app.schemas.page_object_recorder import RecorderSessionCreateCasePayload
 from app.schemas.test_case import TestCaseCreate
 from app.services import page_object_service, test_case_service, test_project_service
+from app.services.page_object_locator_scoring import (
+    _build_element_candidates,
+    _derive_page_url,
+    _derive_precondition_state,
+    _is_locator_blocked_for_ingest,
+    _locator_key,
+    _probe_availability,
+)
 
 import logging
 LOGGER = logging.getLogger(__name__)
@@ -140,7 +148,7 @@ def create_recorder_session(db: Session, payload: RecorderSessionCreate) -> dict
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_name cannot be empty")
     session_id = f"rec_{uuid.uuid4().hex[:16]}"
     script_path = (_RECORDER_ROOT / f"{session_id}.codegen.py").resolve()
-    process_pid = _start_codegen_process(str(payload.url), script_path)
+    process_pid = _svc()._start_codegen_process(str(payload.url), script_path)
     item = PageObjectRecorderSession(
         session_id=session_id,
         project_code=project_code,
@@ -277,7 +285,7 @@ def _safe_delete_recorder_artifacts(raw_script_path: str) -> int:
     except (OSError, ValueError):
         return 0
     deleted_count = 0
-    for path in (script_path, _svc()._recorded_steps_path(script_path), _stderr_log_path(script_path)):
+    for path in (script_path, _svc()._recorded_steps_path(script_path), _svc()._stderr_log_path(script_path)):
         try:
             if path.exists():
                 path.unlink()
@@ -337,7 +345,7 @@ def batch_delete_recorder_sessions(
         if str(item.status or "").strip().lower() == "active":
             _svc()._stop_codegen_process(item.process_pid)
         if delete_artifacts:
-            artifact_deleted_count += _svc()._safe_delete_recorder_artifacts(str(item.script_path or ""))
+            artifact_deleted_count += _safe_delete_recorder_artifacts(str(item.script_path or ""))
 
     candidate_rows = RecorderRepository(db).list_candidates_by_sessions(deleted_session_ids)
     affected_group_keys = {
@@ -367,7 +375,7 @@ def batch_delete_recorder_sessions(
                 normalized_project_code, normalized_client, page_code, group_key
             )
         db.commit()
-        _svc()._sync_page_metrics_for_recorder_pages(
+        _sync_page_metrics_for_recorder_pages(
             db,
             project_code=normalized_project_code,
             client=normalized_client,
@@ -390,7 +398,7 @@ def get_recorder_session_playback(db: Session, *, session_id: str) -> dict[str, 
     script_path = Path(item.script_path)
     recorded_steps = _load_recorded_steps(script_path)
     if not recorded_steps:
-        recorded_steps = _serialize_recorded_steps(_parse_codegen_steps(script_path))
+        recorded_steps = _svc()._serialize_recorded_steps(_svc()._parse_codegen_steps(script_path))
     script_code = ""
     if script_path.exists():
         script_code = script_path.read_text(encoding="utf-8", errors="ignore")
@@ -399,7 +407,7 @@ def get_recorder_session_playback(db: Session, *, session_id: str) -> dict[str, 
         "recorded_step_count": len(recorded_steps),
         "recorded_steps": recorded_steps,
         "script_code": script_code,
-        "stderr_tail": _tail_text_file(_stderr_log_path(script_path), max_chars=4000),
+        "stderr_tail": _svc()._tail_text_file(_svc()._stderr_log_path(script_path), max_chars=4000),
         "can_replay": len(recorded_steps) > 0,
         "candidate_summary": _svc()._candidate_summary_for_session(db, item),
     }
@@ -412,7 +420,7 @@ def replay_recorder_session(db: Session, *, session_id: str, timeout_seconds: in
     script_path = _svc()._resolve_recorder_script_path(str(item.script_path or ""))
     recorded_steps = _load_recorded_steps(script_path)
     if not recorded_steps:
-        recorded_steps = _serialize_recorded_steps(_parse_codegen_steps(script_path))
+        recorded_steps = _svc()._serialize_recorded_steps(_svc()._parse_codegen_steps(script_path))
     if not recorded_steps:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="录制会话没有可回放步骤。")
 
@@ -610,8 +618,8 @@ def create_test_case_draft_from_session(
     script_path = Path(session_item.script_path)
     recorded_steps = _load_recorded_steps(script_path)
     if not recorded_steps:
-        parsed_steps = _parse_codegen_steps(script_path)
-        recorded_steps = _serialize_recorded_steps(parsed_steps)
+        parsed_steps = _svc()._parse_codegen_steps(script_path)
+        recorded_steps = _svc()._serialize_recorded_steps(parsed_steps)
     if not recorded_steps:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -695,8 +703,8 @@ def stop_recorder_session(
 ) -> dict[str, object]:
     item = _svc()._sync_active_session_runtime_state(db, _svc()._get_session_or_404(db, session_id))
     script_path = Path(item.script_path)
-    parsed_steps = _parse_codegen_steps(script_path)
-    parsed_locators_all = _parse_codegen_script(script_path, include_dynamic_text=True)
+    parsed_steps = _svc()._parse_codegen_steps(script_path)
+    parsed_locators_all = _svc()._parse_codegen_script(script_path, include_dynamic_text=True)
     parsed_locators = [locator for locator in parsed_locators_all if not _is_locator_blocked_for_ingest(locator)[0]]
     step_hit_count_by_key: dict[tuple[str, str, str], int] = {}
     for step in parsed_steps:
@@ -732,7 +740,7 @@ def stop_recorder_session(
                 probe_by_key=probe_by_key,
                 probe_status=probe_status,
             )
-            candidate_summary = _candidate_summary_from_payload(element_candidates)
+            candidate_summary = _svc()._candidate_summary_from_payload(element_candidates)
         return {
             "session": session_payload,
             "ingested_count": 0,
@@ -761,8 +769,8 @@ def stop_recorder_session(
         started_by=item.started_by,
     )
 
-    serialized_steps = _serialize_recorded_steps(parsed_steps, element_code_by_key=element_code_by_key)
-    _save_recorded_steps(script_path, serialized_steps)
+    serialized_steps = _svc()._serialize_recorded_steps(parsed_steps, element_code_by_key=element_code_by_key)
+    _svc()._save_recorded_steps(script_path, serialized_steps)
     element_candidates = _build_element_candidates(
         parsed_locators_all,
         step_hit_count_by_key=step_hit_count_by_key,

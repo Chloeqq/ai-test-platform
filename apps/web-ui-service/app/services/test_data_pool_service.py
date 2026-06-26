@@ -81,6 +81,11 @@ def _pool_or_404(db: Session, pool_name: str) -> TestDataPool:
 
 
 def _to_pool_item_payload(pool: TestDataPool) -> dict[str, Any]:
+    """
+    序列化TestDataPool
+    :param pool:
+    :return:
+    """
     return {
         "pool_name": pool.pool_name,
         "description": pool.description,
@@ -336,16 +341,22 @@ def delete_data_pool_item(
     return {"pool_name": pool.pool_name, "item_key": normalized_item_key, "deleted": True}
 
 
-def serialize_runner_data_pool_snapshot(db: Session) -> str:
+def build_runner_data_pool_snapshot(db: Session) -> dict[str, dict[str, Any]]:
+    """构建 {pool_name: {item_key: item_value}} 池快照（唯一构建入口）。
+
+    生成侧 `_resolve_pool_data` 与运行时侧 `DSL_DATA_POOL_JSON` 共用此结构，
+    配合 `shared_backend.data_pool_resolver.resolve_pool_reference` 保证两侧语义一致。
+    表不存在或 DB 异常 → 返回 {}（降级，不阻塞）。
+    """
     try:
         conn = db.get_bind()
         db_inspector = inspect(conn)
         if not db_inspector.has_table("test_data_pools") or not db_inspector.has_table("test_data_pool_items"):
-            return "{}"
+            return {}
         rows = TestDataPoolRepository(db).list_active_items_with_pool_name()
     except SQLAlchemyError as exc:
-        LOGGER.warning("serialize_runner_data_pool_snapshot skipped due to database error: %s", exc)
-        return "{}"
+        LOGGER.warning("build_runner_data_pool_snapshot skipped due to database error: %s", exc)
+        return {}
     payload: dict[str, dict[str, Any]] = {}
     for pool_name, item_key, item_value in rows:
         normalized_pool_name = _normalized_pool_name(pool_name)
@@ -353,4 +364,64 @@ def serialize_runner_data_pool_snapshot(db: Session) -> str:
         if not normalized_pool_name or not normalized_item_key:
             continue
         payload.setdefault(normalized_pool_name, {})[normalized_item_key] = item_value
-    return json.dumps(payload, ensure_ascii=False)
+    return payload
+
+
+def load_runner_data_pool_snapshot(db: Session | None = None) -> dict[str, dict[str, Any]]:
+    """返回池快照；db 为 None 时自管理独立 Session（用于无 Session 上下文，如执行前置解析）。"""
+    if db is not None:
+        return build_runner_data_pool_snapshot(db)
+    from app.core.database import SessionLocal
+
+    own = SessionLocal()
+    try:
+        return build_runner_data_pool_snapshot(own)
+    finally:
+        own.close()
+
+
+def serialize_runner_data_pool_snapshot(db: Session) -> str:
+    return json.dumps(build_runner_data_pool_snapshot(db), ensure_ascii=False)
+
+
+def resolve_pool_value(db: Session | None, pool_name: str, filters: dict[str, str]) -> dict[str, Any]:
+    """从数据池中按标签过滤，返回第一个匹配 item 的 value 字典。
+
+    支持两种查询方式：
+    - filters 含 "key" → 按 item_key 精确匹配
+    - 其他 → 按 tags JSON 字段过滤（保留的标签过滤能力，走
+      `TestDataPoolRepository.list_items_by_pool_and_tags`）
+
+    item_value 兼容两种存储形态：
+    - 合并字典（历史）：`{"username": ..., "password": ...}` → 直接返回该字典
+    - 标量（当前标准）：如 "locked_user" → 返回 `{item_key: 标量值}`，
+      避免对标量值 `json.loads` 崩溃。
+    """
+    _close_db = False
+    if db is None:
+        from app.core.database import SessionLocal
+        db = SessionLocal()
+        _close_db = True
+    try:
+        repo = TestDataPoolRepository(db)
+        pool = repo.get_by_name(pool_name)
+        if pool is None:
+            return {}
+        if "key" in filters:
+            item = repo.get_item_by_key(pool.id, filters["key"])
+        else:
+            items = repo.list_items_by_pool_and_tags(pool.id, filters)
+            item = items[0] if items else None
+        if item is None:
+            return {}
+        try:
+            parsed = json.loads(item.item_value)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            parsed = item.item_value
+        if isinstance(parsed, dict):
+            return parsed
+        return {item.item_key: parsed}
+    finally:
+        if _close_db:
+            db.close()
+

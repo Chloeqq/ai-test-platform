@@ -155,10 +155,28 @@ def load_expanded_test_cases(
         selected_case_path=selected_case_path,
     )
 
+    # 展开阶段(数据矩阵/池引用解析)同样需要韧性：批量扫描时单条展开失败
+    # （如池快照缺失、池 key 未命中）跳过并记录，不让一条拖垮整批；显式单跑
+    # （case_path/case_id）仍 raise，保持严格。与 yaml_loader 批量加载同一哲学。
+    explicit_single = bool(selected_case_path or selected_case_id)
     test_cases = []
+    expand_failures: list[str] = []
 
     for case in raw_cases:
-        test_cases.extend(expand_test_case(case))
+        try:
+            test_cases.extend(expand_test_case(case))
+        except Exception as exc:
+            if explicit_single:
+                raise
+            case_label = _text(case.get("id")) if isinstance(case, dict) else "<unknown>"
+            expand_failures.append(f"{case_label}: {exc}")
+
+    if expand_failures:
+        LOGGER.warning(
+            "skip %s case(s) due to data expansion failure: %s",
+            len(expand_failures),
+            "; ".join(expand_failures),
+        )
 
     if selected_case_id:
         test_cases = [case for case in test_cases if case.get("id") == selected_case_id]

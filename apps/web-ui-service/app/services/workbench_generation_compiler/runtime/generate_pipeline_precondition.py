@@ -13,35 +13,43 @@ _enrich_dsl_v1_1_data_bindings() 之后调用，此时 variables 和 data 已归
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from typing import Any
 
 from shared_backend.execution_compiler import ExecutionCompilerError
+from shared_backend.quality_gate import (
+    PRECONDITION_TYPES as _PRECONDITION_TYPES,
+    RESERVED_PRECONDITION_TYPES as _RESERVED_PRECONDITION_TYPES,
+)
 from shared_backend.type_utils import str_value as _normalized_text
 
 _LOGGER = logging.getLogger(__name__)
 
 # ── Precondition type constants ─────────────────────────────────────────────
-# RULE_005 也引用此常量，避免重复定义。
+# 唯一事实源在 shared_backend.quality_gate.PRECONDITION_TYPES，RULE_005 同源导入。
 
-_PRECONDITION_TYPES: frozenset[str] = frozenset({
-    "login", "account_state", "sql", "api_call", "network",
-})
+# 身份类数据键 — account_state / keyword 路由都按这些 key 把 inline 改为 pool 引用。
+_IDENTITY_DATA_KEYS: frozenset[str] = frozenset({"username", "password", "user_id", "email"})
 
-# 登录流程的标准步骤模板：需要页面对象中的 username_input, password_input, login_button
-_LOGIN_STEP_TEMPLATE: list[dict[str, Any]] = [
-    {"action": "input", "target": "element:username_input",
-     "value": "{{login_username}}", "target_name": "用户名输入框",
-     "expected_result": "用户名输入框内容已填充"},
-    {"action": "input", "target": "element:password_input",
-     "value": "{{login_password}}", "target_name": "密码输入框",
-     "expected_result": "密码输入框内容已填充"},
-    {"action": "click", "target": "element:login_button",
-     "target_name": "登录按钮", "expected_result": "已点击登录按钮"},
-    {"action": "assert_visible", "target": "element:home_menu",
-     "locator_type": "data-testid", "locator_value": "home-page",
-     "target_name": "首页关键元素", "expected_result": "登录成功，首页可见"},
-]
+# 登录流程的元素角色映射 — 从 page_object 按这些 code 查找。
+# input/click 步骤找不到元素则跳过（WARNING）；assert_visible 是登录成功的唯一验证，
+# 找不到元素时退回默认 locator 而非跳过，确保失败的登录仍能在运行时被捕获。
+_LOGIN_FLOW_ELEMENT_CODES: tuple[tuple[str, str, str | None, str], ...] = (
+    # (element_code, action, value_template, expected_result)
+    ("username_input", "input", "{{login_username}}", "用户名输入框内容已填充"),
+    ("password_input", "input", "{{login_password}}", "密码输入框内容已填充"),
+    ("login_button", "click", None, "已点击登录按钮"),
+    ("home_menu", "assert_visible", None, "登录成功，首页可见"),
+)
+
+# assert_visible 步骤找不到元素时的兜底 locator（沿用旧模板 home_menu 定义）。
+_LOGIN_ASSERT_FALLBACK: dict[str, str] = {
+    "target_name": "首页关键元素",
+    "locator_type": "data-testid",
+    "locator_value": "home-page",
+}
 
 
 # ── API ─────────────────────────────────────────────────────────────────────
@@ -103,7 +111,15 @@ def compile_preconditions(
                 seed_data_provider=seed_data_provider,
             )
         else:
-            steps = []  # api_call: reserved
+            # 类型在 PRECONDITION_TYPES 内（已过上方校验）但无编译分支 =
+            # 预留未实现（当前仅 api_call）。硬失败而非静默返回空步骤，
+            # 杜绝「校验通过却不执行任何 setup」的隐患。
+            raise ExecutionCompilerError(
+                code="v2_0_precondition_not_implemented",
+                message=f"preconditions[{i}]: type '{pc_type}' is reserved but not implemented",
+                reason=f"reserved types pending implementation: {sorted(_RESERVED_PRECONDITION_TYPES)} (V2.5+)",
+                stage="v2_0_precondition_compile",
+            )
 
         setup_steps.extend(steps)
 
@@ -152,19 +168,51 @@ def _compile_login(
         # P0 fix: 写入 execution.variables，Runner 才能解析 {{login_username}}
         variables[varname] = f"{{{{{dkey}}}}}"
 
-    # 对登录元素做基本校验（WARNING，不阻塞）
+    # 动态生成登录步骤：从 page_object 查找元素。
     elements = page_object.get("elements") if isinstance(page_object, dict) else {}
-    for el in ("username_input", "password_input", "login_button", "home_menu"):
-        if el not in elements:
+    steps: list[dict[str, Any]] = []
+    for el_code, action, value_tmpl, expected in _LOGIN_FLOW_ELEMENT_CODES:
+        el_def = elements.get(el_code)
+        if not isinstance(el_def, dict):
+            # assert_visible 是登录成功的唯一验证 — 退回默认 locator 而非跳过，
+            # 否则失败的登录会被静默放过。input/click 步骤可安全跳过。
+            if action == "assert_visible":
+                _LOGGER.warning(
+                    "precondition login: element '%s' not found in page_object, "
+                    "using fallback locator for assert step", el_code,
+                )
+                steps.append({
+                    "action": action,
+                    "target": f"element:{el_code}",
+                    "expected_result": expected,
+                    **_LOGIN_ASSERT_FALLBACK,
+                })
+                continue
             _LOGGER.warning(
                 "precondition login: element '%s' not found in page_object, "
-                "setup steps may fail at runtime", el,
+                "skipping login step '%s'", el_code, action,
             )
+            continue
 
-    # 复制模板步骤（模板值全是字符串，dict() 浅拷贝足够）
-    steps: list[dict[str, Any]] = []
-    for tmpl in _LOGIN_STEP_TEMPLATE:
-        steps.append(dict(tmpl))
+        step: dict[str, Any] = {
+            "action": action,
+            "target": f"element:{el_code}",
+            "target_name": _normalized_text(el_def.get("element_name", el_code)),
+            "expected_result": expected,
+        }
+        if value_tmpl:
+            step["value"] = value_tmpl
+        # 从 page_object 复制 locator 信息
+        locator_type = _normalized_text(el_def.get("locator_type") or el_def.get("type", ""))
+        if locator_type:
+            step["locator_type"] = locator_type
+        locator_value = _normalized_text(el_def.get("locator_value") or el_def.get("selector", ""))
+        if locator_value:
+            step["locator_value"] = locator_value
+        role = _normalized_text(el_def.get("role", ""))
+        if locator_type == "role" and role:
+            step["role"] = role
+        steps.append(step)
 
     return steps
 
@@ -192,14 +240,7 @@ def _compile_account_state(
         return []
 
     # ── 1. 路由身份数据到数据池 ─────────────────────────────────
-    identity_keys = {"username", "password", "user_id", "email"}
-    for dk in list(data.keys()):
-        if dk in identity_keys and isinstance(data[dk], dict):
-            entry_data = data[dk]
-            if _normalized_text(entry_data.get("source_type")) == "inline":
-                entry_data["source_type"] = "pool"
-                entry_data["pool_name"] = page  # 按页面对应的池
-                entry_data["key"] = f"{dk}_{state}"
+    route_identity_data_to_pool(data, page=page, state=state)
 
     # ── 2. 查找 setup_sql 模板 ──────────────────────────────────
     sql = _resolve_setup_sql(
@@ -250,7 +291,6 @@ def _resolve_setup_sql(
 
 def _resolve_sql_template(sql: str, data: dict[str, Any]) -> str:
     """解析 SQL 模板中的 {{data_key}} 占位符，替换为实际值。"""
-    import re
     result = sql
     for match in re.finditer(r"\{\{\s*(\w+)\s*\}\}", sql):
         var = match.group(1)
@@ -354,7 +394,6 @@ def _resolve_network_config(
         if isinstance(item, dict):
             return item
         if isinstance(item, str):
-            import json
             try:
                 return json.loads(item)
             except (json.JSONDecodeError, ValueError):
@@ -368,6 +407,31 @@ def _resolve_network_config(
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
+
+def route_identity_data_to_pool(data: dict[str, Any], *, page: str, state: str) -> None:
+    """将身份类 inline data 改写为数据池引用（就地修改 data）。
+
+    池名按 V3.0 约定 = {page}（page 为空时退回 "login"）。
+    key 按约定 = {data_key}_{state}（如 username_locked）。
+    零硬编码池名/键名 — 全由 page 和 state 推导。account_state 预处理与
+    关键词路由（_apply_pool_routing）共用此函数，避免逻辑漂移。
+    """
+    if not state:
+        return
+    pool_name = page or "login"
+    for dk in list(data.keys()):
+        entry = data.get(dk)
+        if (
+            dk in _IDENTITY_DATA_KEYS
+            and isinstance(entry, dict)
+            and _normalized_text(entry.get("source_type")) == "inline"
+        ):
+            data[dk] = {
+                "source_type": "pool",
+                "pool_name": pool_name,
+                "key": f"{dk}_{state}",
+            }
+
 
 def _resolve_data_ref(
     ref: Any,
