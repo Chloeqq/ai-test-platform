@@ -417,6 +417,22 @@ def _intent_type_distribution(candidates: list[dict[str, Any]]) -> dict[str, int
     return dict(sorted(distribution.items()))
 
 
+def _find_existing_page_asset_for_upsert(project: str, page: str, existing_case_ids: list[str]) -> str:
+    """在已有资产中查找同页面资产，返回其 case_id 以支持 upsert 而非重复创建。"""
+    import re
+    normalized_project = _normalized_text(project)
+    normalized_page = _normalized_text(page)
+    if not normalized_project or not normalized_page:
+        return ""
+    # case_id 格式: {project}-web-{page}-{type}-{source}-{seq}
+    # 匹配同 project 同 page 的资产
+    page_prefix = f"{normalized_project}-web-{normalized_page}-"
+    for case_id in sorted(existing_case_ids, key=lambda cid: _normalized_text(cid)):
+        if _normalized_text(case_id).startswith(page_prefix):
+            return _normalized_text(case_id)
+    return ""
+
+
 def _first_candidate_title(candidates: list[dict[str, Any]], *, page: str) -> str:
     for candidate in candidates:
         title = _normalized_text(candidate.get("title")) or _normalized_text(candidate.get("summary"))
@@ -499,6 +515,11 @@ class SaveTestPointAssetsService:
         for case_id in _existing_test_point_asset_ids(project):
             if case_id not in existing_case_ids:
                 existing_case_ids.append(case_id)
+        # Reuse existing asset for the same page when no explicit case_id is requested
+        if not requested_case_id:
+            existing_page_asset_id = _find_existing_page_asset_for_upsert(project, page, existing_case_ids)
+            if existing_page_asset_id:
+                requested_case_id = existing_page_asset_id
         candidate_case_id = repository.allocate_case_id(
             requested_case_id=requested_case_id,
             project=project,
@@ -520,7 +541,8 @@ class SaveTestPointAssetsService:
                 for element in _list_text(point.get("involved_elements"))
             ]
         )
-        asset_title = _first_candidate_title(batch_candidates, page=page)
+        plan_title = _first_candidate_title(batch_candidates, page=page)
+        asset_title = f"{page} 页面测试点资产集" if page else "测试点资产集"
         parse_confidence = requirement_spec.get("parse_confidence")
         try:
             confidence = float(parse_confidence) if parse_confidence is not None else 0.8
@@ -531,7 +553,7 @@ class SaveTestPointAssetsService:
             "project": project,
             "case_id": candidate_case_id,
             "page": page,
-            "title": asset_title,
+            "title": plan_title,
             "priority": _normalized_text(requirement_spec.get("priority")) or _normalized_text(getattr(payload, "priority", "")) or "P1",
             "source_type": "selection_save",
             "requirement": [effective_requirement] if effective_requirement else [],
