@@ -612,7 +612,7 @@ class SaveTestPointAssetsService:
             candidate_case_id,
             state_root=workbench_state_store.WEB_UI_STATE_ROOT / "test-points",
         )
-        # Sync test points to DB
+        # Sync test points to DB (per-point records)
         try:
             db_synced = repository.sync_test_points(
                 project_code=project,
@@ -621,6 +621,13 @@ class SaveTestPointAssetsService:
             )
         except Exception:
             db_synced = 0
+        # Sync asset bundle to DB (test_point_assets table)
+        try:
+            from app.services import test_point_asset_store
+            if isinstance(asset, dict) and asset.get("asset_id"):
+                test_point_asset_store.save_asset(repository.db, project=project, bundle=asset)
+        except Exception:
+            pass
         runtime.append_history(
             {
                 "timestamp": runtime.now_iso(),

@@ -26,9 +26,21 @@ def _int(value: Any) -> int:
         return 0
 
 
-def _ensure_table(db: Session) -> None:
-    # WorkbenchState 系列同款:正式迁移待补，运行期 checkfirst 建表(幂等)。
+_table_ensured: bool = False
+
+
+def init_table(db: Session) -> None:
+    """一次性幂等建表，启动/bootstrap 时调用。"""
+    global _table_ensured
+    if _table_ensured:
+        return
     TestPointAsset.__table__.create(bind=db.get_bind(), checkfirst=True)
+    _table_ensured = True
+
+
+def _ensure_table(db: Session) -> None:
+    if not _table_ensured:
+        init_table(db)
 
 
 def _columns_from_bundle(project: str, bundle: dict[str, Any]) -> dict[str, Any]:
@@ -55,7 +67,6 @@ def save_asset(db: Session, *, project: str, bundle: dict[str, Any]) -> bool:
     if not cols["asset_id"]:
         return False
     TestPointAssetRepository(db).upsert(**cols)
-    db.commit()
     return True
 
 
@@ -68,22 +79,32 @@ def load_asset(db: Session, *, project: str, asset_id: str) -> dict[str, Any] | 
     return payload or None
 
 
-def list_assets(db: Session, *, project: str) -> list[dict[str, Any]]:
+def list_assets(db: Session, *, project: str, page_code: str | None = None,
+                 source_type: str | None = None, keyword: str | None = None,
+                 offset: int = 0, limit: int = 500) -> tuple[list[dict[str, Any]], int]:
     _ensure_table(db)
-    rows = TestPointAssetRepository(db).list_by_project(_text(project).lower() or "mall")
-    return [row.raw_payload for row in rows if isinstance(row.raw_payload, dict) and row.raw_payload]
+    rows, total = TestPointAssetRepository(db).list_by_project(
+        _text(project).lower() or "mall",
+        page_code=page_code,
+        source_type=source_type,
+        keyword=keyword,
+        offset=offset,
+        limit=limit,
+    )
+    payloads = [row.raw_payload for row in rows if isinstance(row.raw_payload, dict) and row.raw_payload]
+    return payloads, total
 
 
 def list_asset_ids(db: Session, *, project: str) -> list[str]:
     _ensure_table(db)
-    rows = TestPointAssetRepository(db).list_by_project(_text(project).lower() or "mall")
+    rows, _total = TestPointAssetRepository(db).list_by_project(_text(project).lower() or "mall", limit=10000)
     return [_text(row.asset_id) for row in rows if _text(row.asset_id)]
 
 
 def delete_asset(db: Session, *, project: str, asset_id: str) -> bool:
     _ensure_table(db)
     ok = TestPointAssetRepository(db).delete(_text(project).lower() or "mall", _text(asset_id))
-    db.commit()
+    db.flush()
     return ok
 
 
@@ -133,5 +154,4 @@ def backfill_from_dir(db: Session, *, project: str, project_dir: Path) -> int:
             continue
         repo.upsert(**cols)
         count += 1
-    db.commit()
     return count

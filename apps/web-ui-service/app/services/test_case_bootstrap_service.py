@@ -378,9 +378,19 @@ def ensure_seed_data(db: Session) -> None:
     TestCaseStep.__table__.create(bind=db.get_bind(), checkfirst=True)
     TestPoint.__table__.create(bind=db.get_bind(), checkfirst=True)
     ensure_test_cases_schema_compatibility(db)
-    # Keep routine service calls safe: they should not inject demo cases into a
-    # real or test project. Demo/default project seed is opt-in via explicit
-    # project writes or ensure_demo_seed_data.
+    # 初始化 test_point_assets 表并从本地 JSON 回填存量数据
+    from app.services import test_point_asset_store
+    test_point_asset_store.init_table(db)
+    from pathlib import Path
+    REPO_ROOT = Path(__file__).resolve().parents[4]
+    STATE_ROOT = REPO_ROOT / "web-ui" / "state" / "test-points"
+    if STATE_ROOT.exists():
+        for project_dir in STATE_ROOT.iterdir():
+            if project_dir.is_dir():
+                try:
+                    test_point_asset_store.backfill_from_dir(db, project=project_dir.name, project_dir=project_dir)
+                except Exception:
+                    pass
     return
 
 

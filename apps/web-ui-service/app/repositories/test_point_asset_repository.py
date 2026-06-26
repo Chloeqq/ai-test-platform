@@ -25,15 +25,29 @@ class TestPointAssetRepository(BaseRepository):
         project_code: str,
         *,
         page_code: str | None = None,
+        source_type: str | None = None,
         status: str | None = None,
-    ) -> list[TestPointAsset]:
+        keyword: str | None = None,
+        offset: int = 0,
+        limit: int = 500,
+    ) -> tuple[list[TestPointAsset], int]:
         stmt = select(TestPointAsset).where(TestPointAsset.project_code == project_code)
         if page_code:
             stmt = stmt.where(TestPointAsset.page_code == page_code)
+        if source_type:
+            stmt = stmt.where(TestPointAsset.source_type == source_type)
         if status:
             stmt = stmt.where(TestPointAsset.status == status)
-        stmt = stmt.order_by(TestPointAsset.updated_at.desc())
-        return list(self.db.execute(stmt).scalars().all())
+        if keyword:
+            stmt = stmt.where(TestPointAsset.title.ilike(f"%{keyword}%"))
+        # count
+        from sqlalchemy import func
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total = self.db.execute(count_stmt).scalar_one() or 0
+        # paginated results
+        stmt = stmt.order_by(TestPointAsset.updated_at.desc()).offset(offset).limit(limit)
+        rows = list(self.db.execute(stmt).scalars().all())
+        return rows, total
 
     def upsert(
         self,

@@ -143,12 +143,14 @@ class WorkbenchFacadeTestPointAssetsMixin:
         """WorkbenchFacade.list_test_point_assets 接口实现。"""
         store.ensure_dirs()
         # DB 事实源:把 DB 中缺失缓存文件的资产回写为缓存,保证文件枚举与 DB 一致。
+        db_asset_ids: set[str] = set()
         try:
             test_point_asset_store.sync_cache_from_db(
                 db,
                 project=project,
                 project_dir=workbench_asset_service.state_project_dir(project, state_root=constants.TEST_POINTS_ROOT),
             )
+            db_asset_ids = set(test_point_asset_store.list_asset_ids(db, project=project))
         except Exception:  # noqa: BLE001 - 缓存重建降级,不阻断列表
             LOGGER.warning("test point asset cache sync from DB failed for %s", project, exc_info=True)
         payload = workbench_asset_service.build_test_point_asset_items(
@@ -205,6 +207,12 @@ class WorkbenchFacadeTestPointAssetsMixin:
             ),
             clamp_confidence=page_analysis_rules.clamp_confidence,
         )
+        # DB 事实源:有 DB 数据时过滤掉文件残留的已删除资产
+        if db_asset_ids:
+            items = payload.get("items", [])
+            if isinstance(items, list):
+                payload["items"] = [item for item in items if isinstance(item, dict) and item.get("asset_id", "") in db_asset_ids]
+                payload["count"] = len(payload["items"])
         payload["coverage_summary"] = workbench_asset_service.build_test_point_asset_coverage_summary(
             items=payload.get("items", []),
             filter_snapshot=payload["selection_summary"].get("filter_snapshot", {}),
@@ -469,6 +477,12 @@ class WorkbenchFacadeTestPointAssetsMixin:
                 _write_json_file(asset_path, asset_payload)
             updated_count += len(changed_intent_ids)
             affected_assets.append(asset_id)
+            # DB 同步:审核状态变更写入 test_point_assets
+            try:
+                if asset_payload:
+                    test_point_asset_store.save_asset(db, project=normalized_project, bundle=asset_payload)
+            except Exception:  # noqa: BLE001 - DB 同步降级,不阻断审核
+                LOGGER.warning("test point asset DB sync failed for review %s/%s", normalized_project, asset_id, exc_info=True)
         store.append_history(
             {
                 "timestamp": reviewed_at,
@@ -1067,12 +1081,7 @@ class WorkbenchFacadeTestPointAssetsMixin:
             normalized_candidate = _text(candidate)
             if normalized_candidate and normalized_candidate not in candidate_asset_ids:
                 candidate_asset_ids.append(normalized_candidate)
-        # DB 事实源:删除权威记录(文件由下方逻辑作为缓存清理)。
-        for _candidate_asset_id in candidate_asset_ids:
-            try:
-                test_point_asset_store.delete_asset(db, project=normalized_project, asset_id=_candidate_asset_id)
-            except Exception:  # noqa: BLE001 - DB 删除降级,不阻断文件清理
-                LOGGER.warning("test point asset DB delete failed for %s/%s", normalized_project, _candidate_asset_id, exc_info=True)
+        # 先删文件缓存,再删 DB 权威记录。
         removed_paths: list[str] = []
         removed_path_set: set[str] = set()
 
@@ -1115,6 +1124,12 @@ class WorkbenchFacadeTestPointAssetsMixin:
                 if int(exc.status_code or 0) not in {status.HTTP_404_NOT_FOUND, status.HTTP_400_BAD_REQUEST}:
                     raise
 
+        # DB 权威删除:文件已清理,现在删 DB 记录。
+        for _candidate_asset_id in candidate_asset_ids:
+            try:
+                test_point_asset_store.delete_asset(db, project=normalized_project, asset_id=_candidate_asset_id)
+            except Exception:  # noqa: BLE001 - DB 删除降级,不阻断返回
+                LOGGER.warning("test point asset DB delete failed for %s/%s", normalized_project, _candidate_asset_id, exc_info=True)
         if not removed_paths and deleted_case_count <= 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="test point asset not found")
         store.append_history(
