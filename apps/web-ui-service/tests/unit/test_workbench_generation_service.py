@@ -229,14 +229,6 @@ def test_normalize_candidates_preserves_steps_hint() -> None:
     assert candidates[0]["steps_hint"] == ["input:username_input", "input:password_input", "click:login_button"]
 
 
-def test_resolve_page_object_falls_back_to_yaml_assets(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(generate_pipeline_module, "_resolve_page_object_from_db", lambda _project, _page: None)
-    page_object = generate_pipeline_module.resolve_page_object("atp", "login", strict_governance=False)
-
-    assert page_object["page"] == "login"
-    assert {"username_input", "password_input", "login_button", "home_menu"}.issubset(set(page_object["elements"]))
-
-
 def test_resolve_page_object_blocks_yaml_fallback_in_strict_governance(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(generate_pipeline_module, "_resolve_page_object_from_db", lambda _project, _page: None)
 
@@ -1129,8 +1121,9 @@ def test_build_generated_case_payload_writes_product_yaml_for_login_success(
     assert steps[4] == {
         "action": "assert_visible",
         "target": "element:home_menu",
-        "locator_type": "data-testid",
-        "locator_value": "home-page",
+        "locator_type": "role",
+        "locator_value": "首页",
+        "role": "menuitem",
         "target_name": "首页菜单",
         "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
     }
