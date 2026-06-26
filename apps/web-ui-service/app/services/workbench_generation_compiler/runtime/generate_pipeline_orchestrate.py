@@ -739,6 +739,14 @@ def _resolve_page_object_from_db(project: str, page: str) -> dict[str, Any] | No
             "stability_level": _normalized_text(getattr(element, "stability_level", "")).lower(),
             "status": _normalized_text(getattr(element, "status", "")).lower() or "active",
         }
+    if page == "login":
+        success_element = _load_cross_page_data_testid_element(
+            project=project,
+            element_code="home-page",
+            preferred_pages=("home", "layout"),
+        )
+        if success_element is not None and "home-page" not in mapping:
+            mapping["home-page"] = success_element
     # 跨页绑定:合并全局外壳页(layout)的合格元素到当前页绑定上下文。
     # 主页面元素优先(setdefault 不覆盖);外壳页自身不触发,避免递归。
     # 外壳页解析失败不影响主页面(广义捕获后跳过)。

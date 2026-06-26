@@ -99,8 +99,8 @@ def _product_element_name(page: str, target_code: str, element_meta: dict[str, A
             return "密码输入框"
         if normalized_code == "login_button":
             return "登录按钮"
-        if normalized_code == "home_menu":
-            return "首页菜单"
+        if normalized_code in ("home_menu", "home-page"):
+            return "首页关键元素"
     return _normalized_text(element_meta.get("name") or element_meta.get("element_name")) or normalized_code
 
 
@@ -145,6 +145,7 @@ _LOGIN_DATA_TESTID_ELEMENT_CODES = {
     "password_input": "login-password-input",
     "login_button": "login-submit-btn",
     "home_menu": "home-page",
+    "home-page": "home-page",
 }
 
 
@@ -348,41 +349,43 @@ def _append_login_success_assertion(
     expected_by_intent: dict[str, str],
 ) -> None:
     """
-    在登录场景的步骤末尾追加一个"登录成功断言"（assert_visible home_menu）。
+    在登录场景的步骤末尾追加一个"登录成功断言"（assert_visible home-page）。
 
     前提条件（缺一不可）：
     1. 当前页面是 login 页
     2. 步骤里还没有任何 assert 动作（避免重复断言）
     3. 所有意图的预期文本汇总后不包含"失败/错误"等负面词汇
     4. 预期文本包含"登录成功"或"工作台首页"等成功信号
-    5. 页面对象库中有 home_menu 的完整定位信息
+    5. 页面对象库中有 home-page 的完整定位信息（从 home/layout 页跨页注入）
 
-    功能：确认登录后能看到首页菜单 → 证明已离开登录页进入工作台。
+    功能：确认登录后能看到首页 → 证明已离开登录页进入工作台。
     """
 
-    # V2.5b: 负向/异常场景不追加登录成功断言（登录应失败，home_menu 不会出现）
+    # V2.5b: 负向/异常场景不追加登录成功断言（登录应失败，home-page 不会出现）
     all_expected = " ".join(expected_by_intent.values()).lower()
     if any(kw in all_expected for kw in NEGATIVE_SCENARIO_KEYWORDS):
         return
 
-    # 避免重复：已有 home_menu 断言则跳过
+    # 避免重复：已有 home-page / home_menu 断言则跳过
     for s in product_steps:
-        if isinstance(s, dict) and "home_menu" in str(s.get("target", "")):
-            return
+        if isinstance(s, dict):
+            target_text = str(s.get("target", ""))
+            if "home-page" in target_text or "home_menu" in target_text:
+                return
 
     elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}
-    home_meta = _product_element_meta(page="login", target_code="home_menu", elements=elements)
+    home_meta = _product_element_meta(page="login", target_code="home-page", elements=elements)
     locator_type = _normalized_text(home_meta.get("type") or home_meta.get("locator_type"))
     locator_value = _normalized_text(home_meta.get("selector") or home_meta.get("locator_value"))
     if not locator_type or not locator_value:
         return
     assertion_step: dict[str, Any] = {
         "action": "assert_visible",
-        "target": "element:home_menu",
+        "target": "element:home-page",
         "locator_type": locator_type,
         "locator_value": locator_value,
-        "target_name": _product_element_name("login", "home_menu", home_meta),
-        "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
+        "target_name": _product_element_name("login", "home-page", home_meta),
+        "expected_result": "登录后首页可见，确认已离开登录页并进入工作台",
     }
     role = _normalized_text(home_meta.get("role"))
     if locator_type == "role" and role:

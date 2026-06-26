@@ -41,10 +41,10 @@ _LOGIN_FLOW_ELEMENT_CODES: tuple[tuple[str, str, str | None, str], ...] = (
     ("username_input", "input", "{{login_username}}", "用户名输入框内容已填充"),
     ("password_input", "input", "{{login_password}}", "密码输入框内容已填充"),
     ("login_button", "click", None, "已点击登录按钮"),
-    ("home_menu", "assert_visible", None, "登录成功，首页可见"),
+    ("home-page", "assert_visible", None, "登录成功，首页可见"),
 )
 
-# assert_visible 步骤找不到元素时的兜底 locator（沿用旧模板 home_menu 定义）。
+# assert_visible 步骤找不到元素时的兜底 locator（跨页面注入的 home-page 元素）。
 _LOGIN_ASSERT_FALLBACK: dict[str, str] = {
     "target_name": "首页关键元素",
     "locator_type": "data-testid",
