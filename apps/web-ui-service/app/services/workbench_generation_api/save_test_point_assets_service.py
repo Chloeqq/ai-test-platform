@@ -612,6 +612,15 @@ class SaveTestPointAssetsService:
             candidate_case_id,
             state_root=workbench_state_store.WEB_UI_STATE_ROOT / "test-points",
         )
+        # Sync test points to DB
+        try:
+            db_synced = repository.sync_test_points(
+                project_code=project,
+                page_code=page,
+                points=points,
+            )
+        except Exception:
+            db_synced = 0
         runtime.append_history(
             {
                 "timestamp": runtime.now_iso(),

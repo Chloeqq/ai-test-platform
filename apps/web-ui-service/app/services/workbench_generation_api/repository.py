@@ -188,3 +188,32 @@ class WorkbenchGenerationRepository:
     def count_case_step_rows(self, *, case_db_id: int) -> int:
         count = self.db.execute(select(func.count(TestCaseStep.id)).where(TestCaseStep.case_id == int(case_db_id))).scalar_one()
         return int(count or 0)
+
+    def sync_test_points(self, *, project_code: str, page_code: str,
+                         points: list[dict[str, Any]]) -> int:
+        """将测试点写入 DB，返回写入条数。"""
+        from app.repositories.test_point_repository import TestPointRepository
+        repo = TestPointRepository(self.db)
+        count = 0
+        for point in points:
+            if not isinstance(point, dict):
+                continue
+            point_id = str(point.get("intent_id") or point.get("key") or "").strip()
+            if not point_id:
+                continue
+            repo.upsert_point(
+                project_code=project_code,
+                page_code=page_code,
+                point_id=point_id,
+                point_name=str(point.get("description") or point.get("title") or "").strip(),
+                scene_type=str(point.get("point_type") or "").strip(),
+                priority=str(point.get("priority") or "P1").strip(),
+                test_data_type=str(point.get("test_data_type") or "").strip(),
+                involved_elements=point.get("involved_elements") if isinstance(point.get("involved_elements"), list) else [],
+                expect_result=str(point.get("expected_result") or point.get("expected") or "").strip(),
+                source="ai",
+                raw_payload=point,
+            )
+            count += 1
+        self.db.commit()
+        return count
