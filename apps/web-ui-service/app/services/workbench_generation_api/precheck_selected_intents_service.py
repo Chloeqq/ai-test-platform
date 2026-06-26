@@ -18,11 +18,23 @@ _NON_DOM_INVOLVED_ELEMENTS = {
     "地址栏",
     "工作台URL",
     "登录页面URL",
+    "工作台首页URL",
+    "dashboard",
+    "home",
 }
+
+_URL_PATH_LIKE_RE = __import__("re").compile(r"^(/[a-zA-Z0-9_\-./]*[a-zA-Z])|(#[a-zA-Z])|([a-z]+://)")
 
 
 def _is_non_dom_involved_element(value: Any) -> bool:
-    return _normalized_text(value) in _NON_DOM_INVOLVED_ELEMENTS
+    normalized = _normalized_text(value)
+    if normalized in _NON_DOM_INVOLVED_ELEMENTS:
+        return True
+    if normalized.endswith("URL") or normalized.endswith("Url"):
+        return True
+    if _URL_PATH_LIKE_RE.match(normalized):
+        return True
+    return False
 
 
 class PrecheckSelectedIntentsService:

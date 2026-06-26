@@ -298,7 +298,12 @@ def _review_summary_from_points(points: list[dict[str, Any]]) -> dict[str, Any]:
 def _is_virtual_test_point_element(value: Any) -> bool:
     """识别不需要真实页面元素治理的虚拟测试点元素。"""
     normalized = _text(value)
-    return normalized in _VIRTUAL_TEST_POINT_ELEMENTS or normalized.endswith("URL")
+    if normalized in _VIRTUAL_TEST_POINT_ELEMENTS or normalized.endswith("URL"):
+        return True
+    # URL 路径模式: /dashboard, #/login, http://...
+    if normalized and (normalized.startswith("/") or normalized.startswith("#/") or normalized.startswith("http")):
+        return True
+    return False
 
 def _test_point_asset_state_paths(project: str, asset_id: str) -> tuple[Path, Path]:
     """解析测试点资产文件及其计划文件的状态存储路径。"""
