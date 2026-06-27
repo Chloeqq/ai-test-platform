@@ -38,9 +38,9 @@ _IDENTITY_DATA_KEYS: frozenset[str] = frozenset({"username", "password", "user_i
 # 找不到元素时退回默认 locator 而非跳过，确保失败的登录仍能在运行时被捕获。
 _LOGIN_FLOW_ELEMENT_CODES: tuple[tuple[str, str, str | None, str], ...] = (
     # (element_code, action, value_template, expected_result)
-    ("username_input", "input", "{{login_username}}", "用户名输入框内容已填充"),
-    ("password_input", "input", "{{login_password}}", "密码输入框内容已填充"),
-    ("login_button", "click", None, "已点击登录按钮"),
+    ("login-username-input", "input", "{{login_username}}", "用户名输入框内容已填充"),
+    ("login-password-input", "input", "{{login_password}}", "密码输入框内容已填充"),
+    ("login-submit-btn", "click", None, "已点击登录按钮"),
     ("home-page", "assert_visible", None, "登录成功，首页可见"),
 )
 

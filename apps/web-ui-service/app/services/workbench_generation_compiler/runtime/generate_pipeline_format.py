@@ -93,11 +93,11 @@ def _product_element_name(page: str, target_code: str, element_meta: dict[str, A
     normalized_page = _normalized_text(page).lower()
     normalized_code = _normalized_text(target_code)
     if normalized_page == "login":
-        if normalized_code == "username_input":
+        if normalized_code in ("username_input", "login-username-input"):
             return "用户名输入框"
-        if normalized_code == "password_input":
+        if normalized_code in ("password_input", "login-password-input"):
             return "密码输入框"
-        if normalized_code == "login_button":
+        if normalized_code in ("login_button", "login-submit-btn"):
             return "登录按钮"
         if normalized_code in ("home_menu", "home-page"):
             return "首页关键元素"
@@ -125,13 +125,13 @@ def _product_locator(
     normalized_page = _normalized_text(page).lower()
     normalized_code = _normalized_text(target_code)
     if normalized_page == "login":
-        if normalized_code == "username_input":
+        if normalized_code in ("username_input", "login-username-input"):
             return (
                 "css",
                 "input[name='username'], #username, #username-input, "
                 "input[placeholder*='请输入用户名'], input[placeholder*='用户名']",
             )
-        if normalized_code == "password_input":
+        if normalized_code in ("password_input", "login-password-input"):
             return (
                 "css",
                 "input[type='password'], input[name='password'], #password, #password-input, "
@@ -435,17 +435,22 @@ def _data_key_for_input(*, page: str, element_code: str) -> str:
     """
     根据页面名和元素代码，生成输入数据在 data 字典里的 key 名。
 
-    登录页有固定映射：username_input → "username", password_input → "password"
-    其他页面：去掉元素代码末尾的 "_input" 后缀，把非法字符替换为下划线。
+    登录页映射到规范编码：login-username-input → "username", login-password-input → "password"
+    其他页面：去掉末尾 "_input"/"-input" 后缀，把非法字符替换为下划线。
     """
     normalized_page = _normalized_text(page).lower()
     normalized_code = _normalized_text(element_code).lower()
-    if normalized_page == "login" and normalized_code == "username_input":
-        return "username"
-    if normalized_page == "login" and normalized_code == "password_input":
-        return "password"
-    if normalized_code.endswith("_input"):
-        normalized_code = normalized_code[: -len("_input")]
+    if normalized_page == "login":
+        if normalized_code in ("username_input", "login-username-input"):
+            return "username"
+        if normalized_code in ("password_input", "login-password-input"):
+            return "password"
+    if normalized_code.endswith("_input") or normalized_code.endswith("-input"):
+        # strip trailing _input or -input suffix
+        if normalized_code.endswith("_input"):
+            normalized_code = normalized_code[: -len("_input")]
+        else:
+            normalized_code = normalized_code[: -len("-input")]
     data_key = re.sub(r"[^a-z0-9_]+", "_", normalized_code).strip("_")
     return data_key or "input_value"
 
@@ -459,10 +464,11 @@ def _variable_name_for_input(*, page: str, element_code: str, data_key: str) -> 
     """
     normalized_page = re.sub(r"[^a-z0-9_]+", "_", _normalized_text(page).lower()).strip("_")
     normalized_code = _normalized_text(element_code).lower()
-    if normalized_page == "login" and normalized_code == "username_input":
-        return "login_username"
-    if normalized_page == "login" and normalized_code == "password_input":
-        return "login_password"
+    if normalized_page == "login":
+        if normalized_code in ("username_input", "login-username-input"):
+            return "login_username"
+        if normalized_code in ("password_input", "login-password-input"):
+            return "login_password"
     return f"{normalized_page}_{data_key}" if normalized_page else data_key
 
 
