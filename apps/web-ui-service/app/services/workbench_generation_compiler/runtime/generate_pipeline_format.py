@@ -84,24 +84,14 @@ def _product_page_load_expected(page: str, page_object: dict[str, Any]) -> str:
 
 
 def _product_element_name(page: str, target_code: str, element_meta: dict[str, Any]) -> str:
-    """
-    根据页面和目标 code，生成元素的"产品化中文名称"（用于展示给用户看）。
-
-    登录页的元素有固定中文化映射（因为账号/密码/登录是最常用的页面）。
-    其他页面从 element_meta 的 name/ element_name 取，取不到就用 target_code 本身。
-    """
-    normalized_page = _normalized_text(page).lower()
-    normalized_code = _normalized_text(target_code)
-    if normalized_page == "login":
-        if normalized_code in ("username_input", "login-username-input"):
-            return "用户名输入框"
-        if normalized_code in ("password_input", "login-password-input"):
-            return "密码输入框"
-        if normalized_code in ("login_button", "login-submit-btn"):
-            return "登录按钮"
-        if normalized_code in ("home_menu", "home-page"):
-            return "首页关键元素"
-    return _normalized_text(element_meta.get("name") or element_meta.get("element_name")) or normalized_code
+    """element_code → 中文展示名。委托 element_naming 统一推导。"""
+    from shared_backend.element_naming import element_display_name, resolve_legacy_code
+    code = resolve_legacy_code(_normalized_text(target_code).lower()) or _normalized_text(target_code).lower()
+    # 优先从页面对象元数据取
+    meta_name = _normalized_text(element_meta.get("name") or element_meta.get("element_name"))
+    if meta_name:
+        return meta_name
+    return element_display_name(code) or _normalized_text(target_code)
 
 
 def _product_locator(
@@ -222,7 +212,7 @@ def _product_step_expected(
     value_text = _normalized_text(value)
     target_name = _normalized_text(target_name) or _normalized_text(target_code)
     if normalized_action == "input":
-        if target_code == "password_input" or "密码" in target_name:
+        if "password" in _normalized_text(target_code).lower() or "密码" in target_name:
             return f"{target_name}内容以掩码形式显示"
         if value_text:
             return f"{target_name}内容显示为 {value_text}"
@@ -432,44 +422,17 @@ def _variable_template_key(value: Any) -> str:
 
 
 def _data_key_for_input(*, page: str, element_code: str) -> str:
-    """
-    根据页面名和元素代码，生成输入数据在 data 字典里的 key 名。
-
-    登录页映射到规范编码：login-username-input → "username", login-password-input → "password"
-    其他页面：去掉末尾 "_input"/"-input" 后缀，把非法字符替换为下划线。
-    """
-    normalized_page = _normalized_text(page).lower()
-    normalized_code = _normalized_text(element_code).lower()
-    if normalized_page == "login":
-        if normalized_code in ("username_input", "login-username-input"):
-            return "username"
-        if normalized_code in ("password_input", "login-password-input"):
-            return "password"
-    if normalized_code.endswith("_input") or normalized_code.endswith("-input"):
-        # strip trailing _input or -input suffix
-        if normalized_code.endswith("_input"):
-            normalized_code = normalized_code[: -len("_input")]
-        else:
-            normalized_code = normalized_code[: -len("-input")]
-    data_key = re.sub(r"[^a-z0-9_]+", "_", normalized_code).strip("_")
-    return data_key or "input_value"
+    """element_code → data key。委托 element_naming 统一推导。"""
+    from shared_backend.element_naming import element_data_key, resolve_legacy_code
+    canonical = resolve_legacy_code(_normalized_text(element_code).lower()) or _normalized_text(element_code).lower()
+    return element_data_key(canonical)
 
 
 def _variable_name_for_input(*, page: str, element_code: str, data_key: str) -> str:
-    """
-    生成变量名，用于 execution.variables 中引用 data。
-
-    登录页固定映射：→ "login_username" / "login_password"
-    其他页面："{page}_{data_key}"，page 内部的非法字符替换为下划线。
-    """
-    normalized_page = re.sub(r"[^a-z0-9_]+", "_", _normalized_text(page).lower()).strip("_")
-    normalized_code = _normalized_text(element_code).lower()
-    if normalized_page == "login":
-        if normalized_code in ("username_input", "login-username-input"):
-            return "login_username"
-        if normalized_code in ("password_input", "login-password-input"):
-            return "login_password"
-    return f"{normalized_page}_{data_key}" if normalized_page else data_key
+    """element_code → 变量名。委托 element_naming 统一推导。"""
+    from shared_backend.element_naming import element_variable_name, resolve_legacy_code
+    canonical = resolve_legacy_code(_normalized_text(element_code).lower()) or _normalized_text(element_code).lower()
+    return element_variable_name(canonical, page=_normalized_text(page))
 
 
 def _reserve_data_key(data: dict[str, Any], base_key: str, value: Any) -> str:

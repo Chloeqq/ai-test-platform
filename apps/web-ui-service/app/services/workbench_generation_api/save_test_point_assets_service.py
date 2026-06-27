@@ -98,10 +98,10 @@ def _candidate_snapshot(candidate: dict[str, Any]) -> dict[str, Any]:
 
 
 _LOGIN_ELEMENT_RULES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
-    ("username_input", "用户名输入框", "username", ("用户名输入框", "账号输入框", "用户名", "账号")),
-    ("password_input", "密码输入框", "password", ("密码输入框", "密码")),
-    ("login_button", "登录按钮", "", ("登录按钮", "登录")),
-    ("home_menu", "首页菜单", "", ("首页菜单", "首页", "工作台首页")),
+    ("login-username-input", "用户名输入框", "username", ("用户名输入框", "账号输入框", "用户名", "账号")),
+    ("login-password-input", "密码输入框", "password", ("密码输入框", "密码")),
+    ("login-submit-btn", "登录按钮", "", ("登录按钮", "登录")),
+    ("home-page", "首页菜单", "", ("首页菜单", "首页", "工作台首页")),
 )
 
 
@@ -131,12 +131,10 @@ def _input_value_from_text(text: str) -> tuple[bool, Any]:
 
 
 def _data_ref_for_element(element_code: str, fallback_key: str) -> str:
-    if element_code == "username_input":
-        return "username"
-    if element_code == "password_input":
-        return "password"
-    normalized = _normalized_text(fallback_key or element_code)
-    return normalized.removesuffix("_input") if normalized else "input_value"
+    """element_code → data key，委托 element_naming 统一推导。"""
+    from shared_backend.element_naming import element_data_key
+    key = element_data_key(element_code)
+    return key or _normalized_text(fallback_key).removesuffix("_input").removesuffix("-input") or "input_value"
 
 
 def _append_unique(items: list[str], value: str) -> None:

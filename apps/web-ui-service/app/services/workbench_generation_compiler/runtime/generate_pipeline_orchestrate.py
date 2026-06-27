@@ -374,17 +374,9 @@ def _ensure_data_steps_and_variables(
 
 
 def _infer_element_code_from_data_key(data_key: str) -> str:
-    """从 data key 推断页面对象 element_code（旧语义名→规范编码映射）。"""
-    return _SEMANTIC_TO_CANONICAL.get(data_key, data_key)
-
-
-_SEMANTIC_TO_CANONICAL: dict[str, str] = {
-    "username": "login-username-input",
-    "password": "login-password-input",
-    "username_input": "login-username-input",
-    "password_input": "login-password-input",
-    "login_button": "login-submit-btn",
-}
+    """从 data key 推断页面对象 element_code，委托 element_naming 统一推导。"""
+    from shared_backend.element_naming import resolve_legacy_code
+    return resolve_legacy_code(data_key) or data_key
 
 
 def _attach_point_expected_results(compiled_steps: list[dict[str, Any]], test_points: list[dict[str, Any]]) -> list[dict[str, Any]]:

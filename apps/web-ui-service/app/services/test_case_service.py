@@ -746,13 +746,9 @@ def _friendly_step_target_name(step: dict[str, Any]) -> str:
     if target_name:
         return target_name
     target_code = _target_code_from_step(step)
-    if target_code == "username_input":
-        return "用户名输入框"
-    if target_code == "password_input":
-        return "密码输入框"
-    if target_code == "login_button":
-        return "登录按钮"
-    return target_code
+    from shared_backend.element_naming import element_display_name, resolve_legacy_code
+    canonical = resolve_legacy_code(target_code) or target_code
+    return element_display_name(canonical) or target_code
 
 
 def _workbench_step_locator(step: dict[str, Any]) -> tuple[str, str]:
