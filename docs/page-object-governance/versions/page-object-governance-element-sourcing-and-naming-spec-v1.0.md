@@ -237,13 +237,13 @@
 
 统一采用：
 
-- `snake_case`
+- `kebab-case`（连字符分隔），格式 `{page}-{semantic}-{type_suffix}`
 
 允许字符：
 
 - 小写字母 `a-z`
 - 数字 `0-9`
-- 下划线 `_`
+- 连字符 `-`
 
 长度建议：
 
@@ -252,28 +252,37 @@
 禁止：
 
 - 大写字母
-- 连字符 `-`
+- 下划线 `_`（仅用于旧语义码向后兼容）
 - 空格
 - 中文
 - locator 噪音词
+
+> **注意：** 本文 V1.0 原推荐 `snake_case`（下划线），现已统一为标准 `kebab-case`。
+> 旧码（`username_input`）在 `element_naming.resolve_legacy_code()` 中保留兼容，
+> 但新元素编码必须使用 `kebab-case`。
 
 ---
 
 ## 5.3 命名结构
 
-推荐结构：
+统一结构：
 
-- `业务对象 + 语义类型`
+- **`{page}-{semantic}-{type_suffix}`**
 
-常见模式：
+三段式，以连字符分隔：
 
-- `username_input`
-- `password_input`
-- `login_button`
-- `remember_me_checkbox`
-- `password_toggle`
-- `search_keyword_input`
-- `search_submit_button`
+1. `page` — 页面标识（如 `login`、`product`、`order`）
+2. `semantic` — 业务语义（如 `username`、`password`、`submit`）
+3. `type_suffix` — 元素类型后缀（见 5.5 节）
+
+示例：
+
+- `login-username-input` — 登录页用户名输入框
+- `login-password-input` — 登录页密码输入框
+- `login-submit-btn` — 登录页提交按钮
+- `login-password-toggle-btn` — 登录页密码显隐按钮
+- `product-search-input` — 商品页搜索输入框
+- `order-table` — 订单列表表格
 - `order_table`
 - `order_no_column`
 - `order_status_filter`
@@ -640,5 +649,67 @@
 如果只靠录制，你会得到一堆能点但没法治理的 locator。
 
 如果只靠源码，你会得到一堆看起来有语义、但不一定能稳定执行的元素。
+
+---
+
+## 十三、附录 A：element_naming 中心模块
+
+> 版本：V1.1（2026-06-27 新增）
+
+为解决 element_code 的命名一致性，统一了 `shared_backend/element_naming.py` 作为唯一的编码推导入口。
+所有代码中不应再硬编码 element_code 的 if-else 映射，改为调用此模块。
+
+### A.1 核心函数
+
+| 函数 | 输入 | 输出 | 说明 |
+|------|------|------|------|
+| `element_data_key(ec)` | `login-username-input` | `username` | 推导 DSL data 段 key |
+| `element_variable_name(ec, page)` | `ec`, page=`login` | `login_username` | 推导 execution.variables 变量名 |
+| `element_display_name(ec, meta?)` | `login-submit-btn` | `提交按钮` | 推导中文展示名（有页面对象时优先 name 字段）|
+| `resolve_legacy_code(v)` | `username_input` | `login-username-input` | 旧语义码→规范码，用于存量过渡 |
+
+### A.2 推导规则
+
+从 `element_code` 本身推导，不依赖硬编码映射表：
+
+1. 按 `-` 拆分为三段：`{page}`-`{semantic}`-`{type_suffix}`
+2. `data_key` = `semantic`（中间段）
+3. `variable_name` = `{page}_{semantic}`（页面前缀 + 语义）
+4. `display_name` = 查 `_TYPE_SUFFIX_DISPLAY` 表（如 `input→输入框`、`btn→按钮`）
+
+### A.3 向后兼容
+
+旧语义码（`username_input`, `password_input`, `login_button` 等）通过 `_LEGACY_TO_CANONICAL` 映射表自动转换。
+新代码应直接使用规范码，旧映射仅用于存量数据解析。
+
+### A.4 使用示例
+
+```python
+from shared_backend.element_naming import element_data_key, element_variable_name
+
+# data key
+assert element_data_key("login-username-input") == "username"
+assert element_data_key("product-search-input") == "search"
+
+# variable name
+assert element_variable_name("login-username-input", page="login") == "login_username"
+assert element_variable_name("login-submit-btn", page="login") == "login_submit"
+
+# display name (with page object metadata)
+from shared_backend.element_naming import element_display_name
+assert element_display_name("login-username-input") == "用户名输入框"
+```
+
+### A.5 旧码→规范码对照表
+
+| 旧语义码 | 规范码 | 说明 |
+|---------|--------|------|
+| `username_input` | `login-username-input` | 用户名输入框 |
+| `password_input` | `login-password-input` | 密码输入框 |
+| `login_button` | `login-submit-btn` | 登录按钮 |
+| `home_menu` | `home-page` | 首页容器 |
+| `username` | `login-username-input` | AI 生成简称 |
+| `password` | `login-password-input` | AI 生成简称 |
+| `loginButton` | `login-submit-btn` | AI 生成 camelCase |
 
 只有把这两者结合起来，页面对象资产才会真正可用于测试点映射和可执行用例生成。
