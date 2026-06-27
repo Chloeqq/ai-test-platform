@@ -118,21 +118,27 @@ def _candidate_rows_from_plan(plan: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _derive_asset_title(asset: dict[str, Any], *, fallback_id: str) -> str:
-    existing_title = str(asset.get("title", "")).strip()
-    if existing_title and not _looks_like_asset_identifier(existing_title, asset_id=fallback_id):
-        return existing_title
+    """推导资产展示标题。优先 metadata 中的页面级标题，其次候选标题。"""
     plan = _dict_value(asset.get("plan"))
-    plan_title = str(plan.get("title", "")).strip()
-    if plan_title and not _looks_like_asset_identifier(plan_title, asset_id=fallback_id):
-        return plan_title
     metadata = _dict_value(plan.get("metadata"))
+    # tier 1: metadata 中的页面级资产标题（如 "login 页面测试点资产集"）
     metadata_title = str(metadata.get("asset_title", "")).strip()
     if metadata_title and not _looks_like_asset_identifier(metadata_title, asset_id=fallback_id):
         return metadata_title
+    # tier 2: asset 自身标题
+    existing_title = str(asset.get("title", "")).strip()
+    if existing_title and not _looks_like_asset_identifier(existing_title, asset_id=fallback_id):
+        return existing_title
+    # tier 3: plan 标题
+    plan_title = str(plan.get("title", "")).strip()
+    if plan_title and not _looks_like_asset_identifier(plan_title, asset_id=fallback_id):
+        return plan_title
+    # tier 4: 候选标题
     for row in _candidate_rows_from_plan(plan):
         title = str(row.get("title") or row.get("summary") or row.get("description") or "").strip()
         if title and not _looks_like_asset_identifier(title, asset_id=fallback_id):
             return title
+    # tier 5: 页面级兜底
     page = str(asset.get("page", "")).strip()
     if page:
         return f"{page} 页面测试点资产集"
