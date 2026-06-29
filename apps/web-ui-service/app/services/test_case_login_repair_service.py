@@ -293,11 +293,17 @@ def _pick_login_element_for_step(
             if _normalize_match_text(candidate.locator_value) == locator_key:
                 matched_by_locator = (candidate, _classify_login_element_role(candidate))
                 break
+    # target 取自结构化 element:code 引用时不参与 merged 文本：本项目元素编码统一
+    # 带 "login-" 前缀（如 login-password-toggle-btn），把它当自然语言关键词匹配会
+    # 让任意 click 步骤都命中 "login" 这个词，导致 desired_role 被误判为 login_button。
+    # 只有 target 是legacy自由文本（不是 element: 引用）时，才把它当语义信号纳入。
+    raw_target_for_merge = _normalize_step_text(step.get("target"))
+    target_text_for_merge = "" if raw_target_for_merge.startswith("element:") else raw_target_for_merge
     merged = _normalize_match_text(
         " ".join(
             [
                 _normalize_step_text(step.get("description")),
-                _normalize_step_text(step.get("target")),
+                target_text_for_merge,
                 _normalize_step_text(step.get("value")),
                 _normalize_step_text(step.get("expected_result")),
             ]
@@ -357,7 +363,9 @@ def _pick_login_element_for_step(
         best = _best_role_element(role_map, "username")
         if best is not None:
             return best, "username"
-    if action == "click" and role_map.get("login_button"):
+    # "click 默认选登录按钮"只在没有任何精确 target 命中时才适用——否则会把
+    # 已经精确绑定到密码切换按钮等非登录按钮元素的 click 步骤错误地改写成提交按钮。
+    if action == "click" and matched_by_target is None and role_map.get("login_button"):
         best = _best_role_element(role_map, "login_button")
         if best is not None:
             return best, "login_button"

@@ -443,7 +443,10 @@ def _build_direct_candidate_orchestrator_result(
             "raw_text": hint,
             "description": hint,
         }
-        if value is not None:
+        if action == "assert_attribute" and isinstance(value, dict):
+            step["attribute"] = value.get("attribute")
+            step["value"] = value.get("value")
+        elif value is not None:
             step["value"] = value
         if action == "assert_metric" and value is not None:
             step["metric_rule"] = value

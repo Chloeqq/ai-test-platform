@@ -15,7 +15,7 @@ from app.repositories.page_object_repository import PageObjectRepository
 from ..debug import debug_enabled, log_debug_event
 from shared_backend.observability import summarize_http_context
 from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
-from shared_backend.quality_gate.models import NEGATIVE_SCENARIO_KEYWORDS
+from shared_backend.quality_gate.models import NEGATIVE_SCENARIO_KEYWORDS, LOGIN_SUCCESS_SIGNAL_KEYWORDS
 from shared_backend.element_binding import build_element_alias_map
 from shared_backend.intent_mapping import resolve_explicit_step
 from shared_backend.schemas.contracts import normalize_test_point_plan_v1
@@ -304,6 +304,8 @@ def _format_product_execution_steps(
             step_payload["role"] = role
         if raw_step.get("value") is not None:
             step_payload["value"] = raw_step.get("value")
+        if action == "assert_attribute" and _normalized_text(raw_step.get("attribute")):
+            step_payload["attribute"] = _normalized_text(raw_step.get("attribute"))
         expected = _product_step_expected(
             action=action,
             target_name=target_name,
@@ -354,6 +356,12 @@ def _append_login_success_assertion(
     # V2.5b: 负向/异常场景不追加登录成功断言（登录应失败，home-page 不会出现）
     all_expected = " ".join(expected_by_intent.values()).lower()
     if any(kw in all_expected for kw in NEGATIVE_SCENARIO_KEYWORDS):
+        return
+
+    # 条件4：预期文本必须包含登录成功/跳转首页等信号，否则说明这条测试点
+    # 与"登录后进入首页"无关（如密码可见性切换、记住密码勾选等单步交互），
+    # 不应被强行追加一个跟它语义不相关的首页断言。
+    if not any(kw in all_expected for kw in LOGIN_SUCCESS_SIGNAL_KEYWORDS):
         return
 
     # 避免重复：已有 home-page / home_menu 断言则跳过

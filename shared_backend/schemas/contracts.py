@@ -698,6 +698,7 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                             "target_name": _string(step_item.get("target_name")),
                             "data_ref": _string(step_item.get("data_ref")),
                             "value": step_item.get("value"),
+                            "attribute": _string(step_item.get("attribute")),
                             "expected_result": _string(step_item.get("expected_result") or step_item.get("expected")),
                             "raw_text": _string(
                                 step_item.get("raw_text")

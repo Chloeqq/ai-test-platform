@@ -21,7 +21,7 @@ class IRSchemaValidationError(ValueError):
 class IRSchemaValidator:
     """校验 IR 与各 step 的 action/target 等字段。"""
     def __init__(self, *, allowed_actions: set[str] | None = None) -> None:
-        default_actions = {"fill", "click", "wait_for", "assert_visible", "assert_text", "assert_metric"}
+        default_actions = {"fill", "click", "wait_for", "assert_visible", "assert_text", "assert_metric", "assert_attribute"}
         self.allowed_actions = set(allowed_actions) if isinstance(allowed_actions, set) and allowed_actions else default_actions
 
     def validate_ir(self, ir: Mapping[str, Any]) -> dict[str, Any]:

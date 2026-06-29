@@ -67,7 +67,7 @@ _COMPILER_ERROR_CODES = {
     "execution_render_failed",
 }
 
-_SUPPORTED_TOP_LEVEL_ASSERTIONS = {"assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url"}
+_SUPPORTED_TOP_LEVEL_ASSERTIONS = {"assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "assert_attribute"}
 _TOP_LEVEL_ASSERTION_KEYS = {
     "action",
     "target",

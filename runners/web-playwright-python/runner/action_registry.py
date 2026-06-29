@@ -2,6 +2,7 @@ from actions.assert_url import assert_url_action
 from actions.assert_count import assert_count_action
 from actions.assert_metric import assert_metric_action
 from actions.assert_text import assert_text_action
+from actions.assert_attribute import assert_attribute_action
 from actions.click import click_action
 from actions.fill import fill_action
 from actions.goto import goto_action
@@ -28,6 +29,7 @@ ACTION_DEFINITIONS = {
     "assert_count": {"handler": assert_count_action, "requires_target": True},
     "assert_metric": {"handler": assert_metric_action, "requires_target": True},
     "assert_text": {"handler": assert_text_action, "requires_target": True},
+    "assert_attribute": {"handler": assert_attribute_action, "requires_target": True},
     "login": {"handler": login_action, "requires_target": False},
     "assert_url": {"handler": assert_url_action, "requires_target": False},
     "goto": {"handler": goto_action, "requires_target": False},

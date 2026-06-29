@@ -89,6 +89,7 @@ def normalize_test_steps(steps: Sequence[Any] | None) -> list[dict[str, Any]]:
         "rule",
         "extract_regex",
         "metric_label",
+        "attribute",
         "source_point_key",
         "traceability",
     )

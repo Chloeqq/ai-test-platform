@@ -11,7 +11,7 @@ from shared_backend.type_utils import dedup_keep_order, dict_value, list_value
 _LOGGER = logging.getLogger(__name__)
 
 _DSL_ACTIONS = {"input", "click", "assert", "navigate", "wait", "login", "assert_metric"}
-_ASSERTION_TYPES = {"url", "visible", "text"}
+_ASSERTION_TYPES = {"url", "visible", "text", "attribute"}
 _DSL_TO_RUNNER_ACTION = {
     "input": "fill",
     "click": "click",
@@ -43,6 +43,15 @@ class ExecutionCompilerError(ValueError):
 
 
 def _normalized_text(value: Any) -> str:
+    """
+    把输入转成字符串。如果 value 是 None 或空，就变成 ""
+    把所有 \r（老式换行符）替换成 \n（标准换行符），统一换行格式
+    .strip() 去掉首尾多余的空格
+    用正则删掉列表前缀
+    把连续多个空白（空格、tab、换行）合并成一个空格
+    :param value:
+    :return:
+    """
     text = str(value or "").replace("\r", "\n").strip()
     text = _LIST_PREFIX_RE.sub("", text)
     return _SPACE_RE.sub(" ", text).strip()
@@ -257,6 +266,19 @@ def _resolve_metric_label(step: dict[str, Any], point: dict[str, Any]) -> str | 
     return None
 
 
+def _resolve_attribute_name(step: dict[str, Any], point: dict[str, Any]) -> str | None:
+    for source in (
+        step.get("attribute"),
+        step.get("attribute_name"),
+        point.get("attribute"),
+        point.get("attribute_name"),
+    ):
+        value = _normalized_text(source)
+        if value:
+            return value
+    return None
+
+
 def _is_business_type_allowed_for_action(action_type: str, assertion: str, business_type: str) -> tuple[bool, str]:
     normalized_type = _normalized_text(business_type).lower()
     if not normalized_type:
@@ -281,7 +303,7 @@ def _is_business_type_allowed_for_action(action_type: str, assertion: str, busin
         return True, ""
 
     if action_type == "assert":
-        if assertion in {"visible", "text"}:
+        if assertion in {"visible", "text", "attribute"}:
             return True, ""
         return False, f"business_type `{normalized_type}` cannot be used for assertion `{assertion}`"
 
@@ -334,6 +356,7 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
             metric_rule = _resolve_metric_rule(step, point, value)
             extract_regex = _resolve_extract_regex(step, point)
             metric_label = _resolve_metric_label(step, point)
+            attribute_name = _resolve_attribute_name(step, point)
             if not action:
                 raise ExecutionCompilerError(
                     code="execution_compiler_invalid_dsl_action",
@@ -351,12 +374,13 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
                 mapped_action = "wait"
             elif action in {"goto", "navigate"}:
                 mapped_action = "navigate"
-            elif action in {"assert_visible", "assert_text", "assert_url"}:
+            elif action in {"assert_visible", "assert_text", "assert_url", "assert_attribute"}:
                 mapped_action = "assert"
                 assertion = {
                     "assert_visible": "visible",
                     "assert_text": "text",
                     "assert_url": "url",
+                    "assert_attribute": "attribute",
                 }[action]
             elif action in {"assert_metric", "assert_number", "assertmetric", "assertnumber"}:
                 mapped_action = "assert_metric"
@@ -367,7 +391,7 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
                     assertion = None
                 else:
                     mapped_action = "assert"
-                if mapped_action == "assert" and assertion not in {"visible", "text", "url"}:
+                if mapped_action == "assert" and assertion not in {"visible", "text", "url", "attribute"}:
                     assertion = "visible"
             elif action == "login":
                 mapped_action = "login"
@@ -395,11 +419,18 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
                     reason=f"point `{intent_id}` step {step_index} missing value",
                     stage="normalize_test_points_to_actions",
                 )
-            if mapped_action == "assert" and assertion not in {"visible", "text", "url"}:
+            if mapped_action == "assert" and assertion not in {"visible", "text", "url", "attribute"}:
                 raise ExecutionCompilerError(
                     code="execution_compiler_invalid_dsl_action",
                     message="assert step has invalid assertion",
                     reason=f"point `{intent_id}` step {step_index} invalid assertion `{assertion}`",
+                    stage="normalize_test_points_to_actions",
+                )
+            if mapped_action == "assert" and assertion == "attribute" and (not attribute_name or value is None):
+                raise ExecutionCompilerError(
+                    code="execution_compiler_invalid_dsl_action",
+                    message="assert_attribute step requires attribute and value",
+                    reason=f"point `{intent_id}` step {step_index} missing attribute/value",
                     stage="normalize_test_points_to_actions",
                 )
             if mapped_action == "assert_metric" and (metric_rule is None or metric_rule == ""):
@@ -414,6 +445,7 @@ def normalize_test_points_to_actions(points: list[dict[str, Any]]) -> list[dict[
                 "target": effective_target or None,
                 "value": metric_rule if mapped_action == "assert_metric" else value,
                 "assertion": assertion,
+                "attribute": attribute_name if assertion == "attribute" else None,
                 "metric_rule": metric_rule if mapped_action == "assert_metric" else None,
                 "rule": metric_rule if mapped_action == "assert_metric" else None,
                 "extract_regex": extract_regex if mapped_action == "assert_metric" else None,
@@ -513,11 +545,19 @@ def build_execution_ir(actions: list[dict[str, Any]]) -> dict[str, Any]:
         metric_rule = _resolve_metric_rule(raw, {}, raw.get("value"))
         extract_regex = _resolve_extract_regex(raw, {})
         metric_label = _resolve_metric_label(raw, {})
+        attribute_name = _resolve_attribute_name(raw, {})
         if action_type == "assert_metric" and (metric_rule is None or metric_rule == ""):
             raise ExecutionCompilerError(
                 code="execution_compiler_invalid_dsl_action",
                 message="assert_metric action requires rule/value",
                 reason=f"assert_metric action {index} missing rule",
+                stage="build_execution_ir",
+            )
+        if action_type == "assert" and assertion == "attribute" and (not attribute_name or raw.get("value") is None):
+            raise ExecutionCompilerError(
+                code="execution_compiler_invalid_dsl_action",
+                message="assert_attribute action requires attribute/value",
+                reason=f"assert_attribute action {index} missing attribute/value",
                 stage="build_execution_ir",
             )
         steps.append(
@@ -526,6 +566,7 @@ def build_execution_ir(actions: list[dict[str, Any]]) -> dict[str, Any]:
                 "target": target,
                 "value": metric_rule if action_type == "assert_metric" else raw.get("value"),
                 "assertion": assertion or None,
+                "attribute": attribute_name if assertion == "attribute" else None,
                 "metric_rule": metric_rule if action_type == "assert_metric" else None,
                 "rule": metric_rule if action_type == "assert_metric" else None,
                 "extract_regex": extract_regex if action_type == "assert_metric" else None,
@@ -717,6 +758,8 @@ def render_execution_steps(ir: dict[str, Any]) -> list[dict[str, Any]]:
                 runner_action = "assert_url"
             elif assertion == "text":
                 runner_action = "assert_text"
+            elif assertion == "attribute":
+                runner_action = "assert_attribute"
             else:
                 runner_action = "assert_visible"
         if action_type in {"input", "click", "wait", "assert_metric"} and (not target or not selector or not locator_type):
@@ -789,6 +832,17 @@ def render_execution_steps(ir: dict[str, Any]) -> list[dict[str, Any]]:
                 )
             output["value"] = step.get("value")
         elif runner_action == "assert_text":
+            output["value"] = step.get("value") if step.get("value") is not None else ""
+        elif runner_action == "assert_attribute":
+            attribute_name = _resolve_attribute_name(step, {})
+            if not attribute_name:
+                raise ExecutionCompilerError(
+                    code="execution_render_failed",
+                    message="assert_attribute step missing attribute",
+                    reason=f"step {index} missing attribute name",
+                    stage="render_execution_steps",
+                )
+            output["attribute"] = attribute_name
             output["value"] = step.get("value") if step.get("value") is not None else ""
         elif runner_action == "assert_visible":
             output["value"] = step.get("value") if step.get("value") not in {"", None} else None
@@ -1021,6 +1075,13 @@ def compile_playwright_python(ir: dict[str, Any], page_object: dict[str, Any]) -
         elif action == "assert_text":
             escaped_value = str(value if value is not None else "").replace("\\", "\\\\").replace("'", "\\'")
             lines.append(f"    expect(page.locator('{escaped_selector}')).to_have_text('{escaped_value}')")
+        elif action == "assert_attribute":
+            attribute_name = str(step.get("attribute") or "").strip()
+            escaped_attribute = attribute_name.replace("\\", "\\\\").replace("'", "\\'")
+            escaped_value = str(value if value is not None else "").replace("\\", "\\\\").replace("'", "\\'")
+            lines.append(
+                f"    expect(page.locator('{escaped_selector}')).to_have_attribute('{escaped_attribute}', '{escaped_value}')"
+            )
         else:
             raise ExecutionCompilerError(
                 code="execution_compile_unsupported_action",

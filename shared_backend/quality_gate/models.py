@@ -92,6 +92,14 @@ NEGATIVE_SCENARIO_KEYWORDS: tuple[str, ...] = (
 )
 
 
+# 登录成功信号关键词 — 预期文本中出现任一才追加"登录后首页可见"断言。
+# 仅判断"非负向"不够：密码可见性切换、记住密码勾选等单步交互场景的预期
+# 文本也不含负向词，但跟"登录后进入首页"无关，不应被强行追加首页断言。
+LOGIN_SUCCESS_SIGNAL_KEYWORDS: tuple[str, ...] = (
+    "登录成功", "工作台", "首页", "跳转",
+)
+
+
 # 账号状态检测关键词 → 规范化 state 名。precondition 文本命中后，
 # 生成管线据此把身份字段路由为数据池引用，键名约定 {field}_{state}
 # （如 username_locked / password_disabled）。dict 插入顺序即匹配优先级。

@@ -134,6 +134,38 @@ def _input_value_from_text(text: str) -> tuple[bool, Any]:
     return False, None
 
 
+def _password_visibility_assertion_step(expected: str) -> dict[str, Any] | None:
+    """密码可见性切换：根据预期文本推断切换方向，生成校验密码输入框 type 属性的断言步骤。
+
+    明文(可见) → input[type=text]；密文(掩码) → input[type=password]。
+    预期文本两个方向都没提到则无法判断方向，不生成断言（避免猜错）。
+    """
+    normalized = _normalized_text(expected)
+    # "从明文变为密文"这类文本里明文/密文都会出现，目标状态是后出现的那个，
+    # 取最后一次出现的位置判断，而不是简单"任一命中"（会被源状态词误判）。
+    plain_pos = normalized.rfind("明文")
+    masked_pos = normalized.rfind("密文")
+    if plain_pos < 0 and masked_pos < 0:
+        if any(token in normalized for token in ("可见", "显示密码")):
+            expected_type = "text"
+        elif any(token in normalized for token in ("掩码", "隐藏密码")):
+            expected_type = "password"
+        else:
+            return None
+    elif plain_pos > masked_pos:
+        expected_type = "text"
+    else:
+        expected_type = "password"
+    return {
+        "action": "assert_attribute",
+        "target": "element:login-password-input",
+        "target_name": "密码输入框",
+        "attribute": "type",
+        "value": expected_type,
+        "raw_text": expected,
+    }
+
+
 def _data_ref_for_element(element_code: str, fallback_key: str) -> str:
     """element_code → data key，委托 element_naming 统一推导。"""
     from shared_backend.element_naming import element_data_key
@@ -220,6 +252,15 @@ def _structured_steps_from_candidate(
             )
             _append_unique(steps_hint, f"click:{element_name}")
             _append_unique(involved_codes, element_code)
+            if element_code == "login-password-toggle-btn":
+                expected_attribute_step = _password_visibility_assertion_step(expected)
+                if expected_attribute_step is not None:
+                    structured_steps.append(expected_attribute_step)
+                    _append_unique(
+                        steps_hint,
+                        f"assert_attribute:login-password-input.type={expected_attribute_step['value']}",
+                    )
+                    _append_unique(involved_codes, "login-password-input")
             continue
 
         if any(token in step_text for token in ("刷新", "访问首页", "进入首页")):

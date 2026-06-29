@@ -19,7 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 ACTIONS_REQUIRING_TARGET: frozenset[str] = frozenset({
     "click", "fill", "select", "check", "uncheck",
     "hover", "scroll", "upload", "drag", "focus", "blur", "clear",
-    "assert_visible", "assert_text", "assert_value",
+    "assert_visible", "assert_text", "assert_value", "assert_attribute",
     "assert_hidden", "assert_enabled", "assert_disabled",
     "assert_count", "assert_metric",
 })

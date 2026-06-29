@@ -116,7 +116,7 @@
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url"]
+            "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "assert_attribute"]
           },
           "target": {
             "type": ["string", "null"]
@@ -157,6 +157,9 @@
           "metric_label": {
             "type": ["string", "null"]
           },
+          "attribute": {
+            "type": ["string", "null"]
+          },
           "page": {
             "type": ["string", "null"],
             "minLength": 1
@@ -180,7 +183,7 @@
             "if": {
               "properties": {
                 "action": {
-                  "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text"]
+                  "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text", "assert_attribute"]
                 }
               }
             },
@@ -215,6 +218,18 @@
                   "required": ["rule"]
                 }
               ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "enum": ["assert_attribute"]
+                }
+              }
+            },
+            "then": {
+              "required": ["attribute", "value"]
             }
           },
           {
@@ -348,7 +363,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": ["login", "click", "fill", "input", "type", "wait_for", "wait", "assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "goto", "open", "network_condition"]
+                "enum": ["login", "click", "fill", "input", "type", "wait_for", "wait", "assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "assert_attribute", "goto", "open", "network_condition"]
               },
               "target": {
                 "type": ["string", "null"]
@@ -389,6 +404,9 @@
               "metric_label": {
                 "type": ["string", "null"]
               },
+              "attribute": {
+                "type": ["string", "null"]
+              },
               "page": {
                 "type": ["string", "null"],
                 "minLength": 1
@@ -416,7 +434,7 @@
                 "if": {
                   "properties": {
                     "action": {
-                      "enum": ["click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_text"]
+                      "enum": ["click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_text", "assert_attribute"]
                     }
                   }
                 },
@@ -451,6 +469,18 @@
                       "required": ["rule"]
                     }
                   ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "enum": ["assert_attribute"]
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["attribute", "value"]
                 }
               },
               {
