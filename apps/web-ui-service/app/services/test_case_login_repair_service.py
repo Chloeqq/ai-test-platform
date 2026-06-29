@@ -89,9 +89,12 @@ def _classify_login_element_role(element: PageElement) -> str:
             "showpassword",
             "hidepassword",
             "togglepassword",
+            "passwordtoggle",
             "visibilitytoggle",
             "eyetoggle",
             "ipath3",
+            "眼睛",
+            "toggle",
         ]
     ):
         return "password_toggle"
