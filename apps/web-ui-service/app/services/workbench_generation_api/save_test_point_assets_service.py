@@ -102,7 +102,7 @@ def _candidate_snapshot(candidate: dict[str, Any]) -> dict[str, Any]:
 
 _LOGIN_ELEMENT_RULES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
     ("login-username-input", "用户名输入框", "username", ("用户名输入框", "账号输入框", "用户名", "账号")),
-    ("login-password-toggle-btn", "密码可见性切换按钮", "", ("密码可见性切换", "密码显隐", "显示密码", "隐藏密码", "密码可见", "明文", "密文")),
+    ("login-password-toggle-btn", "显示/隐藏眼睛图标", "", ("密码可见性切换", "密码显隐", "显示密码", "隐藏密码", "密码可见", "明文", "密文", "眼睛图标", "眼睛", "eyeIcon")),
     ("login-password-input", "密码输入框", "password", ("密码输入框", "密码")),
     ("login-submit-btn", "登录按钮", "", ("登录按钮", "登录")),
     ("home-page", "首页菜单", "", ("首页菜单", "首页", "工作台首页")),
