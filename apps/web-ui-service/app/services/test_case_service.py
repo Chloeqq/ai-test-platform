@@ -795,6 +795,8 @@ def _productize_workbench_steps_for_script(case_yaml: dict[str, Any]) -> list[di
         }
         if raw.get("value") is not None:
             step["value"] = raw.get("value")
+        if action == "assert_attribute" and normalize_optional_text(raw.get("attribute")):
+            step["attribute"] = normalize_optional_text(raw.get("attribute"))
         step_expected = normalize_optional_text(raw.get("expected_result") or raw.get("expected"))
         if index == final_step_index and expected_result:
             step_expected = expected_result
