@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import re
 from typing import Any
@@ -12,6 +13,8 @@ from app.services import workbench_asset_service, workbench_state_store
 
 from .context import WorkbenchContext
 from . import preview_store
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _list_text(value: Any) -> list[str]:
@@ -99,6 +102,7 @@ def _candidate_snapshot(candidate: dict[str, Any]) -> dict[str, Any]:
 
 _LOGIN_ELEMENT_RULES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
     ("login-username-input", "用户名输入框", "username", ("用户名输入框", "账号输入框", "用户名", "账号")),
+    ("login-password-toggle-btn", "密码可见性切换按钮", "", ("密码可见性切换", "密码显隐", "显示密码", "隐藏密码", "密码可见", "明文", "密文")),
     ("login-password-input", "密码输入框", "password", ("密码输入框", "密码")),
     ("login-submit-btn", "登录按钮", "", ("登录按钮", "登录")),
     ("home-page", "首页菜单", "", ("首页菜单", "首页", "工作台首页")),
@@ -624,8 +628,8 @@ class SaveTestPointAssetsService:
             from app.services import test_point_asset_store
             if isinstance(asset, dict) and asset.get("asset_id"):
                 test_point_asset_store.save_asset(repository.db, project=project, bundle=asset)
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 - DB 写穿降级,不阻断保存
+            LOGGER.warning("test point asset DB write-through failed for %s/%s", project, candidate_case_id, exc_info=True)
         runtime.append_history(
             {
                 "timestamp": runtime.now_iso(),
