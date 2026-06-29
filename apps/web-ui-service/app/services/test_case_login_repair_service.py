@@ -515,24 +515,16 @@ def _friendly_target_name_for_login(role: str, element: PageElement) -> str:
 
 
 def _dedupe_exact_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    deduped: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for item in steps:
-        signature = "||".join(
-            [
-                _normalize_step_text(item.get("action")).lower(),
-                _normalize_step_text(item.get("target")),
-                _normalize_step_text(item.get("locator_type")).lower(),
-                _normalize_step_text(item.get("locator_value")),
-                _normalize_step_text(item.get("value")),
-                _normalize_step_text(item.get("expected_result")),
-            ]
-        )
-        if signature in seen:
-            continue
-        seen.add(signature)
-        deduped.append(item)
-    return deduped
+    """不做去重——按完整字段签名判断"重复"并不可靠。
+
+    例如密码可见性切换：先点一次眼睛图标建立"已切换为明文"前置态，再点
+    一次才是真正的测试动作——两步格式化后字段完全相同（同一目标、同一
+    自动生成的 expected_result），但语义上是两个必须都执行的步骤。没有
+    可靠信号能区分"修复逻辑误判出的字面重复"与"测试本身需要的合法重复
+    动作"，错误去重的代价（静默丢失一个真实步骤）远高于不去重，所以原样
+    返回。
+    """
+    return list(steps)
 
 
 def _repair_execution_steps_for_storage(

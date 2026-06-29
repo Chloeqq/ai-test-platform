@@ -166,6 +166,46 @@ def _password_visibility_assertion_step(expected: str) -> dict[str, Any] | None:
     }
 
 
+def _password_visibility_precondition_setup(precondition: str) -> list[dict[str, Any]]:
+    """前置条件描述"密码已切换为明文/密文"时，补建立该 UI 态的步骤。
+
+    这种前置条件本质是"先在本页面交互一次"，而不是登录/账号状态/SQL 这类
+    跨会话状态，结构化前置条件编译器（generate_pipeline_precondition.py）
+    无法表达。用例必须自包含执行（不依赖另一条用例先跑），所以在生成阶段
+    直接把"输入密码 + 必要时点一次眼睛图标"补成本用例自己的步骤。
+    """
+    normalized = _normalized_text(precondition)
+    if not any(token in normalized for token in ("已切换为", "已切换成", "已切回")):
+        return []
+    plain_pos = max(normalized.rfind("明文"), normalized.rfind("可见"))
+    masked_pos = max(normalized.rfind("密文"), normalized.rfind("隐藏"))
+    if plain_pos < 0 and masked_pos < 0:
+        return []
+    target_state = "text" if plain_pos > masked_pos else "password"
+    setup: list[dict[str, Any]] = [
+        {
+            "action": "input",
+            "target": "element:login-password-input",
+            "target_name": "密码输入框",
+            "data_ref": "password",
+            "value": "macro123",
+            "raw_text": "建立前置条件：先输入密码",
+        }
+    ]
+    # 密码输入框默认就是掩码态（type=password），只有目标前置态是"明文"
+    # 时才需要先点一次眼睛图标；目标是"密文"则默认态已满足，不用多点。
+    if target_state == "text":
+        setup.append(
+            {
+                "action": "click",
+                "target": "element:login-password-toggle-btn",
+                "target_name": "显示/隐藏眼睛图标",
+                "raw_text": "建立前置条件：点击眼睛图标切换为明文",
+            }
+        )
+    return setup
+
+
 def _data_ref_for_element(element_code: str, fallback_key: str) -> str:
     """element_code → data key，委托 element_naming 统一推导。"""
     from shared_backend.element_naming import element_data_key
@@ -209,6 +249,16 @@ def _structured_steps_from_candidate(
     data: dict[str, dict[str, Any]] = {}
     warnings: list[str] = []
     involved_codes: list[str] = []
+
+    precondition_setup = _password_visibility_precondition_setup(_normalized_text(candidate.get("precondition")))
+    for setup_step in precondition_setup:
+        structured_steps.append(setup_step)
+        if setup_step["action"] == "input":
+            data["password"] = {"source_type": "inline", "value": setup_step["value"]}
+            _append_unique(steps_hint, f"input:{setup_step['target_name']}={setup_step['value']}")
+        elif setup_step["action"] == "click":
+            _append_unique(steps_hint, f"click:{setup_step['target_name']}")
+        _append_unique(involved_codes, setup_step["target"].removeprefix("element:"))
 
     for raw_step in steps:
         step_text = _normalized_text(raw_step)
@@ -258,7 +308,7 @@ def _structured_steps_from_candidate(
                     structured_steps.append(expected_attribute_step)
                     _append_unique(
                         steps_hint,
-                        f"assert_attribute:login-password-input.type={expected_attribute_step['value']}",
+                        f"assert_attribute:{expected_attribute_step['target_name']}.type={expected_attribute_step['value']}",
                     )
                     _append_unique(involved_codes, "login-password-input")
             continue

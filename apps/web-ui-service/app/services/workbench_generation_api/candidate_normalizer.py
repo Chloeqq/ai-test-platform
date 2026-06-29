@@ -121,9 +121,12 @@ class CandidateNormalizer:
             raw_steps_hint = raw_candidate.get("steps_hint")
             steps_hint: list[str] = []
             if isinstance(raw_steps_hint, list):
+                # steps_hint 是按顺序重放的脚本序列，不是去重集合——同一元素被
+                # 连续操作两次（如先建立前置态再执行真正动作）是合法且必要的，
+                # 这里不能去重，否则会把第二次相同的步骤丢掉。
                 for item in raw_steps_hint:
                     hint = self._normalize_candidate_text(str(item or ""))
-                    if hint and hint not in steps_hint:
+                    if hint:
                         steps_hint.append(hint)
             scene_type = self._normalize_candidate_text(str(raw_candidate.get("scene_type", "")).strip())
             test_data_type = self._normalize_candidate_text(str(raw_candidate.get("test_data_type", "")).strip())

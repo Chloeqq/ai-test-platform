@@ -1434,14 +1434,21 @@ def _steps_hint_from_current_steps(point_steps: list[Any], involved_elements: li
             value = _text(row.get("value"))
             hints.append(f"{prefix}:{target_name}={value}" if value else f"{prefix}:{target_name}")
             continue
+        if action == "assert_attribute" and target_name and _text(row.get("attribute")):
+            hints.append(f"assert_attribute:{target_name}.{_text(row.get('attribute'))}={_text(row.get('value'))}")
+            continue
         if action == "assert_url" and _text(row.get("value")):
             hints.append(f"assert_url:{_text(row.get('value'))}")
             continue
         if action == "goto" and _text(row.get("value")):
             hints.append(f"goto:{_text(row.get('value'))}")
             continue
+    # 注意：steps_hint 是按顺序重放的脚本序列，不是去重集合——同一元素被
+    # 连续操作两次（如先建立前置态再执行真正的测试动作）是合法且必要的，
+    # 这里不能像 involved_elements/tags 那样用 _text_list 去重，否则会把
+    # 第二次相同的 click/input 步骤丢掉。
     if hints:
-        return _text_list(hints)
+        return [item for item in hints if _text(item)]
 
     for step in _point_step_texts(point_steps):
         if "点击" in step:
@@ -1480,7 +1487,16 @@ def _candidate_from_asset_point(point: dict[str, Any], *, fallback_title: str, f
     involved_elements = _text_list(point.get("involved_elements")) or _text_list(snapshot.get("involved_elements"))
     current_steps_hint = _steps_hint_from_current_steps(point_steps, involved_elements)
     saved_steps_hint = _text_list(point.get("steps_hint")) or _text_list(snapshot.get("steps_hint"))
-    merged_steps_hint = _text_list([*current_steps_hint, *saved_steps_hint])
+    # current_steps_hint 是从结构化 point.steps 按顺序重建的权威序列，本身
+    # 就可能合法包含重复动作（如先建立态再执行真正动作），不能对它做去重；
+    # 只对"current 已覆盖的内容"跳过 saved 里的重复项，把 saved 中确实不同
+    # 的提示（如旧版遗留的不同取值）追加在后面，两者都保留即可。
+    merged_steps_hint = list(current_steps_hint)
+    seen_hints = set(current_steps_hint)
+    for hint in saved_steps_hint:
+        if hint not in seen_hints:
+            seen_hints.add(hint)
+            merged_steps_hint.append(hint)
     return {
         "intent_id": intent_id or "manual-intent",
         "title": title,
