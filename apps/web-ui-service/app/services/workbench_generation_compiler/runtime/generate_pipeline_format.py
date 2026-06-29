@@ -21,6 +21,7 @@ from shared_backend.intent_mapping import resolve_explicit_step
 from shared_backend.schemas.contracts import normalize_test_point_plan_v1
 from shared_backend.schemas.validator import ContractValidator
 from shared_backend.type_utils import str_value as _normalized_text
+from shared_backend.step_fields import STEP_FIELD_NAMES
 
 
 # 从主模块导入 leaf 工具函数（无循环：主模块的所有定义在线 1-703 已加载）
@@ -304,8 +305,23 @@ def _format_product_execution_steps(
             step_payload["role"] = role
         if raw_step.get("value") is not None:
             step_payload["value"] = raw_step.get("value")
-        if action == "assert_attribute" and _normalized_text(raw_step.get("attribute")):
-            step_payload["attribute"] = _normalized_text(raw_step.get("attribute"))
+        # 兜底透传：上面只显式处理了需要定位器治理/特殊格式化的字段。其余
+        # "面向最终用例呈现"的 DSL 字段（如 assert_attribute 的 attribute）
+        # 原样带过，避免新增字段时还要在这里加一行才不会被静默丢弃。
+        # 注意：intent_id/selector/traceability/page/element_code 故意不
+        # 透传——这些是编译期 IR 内部记账字段，产品化步骤本来就不应该带
+        # 它们（target/locator_* 已经是治理后的最终定位信息）。
+        for field_name in STEP_FIELD_NAMES - {
+            "action", "target", "locator_type", "locator_value", "target_name",
+            "role", "value", "expected_result", "expected",
+            "intent_id", "selector", "traceability", "page", "element_code",
+            "description", "data_ref", "raw_text",
+        }:
+            if field_name in step_payload:
+                continue
+            field_value = raw_step.get(field_name)
+            if field_value not in (None, ""):
+                step_payload[field_name] = field_value
         expected = _product_step_expected(
             action=action,
             target_name=target_name,

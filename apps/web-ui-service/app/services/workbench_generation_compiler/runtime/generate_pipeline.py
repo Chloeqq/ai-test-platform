@@ -8,6 +8,7 @@ import yaml
 from sqlalchemy.exc import OperationalError
 
 from shared_backend.db import get_db_session as SessionLocal
+from shared_backend.step_fields import STEP_FIELD_NAMES
 from app.models.page_object import PageElement, PageObject
 from app.repositories.page_object_repository import PageObjectRepository
 
@@ -68,27 +69,8 @@ _COMPILER_ERROR_CODES = {
 }
 
 _SUPPORTED_TOP_LEVEL_ASSERTIONS = {"assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "assert_attribute"}
-_TOP_LEVEL_ASSERTION_KEYS = {
-    "action",
-    "target",
-    "target_name",
-    "selector",
-    "locator_type",
-    "locator_value",
-    "role",
-    "intent_id",
-    "element_code",
-    "count",
-    "metric_rule",
-    "rule",
-    "extract_regex",
-    "metric_label",
-    "page",
-    "value",
-    "source_point_key",
-    "traceability",
-    "expected_result",
-}
+# 字段集合来自 shared_backend/step_fields.py（唯一事实源）。
+_TOP_LEVEL_ASSERTION_KEYS = STEP_FIELD_NAMES
 _VARIABLE_TEMPLATE_RE = re.compile(r"^\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}$")
 _DSL_DATA_SOURCE_TYPES = {"inline", "pool", "env"}
 

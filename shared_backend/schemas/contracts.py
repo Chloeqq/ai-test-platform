@@ -692,6 +692,12 @@ def normalize_test_point_plan_v1(payload: dict[str, Any] | None, *, strict: bool
                 normalized_steps = []
                 for step_item in raw_steps:
                     if isinstance(step_item, dict):
+                        # 注意：这里字段比 shared_backend/step_fields.py 的
+                        # STEP_FIELD_NAMES 窄——这一层是绑定前的结构化测试点
+                        # 步骤，locator_type/locator_value/role 等定位信息要
+                        # 到 bind_targets 阶段才从 page_object 解析出来，这里
+                        # 故意不携带。新增「绑定前就需要」的字段（比如这次的
+                        # attribute）才要加在这里；纯定位/渲染相关字段不需要。
                         normalized_steps.append({
                             "action": _string(step_item.get("action")),
                             "target": _string(step_item.get("target")),

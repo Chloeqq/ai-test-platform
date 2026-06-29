@@ -22,6 +22,7 @@ from shared_backend.case_ids import (
     normalize_source_code,
 )
 from shared_backend.type_utils import normalize_project_code as _normalize_project_code_raw
+from shared_backend.step_fields import STEP_FIELD_NAMES
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 import yaml
@@ -795,8 +796,24 @@ def _productize_workbench_steps_for_script(case_yaml: dict[str, Any]) -> list[di
         }
         if raw.get("value") is not None:
             step["value"] = raw.get("value")
-        if action == "assert_attribute" and normalize_optional_text(raw.get("attribute")):
-            step["attribute"] = normalize_optional_text(raw.get("attribute"))
+        # 兜底透传：上面只显式处理了需要定位器治理/特殊格式化的字段。其余
+        # "面向最终用例呈现"的 DSL 字段（如 assert_attribute 的 attribute）
+        # 原样带过，避免新增字段时还要在这里加一行才不会被静默丢弃（这正是
+        # 2026-06-29 漏改导致用例能生成但执行报 schema 校验失败的位置）。
+        # 注意：intent_id/selector/traceability/page/element_code 故意不
+        # 透传——这些是编译期 IR 内部记账字段，写入 script_code 的最终
+        # 用例文本不应该带它们。
+        for field_name in STEP_FIELD_NAMES - {
+            "action", "target", "locator_type", "locator_value", "target_name",
+            "value", "expected_result", "expected",
+            "intent_id", "selector", "traceability", "page", "element_code",
+            "description", "data_ref", "raw_text",
+        }:
+            if field_name in step:
+                continue
+            field_value = raw.get(field_name)
+            if field_value not in (None, ""):
+                step[field_name] = field_value
         step_expected = normalize_optional_text(raw.get("expected_result") or raw.get("expected"))
         if index == final_step_index and expected_result:
             step_expected = expected_result

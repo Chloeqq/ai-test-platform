@@ -1,5 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "step/assertion 字段名需要和 shared_backend/step_fields.py 的 STEP_FIELD_NAMES 保持同步——新增 DSL 字段（如 assert_attribute 的 attribute）时，这个文件里 properties.execution.properties.steps 和 properties.assertions 下的字段列表（多处重复）都要同步加，否则用例能生成但 runner 加载时会报 schema 校验失败。",
   "type": "object",
   "required": ["version", "id", "title", "module", "execution"],
   "additionalProperties": false,

@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
 from shared_backend.schemas.validator import ContractValidator
+from shared_backend.step_fields import STEP_FIELD_NAMES
 
 
 class OrchestrationFlowSupport:
@@ -183,6 +184,18 @@ class OrchestrationFlowSupport:
                 materialized_step["value"] = step.get("value")
             if action == "assert_count" and step.get("count") is not None:
                 materialized_step["count"] = step.get("count")
+            # 兜底透传：上面只显式处理了少数固定字段，其余 DSL 字段（如
+            # assert_attribute 的 attribute）原样带过，避免新增字段时还要
+            # 在这里加一行才不会被静默丢弃。
+            for field_name in STEP_FIELD_NAMES - {
+                "action", "target", "selector", "locator_type", "intent_id",
+                "traceability", "source_point_key", "value", "count",
+            }:
+                if field_name in materialized_step:
+                    continue
+                field_value = step.get(field_name)
+                if field_value not in (None, ""):
+                    materialized_step[field_name] = field_value
             materialized_steps.append(materialized_step)
 
         if materialized_steps:
