@@ -1,7 +1,27 @@
 import os
 from pathlib import Path
 
+import pytest
+import yaml
+
 from app.services import workbench_runtime_service
+
+
+def _write_minimal_case_yaml(case_dir: Path, *, page_url: str = "http://host.docker.internal:5174/#/login") -> Path:
+    """写入包含 page_url 的最小合法用例 YAML，返回文件路径。"""
+    case_dir.mkdir(parents=True, exist_ok=True)
+    case_path = case_dir / "case.yaml"
+    payload = {
+        "version": "v1.1",
+        "id": "test-case-0001",
+        "execution": {
+            "page": "login",
+            "page_url": page_url,
+            "steps": [],
+        },
+    }
+    case_path.write_text(yaml.safe_dump(payload, allow_unicode=True), encoding="utf-8")
+    return case_path
 
 
 def test_replace_allure_results_dir_updates_existing_alluredir() -> None:
@@ -21,9 +41,10 @@ def test_replace_allure_results_dir_appends_when_missing() -> None:
     assert updated == ["python", "-m", "pytest", "--alluredir", "/tmp/run-results"]
 
 
-def test_build_run_command_visible_mode_records_video_and_uses_short_observation_defaults() -> None:
+def test_build_run_command_visible_mode_records_video_and_uses_short_observation_defaults(tmp_path: Path) -> None:
+    case_path = _write_minimal_case_yaml(tmp_path)
     command, env = workbench_runtime_service.build_run_command(
-        Path("/tmp/case.yaml"),
+        case_path,
         get_python_bin_fn=lambda: "python",
         repo_root=Path("/repo"),
         allure_results_root=Path("/tmp/allure-results"),
@@ -38,9 +59,10 @@ def test_build_run_command_visible_mode_records_video_and_uses_short_observation
     assert env["WORKBENCH_RUN_TIMEOUT_SECONDS"] == "120"
 
 
-def test_build_run_command_batch_mode_disables_visible_delay_and_video() -> None:
+def test_build_run_command_batch_mode_disables_visible_delay_and_video(tmp_path: Path) -> None:
+    case_path = _write_minimal_case_yaml(tmp_path)
     command, env = workbench_runtime_service.build_run_command(
-        Path("/tmp/case.yaml"),
+        case_path,
         get_python_bin_fn=lambda: "python",
         repo_root=Path("/repo"),
         allure_results_root=Path("/tmp/allure-results"),
@@ -58,20 +80,37 @@ def test_build_run_command_batch_mode_disables_visible_delay_and_video() -> None
     assert env["WORKBENCH_VISIBLE_HOLD_MS"] == "0"
 
 
-def test_build_run_command_uses_mall_admin_login_default_base_url() -> None:
-    _command, env = workbench_runtime_service.build_run_command(
-        Path("/tmp/case.yaml"),
-        get_python_bin_fn=lambda: "python",
-        repo_root=Path("/repo"),
-        allure_results_root=Path("/tmp/allure-results"),
-        environ={},
+def test_build_run_command_rejects_case_yaml_without_page_url(tmp_path: Path) -> None:
+    # 文件存在但 page_url 为空 — 应明确报错
+    case_path = tmp_path / "case.yaml"
+    case_path.write_text(
+        yaml.safe_dump({"version": "v1.1", "execution": {"page": "login", "steps": []}}),
+        encoding="utf-8",
     )
+    with pytest.raises(RuntimeError, match="page_url"):
+        workbench_runtime_service.build_run_command(
+            case_path,
+            get_python_bin_fn=lambda: "python",
+            repo_root=Path("/repo"),
+            allure_results_root=Path("/tmp/allure-results"),
+            environ={},
+        )
 
-    assert env["BASE_URL"] == "http://localhost:5174/#/login"
+
+def test_build_run_command_rejects_missing_case_yaml() -> None:
+    # 文件不存在 — 应明确报错
+    with pytest.raises(RuntimeError, match="无法读取用例 YAML"):
+        workbench_runtime_service.build_run_command(
+            Path("/tmp/nonexistent-case.yaml"),
+            get_python_bin_fn=lambda: "python",
+            repo_root=Path("/repo"),
+            allure_results_root=Path("/tmp/allure-results"),
+            environ={},
+        )
 
 
-def test_build_run_command_allows_runtime_cases_root() -> None:
-    case_path = Path("/tmp/web-ui/runs/runtime-cases/run-001/case.yaml")
+def test_build_run_command_allows_runtime_cases_root(tmp_path: Path) -> None:
+    case_path = _write_minimal_case_yaml(tmp_path / "web-ui/runs/runtime-cases/run-001")
 
     _command, env = workbench_runtime_service.build_run_command(
         case_path,
@@ -86,8 +125,8 @@ def test_build_run_command_allows_runtime_cases_root() -> None:
     assert str(case_path.resolve().parent) not in allowed_roots
 
 
-def test_build_run_command_does_not_allow_arbitrary_case_parent() -> None:
-    case_path = Path("/tmp/outside/case.yaml")
+def test_build_run_command_does_not_allow_arbitrary_case_parent(tmp_path: Path) -> None:
+    case_path = _write_minimal_case_yaml(tmp_path / "outside")
 
     _command, env = workbench_runtime_service.build_run_command(
         case_path,

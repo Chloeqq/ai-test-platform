@@ -79,6 +79,39 @@ def _runtime_cases_root_for_path(case_path: Path) -> Path | None:
     return runtime_cases_root
 
 
+def _apply_sut_base_url(env: dict[str, str], case_path: Path) -> None:
+    """从用例 YAML 中提取被测系统的 page_url 作为 runner 的 BASE_URL。
+
+    平台自身的 BASE_URL（web 服务地址）和 runner 需要的 BASE_URL（被测系统地址）
+    是两个不同的概念。多项目场景下不存在合理的默认值——page_url 必须在生成用例时
+    由平台写入 YAML，此处仅负责提取和校验。
+    """
+    try:
+        import yaml
+
+        raw = case_path.read_text(encoding="utf-8")
+        payload = yaml.safe_load(raw) or {}
+    except Exception as exc:
+        raise RuntimeError(
+            f"无法读取用例 YAML 以提取被测系统地址: {case_path}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(
+            f"用例 YAML 格式无效，无法提取被测系统地址: {case_path}"
+        )
+    execution = payload.get("execution")
+    if not isinstance(execution, dict):
+        raise RuntimeError(
+            f"用例 YAML 缺少 execution 段，无法提取 page_url: {case_path}"
+        )
+    page_url = str(execution.get("page_url") or "").strip()
+    if not page_url:
+        raise RuntimeError(
+            f"用例 YAML 的 execution.page_url 为空，无法确定被测系统地址: {case_path}"
+        )
+    env["BASE_URL"] = page_url
+
+
 def runtime_run_id(item: dict[str, Any]) -> str:
     run_id = str(item.get("run_id", "")).strip()
     if run_id:
@@ -196,7 +229,9 @@ def build_run_command(
         str(root) for root in dict.fromkeys(allowed_roots)
     )
     env["SELF_HEALING_ENABLED"] = "0"
-    env.setdefault("BASE_URL", "http://localhost:5174/#/login")
+    # 从 YAML 中提取被测系统的 page_url 作为 runner 的 BASE_URL，
+    # 而不是复用平台自身的 BASE_URL（web 服务和 runner 的 BASE_URL 含义完全不同）。
+    _apply_sut_base_url(env, case_path)
     return command, env
 
 
