@@ -1120,12 +1120,11 @@ def test_build_generated_case_payload_writes_product_yaml_for_login_success(
     assert steps[3]["expected_result"] == expected
     assert steps[4] == {
         "action": "assert_visible",
-        "target": "element:home_menu",
-        "locator_type": "role",
-        "locator_value": "首页",
-        "role": "menuitem",
-        "target_name": "首页菜单",
-        "expected_result": "登录后首页菜单可见，确认已离开登录页并进入工作台",
+        "target": "element:home-page",
+        "locator_type": "data-testid",
+        "locator_value": "home-page",
+        "target_name": "首页页面容器",
+        "expected_result": "登录后首页可见，确认已离开登录页并进入工作台",
     }
     assert written_case["assertions"] == []
     assert "登录失败" not in str(written_case)

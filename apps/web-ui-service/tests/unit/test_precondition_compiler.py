@@ -16,10 +16,10 @@ from shared_backend.execution_compiler import ExecutionCompilerError
 
 def _login_elements() -> dict[str, dict[str, str]]:
     return {
-        "username_input": {"element_name": "用户名输入框", "locator_type": "css", "locator_value": "#user"},
-        "password_input": {"element_name": "密码输入框", "locator_type": "css", "locator_value": "#pass"},
-        "login_button": {"element_name": "登录按钮", "locator_type": "css", "locator_value": "#submit"},
-        "home_menu": {"element_name": "首页菜单", "locator_type": "data-testid", "locator_value": "home"},
+        "login-username-input": {"element_name": "用户名输入框", "locator_type": "css", "locator_value": "#user"},
+        "login-password-input": {"element_name": "密码输入框", "locator_type": "css", "locator_value": "#pass"},
+        "login-submit-btn": {"element_name": "登录按钮", "locator_type": "css", "locator_value": "#submit"},
+        "home-page": {"element_name": "首页关键元素", "locator_type": "data-testid", "locator_value": "home-page"},
     }
 
 
@@ -88,10 +88,10 @@ def test_login_compiles_full_step_sequence() -> None:
     assert steps[0]["locator_value"] == "#user"
 
 
-def test_login_missing_home_menu_keeps_assert_with_fallback_locator() -> None:
-    """home_menu 是登录成功的唯一验证 — 元素缺失时必须退回默认 locator，不能跳过。"""
+def test_login_missing_home_page_keeps_assert_with_fallback_locator() -> None:
+    """home-page 是登录成功的唯一验证 — 元素缺失时必须退回默认 locator，不能跳过。"""
     elements = _login_elements()
-    del elements["home_menu"]
+    del elements["home-page"]
     steps = compile_preconditions(
         product_yaml=_login_product_yaml(),
         page_object={"page": "login", "elements": elements},
@@ -104,7 +104,7 @@ def test_login_missing_home_menu_keeps_assert_with_fallback_locator() -> None:
 
 def test_login_missing_input_element_skips_only_that_step() -> None:
     elements = _login_elements()
-    del elements["username_input"]
+    del elements["login-username-input"]
     steps = compile_preconditions(
         product_yaml=_login_product_yaml(),
         page_object={"page": "login", "elements": elements},
