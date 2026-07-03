@@ -75,6 +75,71 @@ def _validate_raw_points_against_contract(points: list[dict[str, Any]]) -> None:
             _logger.warning("point[%d] does not conform to TestPointV1: %s", idx, exc)
 
 
+# ── steps_hint 语义一致性校验 ────────────────────────────────────────────────
+# 问题：AI 可能生成自相矛盾的 steps_hint，如 expected="未跳转回登录页" 但
+# steps_hint=["assert_url:#/login"]。这类错误在 schema 层无法检测（字段都存在，
+# 格式也正确），必须在语义层校验。
+
+# "保持在当前页/未跳转"类预期
+_NEGATION_PATTERNS = [
+    "未跳转", "不跳转", "未重定向", "不重定向",
+    "保持", "停留", "保持可用", "仍在", "依然在", "不会退出",
+]
+# 登录页 URL 模式
+_LOGIN_URL_PATTERNS = ["#/login", "/login", "login#", "/auth", "#/auth"]
+
+
+def _check_steps_hint_semantic_consistency(
+    intent_id: str,
+    title: str,
+    expected_result: str,
+    steps_hint: Any,
+) -> list[str]:
+    """检查 steps_hint 与 expected_result 是否存在语义矛盾。
+
+    返回警告信息列表（空列表 = 通过）。
+    """
+    warnings: list[str] = []
+    if not expected_result or not steps_hint:
+        return warnings
+
+    hints = steps_hint if isinstance(steps_hint, list) else [steps_hint]
+    hint_texts = [
+        h.get("action", "") + ":" + str(h.get("target", h.get("value", "")))
+        if isinstance(h, dict)
+        else str(h)
+        for h in hints
+    ]
+    combined_hints = " ".join(hint_texts).lower()
+
+    # 检查1: expected 说"未跳转"但 steps 断言登录页 URL
+    has_negation = any(pattern in expected_result for pattern in _NEGATION_PATTERNS)
+    has_login_assert = any(
+        pattern in combined_hints for pattern in _LOGIN_URL_PATTERNS
+    )
+    if has_negation and has_login_assert:
+        warnings.append(
+            f"[{intent_id}] 语义矛盾：expected_result 表示'{expected_result[:60]}...'"
+            f"（含'未跳转/保持'语义），但 steps_hint 包含指向登录页的断言。"
+            f"请确认：若场景为'已登录态'，应断言业务页元素可见而非登录页 URL。"
+            f" steps_hint={hint_texts}"
+        )
+
+    # 检查2: title 含"已登录"/"登录态" 但 steps 以 goto login 开头且 assert login
+    is_logged_in_title = any(
+        kw in title for kw in ["已登录", "登录态", "登录后"]
+    )
+    has_goto_login = any("goto" in h and p in h for h in hint_texts for p in _LOGIN_URL_PATTERNS)
+    if is_logged_in_title and has_goto_login and has_login_assert:
+        warnings.append(
+            f"[{intent_id}] 语义矛盾：title 为'已登录态'场景('{title}')，"
+            f"但 steps_hint 导航到登录页并断言登录页 URL。"
+            f"已登录场景应直接访问业务页并断言业务元素。"
+        )
+
+    return warnings
+
+
 class RequirementTestPointSupport:
     """需求质量门、测试点构建与 Markdown 人类可读渲染。"""
 
@@ -412,6 +477,18 @@ class RequirementTestPointSupport:
                 raise ValueError(
                     f"requirement_spec.test_intents[{index - 1}] explicit step mapping failed: {exc}"
                 ) from exc
+
+            # 语义一致性校验：检测 steps_hint 与 expected_result 的矛盾
+            # （如 expected="未跳转回登录页" 但 steps_hint=["assert_url:#/login"]）
+            semantic_warnings = _check_steps_hint_semantic_consistency(
+                intent_id=intent.get("intent_id", f"intent-{index:02d}"),
+                title=title,
+                expected_result=expected_result,
+                steps_hint=intent.get("steps_hint"),
+            )
+            for warning in semantic_warnings:
+                _logger.warning(warning)
+
             intent_id_value = str(intent.get("intent_id", "")).strip()
             if not intent_id_value:
                 raise ValueError(f"requirement_spec.test_intents[{index - 1}] missing intent_id")

@@ -219,6 +219,27 @@ def _append_unique(items: list[str], value: str) -> None:
         items.append(normalized)
 
 
+def _extract_error_message(expected_text: str) -> str:
+    """从 expected_result 文本中提取错误提示文案。
+
+    输入: "页面提示'请输入账号'" 或 '页面提示"请输入账号"'
+    输出: "请输入账号"
+    如果无法提取，返回原文本的前 80 个字符。
+    """
+    import re
+
+    # 匹配引号内的文案: 提示'XXX' / 提示"XXX" / 显示'XXX' / 弹出"XXX"
+    quoted = re.findall(r"['\"“”‘’]([^'\"]+)['\"“”‘’]", expected_text)
+    if quoted:
+        return quoted[0].strip()
+    # 匹配 "提示：" 后面的部分
+    for sep in ("提示：", "提示:", "显示：", "显示:", "错误：", "错误:"):
+        if sep in expected_text:
+            return expected_text.split(sep, 1)[1].strip()[:80]
+    # 兜底：返回 cleaned 文本
+    return expected_text.strip()[:80]
+
+
 def _canonical_login_involved_elements(involved_elements: list[str], involved_codes: list[str]) -> list[str]:
     """登录页结构化后以 element_code 为准，中文元素名只作为识别输入，不再混入正式字段。"""
     canonical: list[str] = []
@@ -346,7 +367,22 @@ def _structured_steps_from_candidate(
         )
         _append_unique(steps_hint, "assert:首页菜单")
         _append_unique(involved_codes, "home_menu")
-    elif any(token in expected_text for token in ("提示", "错误", "请输入", "失败", "拦截", "登录页面", "登录页")):
+    elif any(token in expected_text for token in ("提示", "错误", "请输入", "失败")):
+        # 错误提示场景：expected_text 描述了 UI 应展示的错误文案，
+        # 如 "页面提示'请输入账号'"。此时必须用 assert_text 验证文案确实出现，
+        # 不能用 assert_url（RULE_003 会拦截为"虚假通过风险"）。
+        error_msg = _extract_error_message(expected_text)
+        structured_steps.append(
+            {
+                "action": "assert_text",
+                "value": error_msg,
+                "raw_text": expected_text or "校验错误提示文案",
+            }
+        )
+        _append_unique(steps_hint, f"assert_text:{error_msg}")
+    elif any(token in expected_text for token in ("拦截", "登录页面", "登录页")):
+        # 跳转拦截场景：expected_text 说"自动跳转回登录页"，
+        # 此时 assert_url 是合理的——验证确实停留在登录页。
         structured_steps.append(
             {
                 "action": "assert_url",
