@@ -47,3 +47,67 @@ STEP_FIELD_NAMES: frozenset[str] = frozenset(
         "traceability",
     }
 )
+
+
+# ── DSL Action 常量（唯一事实源）────────────────────────────────────────────
+# 项目里至少 3 处各自定义 action 字符串（execution_compiler、intent_mapping、
+# save_test_point_assets_service），新增 action 类型时必须同步改全部位置。
+# 以下常量是唯一事实源，所有模块统一从这里导入。
+
+ACTION_INPUT = "input"
+ACTION_CLICK = "click"
+ACTION_GOTO = "goto"
+ACTION_ASSERT_VISIBLE = "assert_visible"
+ACTION_ASSERT_TEXT = "assert_text"
+ACTION_ASSERT_URL = "assert_url"
+ACTION_ASSERT_ATTRIBUTE = "assert_attribute"
+ACTION_ASSERT_METRIC = "assert_metric"
+ACTION_WAIT = "wait_for"
+ACTION_LOGIN = "login"
+ACTION_CANDIDATE = "candidate_step"
+
+# 所有可执行的 DSL action（用于 includes 校验）
+ALL_DSL_ACTIONS: frozenset[str] = frozenset({
+    ACTION_INPUT,
+    ACTION_CLICK,
+    ACTION_GOTO,
+    ACTION_ASSERT_VISIBLE,
+    ACTION_ASSERT_TEXT,
+    ACTION_ASSERT_URL,
+    ACTION_ASSERT_ATTRIBUTE,
+    ACTION_ASSERT_METRIC,
+    ACTION_WAIT,
+    ACTION_LOGIN,
+})
+
+
+# ── steps_hint 协议常量 ──────────────────────────────────────────────────────
+# 格式: "action:target=value"
+#   - action 和 target 之间用 HINT_SEP_ACTION 分隔
+#   - target 和 value 之间用 HINT_SEP_VALUE 分隔
+#   - intent_mapping.py 还支持 HINT_SEP_ALT 作为备用分隔符
+# 生成 steps_hint 统一用 format_steps_hint()，不要各自拼接字符串。
+
+HINT_SEP_ACTION = ":"
+HINT_SEP_VALUE = "="
+HINT_SEP_ALT: tuple[str, ...] = ("::", "=>", "|")
+
+# hint_value_map 解析时视为 input 动作的候选名
+HINT_INPUT_ACTIONS: frozenset[str] = frozenset({"input", "fill"})
+
+
+def format_steps_hint(action: str, target: str = "", value: str = "") -> str:
+    """统一生成 steps_hint 字符串，避免各处自己拼接。
+
+    >>> format_steps_hint("input", "用户名输入框", "")
+    "input:用户名输入框="
+    >>> format_steps_hint("click", "登录按钮")
+    "click:登录按钮"
+    >>> format_steps_hint("assert_text", "login_button", "请输入账号")
+    "assert_text:login_button=请输入账号"
+    """
+    if not target:
+        return action
+    if not value:
+        return f"{action}{HINT_SEP_ACTION}{target}"
+    return f"{action}{HINT_SEP_ACTION}{target}{HINT_SEP_VALUE}{value}"
