@@ -45,6 +45,16 @@ Router → Facade → Service → Repository → DB
 - `shared_backend/execution_compiler.py` — DSL 编译器（V1.1 铁律）
 - `web-ui/state/README.md` — 运行态缓存说明
 
+### Architecture Rules
+
+- 所有步骤必须经过 structurer
+- 禁止业务硬编码
+- Element 必须经过 Resolver
+- Assertion 必须符合 intent_type
+- Gate 不允许人工绕过
+- Quality Report 与 Quality Gate 分阶段存在
+- 不新增状态机除非存在真实状态流转需求
+
 ## 测试
 - 运行：`make test-unit`（分两进程以隔离 monkeypatch 状态污染）
 - 预期：274 passed, 3 failed（3 个旧有 facade mock DB 问题）
