@@ -27,7 +27,7 @@ from . import preview_store
 from . import constants as _c
 
 from .elements import load_page_config, ElementResolver
-from .hooks.login_password_visibility import LoginPasswordVisibilityHook
+from .hooks import get_page_hook
 from .compilation import build_point
 from .assets import (
     preview_requirement,
@@ -73,7 +73,7 @@ class SaveTestPointAssetsService:
         resolver = ElementResolver(page_config.alias_map)
 
         # ── 加载页面 Hook ──
-        page_hook = _get_page_hook(page)
+        page_hook = get_page_hook(page)
 
         # ── 需求解析 ──
         requirement_text = _normalized_text(getattr(payload, "requirement", ""))
@@ -414,8 +414,5 @@ def _build_asset_bundle(
     }
 
 
-def _get_page_hook(page: str) -> LoginPasswordVisibilityHook | None:
-    """根据 page code 返回对应的 PageHook，无匹配则返回 None。"""
-    if page == LoginPasswordVisibilityHook().page_code:
-        return LoginPasswordVisibilityHook()
-    return None
+# _get_page_hook 已迁移至 hooks/__init__.py 的 PAGE_HOOK_REGISTRY 注册表模式
+# 新增页面 Hook: 继承 PageHook → 注册到 PAGE_HOOK_REGISTRY → 无需改本文件
