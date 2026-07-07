@@ -8,6 +8,7 @@ from app.services.workbench_asset_views import (
     get_quality_gate_violations,
     check_generate_gate,
     check_approve_point_gate,
+    check_execute_gate,
 )
 
 
@@ -192,3 +193,48 @@ def test_approve_data_warning_allowed() -> None:
         "用户名输入框 输入步骤缺少明确测试数据",
     ])
     check_approve_point_gate(point)
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 4.3: check_execute_gate
+# ════════════════════════════════════════════════════════════════
+
+
+def test_execute_reject_blocked() -> None:
+    """source_asset + REJECT → execute blocked。"""
+    asset = _make_asset(plan_points=[
+        _make_point("intent-01", steps=[_step("input"), _step("click")], warnings=[
+            "assertion_missing: 无可执行断言",
+        ]),
+    ])
+    with pytest.raises(HTTPException) as exc:
+        check_execute_gate(asset)
+    assert exc.value.status_code == 422
+    assert "quality_gate_blocked" in str(exc.value.detail)
+
+
+def test_execute_pass_success() -> None:
+    """source_asset + PASS → execute allowed。"""
+    asset = _make_asset(plan_points=[
+        _make_point("intent-01", steps=[_step("input"), _step("assert_visible")]),
+    ])
+    check_execute_gate(asset)
+
+
+def test_execute_unprocessed_blocked() -> None:
+    """unprocessed (candidate_step + 无断言) → execute blocked。"""
+    asset = _make_asset(plan_points=[
+        _make_point("intent-25", steps=[_step("candidate_step")]),
+    ])
+    with pytest.raises(HTTPException):
+        check_execute_gate(asset)
+
+
+def test_execute_data_warning_allowed() -> None:
+    """data_warning → execute 不阻断。"""
+    asset = _make_asset(plan_points=[
+        _make_point("intent-01", steps=[_step("input"), _step("assert_text")], warnings=[
+            "用户名输入框 的空格输入需要后续由 DSL 数据引用执行",
+        ]),
+    ])
+    check_execute_gate(asset)

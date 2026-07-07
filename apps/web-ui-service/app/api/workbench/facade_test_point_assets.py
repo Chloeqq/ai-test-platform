@@ -53,7 +53,7 @@ from app.services import (
     workbench_scheduler_service,
     workbench_task_service,
 )
-from app.services.workbench_asset_views import check_generate_gate, check_approve_point_gate
+from app.services.workbench_asset_views import check_generate_gate, check_approve_point_gate, check_execute_gate
 from app.services.workbench_generation_api.payloads import GenerateCasePayload as GenerationGenerateCasePayload
 from app.services.workbench_generation_api.usecase_factory import build_generate_case_usecase
 
@@ -1486,6 +1486,30 @@ class WorkbenchFacadeTestPointAssetsMixin:
                     "message": "用例脚本为空，无法执行",
                     "case_id": normalized_case_id,
                 },
+            )
+
+        # Phase 4.3: Execute Gate — 追溯 source_asset 检查质量
+        source_asset_id, _ = _source_identity_from_case(case_for_run)
+        if source_asset_id:
+            asset = workbench_asset_service.load_test_point_asset_with_root(
+                normalized_project,
+                source_asset_id,
+                state_root=constants.TEST_POINTS_ROOT,
+            )
+            if not asset:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "code": "quality_gate_asset_missing",
+                        "message": f"测试点资产 {source_asset_id} 不存在或已被删除，无法验证质量状态。",
+                        "source_asset_id": source_asset_id,
+                    },
+                )
+            check_execute_gate(asset)
+        else:
+            LOGGER.warning(
+                "case %s has no source_asset_id, skipping execute gate",
+                normalized_case_id,
             )
 
         def _build_runtime_execution_record(**kwargs: Any) -> dict[str, Any]:

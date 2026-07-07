@@ -588,6 +588,21 @@ def check_approve_point_gate(point: dict[str, Any]) -> None:
         )
 
 
+def check_execute_gate(asset: dict[str, Any]) -> None:
+    """Execute 前的质量门禁检查。与 Generate Gate 规则一致（zero_assertion + unprocessed → block）。"""
+    violations = get_quality_gate_violations(asset)
+    blocking = [v for v in violations if v.get("severity") == "block"]
+    if blocking:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "quality_gate_blocked",
+                "message": "质量门禁阻断，无法执行。请先修复阻断项后再执行。",
+                "violations": blocking,
+            },
+        )
+
+
 def build_test_point_asset_detail(
     *,
     project: str,
