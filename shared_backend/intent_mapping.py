@@ -19,6 +19,8 @@ def _normalize_action(value: Any) -> str:
         return "assert_visible"
     if action in {"asserttext", "text"}:
         return "assert_text"
+    if action in {"assertattribute", "attribute"}:
+        return "assert_attribute"
     if action in {"asserturl", "url"}:
         return "assert_url"
     if action in {"assertmetric", "assertnumber", "metric", "number", "numeric"}:
@@ -95,6 +97,16 @@ def resolve_explicit_step(
                     hint_target, hint_value = comparator_split
                 else:
                     hint_target, hint_value = _split_payload(payload_text)
+            elif hint_action == "assert_attribute":
+                # 语法: assert_attribute:target.attribute=expected_value
+                payload_text = _normalized_text(payload)
+                target_part, hint_value = _split_payload(payload_text)
+                if "." in target_part:
+                    hint_target, attribute_part = target_part.rsplit(".", 1)
+                    hint_value = {"attribute": _normalized_text(attribute_part), "value": hint_value}
+                else:
+                    hint_target = target_part
+                    hint_value = {"attribute": "", "value": hint_value}
             elif hint_action in {"click", "wait_for", "assert_visible", "assert_text", "assert_url", "assert_metric"}:
                 hint_target, hint_value = _split_payload(payload)
             elif hint_action == "input":
@@ -126,6 +138,21 @@ def resolve_explicit_step(
         if not resolved_target:
             raise ValueError(f"{hint_action} step requires explicit target")
         return hint_action, resolved_target, None
+
+    if hint_action == "assert_attribute":
+        resolved_target = _resolve_target_code(explicit_target, page_element_alias_map)
+        if not resolved_target:
+            raise ValueError("assert_attribute step requires explicit target")
+        explicit_attribute = explicit_value.get("attribute") if isinstance(explicit_value, dict) else None
+        explicit_expected = explicit_value.get("value") if isinstance(explicit_value, dict) else explicit_value
+        if not _normalized_text(explicit_attribute):
+            raise ValueError("assert_attribute step requires explicit attribute name")
+        if explicit_expected is None or _normalized_text(explicit_expected) == "":
+            raise ValueError("assert_attribute step requires explicit expected value")
+        return "assert_attribute", resolved_target, {
+            "attribute": _normalized_text(explicit_attribute),
+            "value": _normalized_text(explicit_expected),
+        }
 
     if hint_action == "assert_metric":
         resolved_target = _resolve_target_code(explicit_target, page_element_alias_map)

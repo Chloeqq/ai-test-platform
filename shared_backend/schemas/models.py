@@ -116,7 +116,7 @@ class QualityGateThresholds(BaseModel):
 ALLOWED_ACTIONS: frozenset[str] = frozenset({
     "click", "fill", "select", "check", "uncheck",
     "hover", "scroll", "wait", "navigate",
-    "assert_visible", "assert_text", "assert_value",
+    "assert_visible", "assert_text", "assert_value", "assert_attribute",
     "assert_hidden", "assert_enabled", "assert_disabled",
     "assert_count", "assert_url", "assert_title", "assert_metric",
     "upload", "download", "drag",

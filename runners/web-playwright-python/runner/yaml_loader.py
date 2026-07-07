@@ -27,25 +27,36 @@ def load_validated_yaml_file(file_path: Path) -> Any:
 
 def load_yaml_files(dir_path: Path) -> list[Any]:
     cases = []
+    invalid_files: list[str] = []
 
     # 如果目录不存在，返回空列表
     if not dir_path.exists():
         print(f"⚠️ Directory not found: {dir_path}")
         return cases
 
-    for file_path in dir_path.iterdir():
+    # 排序保证批量执行顺序可复现。
+    for file_path in sorted(dir_path.iterdir()):
 
         if file_path.suffix not in [".yaml", ".yml"]:
             continue
 
         try:
             parsed = load_validated_yaml_file(file_path)
-        except ValueError as exc:
-            if "Test case file is empty" not in str(exc):
-                raise
-            print(f"⚠️ Skip empty YAML: {file_path}")
+        except Exception as exc:
+            # 批量目录扫描：单条坏用例（空文件 / schema 不合规等）跳过并记录，
+            # 不让一条脏数据阻断整批收集。单条入口 load_validated_yaml_file 仍 raise，
+            # 保持显式单跑的严格性（与 test_case_loader 身份门禁同一哲学）。
+            if "Test case file is empty" in str(exc):
+                print(f"⚠️ Skip empty YAML: {file_path}")
+            else:
+                invalid_files.append(f"{file_path.name}: {exc}")
             continue
 
         cases.append(parsed)
+
+    if invalid_files:
+        print(f"⚠️ Skipped {len(invalid_files)} invalid YAML case(s) during batch load:")
+        for item in invalid_files:
+            print(f"   - {item}")
 
     return cases

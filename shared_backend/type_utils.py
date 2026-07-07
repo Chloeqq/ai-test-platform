@@ -46,6 +46,41 @@ def dedup_keep_order(items: list[str]) -> list[str]:
     return result
 
 
+def as_text_list(value: Any) -> list[str]:
+    """将任意输入规范化为去重的非空字符串列表。
+
+    list 输入：逐个转为 stripped 字符串，过滤空值并去重。
+    非 list 输入：返回空列表。
+
+    >>> as_text_list(["a", "b", "a", "", "c"])
+    ['a', 'b', 'c']
+    >>> as_text_list("not a list")
+    []
+    """
+    if not isinstance(value, list):
+        return []
+    items: list[str] = []
+    for raw in value:
+        text = str_value(raw)
+        if text and text not in items:
+            items.append(text)
+    return items
+
+
+def append_unique(items: list[str], value: str) -> None:
+    """向列表中追加非空且不重复的字符串（原地修改）。
+
+    >>> items = ["a", "b"]
+    >>> append_unique(items, "c")
+    >>> items
+    ['a', 'b', 'c']
+    >>> append_unique(items, "a")  # 重复，不追加
+    """
+    text = str_value(value)
+    if text and text not in items:
+        items.append(text)
+
+
 def normalized_key(value: Any) -> str:
     """将值规范化为仅含字母数字的 key（用于 alias/element 匹配）。"""
     text = str_value(value).lower()

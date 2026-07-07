@@ -17,6 +17,9 @@ from .domain.case_lifecycle import (
 )
 from .engine import RuleEngine
 from .models import (
+    IMPLEMENTED_PRECONDITION_TYPES,
+    PRECONDITION_TYPES,
+    RESERVED_PRECONDITION_TYPES,
     CaseScore,
     Decision,
     GateContext,
@@ -36,6 +39,10 @@ __all__ = [
     "Decision",
     "RuleCategory",
     "CaseStatus",
+    # Domain constants
+    "PRECONDITION_TYPES",
+    "IMPLEMENTED_PRECONDITION_TYPES",
+    "RESERVED_PRECONDITION_TYPES",
     # Models
     "RuleResult",
     "CaseScore",

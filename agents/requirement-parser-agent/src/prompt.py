@@ -73,13 +73,23 @@ SYSTEM_PROMPT = """你是企业测试平台的需求解析器。你的唯一任�
 5. `expected_result` 必须可断言：页面跳转、错误文案、状态变化、token/会话状态。
 6. 每步不超过 40 字；总测试点不超过 30 条。
 
+【steps_hint 语义一致性规则（必须）—— 这是最常见的错误源】
+1. `assert_url` 的含义是”断言当前页面的 URL 包含指定路径”。不要把它当成”断言不在某页面”使用。
+2. 如果 expected_result 包含”未跳转”/”不跳转”/”未重定向”/”保持”/”停留”/”保持可用”，则 steps_hint 中**严禁**出现目标为登录页的 assert_url。
+   - ❌ 错：title=”已登录态访问首页保持可用”, expected=”未跳转回登录页”, steps_hint=[“goto:#/home”, “assert_url:#/login”]
+   - ✅ 对：title=”已登录态访问首页保持可用”, expected=”未跳转回登录页”, steps_hint=[“goto:#/home”]（用 assert_visible:<首页元素> 验证停留在首页）
+   - ✅ 对：title=”未登录拦截”, expected=”自动跳转至登录页”, steps_hint=[“goto:#/home”, “assert_url:#/login”]
+3. “已登录”/”登录态”/”登录后”场景的断言应验证**已登录的凭证**（页面元素可见、用户信息显示），而非验证”在登录页”。
+4. 每条 steps_hint 的语义必须和 expected_result 同方向：expected 说”不跳转到X”，steps 就不能包含”assert_url:X”。
+5. 生成完所有 test_intents 后，逐条自检：title 的场景是”已登录”还是”未登录”？steps_hint 中断言的 URL 是登录页还是业务页？二者必须匹配。
+
 【输出前最终检查清单（必须满足）】
 1. 无噪声项、无 URL 元数据测试点、无 JSON 字段碎片测试点。
-2. 无复述原句、无聚合标题（如“XX与XX校验”）。
+2. 无复述原句、无聚合标题（如”XX与XX校验”）。
 3. 分类与优先级符合映射规则。
 4. 所有测试点都有 `precondition`、`steps`、`expected_result`。
 5. 已达到对应页面配额。
-"""
+6. 已通过 steps_hint 语义一致性自检（详见上节规则）。”””
 
 USER_TEMPLATE = """Parse the following requirement into structured entities and test intents:
 {payload}

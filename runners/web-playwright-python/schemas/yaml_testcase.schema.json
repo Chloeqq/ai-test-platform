@@ -1,5 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "step/assertion 字段名需要和 shared_backend/step_fields.py 的 STEP_FIELD_NAMES 保持同步——新增 DSL 字段（如 assert_attribute 的 attribute）时，这个文件里 properties.execution.properties.steps 和 properties.assertions 下的字段列表（多处重复）都要同步加，否则用例能生成但 runner 加载时会报 schema 校验失败。",
   "type": "object",
   "required": ["version", "id", "title", "module", "execution"],
   "additionalProperties": false,
@@ -116,7 +117,7 @@
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url"]
+            "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "assert_attribute"]
           },
           "target": {
             "type": ["string", "null"]
@@ -157,6 +158,9 @@
           "metric_label": {
             "type": ["string", "null"]
           },
+          "attribute": {
+            "type": ["string", "null"]
+          },
           "page": {
             "type": ["string", "null"],
             "minLength": 1
@@ -180,7 +184,7 @@
             "if": {
               "properties": {
                 "action": {
-                  "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text"]
+                  "enum": ["assert_visible", "assert_count", "assert_metric", "assert_text", "assert_attribute"]
                 }
               }
             },
@@ -221,6 +225,18 @@
             "if": {
               "properties": {
                 "action": {
+                  "enum": ["assert_attribute"]
+                }
+              }
+            },
+            "then": {
+              "required": ["attribute", "value"]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "action": {
                   "enum": ["assert_text", "assert_url"]
                 }
               }
@@ -232,6 +248,15 @@
         ]
       }
     },
+    "preconditions": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "scenario": { "type": "object", "additionalProperties": true },
+    "case": { "type": "object", "additionalProperties": true },
+    "actors": { "type": "object", "additionalProperties": true },
+    "environment": { "type": "object", "additionalProperties": true },
+    "coverage": { "type": "object", "additionalProperties": true },
     "data": {
       "type": "object",
       "additionalProperties": {
@@ -339,7 +364,7 @@
             "properties": {
               "action": {
                 "type": "string",
-                "enum": ["login", "click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "goto"]
+                "enum": ["login", "click", "fill", "input", "type", "wait_for", "wait", "assert_visible", "assert_count", "assert_metric", "assert_text", "assert_url", "assert_attribute", "goto", "open", "network_condition"]
               },
               "target": {
                 "type": ["string", "null"]
@@ -380,6 +405,9 @@
               "metric_label": {
                 "type": ["string", "null"]
               },
+              "attribute": {
+                "type": ["string", "null"]
+              },
               "page": {
                 "type": ["string", "null"],
                 "minLength": 1
@@ -396,14 +424,18 @@
               },
               "expected_result": {
                 "type": ["string", "null"]
-              }
+              },
+              "url": { "type": ["string", "null"] },
+              "target_url": { "type": ["string", "null"] },
+              "timeout_ms": { "type": ["integer", "number", "string", "null"] },
+              "network_condition": { "type": ["string", "null"] }
             },
             "allOf": [
               {
                 "if": {
                   "properties": {
                     "action": {
-                      "enum": ["click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_text"]
+                      "enum": ["click", "fill", "input", "wait_for", "assert_visible", "assert_count", "assert_metric", "assert_text", "assert_attribute"]
                     }
                   }
                 },
@@ -438,6 +470,18 @@
                       "required": ["rule"]
                     }
                   ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "action": {
+                      "enum": ["assert_attribute"]
+                    }
+                  }
+                },
+                "then": {
+                  "required": ["attribute", "value"]
                 }
               },
               {
