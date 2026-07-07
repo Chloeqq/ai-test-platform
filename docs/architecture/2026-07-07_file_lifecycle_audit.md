@@ -1,6 +1,6 @@
 # 文件生命周期治理审计报告
 
-> **日期:** 2026-07-07
+> **日期:** 2026-07-07 | **状态:** FILE-001 preview 清理已修复 (3684f9c)
 > **审查范围:** `web-ui/state/` 全目录 — preview/test-points/generated-cases/runs
 
 ---

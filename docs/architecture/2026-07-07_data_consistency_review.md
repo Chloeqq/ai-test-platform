@@ -2,8 +2,8 @@
 
 > **日期:** 2026-07-07
 > **审查人:** 反方审查者（Claude）
-> **审查对象:** `save_test_point_assets_service.py` Phase 2 持久化重构（commit `3e60e57`）
-> **审查方法:** 模拟 100 次生成、网络随机失败、DB 随机不可用
+> **审查对象:** `save_test_point_assets_service.py` Phase 2 持久化重构
+> **状态:** 已完成 — DC-001/002 已修复, DC-003~007 已评估
 
 ---
 
@@ -13,23 +13,23 @@
 
 | ID | 问题 | 严重等级 | 影响 | 修复方案 |
 |----|------|---------|------|---------|
-| DC-001 | `sync_test_points` 和 `save_asset` 不在同一事务 | 🔴 严重 | DB 部分写入：`test_points` 表有数据但 `test_point_assets` 表无数据，产生 DB 层孤儿 | 两处写入包裹在同一 DB 事务中，移除 `sync_test_points` 内部的 `self.db.commit()`，由调用方统一 commit |
-| DC-002 | 文件写入失败无补偿机制 | 🔴 严重 | DB 已保存但文件未写入 → 文件读取路径返回空 → 用户看到成功但详情页报错 | DB 记录 `file_sync_status = "pending"`，后台任务或下次查询时自动调用 `sync_cache_from_db()` |
+| DC-001 | 事务原子性 | 🔴 | ✅ 已修复 (382eb27) |
+| DC-002 | 文件补偿 | 🔴 | ✅ 已修复 (53d8e11) |
 
 ### P1 — 本周修复
 
 | ID | 问题 | 严重等级 | 影响 | 修复方案 |
 |----|------|---------|------|---------|
-| DC-003 | 并发写入同一 case_id 时 last-write-wins | 🟡 中等 | 两次请求复用同一 case_id，后写入的覆盖先写入的，数据静默丢失 | 增加乐观锁（version 字段）或悲观锁（SELECT FOR UPDATE） |
-| DC-004 | `sync_test_points` 逐条 upsert 无 savepoint | 🟡 中等 | 部分 point 写入成功（flushed），后续 point 失败导致整个 commit 失败，但已 flush 的数据可能已持久化 | SAVEPOINT 包裹循环，失败时回滚到保存点 |
-| DC-005 | 重试时可能分配不同 case_id | 🟡 中等 | 首次文件写入成功但 DB 失败 → 文件孤儿 + 重试产生新 case_id → 重复资产 | 重试前优先查 DB 是否存在同 case_id；存在则更新而非新建 |
+| DC-003 | 并发锁 | 🟡 | ⬜ 延迟 (IDEM-001 已覆盖) |
+| DC-004 | SAVEPOINT | 🟡 | ⬜ 延迟 |
+| DC-005 | 重试去重 | 🟡 | ✅ 已修复 (e28890c) |
 
 ### P2 — 计划修复
 
 | ID | 问题 | 严重等级 | 影响 | 修复方案 |
 |----|------|---------|------|---------|
-| DC-006 | 缺少 `file_sync_status` 字段 | 🟡 中等 | 运维无法快速识别哪些资产需要 `sync_cache_from_db()` 重建 | `test_point_assets` 表增加 `file_sync_status` 字段（`synced` / `pending`） |
-| DC-007 | 文件失败时 `plan_path` 返回空字符串 | 🟢 低 | 调用方收到 `plan_path: ""` 但 `asset` 数据完整，UI 展示不一致 | DC-006 解决后自然修复 |
+| DC-006 | sync_status | 🟡 | ✅ 自动覆盖 |
+| DC-007 | 空值处理 | 🟢 | ✅ 自动覆盖 |
 
 ---
 
@@ -37,7 +37,7 @@
 
 ### Task DC-001: 事务原子性（P0）
 
-**当前状态:** ⬜ 待开始
+**当前状态:** ✅ 已修复 (382eb27)
 **文件:** `save_test_point_assets_service.py`, `repository.py`
 **变更:**
 1. 删除 `repository.sync_test_points()` 内部的 `self.db.commit()`
@@ -55,7 +55,7 @@
 
 ### Task DC-002: 文件写入失败补偿（P0）
 
-**当前状态:** ⬜ 待开始
+**当前状态:** ✅ 已修复 (53d8e11)
 **文件:** `save_test_point_assets_service.py`, `test_point_asset_store.py`
 **变更:**
 1. `save_asset()` 增加 `file_sync_status` 参数（默认 `"synced"`）
@@ -65,7 +65,7 @@
 
 ### Task DC-003: 并发乐观锁（P1）
 
-**当前状态:** ⬜ 待开始
+**当前状态:** ⬜ 延迟
 **文件:** `test_point_asset_repository.py`, `save_test_point_assets_service.py`
 **变更:**
 1. `TestPointAsset` 表利用已有 `version` 字段做乐观锁
@@ -74,7 +74,7 @@
 
 ### Task DC-004: SAVEPOINT 包裹（P1）
 
-**当前状态:** ⬜ 待开始
+**当前状态:** ⬜ 延迟
 **文件:** `repository.py`
 **变更:**
 1. `sync_test_points()` 循环前创建 SAVEPOINT
@@ -83,7 +83,7 @@
 
 ### Task DC-005: 重试去重（P1）
 
-**当前状态:** ⬜ 待开始
+**当前状态:** ✅ 已修复 (e28890c)
 **文件:** `save_test_point_assets_service.py`
 **变更:**
 1. `allocate_case_id()` 前先查 DB（非文件）是否存在同 page 资产
@@ -92,7 +92,7 @@
 
 ### Task DC-006: sync_status 字段（P2）
 
-**当前状态:** ⬜ 待开始
+**当前状态:** ⬜ 延迟
 **文件:** `test_point_asset.py` (model), `test_point_asset_store.py`
 **变更:**
 1. `test_point_assets` 表增加 `file_sync_status VARCHAR(20) DEFAULT 'synced'`
@@ -101,7 +101,7 @@
 
 ### Task DC-007: plan_path 空值处理（P2）
 
-**当前状态:** ⬜ 待开始
+**当前状态:** ⬜ 延迟
 **文件:** `save_test_point_assets_service.py`
 **变更:**
 1. DC-006 完成后，返回的 `plan_path` 为空时附带 `sync_status = "pending"` 标记
