@@ -41,6 +41,16 @@ function text(value: unknown): string {
   return String(value || "").trim();
 }
 
+function classifyWarning(w: string): { category: string; tone: string } {
+  const lower = w.toLowerCase();
+  if (lower.includes("assertion_missing")) return { category: "阻断问题", tone: "danger" };
+  if (lower.includes("缺少涉及元素")) return { category: "阻断问题", tone: "danger" };
+  if (lower.includes("元素未在 page object 注册")) return { category: "阻断问题", tone: "danger" };
+  if (lower.includes("仍需人工结构化")) return { category: "待人工处理", tone: "warning" };
+  if (lower.includes("缺少明确测试数据") || lower.includes("空格输入") || lower.includes("无法无损表达")) return { category: "数据补充", tone: "warning" };
+  return { category: "其他", tone: "neutral" };
+}
+
 function displayText(value: unknown): string {
   return text(value) || "-";
 }
@@ -194,6 +204,7 @@ export function TestPointAssetEditPage() {
   const [busy, setBusy] = useState<boolean>(false);
   const [errorText, setErrorText] = useState<string>("");
   const [actionText, setActionText] = useState<string>("");
+  const [qualityReport, setQualityReport] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -212,6 +223,7 @@ export function TestPointAssetEditPage() {
         const plan = (item.plan || {}) as Record<string, unknown>;
         const rows = candidatesFromItem(item);
         if (!cancelled) {
+          setQualityReport((item.quality_report || {}) as Record<string, unknown>);
           setForm({
             title: text(item.title || plan.title || assetId),
             page: text(item.page || plan.page),
@@ -337,6 +349,38 @@ export function TestPointAssetEditPage() {
       {loading ? <section className="panel">正在加载编辑数据...</section> : null}
       {errorText ? <section className="panel error">{errorText}</section> : null}
       {actionText ? <section className="panel">{actionText}</section> : null}
+
+      {!loading && Object.keys(qualityReport).length > 0 ? (
+        (() => {
+          const qr = qualityReport;
+          const assertionWarnings: string[] = Array.isArray(qr.assertion_warnings) ? qr.assertion_warnings as string[] : [];
+          const otherWarnings: string[] = Array.isArray(qr.other_warnings) ? qr.other_warnings as string[] : [];
+          const allWarnings = [...assertionWarnings, ...otherWarnings];
+          if (!allWarnings.length) return null;
+          const groups: Record<string, { tone: string; items: string[] }> = {};
+          for (const w of allWarnings) {
+            const { category, tone } = classifyWarning(w);
+            if (!groups[category]) groups[category] = { tone, items: [] };
+            groups[category].items.push(w);
+          }
+          return (
+            <section className="panel" style={{ borderLeft: "4px solid var(--color-warning, #e6a23c)", background: "var(--color-warning-light, #fdf6ec)" }}>
+              <strong style={{ display: "block", marginBottom: 8 }}>质量警告 — 请在编辑前关注以下问题</strong>
+              {Object.entries(groups).map(([category, group]) => (
+                <div key={category} style={{ marginBottom: 6 }}>
+                  <span className={`tag tag--${group.tone}`} style={{ fontWeight: 600, marginRight: 8 }}>{category} ({group.items.length})</span>
+                  {group.items.slice(0, 3).map((w, i) => (
+                    <div key={i} style={{ fontSize: "0.85rem", paddingLeft: 8, color: "var(--color-text-muted)" }}>
+                      {w}
+                    </div>
+                  ))}
+                  {group.items.length > 3 ? <div style={{ fontSize: "0.8rem", paddingLeft: 8 }}>...及其他 {group.items.length - 3} 条</div> : null}
+                </div>
+              ))}
+            </section>
+          );
+        })()
+      ) : null}
 
       {!loading ? (
         <section className="panel">
@@ -582,3 +626,4 @@ export function TestPointAssetEditPage() {
     </main>
   );
 }
+

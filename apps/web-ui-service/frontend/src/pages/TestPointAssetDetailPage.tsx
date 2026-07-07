@@ -86,6 +86,16 @@ interface SummaryBadgeConfig {
   raw?: string;
 }
 
+function classifyWarning(w: string): { category: string; tone: string } {
+  const lower = w.toLowerCase();
+  if (lower.includes("assertion_missing")) return { category: "阻断问题", tone: "danger" };
+  if (lower.includes("缺少涉及元素")) return { category: "阻断问题", tone: "danger" };
+  if (lower.includes("元素未在 page object 注册")) return { category: "阻断问题", tone: "danger" };
+  if (lower.includes("仍需人工结构化")) return { category: "待人工处理", tone: "warning" };
+  if (lower.includes("缺少明确测试数据") || lower.includes("空格输入") || lower.includes("无法无损表达")) return { category: "数据补充", tone: "warning" };
+  return { category: "其他", tone: "neutral" };
+}
+
 function QualityGateCard({ report }: { report: Record<string, unknown> }) {
   if (!report || !Object.keys(report).length) {
     return null;
@@ -94,48 +104,104 @@ function QualityGateCard({ report }: { report: Record<string, unknown> }) {
   const decision = String(report.decision || "PASS");
   const zeroCount = Number(report.zero_assertion_count ?? 0);
   const total = Number(report.total_points ?? 0);
-  const assertionWarnings = Array.isArray(report.assertion_warnings) ? report.assertion_warnings as string[] : [];
+  const candidateCount = Number(report.candidate_step_count ?? 0);
+  const unprocessedCount = Number(report.unprocessed_count ?? 0);
   const byType = (report.by_point_type || {}) as Record<string, Record<string, number>>;
 
-  const decisionBadge: Record<string, { label: string; tone: string }> = {
-    REJECT: { label: "不可执行", tone: "danger" },
-    REVIEW: { label: "需审核", tone: "warning" },
-    PASS: { label: "质量通过", tone: "success" },
+  // P0-2: 优先新字段 quality_warnings / data_warnings，回退到旧字段
+  const qualityWarnings: string[] = Array.isArray(report.quality_warnings)
+    ? report.quality_warnings as string[] : [];
+  const dataWarnings: string[] = Array.isArray(report.data_warnings)
+    ? report.data_warnings as string[] : [];
+  const effectiveQuality = qualityWarnings.length > 0
+    ? qualityWarnings
+    : (Array.isArray(report.assertion_warnings) ? report.assertion_warnings as string[] : []);
+  const effectiveData = dataWarnings;
+
+  const decisionBadge: Record<string, { label: string; icon: string; tone: string }> = {
+    REJECT: { label: "不可执行", icon: "🚫", tone: "danger" },
+    REVIEW: { label: "需审核", icon: "⚠️", tone: "warning" },
+    PASS: { label: "可执行", icon: "✅", tone: "success" },
   };
-  const badge = decisionBadge[decision] || { label: decision, tone: "neutral" };
+  const badge = decisionBadge[decision] || { label: decision, icon: "❓", tone: "neutral" };
+
+  const hasQualityIssues = zeroCount > 0 || candidateCount > 0 || effectiveQuality.length > 0;
+  const hasDataHints = effectiveData.length > 0;
+  const hasContent = hasQualityIssues || hasDataHints || Object.keys(byType).length > 0;
 
   return (
     <div className={`asset-review-banner asset-review-${badge.tone}`}>
-      <div className="detail-field-row">
-        <strong>Quality Gate</strong>
-        <span>Score: {score}/100 · Decision: {badge.label}</span>
+      {/* ── 质量评分 ── */}
+      <div className="detail-field-row" style={{ flexWrap: "wrap", gap: "8px 16px", alignItems: "baseline" }}>
+        <strong>质量评分</strong>
+        <span style={{ fontSize: "1.1rem", fontWeight: 600 }}>{score}/100</span>
       </div>
-      {zeroCount > 0 ? (
-        <div className="detail-field-row">
-          <span>零断言测试点: {zeroCount}/{total}</span>
-        </div>
-      ) : null}
-      {Object.keys(byType).length > 0 ? (
-        <div className="detail-field-row">
-          {Object.entries(byType).map(([pt, stats]) =>
-            stats.zero_assertion > 0 ? (
-              <span key={pt} className="tag tag--warning">
-                {pt}: {stats.zero_assertion}/{stats.total} 零断言
-              </span>
-            ) : null
-          )}
-        </div>
-      ) : null}
-      {assertionWarnings.length > 0 ? (
-        <div className="detail-field-help">
-          {assertionWarnings.slice(0, 3).map((w, i) => (
-            <div key={i}>⚠️ {w}</div>
-          ))}
-          {assertionWarnings.length > 3 ? (
-            <div>...及其他 {assertionWarnings.length - 3} 条警告</div>
+
+      {/* ── 执行状态 ── */}
+      <div className="detail-field-row" style={{ flexWrap: "wrap", gap: "4px 12px", alignItems: "baseline" }}>
+        <strong>执行状态</strong>
+        <span>{badge.icon} {badge.label}</span>
+      </div>
+
+      {/* ── 指标 ── */}
+      <div className="detail-field-row" style={{ flexWrap: "wrap", gap: "4px 12px", fontSize: "0.9rem" }}>
+        <span>零断言: <strong>{zeroCount}</strong>/{total}</span>
+        {candidateCount > 0 ? (
+          <span>未结构化: <strong>{candidateCount}</strong> (其中 {unprocessedCount} 无断言)</span>
+        ) : null}
+      </div>
+      {!hasContent ? null : (
+        <div className="detail-field-section" style={{ marginTop: 8 }}>
+          {/* ── 零断言 by type ── */}
+          {Object.keys(byType).length > 0 && zeroCount > 0 ? (
+            <div className="detail-field-row" style={{ flexWrap: "wrap", gap: 4 }}>
+              {Object.entries(byType).map(([pt, stats]) =>
+                stats.zero_assertion > 0 ? (
+                  <span key={pt} className="tag tag--danger">
+                    {pt}: {stats.zero_assertion}/{stats.total} 零断言
+                  </span>
+                ) : null
+              )}
+            </div>
+          ) : null}
+
+          {/* ── 质量问题 ── */}
+          {effectiveQuality.length > 0 ? (
+            <div className="detail-field-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4, marginTop: 4 }}>
+              <span className="tag tag--danger" style={{ fontWeight: 600 }}>质量问题 ({effectiveQuality.length})</span>
+              {effectiveQuality.slice(0, 5).map((w, i) => (
+                <div key={i} className="detail-field-help" style={{ paddingLeft: 8 }}>🚫 {w}</div>
+              ))}
+              {effectiveQuality.length > 5 ? (
+                <div className="detail-field-help" style={{ paddingLeft: 8 }}>...及其他 {effectiveQuality.length - 5} 条</div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* ── 待结构化 ── */}
+          {unprocessedCount > 0 ? (
+            <div className="detail-field-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4, marginTop: 4 }}>
+              <span className="tag tag--warning" style={{ fontWeight: 600 }}>待结构化 ({unprocessedCount})</span>
+              <div className="detail-field-help" style={{ paddingLeft: 8 }}>
+                ⚠️ {unprocessedCount} 个测试点存在 candidate_step 且未生成断言步骤，建议进入编辑页完成人工结构化。
+              </div>
+            </div>
+          ) : null}
+
+          {/* ── 数据补充 ── */}
+          {effectiveData.length > 0 ? (
+            <div className="detail-field-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 4, marginTop: 4 }}>
+              <span className="tag tag--neutral" style={{ fontWeight: 600 }}>数据补充 ({effectiveData.length})</span>
+              {effectiveData.slice(0, 3).map((w, i) => (
+                <div key={i} className="detail-field-help" style={{ paddingLeft: 8 }}>📋 {w}</div>
+              ))}
+              {effectiveData.length > 3 ? (
+                <div className="detail-field-help" style={{ paddingLeft: 8 }}>...及其他 {effectiveData.length - 3} 条</div>
+              ) : null}
+            </div>
           ) : null}
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

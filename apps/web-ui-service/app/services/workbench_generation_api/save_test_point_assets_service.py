@@ -265,7 +265,6 @@ class SaveTestPointAssetsService:
             },
             "involved_elements": involved_elements,
             "confidence": max(0.0, min(1.0, confidence)),
-            "warnings": [],
             "requires_review": False,
         }
 

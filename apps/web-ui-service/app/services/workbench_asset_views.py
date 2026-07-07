@@ -366,13 +366,17 @@ def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
     """从资产数据构建质量报告 (P0-4: 审核页展示 Gate 报告)。
 
     完全基于 asset 已有字段计算，不查询 DB，不新增字段。
+
+    P0-1: candidate_step 不计入 zero_assert（本质是"未结构化"而非"缺断言"）。
+    P0-2: data_warnings（数据补全提示）不影响 quality decision。
     """
     plan = asset.get("plan", {}) if isinstance(asset.get("plan"), dict) else {}
     points = plan.get("points", []) if isinstance(plan.get("points"), list) else []
-    warnings = asset.get("warnings", []) if isinstance(asset.get("warnings"), list) else []
     requires_review = bool(asset.get("requires_review", False))
 
-    # 按 point_type 统计断言质量
+    # 按 point_type 统计断言质量（candidate_step 且无断言的 point 不计入 zero_assert）
+    candidate_step_count = 0
+    unprocessed_count = 0
     by_type: dict[str, dict[str, int]] = {}
     for p in points:
         pt = str(p.get("point_type", "unknown")).strip() or "unknown"
@@ -380,12 +384,39 @@ def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
             by_type[pt] = {"total": 0, "zero_assertion": 0}
         by_type[pt]["total"] += 1
         steps = p.get("steps", []) if isinstance(p.get("steps"), list) else []
-        if not any(str(s.get("action", "")).startswith("assert_") for s in steps):
-            by_type[pt]["zero_assertion"] += 1
+        actions = [str(s.get("action", "")) for s in steps]
+        has_assertion = any(a.startswith("assert_") for a in actions)
+        has_candidate = "candidate_step" in actions
+
+        if has_candidate:
+            candidate_step_count += 1
+            if not has_assertion:
+                unprocessed_count += 1
+                # 不计入 zero_assertion — candidate_step 的本质是未结构化，而非缺断言
+            # 有 candidate_step 但同时有断言：仍计 candidate_step，但断言存在所以不计 zero_assert
+        else:
+            if not has_assertion:
+                by_type[pt]["zero_assertion"] += 1
+
+    # 聚合 warnings：仅从 plan.points[].warnings（去重），不依赖 asset 顶层 warnings
+    seen_warnings: set[str] = set()
+    all_warnings: list[str] = []
+    for p in points:
+        pw_list = p.get("warnings", []) if isinstance(p.get("warnings"), list) else []
+        for w in pw_list:
+            key = str(w).strip()
+            if key and key not in seen_warnings:
+                seen_warnings.add(key)
+                all_warnings.append(key)
 
     # 分类 warnings
-    assertion_warnings = [w for w in warnings if "assertion" in str(w).lower()]
-    other_warnings = [w for w in warnings if w not in assertion_warnings]
+    assertion_warnings = [w for w in all_warnings if "assertion" in str(w).lower()]
+    other_warnings = [w for w in all_warnings if w not in assertion_warnings]
+
+    # P0-2: 数据补全提示不影响 quality decision
+    _DATA_HINT_KEYWORDS = ("空格输入", "缺少明确测试数据", "无法无损表达")
+    data_warnings = [w for w in all_warnings if any(kw in str(w) for kw in _DATA_HINT_KEYWORDS)]
+    quality_warnings = [w for w in all_warnings if w not in data_warnings]
 
     # Gate-expected decision: 基于领域规则 (非硬编码)
     total_points = len(points)
@@ -396,7 +427,10 @@ def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
     elif zero_assert_count > 0:
         decision = "REJECT"
         score = max(0, 100 - zero_assert_count * 10)
-    elif assertion_warnings:
+    elif candidate_step_count > 0:
+        decision = "REVIEW"
+        score = 75
+    elif quality_warnings:
         decision = "REVIEW"
         score = 75
     elif requires_review:
@@ -427,8 +461,12 @@ def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
         "requires_review": requires_review,
         "total_points": total_points,
         "zero_assertion_count": zero_assert_count,
+        "candidate_step_count": candidate_step_count,
+        "unprocessed_count": unprocessed_count,
         "assertion_warnings": assertion_warnings,
         "other_warnings": other_warnings,
+        "quality_warnings": quality_warnings,
+        "data_warnings": data_warnings,
         "by_point_type": by_type,
         "per_point": per_point,
     }

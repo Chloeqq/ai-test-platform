@@ -8,6 +8,7 @@ from shared_backend.type_utils import str_value as _normalized_text
 
 from .context import WorkbenchContext
 from . import preview_store
+from . import constants as _c
 from ..workbench_generation_compiler.runtime.generate_pipeline import resolve_page_object
 
 
@@ -71,10 +72,10 @@ class PrecheckSelectedIntentsService:
         normalized_candidates = self._context.candidate_normalizer.normalize_candidates(
             resolved_candidates
         )
-        if len(normalized_candidates) > 20:
+        if len(normalized_candidates) > _c.MAX_CANDIDATES:
             raise runtime.HTTPException(
                 status_code=runtime.status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="selected_candidates exceeds max size 20",
+                detail=f"selected_candidates exceeds max size {_c.MAX_CANDIDATES}",
             )
 
         page_object_error: dict[str, Any] | None = None

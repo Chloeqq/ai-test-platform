@@ -50,8 +50,6 @@ interface PipelineEvent {
 type StageState = "pending" | "running" | "success" | "error" | "block";
 type StepId = 1 | 2 | 3 | 4;
 
-const MAX_GENERATE_SELECTED = 20;
-
 const DEFAULT_FORM: GenerationForm = {
   project: DEFAULT_PROJECT_CODE,
   source: "manual",
@@ -613,11 +611,10 @@ export function AiGenerationPage() {
         source: form.source.trim() || "manual",
       });
       const normalized = normalizeCandidates(response);
-      const limited = normalized.slice(0, MAX_GENERATE_SELECTED);
       const gateDecision = readQualityDecision(response);
       setPreviewPayload(response);
       setCandidates(normalized);
-      setSelectedKeys(limited.map((item) => item.key));
+      setSelectedKeys(normalized.map((item) => item.key));
       setLastSyncedSignature("");
       if (gateDecision === "block") {
         setResultText(`提取完成：识别 ${normalized.length} 个测试点，但质量门禁阻断，需先处理后再进入资产治理。`);
@@ -625,13 +622,6 @@ export function AiGenerationPage() {
         setResultText(`提取完成：识别 ${normalized.length} 个测试点，已全部同步到测试点资产；请到资产中心审核后生成用例。`);
       }
       appendEvent({ stage: "extract", level: "success", message: `测试点提取完成，识别 ${normalized.length} 项。` });
-      if (normalized.length > MAX_GENERATE_SELECTED) {
-        appendEvent({
-          stage: "candidate",
-          level: "info",
-          message: `当前页面仅保留候选预校验；测试点资产会保存全部 ${normalized.length} 条。`,
-        });
-      }
       setActiveStep(3);
     } catch (error) {
       const message = error instanceof Error ? error.message : "测试点提取失败";
@@ -653,15 +643,12 @@ export function AiGenerationPage() {
       if (prev.includes(key)) {
         return prev.filter((item) => item !== key);
       }
-      if (prev.length >= MAX_GENERATE_SELECTED) {
-        return prev;
-      }
       return [...prev, key];
     });
   }
 
   function selectAllCandidates() {
-    setSelectedKeys(candidates.slice(0, MAX_GENERATE_SELECTED).map((item) => item.key));
+    setSelectedKeys(candidates.map((item) => item.key));
   }
 
   function clearAllCandidates() {
@@ -880,7 +867,7 @@ export function AiGenerationPage() {
                 表格视图
               </button>
               <button type="button" className="button secondary" onClick={selectAllCandidates} disabled={!candidates.length}>
-                选择前 20 条预校验
+                全选预校验
               </button>
               <button type="button" className="button secondary" onClick={clearAllCandidates} disabled={!selectedCandidates.length}>
                 清空
@@ -888,7 +875,7 @@ export function AiGenerationPage() {
             </div>
           </header>
 
-          <p className="muted">当前已选用于预校验：{selectedCandidates.length}/{MAX_GENERATE_SELECTED}；测试点资产会保存全部 {candidates.length} 条。</p>
+          <p className="muted">当前已选用于预校验：{selectedCandidates.length}；测试点资产会保存全部 {candidates.length} 条。</p>
           {selectedCandidates.length ? (
             precheckErrorText ? (
               <section className="aiw-error-box aiw-step-error">
@@ -905,7 +892,6 @@ export function AiGenerationPage() {
               {candidates.length ? (
                 candidates.map((candidate, index) => {
                   const selected = selectedKeys.includes(candidate.key);
-                  const disabled = !selected && selectedKeys.length >= MAX_GENERATE_SELECTED;
                   const precheck = precheckByIntentId[candidate.intentId];
                   const precheckStatus = precheck?.status || "ok";
                   return (
@@ -946,7 +932,7 @@ export function AiGenerationPage() {
                             <input
                               type="checkbox"
                               checked={selected}
-                              disabled={disabled || extracting}
+                              disabled={extracting}
                               onChange={() => toggleCandidate(candidate.key)}
                               style={{
                                 width: "20px",
@@ -1089,7 +1075,6 @@ export function AiGenerationPage() {
                   {candidates.length ? (
                     candidates.map((candidate) => {
                       const selected = selectedKeys.includes(candidate.key);
-                      const disabled = !selected && selectedKeys.length >= MAX_GENERATE_SELECTED;
                       const precheck = precheckByIntentId[candidate.intentId];
                       const precheckStatus = precheck?.status || "ok";
                       return (
@@ -1101,7 +1086,7 @@ export function AiGenerationPage() {
                             <input
                               type="checkbox"
                               checked={selected}
-                              disabled={disabled || extracting}
+                              disabled={extracting}
                               onChange={() => toggleCandidate(candidate.key)}
                             />
                           </td>
@@ -1303,7 +1288,7 @@ export function AiGenerationPage() {
               </li>
               <li className="simple-list-item">
                 <span>预校验已选</span>
-                <strong>{selectedCandidates.length}/{MAX_GENERATE_SELECTED}</strong>
+                <strong>{selectedCandidates.length}</strong>
               </li>
             </ul>
           </section>
@@ -1313,7 +1298,7 @@ export function AiGenerationPage() {
 
       <section className="aiw-sticky-bar">
         <div className="aiw-sticky-inner">
-          <span className="muted">步骤进度 {completedStages}/4 · 已选用于预校验 {selectedCandidates.length}/{MAX_GENERATE_SELECTED}</span>
+          <span className="muted">步骤进度 {completedStages}/4 · 已选用于预校验 {selectedCandidates.length}</span>
           <div className="header-actions">
             <button type="button" className="button secondary" onClick={goStepPrev} disabled={activeStep === 1}>
               上一步

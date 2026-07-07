@@ -1386,7 +1386,6 @@ def _manual_point_from_candidate(candidate: dict[str, Any], *, index: int) -> di
         "dependencies": [],
         "source_ids": [intent_id],
         "steps": _steps_from_candidate(candidate),
-        "warnings": [],
         "requires_review": False,
         "involved_elements": involved_elements,
         "expected_result": expected,

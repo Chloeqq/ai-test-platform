@@ -1013,7 +1013,6 @@ class WorkbenchFacadeTestPointAssetsMixin:
                 ]
             ),
             "confidence": 0.85,
-            "warnings": [],
             "requires_review": False,
         }
 

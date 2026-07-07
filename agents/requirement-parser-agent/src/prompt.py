@@ -89,7 +89,7 @@ SYSTEM_PROMPT = """你是企业测试平台的需求解析器。你的唯一任�
 3. 分类与优先级符合映射规则。
 4. 所有测试点都有 `precondition`、`steps`、`expected_result`。
 5. 已达到对应页面配额。
-6. 已通过 steps_hint 语义一致性自检（详见上节规则）。”””
+6. 已通过 steps_hint 语义一致性自检（详见上节规则）。"""
 
 USER_TEMPLATE = """Parse the following requirement into structured entities and test intents:
 {payload}

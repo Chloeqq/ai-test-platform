@@ -106,3 +106,86 @@ def test_precheck_selected_intents_ignores_non_dom_system_targets(monkeypatch) -
     assert item["status"] == "ok"
     assert item["unknown_elements"] == []
     assert item["involved_element_codes"] == []
+
+
+# ── MAX_CANDIDATES boundary tests ────────────────────────────────────────────
+
+_CANDIDATE_TEMPLATE = {
+    "intent_id": "intent-{:03d}",
+    "title": "test candidate {:03d}",
+    "steps": ["输入账号", "点击登录"],
+    "expected_result": "跳转首页",
+    "involved_elements": ["账号输入框", "登录按钮"],
+}
+
+
+def _make_context() -> SimpleNamespace:
+    class MockHTTPException(Exception):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            detail = str(kwargs.get("detail", args[0] if args else ""))
+            super().__init__(detail)
+            self.detail = detail
+            self.status_code = kwargs.get("status_code")
+
+    return SimpleNamespace(
+        candidate_normalizer=SimpleNamespace(normalize_candidates=lambda items: list(items)),
+        runtime=SimpleNamespace(
+            normalize_page_slug=lambda value: str(value or "").strip().lower(),
+            HTTPException=MockHTTPException,
+            status=SimpleNamespace(HTTP_422_UNPROCESSABLE_ENTITY=422),
+        ),
+    )
+
+
+def _make_candidates(count: int) -> list[dict]:
+    return [
+        {**{k: v.format(i) if isinstance(v, str) and "{" in v else v for k, v in _CANDIDATE_TEMPLATE.items()}}
+        for i in range(1, count + 1)
+    ]
+
+
+def test_max_candidates_accepts_20(monkeypatch) -> None:
+    """Case 1: 20 个 intent — 应通过预校验。"""
+    monkeypatch.setattr(
+        "app.services.workbench_generation_api.precheck_selected_intents_service.resolve_page_object",
+        lambda _project, _page: {"page": "login", "elements": {}},
+    )
+    service = PrecheckSelectedIntentsService(context=_make_context())
+    candidates = _make_candidates(20)
+    result = service.execute(
+        SimpleNamespace(project="atp", page="login", selected_candidates=candidates)
+    )
+    assert result["summary"]["total"] == 20
+    assert result["summary"]["block_count"] <= 20
+
+
+def test_max_candidates_accepts_28(monkeypatch) -> None:
+    """Case 2: 28 个 intent — 应通过预校验（20 限制已删除）。"""
+    monkeypatch.setattr(
+        "app.services.workbench_generation_api.precheck_selected_intents_service.resolve_page_object",
+        lambda _project, _page: {"page": "login", "elements": {}},
+    )
+    service = PrecheckSelectedIntentsService(context=_make_context())
+    candidates = _make_candidates(28)
+    result = service.execute(
+        SimpleNamespace(project="atp", page="login", selected_candidates=candidates)
+    )
+    assert result["summary"]["total"] == 28
+
+
+def test_max_candidates_rejects_201(monkeypatch) -> None:
+    """Case 3: 201 个 intent — 应返回明确的 max size 200 错误。"""
+    monkeypatch.setattr(
+        "app.services.workbench_generation_api.precheck_selected_intents_service.resolve_page_object",
+        lambda _project, _page: {"page": "login", "elements": {}},
+    )
+    service = PrecheckSelectedIntentsService(context=_make_context())
+    candidates = _make_candidates(201)
+    try:
+        service.execute(
+            SimpleNamespace(project="atp", page="login", selected_candidates=candidates)
+        )
+        raise AssertionError("expected RuntimeError for 201 candidates")
+    except Exception as exc:
+        error_text = getattr(exc, "detail", "") or str(exc)
+        assert "200" in error_text, f"expected max size 200 in error, got: {error_text!r}"
