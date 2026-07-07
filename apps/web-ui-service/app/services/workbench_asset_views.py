@@ -334,6 +334,62 @@ def build_test_point_asset_items(
     }
 
 
+def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
+    """从资产数据构建质量报告 (P0-4: 审核页展示 Gate 报告)。
+
+    完全基于 asset 已有字段计算，不查询 DB，不新增字段。
+    """
+    plan = asset.get("plan", {}) if isinstance(asset.get("plan"), dict) else {}
+    points = plan.get("points", []) if isinstance(plan.get("points"), list) else []
+    warnings = asset.get("warnings", []) if isinstance(asset.get("warnings"), list) else []
+    requires_review = bool(asset.get("requires_review", False))
+
+    # 按 point_type 统计断言质量
+    by_type: dict[str, dict[str, int]] = {}
+    for p in points:
+        pt = str(p.get("point_type", "unknown")).strip() or "unknown"
+        if pt not in by_type:
+            by_type[pt] = {"total": 0, "zero_assertion": 0}
+        by_type[pt]["total"] += 1
+        steps = p.get("steps", []) if isinstance(p.get("steps"), list) else []
+        if not any(str(s.get("action", "")).startswith("assert_") for s in steps):
+            by_type[pt]["zero_assertion"] += 1
+
+    # 分类 warnings
+    assertion_warnings = [w for w in warnings if "assertion" in str(w).lower()]
+    other_warnings = [w for w in warnings if w not in assertion_warnings]
+
+    # Gate-expected decision: 基于领域规则 (非硬编码)
+    total_points = len(points)
+    zero_assert_count = sum(v["zero_assertion"] for v in by_type.values())
+    if total_points == 0:
+        decision = "PASS"
+        score = 100
+    elif zero_assert_count > 0:
+        decision = "REJECT"
+        score = max(0, 100 - zero_assert_count * 10)
+    elif assertion_warnings:
+        decision = "REVIEW"
+        score = 75
+    elif requires_review:
+        decision = "REVIEW"
+        score = 80
+    else:
+        decision = "PASS"
+        score = 90
+
+    return {
+        "score": score,
+        "decision": decision,
+        "requires_review": requires_review,
+        "total_points": total_points,
+        "zero_assertion_count": zero_assert_count,
+        "assertion_warnings": assertion_warnings,
+        "other_warnings": other_warnings,
+        "by_point_type": by_type,
+    }
+
+
 def build_test_point_asset_detail(
     *,
     project: str,
@@ -383,6 +439,7 @@ def build_test_point_asset_detail(
             "coverage_matrix": coverage_matrix,
             "traceability_summary": traceability_summary,
             "selection_summary": build_selection_summary(traceability_summary=traceability_summary),
+            "quality_report": _build_quality_report(asset),
         }
     }
 
