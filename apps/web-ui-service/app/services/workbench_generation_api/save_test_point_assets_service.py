@@ -237,14 +237,9 @@ class SaveTestPointAssetsService:
             "requires_review": False,
         }
 
-        # ── 持久化 Step 1：DB 写入（事实源，必须成功） ──
-        # DB 是权威数据源，文件是可重建缓存。
-        # DB 写入失败必须向上抛异常，不允许静默降级导致数据孤儿。
-        repository.sync_test_points(
-            project_code=project,
-            page_code=page,
-            points=points,
-        )
+        # ── 持久化 Step 1：DB 写入（事实源，原子事务） ──
+        # test_points 和 test_point_assets 必须在同一事务中，
+        # 任意一条失败即全部回滚，杜绝 DB 层部分写入。
         from app.services import test_point_asset_store
         bundle = _build_asset_bundle(
             plan=plan,
@@ -253,13 +248,27 @@ class SaveTestPointAssetsService:
             point_count=len(points),
             intent_count=len(selected_ids) or len(points),
         )
-        test_point_asset_store.save_asset(
-            db=repository.db, project=project, bundle=bundle,
-        )
-        LOGGER.info(
-            "test point asset saved to DB: project=%s case_id=%s points=%d",
-            project, candidate_case_id, len(points),
-        )
+        try:
+            repository.sync_test_points(
+                project_code=project,
+                page_code=page,
+                points=points,
+            )
+            test_point_asset_store.save_asset(
+                db=repository.db, project=project, bundle=bundle,
+            )
+            repository.db.commit()
+            LOGGER.info(
+                "test point asset saved to DB: project=%s case_id=%s points=%d",
+                project, candidate_case_id, len(points),
+            )
+        except Exception:
+            repository.db.rollback()
+            LOGGER.error(
+                "test point asset DB write failed for %s/%s, rolled back",
+                project, candidate_case_id, exc_info=True,
+            )
+            raise
 
         # ── 持久化 Step 2：文件写入（缓存，失败不阻断） ──
         # 文件是 DB 的可重建缓存，写入失败仅记日志。

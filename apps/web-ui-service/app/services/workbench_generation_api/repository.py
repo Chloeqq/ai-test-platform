@@ -215,5 +215,5 @@ class WorkbenchGenerationRepository:
                 raw_payload=point,
             )
             count += 1
-        self.db.commit()
+        self.db.flush()
         return count
