@@ -1942,3 +1942,136 @@ class TestAssertionQuality:
         actions = [s["action"] for s in steps]
         assert "assert_visible" in actions, f"happy path must have assert_visible, got {actions}"
         assert assertion_count >= 1
+
+
+class TestQualityClosedLoopRegression:
+    """P1-3: 质量闭环回归测试 — 编辑→编译→断言→审核 全链路验证。"""
+
+    # ── Case 1: negative 场景禁止 assert_url only ──
+
+    def test_negative_case_must_have_assert_text_not_url_only(self):
+        """negative 场景: expected 含 URL token 但必须生成 assert_text。"""
+        from app.services.workbench_generation_api.steps.structurer import (
+            structured_steps_from_candidate,
+        )
+        candidate = {
+            "intent_id": "neg-reg-1",
+            "title": "用户名为空",
+            "steps": ["清空用户名", "点击登录"],
+            "expected": '页面提示"请输入用户名"，停留在登录页',
+        }
+        steps, _, _, _, _, _ = structured_steps_from_candidate(
+            candidate=candidate, steps=candidate["steps"],
+            expected=candidate["expected"], point_type="negative",
+        )
+        actions = [s["action"] for s in steps]
+        assert "assert_text" in actions, f"negative must have assert_text, got {actions}"
+        assert "assert_url" not in actions, f"negative must not use assert_url alone, got {actions}"
+
+    # ── Case 2: functional happy path 至少一个有效 assertion ──
+
+    def test_functional_happy_path_has_assertion(self):
+        """functional 登录成功场景至少有 assert_visible 或 assert_text。"""
+        from app.services.workbench_generation_api.steps.structurer import (
+            structured_steps_from_candidate,
+        )
+        candidate = {
+            "intent_id": "func-reg-1",
+            "title": "登录成功",
+            "steps": ["输入用户名admin", "输入密码macro", "点击登录"],
+            "expected": "成功登录，跳转到首页，首页菜单可见",
+        }
+        steps, _, _, _, _, assertion_count = structured_steps_from_candidate(
+            candidate=candidate, steps=candidate["steps"],
+            expected=candidate["expected"], point_type="functional",
+        )
+        assert assertion_count >= 1, f"functional must have at least 1 assertion, got {assertion_count}"
+        actions = [s["action"] for s in steps]
+        has_valid = any(a in ("assert_visible", "assert_text") for a in actions)
+        assert has_valid, f"functional must have assert_visible or assert_text, got {actions}"
+
+    # ── Case 3: 编辑保存后必须经过 structurer 编译 ──
+
+    def test_edited_candidate_compiled_not_candidate_step(self):
+        """编辑保存后的 steps 必须经过编译器，不能残留 candidate_step。"""
+        from app.services.workbench_generation_api.compilation.point_builder import (
+            build_point,
+        )
+        candidate = {
+            "intent_id": "edit-reg-1",
+            "title": "编辑后测试",
+            "intent_type": "functional",
+            "steps": ["在用户名输入框输入admin", "在密码输入框输入macro", "点击登录按钮"],
+            "expected": "成功登录，跳转到首页",
+            "involved_elements": ["用户名输入框", "密码输入框", "登录按钮"],
+        }
+        point = build_point(candidate, index=1)
+        actions = [s["action"] for s in point["steps"]]
+        assert "candidate_step" not in actions, (
+            f"edited steps must be compiled, not candidate_step: {actions}"
+        )
+        assert len(actions) >= 3, f"expected at least 3 steps, got {len(actions)}"
+
+    # ── Case 4: boundary 场景必须生成 assert_text ──
+
+    def test_boundary_case_assert_text(self):
+        """boundary 场景 expected 含 URL token 但必须生成 assert_text。"""
+        from app.services.workbench_generation_api.steps.structurer import (
+            structured_steps_from_candidate,
+        )
+        candidate = {
+            "intent_id": "bnd-reg-1",
+            "title": "账号锁定",
+            "steps": ["输入错误密码5次", "点击登录"],
+            "expected": '页面提示"账号已锁定"，停留在登录页',
+        }
+        steps, _, _, _, _, _ = structured_steps_from_candidate(
+            candidate=candidate, steps=candidate["steps"],
+            expected=candidate["expected"], point_type="boundary",
+        )
+        actions = [s["action"] for s in steps]
+        assert "assert_text" in actions, f"boundary must have assert_text, got {actions}"
+        assert "assert_url" not in actions, f"boundary must not use assert_url alone, got {actions}"
+
+    # ── Case 5: 零断言 functional 点被标记 requires_review ──
+
+    def test_zero_assertion_functional_marked_review(self):
+        """functional 无 token 匹配: requires_review=True + assertion_missing warning。"""
+        from app.services.workbench_generation_api.compilation.point_builder import (
+            build_point,
+        )
+        point = build_point(
+            {
+                "intent_id": "func-zero-reg",
+                "title": "无验证的操作",
+                "intent_type": "functional",
+                "steps": ["点击某按钮"],
+                "expected": "操作完成",
+            },
+            index=1,
+        )
+        assert point["requires_review"] is True
+        assert any("assertion_missing" in w for w in point["warnings"])
+
+    # ── Case 6: security 场景 assert_url 不被误判 ──
+
+    def test_security_assert_url_not_blocked(self):
+        """security 场景: assert_url 验证跳转是合理的，不应被拦截。"""
+        from app.services.workbench_generation_api.steps.structurer import (
+            structured_steps_from_candidate,
+        )
+        candidate = {
+            "intent_id": "sec-reg-1",
+            "title": "未登录拦截",
+            "steps": ["访问工作台URL"],
+            "expected": "页面跳转回登录页面",
+        }
+        steps, _, _, _, _, assertion_count = structured_steps_from_candidate(
+            candidate=candidate, steps=candidate["steps"],
+            expected=candidate["expected"], point_type="security",
+        )
+        assert assertion_count >= 1, f"security must have assertion, got {assertion_count}"
+        actions = [s["action"] for s in steps]
+        assert "assert_url" in actions or "assert_visible" in actions, (
+            f"security should have valid assertion, got {actions}"
+        )
