@@ -2,8 +2,8 @@
 
 被 2 个以上模块使用的文本匹配、否定检测、错误文案提取等工具函数，
 统一放在这里。当前使用方：
-- apps/web_ui_service/.../save_test_point_assets_service.py
-- apps/web_ui_service/.../generate_pipeline_precondition.py
+- apps/web-ui-service/.../save_test_point_assets_service.py
+- apps/web-ui-service/.../generate_pipeline_precondition.py
 - 质量门禁规则（未来）
 """
 from __future__ import annotations
@@ -60,3 +60,40 @@ def extract_error_message(expected_text: str, *, max_len: int = 80) -> str:
         if sep in expected_text:
             return expected_text.split(sep, 1)[1].strip()[:max_len]
     return expected_text.strip()[:max_len]
+
+
+# ── 输入值提取 ────────────────────────────────────────────────────────────────
+
+def extract_input_value(
+    text: str,
+    *,
+    empty_tokens: tuple[str, ...] = (),
+    space_token: str = "",
+    input_value_pattern: str = "",
+) -> tuple[bool, Any]:
+    """从步骤自然语言中提取明确写出的输入值。
+
+    不猜测未明确写出的值（如账号、密码、边界值）——那些由 steps_hint 或数据池提供。
+
+    返回: (has_value, value)。has_value=False 表示未提取到值。
+
+    匹配顺序：
+    1. 空值 token（如"清空"/"留空"） → value=""
+    2. 空格 token（如"空格"） → value=" "
+    3. 引号内文本 → 提取第一对引号内的内容
+    4. 正则模式（如匹配"输入xxx"后面的值）
+    5. 未匹配 → (False, None)
+    """
+    normalized = _normalized_text(text)
+    if empty_tokens and any(token in normalized for token in empty_tokens):
+        return True, ""
+    if space_token and space_token in normalized:
+        return True, " "
+    quoted = re.search(QUOTED_TEXT_PATTERN, normalized)
+    if quoted is not None:
+        return True, quoted.group(1)
+    if input_value_pattern:
+        matched = re.search(input_value_pattern, normalized)
+        if matched is not None:
+            return True, matched.group(1)
+    return False, None

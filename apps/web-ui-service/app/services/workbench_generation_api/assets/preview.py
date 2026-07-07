@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared_backend.type_utils import dict_value as _dict_value
-from shared_backend.type_utils import str_value as _normalized_text
+from shared_backend.type_utils import dict_value as _dict_value, str_value as _normalized_text, as_text_list
 
 from .. import constants as _c
 from .. import preview_store
@@ -43,7 +42,7 @@ def candidate_snapshot(candidate: dict[str, Any]) -> dict[str, Any]:
                 snapshot[key] = value
             continue
         if isinstance(value, list):
-            rows = _list_text(value)
+            rows = as_text_list(value)
             if rows:
                 snapshot[key] = rows
             continue
@@ -51,15 +50,4 @@ def candidate_snapshot(candidate: dict[str, Any]) -> dict[str, Any]:
         if text:
             snapshot[key] = text
     return snapshot
-
-
-def _list_text(value: Any) -> list[str]:
-    """将输入值规范化为去重的非空字符串列表。"""
-    if not isinstance(value, list):
-        return []
-    items: list[str] = []
-    for raw in value:
-        text = _normalized_text(raw)
-        if text and text not in items:
-            items.append(text)
-    return items
+# as_text_list 已迁移至 shared_backend.type_utils

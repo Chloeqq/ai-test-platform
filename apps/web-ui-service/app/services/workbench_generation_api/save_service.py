@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from shared_backend.type_utils import str_value as _normalized_text
+from shared_backend.type_utils import str_value as _normalized_text, as_text_list
 
 from app.services import workbench_asset_service, workbench_state_store
 
@@ -162,11 +162,11 @@ class SaveTestPointAssetsService:
             for candidate in batch_candidates
             if _normalized_text(candidate.get("intent_id"))
         ]
-        involved_elements = _list_text(
+        involved_elements = as_text_list(
             [
                 element
                 for point in points
-                for element in _list_text(point.get("involved_elements"))
+                for element in as_text_list(point.get("involved_elements"))
             ]
         )
 
@@ -313,15 +313,7 @@ class SaveTestPointAssetsService:
 
 # ── 内置函数 ──────────────────────────────────────────────────────────────
 
-def _list_text(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    items: list[str] = []
-    for raw in value:
-        text = _normalized_text(raw)
-        if text and text not in items:
-            items.append(text)
-    return items
+# as_text_list 已迁移至 shared_backend.type_utils
 
 
 def _get_page_hook(page: str) -> LoginPasswordVisibilityHook | None:

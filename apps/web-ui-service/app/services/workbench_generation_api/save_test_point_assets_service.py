@@ -37,12 +37,12 @@ from .assets.queries import find_existing_page_asset_for_upsert as _find_existin
 from .assets.coverage import coverage_matrix_from_requirement_spec as _coverage_matrix_from_requirement_spec
 from .assets.statistics import intent_type_distribution as _intent_type_distribution, first_candidate_title as _first_candidate_title
 
-# ── 工具函数 ──
-from .steps.structurer import _input_value_from_text
+# ── 工具函数（已迁移至 shared_backend） ──
+from shared_backend.type_utils import as_text_list as _list_text, append_unique as _append_unique
+from shared_backend.text_utils import extract_input_value as _input_value_from_text
 
 # ── 后向兼容（旧代码引用这些函数名） ──
-from .steps.structurer import _append_unique
-from .compilation.point_builder import _list_text, _resolve_involved_element_codes
+from .compilation.point_builder import _resolve_involved_element_codes
 from .hooks.login_password_visibility import _assertion_step as _password_visibility_assertion_step
 from .hooks.login_password_visibility import _precondition_setup as _password_visibility_precondition_setup
 from .elements.resolver import _data_ref_for_element

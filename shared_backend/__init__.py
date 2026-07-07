@@ -49,6 +49,8 @@ from .page_object_assets import (
     merge_page_object_with_yaml,
 )
 from .intent_mapping import resolve_explicit_step
+from .type_utils import as_text_list, append_unique
+from .text_utils import extract_input_value, extract_error_message, has_negation_before
 
 __all__ = [
     "build_case_id",
@@ -70,4 +72,9 @@ __all__ = [
     "resolve_element_code",
     "resolve_involved_element_codes",
     "validate_case_payload",
+    "as_text_list",
+    "append_unique",
+    "extract_input_value",
+    "extract_error_message",
+    "has_negation_before",
 ]

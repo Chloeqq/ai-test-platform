@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared_backend.type_utils import str_value as _normalized_text
+from shared_backend.type_utils import str_value as _normalized_text, as_text_list, append_unique
 
 from .. import constants as _c
 from ..elements.resolver import ElementResolver
@@ -33,8 +33,8 @@ def build_point(
     intent_id = _normalized_text(candidate.get("intent_id")) or f"candidate-{index:02d}"
     title = _normalized_text(candidate.get("title")) or intent_id
     summary = _normalized_text(candidate.get("summary")) or title
-    steps = _list_text(candidate.get("steps"))
-    involved_elements = _list_text(candidate.get("involved_elements"))
+    steps = as_text_list(candidate.get("steps"))
+    involved_elements = as_text_list(candidate.get("involved_elements"))
     expected = _normalized_text(candidate.get("expected") or candidate.get("expected_result"))
     point_type = _normalized_text(candidate.get("intent_type")) or _c.DEFAULT_POINT_TYPE
     precondition = fallback_precondition(candidate, point_type=point_type, expected=expected)
@@ -75,7 +75,7 @@ def build_point(
         "involved_elements": involved_elements,
         "expected_result": expected,
         "precondition": precondition,
-        "tags": _list_text(candidate.get("tags")),
+        "tags": as_text_list(candidate.get("tags")),
         "priority": _normalized_text(candidate.get("priority")) or _c.DEFAULT_PRIORITY,
         "confidence": _c.DEFAULT_CONFIDENCE_WITH_STEPS if steps else _c.DEFAULT_CONFIDENCE_WITHOUT_STEPS,
         "metadata": {
@@ -93,24 +93,6 @@ def build_point(
     }
 
 
-def _list_text(value: Any) -> list[str]:
-    """将输入值规范化为去重的非空字符串列表。"""
-    if not isinstance(value, list):
-        return []
-    items: list[str] = []
-    for raw in value:
-        text = _normalized_text(raw)
-        if text and text not in items:
-            items.append(text)
-    return items
-
-
-def _append_unique(items: list[str], value: str) -> None:
-    """去重追加。"""
-    if value and value not in items:
-        items.append(value)
-
-
 def _resolve_involved_element_codes(
     involved_elements: list[str],
     involved_codes: list[str],
@@ -119,7 +101,7 @@ def _resolve_involved_element_codes(
     """将中文元素名归一化为 element_code 列表。"""
     canonical: list[str] = []
     for element_code in involved_codes:
-        _append_unique(canonical, element_code)
+        append_unique(canonical, element_code)
     if resolver is None:
         return canonical
     for raw_element in involved_elements:

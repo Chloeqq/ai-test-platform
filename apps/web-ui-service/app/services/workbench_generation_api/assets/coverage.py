@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared_backend.type_utils import str_value as _normalized_text
+from shared_backend.type_utils import str_value as _normalized_text, as_text_list
 
 
 def coverage_matrix_from_requirement_spec(
@@ -26,7 +26,7 @@ def coverage_matrix_from_requirement_spec(
         for index, raw_row in enumerate(raw_rows, start=1):
             if not isinstance(raw_row, dict):
                 continue
-            intent_ids = _list_text(raw_row.get("intent_ids"))
+            intent_ids = as_text_list(raw_row.get("intent_ids"))
             point_keys = [
                 point_by_intent[intent_id]
                 for intent_id in intent_ids
@@ -40,23 +40,23 @@ def coverage_matrix_from_requirement_spec(
                         raw_row.get("traceability_status")
                     )
                     or "covered",
-                    "source_ids": _list_text(raw_row.get("source_ids")),
+                    "source_ids": as_text_list(raw_row.get("source_ids")),
                     "intent_ids": intent_ids,
                     "point_keys": point_keys,
-                    "changed_areas": _list_text(raw_row.get("changed_areas")),
+                    "changed_areas": as_text_list(raw_row.get("changed_areas")),
                     "explanation": _normalized_text(raw_row.get("explanation")),
                 }
             )
     if rows:
         return rows
-    intent_ids = _list_text(
+    intent_ids = as_text_list(
         [
             str(point.get("intent_id", "")).strip()
             for point in points
             if isinstance(point, dict) and str(point.get("intent_id", "")).strip()
         ]
     )
-    point_keys = _list_text(
+    point_keys = as_text_list(
         [
             str(point.get("key", "")).strip()
             for point in points
@@ -76,14 +76,4 @@ def coverage_matrix_from_requirement_spec(
             "explanation": "derived from selected test intents",
         }
     ]
-
-
-def _list_text(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    items: list[str] = []
-    for raw in value:
-        text = _normalized_text(raw)
-        if text and text not in items:
-            items.append(text)
-    return items
+# as_text_list 已迁移至 shared_backend.type_utils

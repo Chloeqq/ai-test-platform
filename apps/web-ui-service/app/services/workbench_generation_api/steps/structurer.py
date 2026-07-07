@@ -9,13 +9,10 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-import shared_backend
-
-from shared_backend.type_utils import str_value as _normalized_text
-from shared_backend.text_utils import has_negation_before, extract_error_message
+from shared_backend.type_utils import str_value as _normalized_text, append_unique
+from shared_backend.text_utils import has_negation_before, extract_error_message, extract_input_value
 from shared_backend.step_fields import (
     ACTION_INPUT, ACTION_CLICK, ACTION_GOTO,
     ACTION_ASSERT_VISIBLE, ACTION_ASSERT_TEXT, ACTION_ASSERT_URL,
@@ -69,13 +66,13 @@ def structured_steps_from_candidate(
                     "source_type": _c.SOURCE_TYPE_INLINE,
                     "value": setup_step["value"],
                 }
-                _append_unique(
+                append_unique(
                     steps_hint,
                     format_steps_hint(ACTION_INPUT, setup_step["target_name"], str(setup_step["value"])),
                 )
             elif setup_step["action"] == ACTION_CLICK:
-                _append_unique(steps_hint, format_steps_hint(ACTION_CLICK, setup_step["target_name"]))
-            _append_unique(involved_codes, setup_step["target"].removeprefix(_c.ELEMENT_PREFIX))
+                append_unique(steps_hint, format_steps_hint(ACTION_CLICK, setup_step["target_name"]))
+            append_unique(involved_codes, setup_step["target"].removeprefix(_c.ELEMENT_PREFIX))
 
     # 主步骤循环
     for raw_step in steps:
@@ -105,7 +102,7 @@ def structured_steps_from_candidate(
             structured_steps.append(
                 {"action": ACTION_GOTO, "value": _c.GOTO_DEFAULT_ROUTE, "raw_text": step_text}
             )
-            _append_unique(steps_hint, format_steps_hint(ACTION_GOTO, _c.GOTO_DEFAULT_ROUTE))
+            append_unique(steps_hint, format_steps_hint(ACTION_GOTO, _c.GOTO_DEFAULT_ROUTE))
             continue
 
         # ── 无法分类 → 降级 ──
@@ -135,12 +132,6 @@ def structured_steps_from_candidate(
 
 
 # ── 内部辅助函数 ──────────────────────────────────────────────────────────────
-
-def _append_unique(items: list[str], value: str) -> None:
-    """去重追加。"""
-    if value and value not in items:
-        items.append(value)
-
 
 def _parse_hint_value_map(steps_hint_items: list[Any]) -> dict[str, str]:
     """解析 AI 的 steps_hint 列表，构建 target → value 映射。
@@ -177,7 +168,12 @@ def _build_input_step(
 ) -> None:
     """构造 input 步骤并追加到各列表中。"""
     element_code, element_name, data_key_hint = element
-    has_value, value = _input_value_from_text(step_text)
+    has_value, value = extract_input_value(
+        step_text,
+        empty_tokens=_c.EMPTY_INPUT_TOKENS,
+        space_token=_c.SPACE_INPUT_TOKEN,
+        input_value_pattern=_c.INPUT_VALUE_PATTERN,
+    )
     data_ref = _data_ref_for_element(element_code, data_key_hint)
     fallback_value = ""
 
@@ -197,7 +193,7 @@ def _build_input_step(
                 _c.MSG_SPACE_INPUT_STEPS_HINT_LIMITATION.format(element_name=element_name)
             )
         else:
-            _append_unique(steps_hint, format_steps_hint(ACTION_INPUT, element_name, str(value)))
+            append_unique(steps_hint, format_steps_hint(ACTION_INPUT, element_name, str(value)))
     else:
         fallback_value = ""
         for hint_name, hint_val in hint_value_map.items():
@@ -208,7 +204,7 @@ def _build_input_step(
         if fallback_value:
             step["value"] = fallback_value
             data[data_ref] = {"source_type": _c.SOURCE_TYPE_INLINE, "value": fallback_value}
-            _append_unique(
+            append_unique(
                 steps_hint, format_steps_hint(ACTION_INPUT, element_name, str(fallback_value))
             )
         else:
@@ -219,7 +215,7 @@ def _build_input_step(
             )
 
     structured_steps.append(step)
-    _append_unique(involved_codes, element_code)
+    append_unique(involved_codes, element_code)
 
 
 def _build_click_step(
@@ -244,15 +240,15 @@ def _build_click_step(
             "raw_text": step_text,
         }
     )
-    _append_unique(steps_hint, format_steps_hint(ACTION_CLICK, element_name))
-    _append_unique(involved_codes, element_code)
+    append_unique(steps_hint, format_steps_hint(ACTION_CLICK, element_name))
+    append_unique(involved_codes, element_code)
 
     # 页面 Hook：click 后补充断言
     if page_hook is not None:
         for extra_step in page_hook.post_click_assertions(element_code, expected):
             structured_steps.append(extra_step)
             if extra_step.get("action") == ACTION_ASSERT_ATTRIBUTE:
-                _append_unique(
+                append_unique(
                     steps_hint,
                     format_steps_hint(
                         ACTION_ASSERT_ATTRIBUTE,
@@ -260,7 +256,7 @@ def _build_click_step(
                         f"{extra_step.get('attribute', '')}={extra_step.get('value', '')}",
                     ),
                 )
-                _append_unique(
+                append_unique(
                     involved_codes,
                     extra_step["target"].removeprefix(_c.ELEMENT_PREFIX),
                 )
@@ -285,7 +281,7 @@ def _build_expected_assertions(
                 "raw_text": expected_text or _c.ASSERT_VISIBLE_FALLBACK_TEXT,
             }
         )
-        _append_unique(steps_hint, format_steps_hint("assert", _c.HOME_ELEMENT_NAME))
+        append_unique(steps_hint, format_steps_hint("assert", _c.HOME_ELEMENT_NAME))
     elif any(token in expected_text for token in _c.ASSERT_TEXT_TOKENS):
         error_msg = extract_error_message(expected_text)
         target_code = involved_codes[-1] if involved_codes else _c.LAST_ELEMENT_FALLBACK_CODE
@@ -298,7 +294,7 @@ def _build_expected_assertions(
                 "raw_text": expected_text or _c.ASSERT_TEXT_FALLBACK_TEXT,
             }
         )
-        _append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_TEXT, target_code, error_msg))
+        append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_TEXT, target_code, error_msg))
     elif any(token in expected_text for token in _c.ASSERT_URL_TOKENS):
         if not has_negation_before(expected_text, ("登录页", "登录页面")):
             structured_steps.append(
@@ -308,20 +304,7 @@ def _build_expected_assertions(
                     "raw_text": expected_text or _c.ASSERT_URL_FALLBACK_TEXT,
                 }
             )
-            _append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_URL, _c.ASSERT_URL_FALLBACK))
+            append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_URL, _c.ASSERT_URL_FALLBACK))
 
 
-def _input_value_from_text(text: str) -> tuple[bool, Any]:
-    """从步骤自然语言中提取明确写出的输入值。"""
-    normalized = _normalized_text(text)
-    if any(token in normalized for token in _c.EMPTY_INPUT_TOKENS):
-        return True, ""
-    if _c.SPACE_INPUT_TOKEN in normalized:
-        return True, " "
-    quoted = re.search(shared_backend.text_utils.QUOTED_TEXT_PATTERN, normalized)
-    if quoted is not None:
-        return True, quoted.group(1)
-    matched = re.search(_c.INPUT_VALUE_PATTERN, normalized)
-    if matched is not None:
-        return True, matched.group(1)
-    return False, None
+# _input_value_from_text 已迁移至 shared_backend.text_utils.extract_input_value
