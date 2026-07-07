@@ -204,6 +204,33 @@ def build_saved_case_payload(
     }
 
 
+def _build_list_quality_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Phase 3: 聚合列表中所有资产的质量数据。
+
+    纯消费已有 quality_report 结果，不新增质量判断。
+    """
+    if not items:
+        return {"total_assets": 0, "avg_score": 100, "decision_counts": {}, "lowest": []}
+    scores = []
+    decisions: dict[str, int] = {}
+    for item in items:
+        qr = item.get("quality_report") if isinstance(item.get("quality_report"), dict) else {}
+        s = int(qr.get("score", 0))
+        d = str(qr.get("decision", "PASS"))
+        scores.append(s)
+        decisions[d] = decisions.get(d, 0) + 1
+    avg = sum(scores) // len(scores) if scores else 100
+    return {
+        "total_assets": len(items),
+        "avg_score": avg,
+        "decision_counts": decisions,
+        "lowest": sorted(items, key=lambda i: (
+            i.get("quality_report", {}).get("score", 100)
+            if isinstance(i.get("quality_report"), dict) else 100
+        ))[:3],
+    }
+
+
 def build_test_point_asset_items(
     *,
     project: str,
@@ -331,6 +358,7 @@ def build_test_point_asset_items(
             "filter_snapshot": filter_snapshot,
         },
         "coverage_summary": build_coverage_summary(items=items, filter_snapshot=filter_snapshot),
+        "quality_summary": _build_list_quality_summary(items),
     }
 
 
@@ -378,6 +406,21 @@ def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
         decision = "PASS"
         score = 90
 
+    # 单点质量评分 (Phase 3: point_level_quality)
+    per_point: list[dict[str, Any]] = []
+    for p in points:
+        psteps = p.get("steps", []) if isinstance(p.get("steps"), list) else []
+        pactions = [str(s.get("action", "")) for s in psteps]
+        passertions = [a for a in pactions if a.startswith("assert_")]
+        per_point.append({
+            "intent_id": str(p.get("intent_id", "")).strip(),
+            "point_type": str(p.get("point_type", "unknown")).strip(),
+            "has_assertion": len(passertions) > 0,
+            "assertion_types": list(set(passertions)),
+            "has_candidate_step": "candidate_step" in pactions,
+            "warning_count": len(p.get("warnings", []) if isinstance(p.get("warnings"), list) else []),
+        })
+
     return {
         "score": score,
         "decision": decision,
@@ -387,6 +430,7 @@ def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
         "assertion_warnings": assertion_warnings,
         "other_warnings": other_warnings,
         "by_point_type": by_type,
+        "per_point": per_point,
     }
 
 
