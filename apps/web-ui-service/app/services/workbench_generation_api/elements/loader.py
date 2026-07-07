@@ -1,18 +1,42 @@
-"""从数据库或资产文件加载页面对象，构建元素别名映射。
+"""从数据库或资产文件加载页面对象，构建元素别名映射和页面级配置。
 
-加载优先级：DB(page_objects + page_elements) → YAML 资产 → 空字典
+加载优先级：DB(page_objects + page_elements) → YAML 资产 → 默认值
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+import os
+from typing import Any, NamedTuple
 
 from sqlalchemy.orm import Session
 
 from shared_backend.element_binding import build_element_alias_map
+from shared_backend.element_naming import element_display_name
 
 LOGGER = logging.getLogger(__name__)
+
+
+class PageConfig(NamedTuple):
+    """页面级配置，从 DB/YAML 加载，包含别名映射、路由、首页元素等。"""
+    alias_map: dict[str, str]
+    home_element_code: str
+    home_element_name: str
+    default_route: str
+    login_url: str
+    fallback_element_code: str
+
+    @staticmethod
+    def defaults() -> PageConfig:
+        """当 DB 和 YAML 都无数据时的最小回退配置。"""
+        return PageConfig(
+            alias_map=dict(_FALLBACK_LOGIN_PAGE_MAP),
+            home_element_code="home_menu",
+            home_element_name="首页菜单",
+            default_route="#/home",
+            login_url="#/login",
+            fallback_element_code="login-submit-btn",
+        )
 
 # 回退映射 — 当 DB 和 YAML 都无数据时使用（过渡期安全网）
 _FALLBACK_LOGIN_PAGE_MAP: dict[str, str] = {
@@ -39,6 +63,42 @@ _FALLBACK_LOGIN_PAGE_MAP: dict[str, str] = {
 }
 
 
+def load_page_config(
+    db: Session,
+    *,
+    project: str,
+    client: str = "web",
+    page: str,
+) -> PageConfig:
+    """从数据源加载页面完整配置。
+
+    三层回退策略：
+    1. DB: page_objects + page_elements 表 → 提取路由、首页元素等
+    2. 文件: assets/page-objects/{client}/{page}.page-object.yaml
+    3. 默认: PageConfig.defaults()
+
+    返回 PageConfig 包含 alias_map, 路由, 首页元素等全部页面级配置。
+    """
+    # 1. 尝试从 DB 加载
+    db_result = _load_from_db(db, project=project, client=client, page=page)
+    if db_result:
+        return _page_config_from_db_result(db_result)
+
+    # 2. 回退到 YAML 资产文件
+    yaml_po = _load_from_yaml(page)
+    if yaml_po:
+        alias_map = build_element_alias_map(yaml_po)
+        defaults = PageConfig.defaults()
+        return defaults._replace(alias_map=alias_map)
+
+    # 3. 最终回退：默认 login 页面配置
+    LOGGER.warning(
+        "No page_object found for project=%s client=%s page=%s, using defaults",
+        project, client, page,
+    )
+    return PageConfig.defaults()
+
+
 def load_alias_map(
     db: Session,
     *,
@@ -48,29 +108,9 @@ def load_alias_map(
 ) -> dict[str, str]:
     """从数据源加载页面对象，构建元素别名 → element_code 映射。
 
-    三层回退策略：
-    1. DB: page_objects + page_elements 表
-    2. 文件: assets/page-objects/{client}/{page}.page-object.yaml
-    3. 硬编码: login 页面最小映射（过渡期安全网，生产不应触发）
-
-    返回的 dict 可直接传入 ElementResolver.resolve()。
+    后向兼容包装，新代码请使用 load_page_config()。
     """
-    # 1. 尝试从 DB 加载
-    page_object = _load_from_db(db, project=project, client=client, page=page)
-    if page_object:
-        return build_element_alias_map(page_object)
-
-    # 2. 回退到 YAML 资产文件
-    page_object = _load_from_yaml(page)
-    if page_object:
-        return build_element_alias_map(page_object)
-
-    # 3. 最终回退：login 页面硬编码映射
-    LOGGER.warning(
-        "No page_object found for project=%s client=%s page=%s, falling back to login page map",
-        project, client, page,
-    )
-    return dict(_FALLBACK_LOGIN_PAGE_MAP)
+    return load_page_config(db, project=project, client=client, page=page).alias_map
 
 
 def _load_from_db(
@@ -80,7 +120,13 @@ def _load_from_db(
     client: str,
     page: str,
 ) -> dict[str, Any] | None:
-    """从 page_objects + page_elements 表加载页面对象。"""
+    """从 page_objects + page_elements 表加载页面对象。
+
+    返回 dict 包含:
+      - page, route_pattern, login_url
+      - elements: {element_code: {name, type, selector, role, aliases, is_key_element}}
+    失败返回 None。
+    """
     try:
         from app.repositories.page_object_repository import PageObjectRepository
         repo = PageObjectRepository(db)
@@ -92,6 +138,7 @@ def _load_from_db(
             return None
         return {
             "page": page,
+            "route_pattern": po.route_pattern or "",
             "elements": {
                 elem.element_code: {
                     "name": elem.element_name or "",
@@ -99,6 +146,7 @@ def _load_from_db(
                     "selector": elem.locator_value or "",
                     "role": elem.role or "",
                     "aliases": elem.aliases_json or [],
+                    "is_key_element": bool(elem.is_key_element),
                 }
                 for elem in elements
             },
@@ -108,6 +156,37 @@ def _load_from_db(
             "failed to load page_object from DB for page=%s", page, exc_info=True,
         )
         return None
+
+
+def _page_config_from_db_result(db_result: dict[str, Any]) -> PageConfig:
+    """从 DB 查询结果构建 PageConfig。"""
+    alias_map = build_element_alias_map(db_result)
+    defaults = PageConfig.defaults()
+
+    # 首页元素：取 is_key_element=True 的第一个元素
+    home_elem_code = defaults.home_element_code
+    home_elem_name = defaults.home_element_name
+    for code, meta in db_result.get("elements", {}).items():
+        if meta.get("is_key_element"):
+            home_elem_code = code
+            home_elem_name = element_display_name(code) or meta.get("name", code)
+            break
+
+    # 路由
+    route_pattern = db_result.get("route_pattern", "") or defaults.default_route
+
+    # 回退元素 code：取元素列表最后一个
+    elem_codes = list(db_result.get("elements", {}).keys())
+    fallback_code = elem_codes[-1] if elem_codes else defaults.fallback_element_code
+
+    return PageConfig(
+        alias_map=alias_map,
+        home_element_code=home_elem_code,
+        home_element_name=home_elem_name,
+        default_route=route_pattern,
+        login_url=route_pattern or defaults.login_url,
+        fallback_element_code=fallback_code,
+    )
 
 
 def _load_from_yaml(page: str) -> dict[str, Any] | None:

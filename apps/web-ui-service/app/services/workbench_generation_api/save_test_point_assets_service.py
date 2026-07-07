@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,7 @@ from .context import WorkbenchContext
 from . import preview_store
 from . import constants as _c
 
-from .elements import load_alias_map, ElementResolver
+from .elements import load_page_config, ElementResolver
 from .hooks.login_password_visibility import LoginPasswordVisibilityHook
 from .compilation import build_point
 from .assets import (
@@ -67,9 +68,9 @@ class SaveTestPointAssetsService:
                 detail="page must not be empty",
             )
 
-        # ── DB 加载页面对象 → alias_map + ElementResolver ──
-        alias_map = load_alias_map(repository.db, project=project, page=page)
-        resolver = ElementResolver(alias_map)
+        # ── DB 加载页面对象 → PageConfig + ElementResolver ──
+        page_config = load_page_config(repository.db, project=project, page=page)
+        resolver = ElementResolver(page_config.alias_map)
 
         # ── 加载页面 Hook ──
         page_hook = _get_page_hook(page)
@@ -154,7 +155,7 @@ class SaveTestPointAssetsService:
 
         # ── 测试点编译（通过 compilation 模块，注入 resolver + page_hook） ──
         points = [
-            build_point(candidate, index=index, resolver=resolver, page_hook=page_hook)
+            build_point(candidate, index=index, resolver=resolver, page_hook=page_hook, page_config=page_config)
             for index, candidate in enumerate(batch_candidates, start=1)
         ]
         selected_ids = [
@@ -212,7 +213,7 @@ class SaveTestPointAssetsService:
                 "technique_distribution": intent_type_distribution(batch_candidates),
             },
             "metadata": {
-                "saved_by": _c.SAVED_BY,
+                "saved_by": os.getenv("SERVICE_NAME", _c.SAVED_BY),
                 "origin": _c.SOURCE_TYPE_SELECTION_SAVE,
                 "preview_id": preview_id,
                 "asset_title": _c.asset_title_for_page(page),

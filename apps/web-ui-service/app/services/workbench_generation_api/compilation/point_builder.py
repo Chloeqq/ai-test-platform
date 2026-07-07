@@ -20,6 +20,7 @@ def build_point(
     index: int,
     resolver: ElementResolver | None = None,
     page_hook: PageHook | None = None,
+    page_config: Any = None,  # PageConfig
 ) -> dict[str, Any]:
     """将单个候选测试点编译为可存储的 point 字典。
 
@@ -48,6 +49,7 @@ def build_point(
         expected=expected,
         resolver=resolver,
         page_hook=page_hook,
+        page_config=page_config,
     )
 
     warnings: list[str] = []
