@@ -1462,3 +1462,126 @@ def test_generation_payload_redaction_hides_sensitive_values() -> None:
     assert "macro" not in str(redacted)
     assert "123456" not in str(redacted)
     assert redacted["selected_candidate"]["password"] == "***"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 数据一致性测试：DB 写入改为事实源（Phase 2 持久化重构）
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+
+class TestDataConsistency:
+    """验证 save 流程中 DB 为事实源、文件为缓存的数据一致性。"""
+
+    @staticmethod
+    def _make_context(monkeypatch, *, db_sync_succeeds=True):
+        from unittest.mock import MagicMock
+        ctx = SimpleNamespace()
+        ctx.runtime = SimpleNamespace()
+        ctx.runtime.now_iso = lambda: "2026-07-07T00:00:00Z"
+        ctx.runtime.HTTPException = type("HTTPEx", (Exception,), {})
+        ctx.runtime.status = SimpleNamespace()
+        ctx.runtime.status.HTTP_422_UNPROCESSABLE_ENTITY = 422
+        ctx.runtime.AI_CASES_ROOT = Path(".")
+        ctx.runtime.ensure_dirs = lambda: None
+        ctx.runtime.normalize_page_slug = lambda s: str(s or "").strip()
+        ctx.runtime.save_test_point_plan = MagicMock(return_value=Path("/tmp/p.json"))
+        ctx.runtime.append_history = MagicMock()
+        ctx.repository = SimpleNamespace()
+        ctx.repository.db = MagicMock()
+        ctx.repository.collect_existing_case_ids = MagicMock(return_value=[])
+        ctx.repository.allocate_case_id = MagicMock(return_value="t-case-0001")
+        if db_sync_succeeds:
+            ctx.repository.sync_test_points = MagicMock(return_value=1)
+        else:
+            ctx.repository.sync_test_points = MagicMock(side_effect=RuntimeError("DB down"))
+        ctx.default_project = "mall"
+        ctx.generation = SimpleNamespace()
+        ctx.generation.has_multisource_inputs = MagicMock(return_value=False)
+        ctx.generation.resolve_effective_requirement = MagicMock(return_value="req")
+        ctx.candidate_normalizer = SimpleNamespace()
+        ctx.candidate_normalizer.normalize_candidates = lambda cs: cs
+
+        page_cfg = MagicMock()
+        page_cfg.alias_map = {}
+        page_cfg.home_element_code = "home_menu"
+        page_cfg.home_element_name = "首页菜单"
+        page_cfg.default_route = "#/home"
+        page_cfg.login_url = "#/login"
+        page_cfg.fallback_element_code = "login-submit-btn"
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.load_page_config",
+            lambda *a, **kw: page_cfg,
+        )
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.ElementResolver",
+            MagicMock(),
+        )
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.workbench_asset_service",
+            MagicMock(),
+        )
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.workbench_state_store",
+            MagicMock(),
+        )
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.preview_store",
+            MagicMock(),
+        )
+        import sys
+        mock_tpas = MagicMock()
+        mock_tpas.save_asset = MagicMock(return_value=True)
+        sys.modules["app.services.test_point_asset_store"] = mock_tpas
+        return ctx
+
+    @staticmethod
+    def _payload():
+        p = SimpleNamespace()
+        p.project = "mall"
+        p.page = "login"
+        p.requirement = "test"
+        p.priority = "P1"
+        p.case_id = ""
+        p.preview_id = ""
+        p.selected_candidates = [{"intent_id": "t1", "title": "t", "steps": ["点击登录按钮"], "expected": "ok", "involved_elements": ["登录按钮"]}]
+        p.selected_intent_ids = ["t1"]
+        p.input_sources = []
+        p.openapi_spec = {}
+        for attr in ("prd_text", "prd_url", "user_story", "git_diff", "git_diff_path", "openapi_url", "defect_ticket", "runtime_logs"):
+            setattr(p, attr, "")
+        return p
+
+    def test_db_success_writes_file(self, monkeypatch):
+        """DB 成功 → 返回 200 + 文件写入被调用。"""
+        from app.services.workbench_generation_api.save_test_point_assets_service import SaveTestPointAssetsService
+        ctx = self._make_context(monkeypatch)
+        result = SaveTestPointAssetsService(context=ctx).execute(self._payload())
+        assert result["count"] == 1
+        ctx.repository.sync_test_points.assert_called_once()
+        ctx.runtime.save_test_point_plan.assert_called_once()
+
+    def test_db_failure_raises_no_file_written(self, monkeypatch):
+        """DB 失败 → 抛异常 + 文件不写入（无孤儿数据）。"""
+        from app.services.workbench_generation_api.save_test_point_assets_service import SaveTestPointAssetsService
+        ctx = self._make_context(monkeypatch, db_sync_succeeds=False)
+        with pytest.raises(RuntimeError, match="DB down"):
+            SaveTestPointAssetsService(context=ctx).execute(self._payload())
+        ctx.runtime.save_test_point_plan.assert_not_called()
+
+    def test_bundle_built_from_memory(self):
+        """asset bundle 在内存中构造，不依赖文件 I/O。"""
+        from app.services.workbench_generation_api.save_test_point_assets_service import _build_asset_bundle
+        b = _build_asset_bundle(plan={"p": "P0"}, case_id="t1", page="login", point_count=3, intent_count=3)
+        assert b["asset_id"] == "t1"
+        assert b["point_count"] == 3
+        assert b["plan"] == {"p": "P0"}
+
+    def test_idempotent_save(self, monkeypatch):
+        """重复 save 不抛异常（upsert 幂等）。"""
+        from app.services.workbench_generation_api.save_test_point_assets_service import SaveTestPointAssetsService
+        ctx = self._make_context(monkeypatch)
+        svc = SaveTestPointAssetsService(context=ctx)
+        p = self._payload()
+        assert svc.execute(p)["count"] == 1
+        assert svc.execute(p)["count"] == 1

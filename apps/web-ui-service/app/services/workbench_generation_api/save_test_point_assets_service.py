@@ -237,61 +237,81 @@ class SaveTestPointAssetsService:
             "requires_review": False,
         }
 
-        # ── 持久化：文件写入 ──
-        plan_path = runtime.save_test_point_plan(
-            project=project,
+        # ── 持久化 Step 1：DB 写入（事实源，必须成功） ──
+        # DB 是权威数据源，文件是可重建缓存。
+        # DB 写入失败必须向上抛异常，不允许静默降级导致数据孤儿。
+        repository.sync_test_points(
+            project_code=project,
+            page_code=page,
+            points=points,
+        )
+        from app.services import test_point_asset_store
+        bundle = _build_asset_bundle(
+            plan=plan,
             case_id=candidate_case_id,
             page=page,
-            page_url="",
-            requirement=effective_requirement,
-            plan=plan,
-            state_root=workbench_state_store.WEB_UI_STATE_ROOT / "test-points",
+            point_count=len(points),
+            intent_count=len(selected_ids) or len(points),
         )
-        asset_path = workbench_asset_service.state_case_file(
-            project,
-            candidate_case_id,
-            state_root=workbench_state_store.WEB_UI_STATE_ROOT / "test-points",
+        test_point_asset_store.save_asset(
+            db=repository.db, project=project, bundle=bundle,
         )
-        asset = workbench_asset_service.load_test_point_asset_with_root(
-            project,
-            candidate_case_id,
-            state_root=workbench_state_store.WEB_UI_STATE_ROOT / "test-points",
+        LOGGER.info(
+            "test point asset saved to DB: project=%s case_id=%s points=%d",
+            project, candidate_case_id, len(points),
         )
 
-        # ── 持久化：DB 同步（降级不阻断） ──
+        # ── 持久化 Step 2：文件写入（缓存，失败不阻断） ──
+        # 文件是 DB 的可重建缓存，写入失败仅记日志。
+        plan_path_str = ""
+        asset_path_str = ""
+        state_root = workbench_state_store.WEB_UI_STATE_ROOT / "test-points"
         try:
-            db_synced = repository.sync_test_points(
-                project_code=project,
-                page_code=page,
-                points=points,
+            plan_path = runtime.save_test_point_plan(
+                project=project,
+                case_id=candidate_case_id,
+                page=page,
+                page_url="",
+                requirement=effective_requirement,
+                plan=plan,
+                state_root=state_root,
             )
-        except Exception:
-            db_synced = 0
-        try:
-            from app.services import test_point_asset_store
-            if isinstance(asset, dict) and asset.get("asset_id"):
-                test_point_asset_store.save_asset(
-                    repository.db, project=project, bundle=asset,
-                )
+            plan_path_str = str(Path(plan_path).resolve())
         except Exception:
             LOGGER.warning(
-                "test point asset DB write-through failed for %s/%s",
+                "test point plan file write failed for %s/%s (data is in DB)",
+                project, candidate_case_id, exc_info=True,
+            )
+        try:
+            asset_path = workbench_asset_service.state_case_file(
+                project, candidate_case_id, state_root=state_root,
+            )
+            asset_path_str = str(asset_path.resolve())
+        except Exception:
+            LOGGER.warning(
+                "test point asset file write failed for %s/%s (data is in DB)",
                 project, candidate_case_id, exc_info=True,
             )
 
-        # ── 操作历史记录 ──
-        runtime.append_history(
-            {
-                "timestamp": runtime.now_iso(),
-                "action": "save_test_point_asset",
-                "case_id": candidate_case_id,
-                "page": page,
-                "project": project,
-                "path": str(asset_path.resolve()),
-                "plan_path": str(Path(plan_path).resolve()),
-                "intent_count": len(selected_ids) or len(points),
-            }
-        )
+        # ── 操作历史记录（失败不阻断） ──
+        try:
+            runtime.append_history(
+                {
+                    "timestamp": runtime.now_iso(),
+                    "action": "save_test_point_asset",
+                    "case_id": candidate_case_id,
+                    "page": page,
+                    "project": project,
+                    "path": asset_path_str,
+                    "plan_path": plan_path_str,
+                    "intent_count": len(selected_ids) or len(points),
+                }
+            )
+        except Exception:
+            LOGGER.warning(
+                "history append failed for %s/%s",
+                project, candidate_case_id, exc_info=True,
+            )
 
         return {
             "message": "saved 1 test point asset",
@@ -304,15 +324,42 @@ class SaveTestPointAssetsService:
                     "title": _c.asset_title_for_page(page),
                     "intent_ids": selected_ids,
                     "intent_count": len(selected_ids) or len(points),
-                    "plan_path": str(Path(plan_path).resolve()),
-                    "asset_path": str(asset_path.resolve()),
-                    "asset": asset,
+                    "plan_path": plan_path_str,
+                    "asset_path": asset_path_str,
+                    "asset": bundle,
                 }
             ],
         }
 
 
 # ── 内置函数 ──────────────────────────────────────────────────────────────
+
+def _build_asset_bundle(
+    *,
+    plan: dict[str, Any],
+    case_id: str,
+    page: str,
+    point_count: int,
+    intent_count: int,
+) -> dict[str, Any]:
+    """在内存中构造 asset bundle，不依赖文件 I/O。
+
+    DB 写入需要此 bundle 作为 raw_payload，包含完整的 plan 数据。
+    """
+    return {
+        "asset_id": case_id,
+        "page": page,
+        "title": _c.asset_title_for_page(page),
+        "priority": plan.get("priority", _c.DEFAULT_PRIORITY),
+        "source_type": plan.get("source_type", _c.SOURCE_TYPE_SELECTION_SAVE),
+        "status": "active",
+        "point_count": point_count,
+        "intent_count": intent_count,
+        "requires_review": plan.get("requires_review", False),
+        "version": 1,
+        "plan": plan,
+    }
+
 
 def _get_page_hook(page: str) -> LoginPasswordVisibilityHook | None:
     """根据 page code 返回对应的 PageHook，无匹配则返回 None。"""
