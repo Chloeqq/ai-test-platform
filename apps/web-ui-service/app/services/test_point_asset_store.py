@@ -101,6 +101,26 @@ def list_asset_ids(db: Session, *, project: str) -> list[str]:
     return [_text(row.asset_id) for row in rows if _text(row.asset_id)]
 
 
+def find_asset_id_by_preview_id(db: Session, *, project: str, preview_id: str) -> str | None:
+    """按 preview_id 查找已保存的资产，用于幂等检查。
+
+    preview_id 存储在 raw_payload.metadata.preview_id 中。
+    返回 asset_id 或 None。
+    """
+    if not _text(preview_id):
+        return None
+    _ensure_table(db)
+    rows, _total = TestPointAssetRepository(db).list_by_project(
+        _text(project).lower() or "mall", limit=10000,
+    )
+    for row in rows:
+        raw = row.raw_payload if isinstance(row.raw_payload, dict) else {}
+        meta = raw.get("metadata", {}) if isinstance(raw.get("metadata"), dict) else {}
+        if _text(meta.get("preview_id")) == _text(preview_id):
+            return _text(row.asset_id)
+    return None
+
+
 def delete_asset(db: Session, *, project: str, asset_id: str) -> bool:
     _ensure_table(db)
     ok = TestPointAssetRepository(db).delete(_text(project).lower() or "mall", _text(asset_id))

@@ -1709,3 +1709,123 @@ class TestListEnumerationConsistency:
         )
         assert len(result["items"]) >= 1
         load_fn.assert_called()
+
+
+class TestIdempotency:
+    """验证 preview_id 幂等检查: IDEM-001/002/003。"""
+
+    @staticmethod
+    def _make_ctx(monkeypatch, *, preview_already_saved=False, existing_asset_id=None):
+        from unittest.mock import MagicMock
+        ctx = SimpleNamespace()
+        ctx.runtime = SimpleNamespace()
+        ctx.runtime.now_iso = lambda: "2026-07-07T00:00:00Z"
+        ctx.runtime.HTTPException = type("HTTPEx", (Exception,), {})
+        ctx.runtime.status = SimpleNamespace()
+        ctx.runtime.status.HTTP_422_UNPROCESSABLE_ENTITY = 422
+        ctx.runtime.AI_CASES_ROOT = Path(".")
+        ctx.runtime.ensure_dirs = lambda: None
+        ctx.runtime.normalize_page_slug = lambda s: str(s or "").strip()
+        ctx.runtime.save_test_point_plan = MagicMock(return_value=Path("/tmp/p.json"))
+        ctx.runtime.append_history = MagicMock()
+        ctx.repository = SimpleNamespace()
+        ctx.repository.db = MagicMock()
+        ctx.repository.collect_existing_case_ids = MagicMock(return_value=[])
+        ctx.repository.allocate_case_id = MagicMock(return_value="t-case-0001")
+        ctx.repository.sync_test_points = MagicMock(return_value=1)
+        ctx.default_project = "mall"
+        ctx.generation = SimpleNamespace()
+        ctx.generation.has_multisource_inputs = MagicMock(return_value=False)
+        ctx.generation.resolve_effective_requirement = MagicMock(return_value="req")
+        ctx.candidate_normalizer = SimpleNamespace()
+        ctx.candidate_normalizer.normalize_candidates = lambda cs: cs
+
+        page_cfg = MagicMock()
+        page_cfg.alias_map = {}
+        page_cfg.home_element_code = "home_menu"
+        page_cfg.home_element_name = "首页菜单"
+        page_cfg.default_route = "#/home"
+        page_cfg.login_url = "#/login"
+        page_cfg.fallback_element_code = "login-submit-btn"
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.load_page_config",
+            lambda *a, **kw: page_cfg,
+        )
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.ElementResolver", MagicMock())
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.workbench_asset_service", MagicMock())
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.workbench_state_store", MagicMock())
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.preview_store", MagicMock())
+        monkeypatch.setattr(
+            "app.services.workbench_generation_api.save_test_point_assets_service.preview_requirement",
+            lambda pid: ("test_req", {}))
+
+        import sys
+        mock_tpas = MagicMock()
+        mock_tpas.save_asset = MagicMock(return_value=True)
+        if preview_already_saved:
+            mock_tpas.find_asset_id_by_preview_id = MagicMock(return_value=existing_asset_id)
+            mock_tpas.load_asset = MagicMock(return_value={
+                "asset_id": existing_asset_id, "page": "login", "title": "E",
+                "plan_path": "/tmp/plan.json",
+            })
+        else:
+            mock_tpas.find_asset_id_by_preview_id = MagicMock(return_value=None)
+        sys.modules["app.services.test_point_asset_store"] = mock_tpas
+        # tpa_store alias (used after lazy import)
+        sys.modules["app.services.test_point_asset_store"] = mock_tpas
+        return ctx
+
+    @staticmethod
+    def _payload(**kw):
+        p = SimpleNamespace()
+        p.project = kw.get("project", "mall")
+        p.page = kw.get("page", "login")
+        p.requirement = "test"
+        p.priority = "P1"
+        p.case_id = kw.get("case_id", "")
+        p.preview_id = kw.get("preview_id", "preview-abc123")
+        p.selected_candidates = [{"intent_id": "t1", "title": "t", "steps": ["点击登录按钮"], "expected": "ok", "involved_elements": ["登录按钮"]}]
+        p.selected_intent_ids = ["t1"]
+        p.input_sources = []
+        p.openapi_spec = {}
+        for attr in ("prd_text", "prd_url", "user_story", "git_diff", "git_diff_path", "openapi_url", "defect_ticket", "runtime_logs"):
+            setattr(p, attr, "")
+        return p
+
+    # Case 1: 同 preview_id 保存两次 → 第二次返回第一次 case_id
+    def test_same_preview_id_returns_existing_asset(self, monkeypatch):
+        """同一 preview_id 重复保存 → 幂等返回已有 case_id。"""
+        from app.services.workbench_generation_api.save_test_point_assets_service import SaveTestPointAssetsService
+        ctx = self._make_ctx(monkeypatch, preview_already_saved=True, existing_asset_id="existing-001")
+        svc = SaveTestPointAssetsService(context=ctx)
+        r = svc.execute(self._payload(preview_id="preview-dup"))
+        assert r["items"][0]["case_id"] == "existing-001"
+        assert "already saved" in r["message"]
+        # 不应尝试分配新 case_id
+        ctx.repository.allocate_case_id.assert_not_called()
+
+    # Case 2: DB 成功后客户端 timeout 重新请求 → 幂等返回
+    def test_retry_after_db_success_returns_same_case(self, monkeypatch):
+        """模拟 case: 首次 DB commit 成功但网络断开，重试应返回同一资产。"""
+        from app.services.workbench_generation_api.save_test_point_assets_service import SaveTestPointAssetsService
+        ctx = self._make_ctx(monkeypatch, preview_already_saved=True, existing_asset_id="t-case-0001")
+        svc = SaveTestPointAssetsService(context=ctx)
+        r = svc.execute(self._payload(preview_id="preview-timeout"))
+        assert r["items"][0]["case_id"] == "t-case-0001"
+        ctx.repository.allocate_case_id.assert_not_called()
+
+    # Case 3: DB 失败重试 → 首次失败后第二次正常保存
+    def test_db_failure_retry_does_not_create_duplicate(self, monkeypatch):
+        """DB 失败重试: 首次不保存(DC-001 回滚)，第二次正常保存。"""
+        from app.services.workbench_generation_api.save_test_point_assets_service import SaveTestPointAssetsService
+        # 首次: preview 未保存(正常路径)
+        ctx = self._make_ctx(monkeypatch, preview_already_saved=False)
+        svc = SaveTestPointAssetsService(context=ctx)
+        r = svc.execute(self._payload(preview_id="preview-retry"))
+        assert r["items"][0]["case_id"] == "t-case-0001"
+        ctx.repository.allocate_case_id.assert_called_once()
+        ctx.repository.sync_test_points.assert_called_once()

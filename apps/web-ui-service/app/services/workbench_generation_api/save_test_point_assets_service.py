@@ -130,6 +130,38 @@ class SaveTestPointAssetsService:
         if not batch_candidates:
             return {"message": "no selected candidates to save", "count": 0, "items": []}
 
+        # ── 幂等检查：同 preview_id 已保存 → 直接返回已有资产 ──
+        from app.services import test_point_asset_store as tpa_store
+        if preview_id:
+            existing_asset_id = tpa_store.find_asset_id_by_preview_id(
+                repository.db, project=project, preview_id=preview_id,
+            )
+            if existing_asset_id:
+                LOGGER.info(
+                    "preview_id %s already saved as %s, returning existing asset",
+                    preview_id, existing_asset_id,
+                )
+                existing_asset = tpa_store.load_asset(
+                    repository.db, project=project, asset_id=existing_asset_id,
+                )
+                return {
+                    "message": "already saved (idempotent)",
+                    "count": 1,
+                    "items": [
+                        {
+                            "case_id": existing_asset_id,
+                            "project": project,
+                            "page": page,
+                            "title": (existing_asset or {}).get("title", _c.asset_title_for_page(page)),
+                            "intent_ids": selected_intent_ids,
+                            "intent_count": len(selected_intent_ids),
+                            "plan_path": (existing_asset or {}).get("plan_path", ""),
+                            "asset_path": "",
+                            "asset": existing_asset,
+                        }
+                    ],
+                }
+
         # ── case_id 分配（支持 upsert） ──
         requested_case_id = _normalized_text(getattr(payload, "case_id", ""))
         existing_case_ids = repository.collect_existing_case_ids(

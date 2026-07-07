@@ -17,11 +17,23 @@ class WorkbenchGenerationRepository:
 
     def collect_existing_case_ids(self, *, assets_cases_root: Path) -> list[str]:
         items: list[str] = []
+        # 1. test_cases 表
         db_case_ids = self.db.execute(select(TestCase.case_id)).scalars().all()
         for raw_case_id in db_case_ids:
             normalized_case_id = normalize_case_id(str(raw_case_id or "").strip(), fallback="").strip()
             if normalized_case_id and match_case_id(normalized_case_id):
                 items.append(normalized_case_id)
+        # 2. test_point_assets 表 (DC-002: DB 为事实源)
+        try:
+            from app.services import test_point_asset_store
+            tpa_ids = test_point_asset_store.list_asset_ids(self.db, project="")
+            for asset_id in tpa_ids:
+                normalized = normalize_case_id(str(asset_id or "").strip(), fallback="").strip()
+                if normalized and match_case_id(normalized) and normalized not in items:
+                    items.append(normalized)
+        except Exception:
+            pass
+        # 3. 文件扫描
         if assets_cases_root.exists():
             for path in assets_cases_root.rglob("*.yaml"):
                 normalized_case_id = normalize_case_id(path.stem, fallback="").strip()
