@@ -1,3 +1,4 @@
+
 """WorkbenchFacade 混入 —— 测试点资产相关方法。
 
 提取自 facade.py 以控制单文件大小在 2500 行以内。
@@ -931,16 +932,11 @@ class WorkbenchFacadeTestPointAssetsMixin:
         selected_candidates = [item for item in selected_candidates_raw if isinstance(item, dict)]
         if incoming_points:
             points = incoming_points
+        elif selected_candidates:
+            points = [_manual_point_from_candidate(candidate, index=index) for index, candidate in enumerate(selected_candidates, start=1)]
         elif existing_points:
             points = existing_points
-            if selected_candidates:
-                LOGGER.warning(
-                    "ignore selected_candidates for existing test point asset because plan.points is canonical: project=%s asset_id=%s",
-                    project,
-                    asset_id,
-                )
-                selected_candidates = []
-        elif not selected_candidates:
+        else:
             selected_candidates = [
                 {
                     "intent_id": asset_id,
@@ -951,11 +947,9 @@ class WorkbenchFacadeTestPointAssetsMixin:
                     "expected": "手工维护测试点",
                 }
             ]
+            points = [_manual_point_from_candidate(candidate, index=index) for index, candidate in enumerate(selected_candidates, start=1)]
         if len(selected_candidates) > 200:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="selected_candidates exceeds max size 200")
-
-        if not incoming_points and not existing_points:
-            points = [_manual_point_from_candidate(candidate, index=index) for index, candidate in enumerate(selected_candidates, start=1)]
         page_context = _page_object_generation_context(db, project=project, page=page)
         points = _normalize_points_involved_elements(points, page_context=page_context)
         selected_intent_ids = [intent_id for intent_id in [_text(item.get("intent_id") or item.get("key")) for item in points] if intent_id]
