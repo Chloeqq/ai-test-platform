@@ -150,3 +150,43 @@ def test_multi_version_sequential(tmp_state_root):
     assert len(lines) == 3
     versions = [json.loads(line)["version"] for line in lines]
     assert versions == [1, 2, 3], f"expected [1,2,3], got {versions}"
+
+
+def test_ai_save_version_continuity(tmp_state_root):
+    """P0: AI 保存后 snapshot.version 应等于 asset.version。
+
+    场景: asset.version=8 → AI save → 文件落盘 version=9 → snapshot version=9。
+    禁止 snapshot version 回退到 1。
+    """
+    asset = _make_asset(version=9)  # 模拟已递增的 asset
+    append_quality_snapshot(asset, trigger="ai_save")
+
+    snap_path = tmp_state_root / "quality-snapshots" / "mall" / "test-asset-001.jsonl"
+    snap = json.loads(snap_path.read_text().strip())
+    assert snap["version"] == 9, f"snapshot version={snap['version']}, expected asset.version=9"
+    assert snap["trigger"] == "ai_save"
+
+
+def test_project_fallback(tmp_state_root):
+    """P1: 历史 asset 无 project 字段 → snapshot 不出现 null/空。
+
+    场景: asset = {"asset_id": "old-001", "version": 1}（无 project）
+    预期: snapshot["project"] 不为 null/空，至少为 "unknown"。
+    """
+    old_asset = {
+        "asset_id": "old-001",
+        "version": 1,
+        "updated_at": "2026-07-07T12:00:00Z",
+        "source_type": "manual",
+        "plan": {"points": []},
+        "warnings": [],
+    }
+    append_quality_snapshot(old_asset, trigger="upsert")
+
+    snap_dir = tmp_state_root / "quality-snapshots" / "unknown"
+    snap_files = list(snap_dir.glob("*.jsonl"))
+    assert len(snap_files) == 1
+    snap = json.loads(snap_files[0].read_text().strip())
+    assert snap.get("project"), f"project must not be empty: {snap}"
+    assert snap["project"] == "unknown"
+    assert snap["asset_id"] == "old-001"

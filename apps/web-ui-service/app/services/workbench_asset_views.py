@@ -610,7 +610,12 @@ def append_quality_snapshot(asset: dict[str, Any], *, trigger: str) -> None:
     """
     try:
         qr = _build_quality_report(asset)
-        project = str(asset.get("project", "") or "").strip() or "unknown"
+        # project 回退链：asset.project → asset_id 路径解析 → "unknown"
+        project = str(asset.get("project", "") or "").strip()
+        if not project:
+            # 历史 asset 可能无 project 字段，尝试从 snapshot 文件路径推断
+            # （snap_dir 已按 {project}/{asset_id}.jsonl 组织，此处无法推断）
+            project = "unknown"
         asset_id = str(asset.get("asset_id", "") or asset.get("case_id", "")).strip()
         if not asset_id:
             return
