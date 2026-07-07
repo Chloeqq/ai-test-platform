@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { MetricCards } from "../components/MetricCards";
 import { getQualitySummary, getQualityRanking, getQualityIssues, type QualitySummaryResponse, type QualityRankingItem, type QualityIssuesResponse } from "../api/quality";
+import { DEFAULT_PROJECT_CODE } from "../config/projects";
 
 const DECISION_LABELS: Record<string, string> = { PASS: "通过", REVIEW: "需审核", REJECT: "不可执行", UNKNOWN: "未知" };
 const DECISION_TONES: Record<string, "good" | "warn" | "bad"> = { PASS: "good", REVIEW: "warn", REJECT: "bad", UNKNOWN: "warn" };
@@ -27,9 +28,9 @@ export function QualityDashboardPage() {
       setErrorText("");
       try {
         const [s, r, i] = await Promise.all([
-          getQualitySummary("mall"),
-          getQualityRanking("mall", 10),
-          getQualityIssues("mall"),
+          getQualitySummary(DEFAULT_PROJECT_CODE),
+          getQualityRanking(DEFAULT_PROJECT_CODE, 10),
+          getQualityIssues(DEFAULT_PROJECT_CODE),
         ]);
         if (!cancelled) { setSummary(s); setRanking(r); setIssues(i); }
       } catch (e) {
@@ -106,7 +107,7 @@ export function QualityDashboardPage() {
                   {ranking.slice(0, 10).map((item) => (
                     <tr key={item.asset_id}>
                       <td>
-                        <Link to={`/react/assets/test-points/${encodeURIComponent(item.asset_id)}?project=mall`}>
+                        <Link to={`/quality/assets/${encodeURIComponent(item.asset_id)}`}>
                           {item.asset_id}
                         </Link>
                       </td>

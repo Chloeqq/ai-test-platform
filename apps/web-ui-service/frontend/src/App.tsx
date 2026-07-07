@@ -26,6 +26,7 @@ import { PageObjectsPage } from "./pages/PageObjectsPage";
 import { PromptManagementPage } from "./pages/PromptManagementPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { QualityClustersPage } from "./pages/QualityClustersPage";
+import { QualityAssetDetailPage } from "./pages/QualityAssetDetailPage";
 import { QualityDashboardPage } from "./pages/QualityDashboardPage";
 import { QualityFlakyPage } from "./pages/QualityFlakyPage";
 import { QualityGatesPage } from "./pages/QualityGatesPage";
@@ -87,6 +88,7 @@ export function App() {
         <Route path="/assets/api-contracts" element={<ApiContractsPage />} />
         <Route path="/assets/data-templates" element={<DataTemplatesPage />} />
         <Route path="/quality/dashboard" element={<QualityDashboardPage />} />
+        <Route path="/quality/assets/:assetId" element={<QualityAssetDetailPage />} />
         <Route path="/quality/flaky" element={<QualityFlakyPage />} />
         <Route path="/quality/failure-clusters" element={<QualityClustersPage />} />
         <Route path="/quality/clusters" element={<Navigate to="/quality/failure-clusters" replace />} />
