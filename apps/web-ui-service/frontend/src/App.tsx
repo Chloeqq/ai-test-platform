@@ -26,6 +26,7 @@ import { PageObjectsPage } from "./pages/PageObjectsPage";
 import { PromptManagementPage } from "./pages/PromptManagementPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { QualityClustersPage } from "./pages/QualityClustersPage";
+import { QualityDashboardPage } from "./pages/QualityDashboardPage";
 import { QualityFlakyPage } from "./pages/QualityFlakyPage";
 import { QualityGatesPage } from "./pages/QualityGatesPage";
 import { QualityTrendsPage } from "./pages/QualityTrendsPage";
@@ -85,6 +86,7 @@ export function App() {
         <Route path="/assets/page-objects/recorder/sessions/:sessionId" element={<PageObjectRecorderPage />} />
         <Route path="/assets/api-contracts" element={<ApiContractsPage />} />
         <Route path="/assets/data-templates" element={<DataTemplatesPage />} />
+        <Route path="/quality/dashboard" element={<QualityDashboardPage />} />
         <Route path="/quality/flaky" element={<QualityFlakyPage />} />
         <Route path="/quality/failure-clusters" element={<QualityClustersPage />} />
         <Route path="/quality/clusters" element={<Navigate to="/quality/failure-clusters" replace />} />

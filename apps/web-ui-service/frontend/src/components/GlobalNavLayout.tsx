@@ -61,6 +61,7 @@ const NAV_GROUPS: NavGroup[] = [
     key: "quality",
     label: "质量治理",
     items: [
+      { label: "质量仪表盘", to: "/quality/dashboard" },
       { label: "Flaky 分析", to: "/quality/flaky" },
       { label: "失败聚类", to: "/quality/failure-clusters" },
       { label: "趋势分析", to: "/quality/trends" },
