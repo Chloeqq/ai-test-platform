@@ -43,12 +43,7 @@ class PrecheckSelectedIntentsService:
 
     def execute(self, payload: Any) -> dict[str, Any]:
         runtime = self._context.runtime
-        project = _normalized_text(getattr(payload, "project", ""))
-        if not project:
-            raise runtime.HTTPException(
-                status_code=runtime.status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="project must not be empty",
-            )
+        project = _normalized_text(getattr(payload, "project", "")) or context.default_project
         page_raw = _normalized_text(getattr(payload, "page", ""))
         page = runtime.normalize_page_slug(page_raw) if page_raw else ""
         if not page:

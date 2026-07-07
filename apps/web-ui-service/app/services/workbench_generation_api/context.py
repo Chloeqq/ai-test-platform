@@ -230,6 +230,7 @@ class WorkbenchContext:
     repository: WorkbenchGenerationRepository
     runtime: WorkbenchRuntimeContext
     generation: WorkbenchGenerationContext
+    default_project: str = "mall"
 
 
 def build_workbench_runtime_context() -> WorkbenchRuntimeContext:
@@ -637,6 +638,7 @@ def build_workbench_context(db: Session) -> WorkbenchContext:
             allocate_case_id=repository.allocate_case_id,
         ),
     )
+    default_project = _resolve_default_project(db)
     return WorkbenchContext(
         db=db,
         orchestrator_client=orchestrator_client,
@@ -646,4 +648,18 @@ def build_workbench_context(db: Session) -> WorkbenchContext:
         repository=repository,
         runtime=runtime,
         generation=generation,
+        default_project=default_project,
     )
+
+
+def _resolve_default_project(db: Session) -> str:
+    """从 DB 查询第一个活跃项目作为默认值，查不到回退 'mall'。"""
+    try:
+        from app.repositories.test_project_repository import TestProjectRepository
+        projects = TestProjectRepository(db).list_all()
+        for p in projects:
+            if p.status == "active":
+                return p.project_code
+    except Exception:
+        pass
+    return "mall"

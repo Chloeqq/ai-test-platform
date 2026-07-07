@@ -9,6 +9,8 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
+from .routes import PREVIEW_INTENT_DETAIL, PREVIEW_DIAGNOSTICS
+
 from app.services import workbench_state_store
 
 
@@ -68,7 +70,7 @@ def _public_intent(intent: dict[str, Any], *, index: int, preview_id: str) -> di
         "priority": _text(intent.get("priority")) or "P1",
         "steps_summary": _steps_summary(intent),
         "expected_result": _text(intent.get("expected_result") or intent.get("expected")),
-        "detail_url": f"/api/workbench/preview-test-points/{preview_id}/test-intents/{intent_id}",
+        "detail_url": PREVIEW_INTENT_DETAIL.format(preview_id=preview_id, intent_id=intent_id),
     }
 
 
@@ -177,7 +179,7 @@ def build_public_preview_response(snapshot: dict[str, Any]) -> dict[str, Any]:
             "intent_type_distribution": distribution,
             "quality_gate": _public_quality_gate(gate),
             "test_intents": public_intents,
-            "diagnostics_url": f"/api/workbench/preview-test-points/{preview_id}/diagnostics",
+            "diagnostics_url": PREVIEW_DIAGNOSTICS.format(preview_id=preview_id),
             "output_contract": {
                 "machine_schema": "TestPointPreviewPublicV1",
                 "detail_schema": "RequirementSpecV1",
