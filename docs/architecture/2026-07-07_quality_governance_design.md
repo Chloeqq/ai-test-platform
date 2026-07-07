@@ -251,7 +251,7 @@ grade = A/B/C/D/F
 |---|------|------|
 | 5 | ✅ Gate 保护 — 零断言点不可批准 | 已实施 (d98b606) |
 | 6 | RULE_003 按 intent_type 分级 | ⬜ P1 |
-| 7 | candidate_step 在编译阶段拒绝而非降级 | P0-2 |
+| 7 | candidate_step 编译阶段拒绝 | ⬜ P1 |
 
 ### P2: 暂不做
 
