@@ -162,6 +162,7 @@ class WorkbenchFacadeTestPointAssetsMixin:
             review_status=review_status,
             gate_decision=gate_decision,
             selection_state=selection_state,
+            db_asset_ids=db_asset_ids,
             state_project_dir=lambda code: workbench_asset_service.state_project_dir(code, state_root=constants.TEST_POINTS_ROOT),
             normalize_page_slug=workbench_gate_service.normalize_page_slug,
             load_test_point_asset=lambda project_value, case_id_value: (

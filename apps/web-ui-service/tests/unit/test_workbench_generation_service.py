@@ -1585,3 +1585,127 @@ class TestDataConsistency:
         p = self._payload()
         assert svc.execute(p)["count"] == 1
         assert svc.execute(p)["count"] == 1
+
+
+
+class TestListEnumerationConsistency:
+    """验证列表枚举 case_id 时 DB 优先、文件回退。"""
+
+    def test_db_exists_file_missing_still_shown(self, monkeypatch):
+        """Case 1: DB 有资产但文件不存在 → 列表仍显示。"""
+        from app.services.workbench_asset_views import build_test_point_asset_items
+        from unittest.mock import MagicMock
+
+        mock_dir = MagicMock()
+        mock_dir.exists.return_value = False
+        monkeypatch.setattr(
+            "app.services.workbench_asset_views._state_svc",
+            lambda: MagicMock(state_project_dir=lambda p: mock_dir),
+        )
+
+        db_ids = {"asset-001", "asset-002"}
+        load_fn = MagicMock()
+        load_fn.side_effect = lambda p, cid: {
+            "asset_id": cid, "page": "login", "title": cid,
+            "source_type": "selection_save", "priority": "P1",
+            "point_count": 3, "intent_count": 3, "plan": {"points": []},
+        }
+
+        result = build_test_point_asset_items(
+            project="mall", page="", keyword="", source_type="",
+            coverage_status="", review_status="", gate_decision="",
+            selection_state="",
+            state_project_dir=lambda c: mock_dir,
+            normalize_page_slug=lambda s: str(s or "").strip(),
+            load_test_point_asset=load_fn,
+            latest_run_snapshot_for_case=lambda **kw: {},
+            build_traceability_summary=lambda asset=None, latest_run=None: {},
+            build_selection_summary=lambda traceability_summary=None: {},
+            build_coverage_summary=lambda items=None, filter_snapshot=None: {},
+            clamp_confidence=lambda v: v,
+            db_asset_ids=db_ids,
+        )
+        assert len(result["items"]) == 2
+        assert {i["asset_id"] for i in result["items"]} == db_ids
+
+    def test_db_missing_file_exists_still_readable(self, monkeypatch, tmp_path):
+        """Case 2: DB 无但文件存在 → 详情仍可读取（文件回退）。"""
+        from app.services.workbench_asset_views import build_test_point_asset_items
+        from unittest.mock import MagicMock
+
+        asset_file = tmp_path / "fallback-01.json"
+        asset_file.write_text(
+            '{"asset_id":"fallback-01","page":"login","title":"F","source_type":"s","priority":"P1","plan":{"points":[]}}',
+            encoding="utf-8")
+
+        mock_dir = MagicMock()
+        mock_dir.exists.return_value = True
+        mock_dir.glob.return_value = [asset_file]
+        mock_dir.__truediv__.return_value = MagicMock(exists=MagicMock(return_value=False))
+
+        monkeypatch.setattr(
+            "app.services.workbench_asset_views._state_svc",
+            lambda: MagicMock(state_project_dir=lambda p: mock_dir),
+        )
+
+        load_calls = []
+        def load_fn(p, cid):
+            load_calls.append(cid)
+            return {"asset_id": cid, "page": "login", "title": cid,
+                    "source_type": "s", "priority": "P1", "plan": {"points": []}}
+
+        result = build_test_point_asset_items(
+            project="mall", page="", keyword="", source_type="",
+            coverage_status="", review_status="", gate_decision="",
+            selection_state="",
+            state_project_dir=lambda c: mock_dir,
+            normalize_page_slug=lambda s: str(s or "").strip(),
+            load_test_point_asset=load_fn,
+            latest_run_snapshot_for_case=lambda **kw: {},
+            build_traceability_summary=lambda asset=None, latest_run=None: {},
+            build_selection_summary=lambda traceability_summary=None: {},
+            build_coverage_summary=lambda items=None, filter_snapshot=None: {},
+            clamp_confidence=lambda v: v,
+            db_asset_ids=set(),
+        )
+        assert len(result["items"]) >= 1
+        assert "fallback-01" in load_calls
+
+    def test_db_and_file_both_exist_db_used(self, monkeypatch, tmp_path):
+        """Case 3: DB 和文件都存在 → 使用传入的 load_fn（DB 优先）。"""
+        from app.services.workbench_asset_views import build_test_point_asset_items
+        from unittest.mock import MagicMock
+
+        asset_file = tmp_path / "asset-01.json"
+        asset_file.write_text('{"asset_id":"asset-01"}', encoding="utf-8")
+
+        mock_dir = MagicMock()
+        mock_dir.exists.return_value = True
+        mock_dir.glob.return_value = [asset_file]
+        mock_dir.__truediv__.return_value = MagicMock(exists=MagicMock(return_value=False))
+
+        monkeypatch.setattr(
+            "app.services.workbench_asset_views._state_svc",
+            lambda: MagicMock(state_project_dir=lambda p: mock_dir),
+        )
+
+        db_data = {"asset_id": "asset-01", "page": "login", "title": "FROM_DB",
+                    "source_type": "s", "priority": "P1", "plan": {"points": []}}
+        load_fn = MagicMock(return_value=db_data)
+
+        result = build_test_point_asset_items(
+            project="mall", page="", keyword="", source_type="",
+            coverage_status="", review_status="", gate_decision="",
+            selection_state="",
+            state_project_dir=lambda c: mock_dir,
+            normalize_page_slug=lambda s: str(s or "").strip(),
+            load_test_point_asset=load_fn,
+            latest_run_snapshot_for_case=lambda **kw: {},
+            build_traceability_summary=lambda asset=None, latest_run=None: {},
+            build_selection_summary=lambda traceability_summary=None: {},
+            build_coverage_summary=lambda items=None, filter_snapshot=None: {},
+            clamp_confidence=lambda v: v,
+            db_asset_ids={"asset-01"},
+        )
+        assert len(result["items"]) >= 1
+        load_fn.assert_called()

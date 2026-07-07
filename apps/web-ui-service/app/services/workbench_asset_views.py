@@ -222,6 +222,7 @@ def build_test_point_asset_items(
     build_selection_summary: BuildSelectionSummary,
     build_coverage_summary: BuildCoverageSummary,
     clamp_confidence: ClampConfidence,
+    db_asset_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     project_dir = _state_svc().state_project_dir(project)
     normalized_page = normalize_page_slug(page) if str(page).strip() else ""
@@ -231,7 +232,7 @@ def build_test_point_asset_items(
     review_status_value = str(review_status or "").strip().lower()
     gate_decision_value = str(gate_decision or "").strip().lower()
     selection_state_value = str(selection_state or "").strip().lower()
-    case_ids: set[str] = set()
+    case_ids: set[str] = set(db_asset_ids) if db_asset_ids else set()
     if project_dir.exists():
         case_ids.update(file.stem for file in project_dir.glob("*.json") if file.is_file())
         plans_dir = project_dir / "plans"
@@ -240,7 +241,7 @@ def build_test_point_asset_items(
 
     items: list[dict[str, Any]] = []
     for case_id in sorted(case_ids):
-        asset = _state_svc().load_test_point_asset(project, case_id)
+        asset = load_test_point_asset(project, case_id)
         if not asset:
             continue
         asset_page = normalize_page_slug(str(asset.get("page", "")).strip()) if str(asset.get("page", "")).strip() else ""
