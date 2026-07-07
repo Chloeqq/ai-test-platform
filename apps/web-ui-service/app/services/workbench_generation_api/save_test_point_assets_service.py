@@ -365,6 +365,20 @@ class SaveTestPointAssetsService:
         except Exception:
             pass
 
+        # Phase 5.1: 追加 quality snapshot
+        try:
+            from app.services.workbench_asset_views import append_quality_snapshot
+            snapshot_asset = dict(bundle)
+            snapshot_asset["project"] = project
+            snapshot_asset["asset_id"] = candidate_case_id
+            snapshot_asset["source_type"] = source_type
+            append_quality_snapshot(snapshot_asset, trigger="ai_save")
+        except Exception:
+            LOGGER.warning(
+                "quality snapshot append failed for %s/%s",
+                project, candidate_case_id, exc_info=True,
+            )
+
         return {
             "message": "saved 1 test point asset",
             "count": 1,

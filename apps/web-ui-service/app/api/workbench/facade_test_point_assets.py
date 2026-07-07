@@ -53,7 +53,7 @@ from app.services import (
     workbench_scheduler_service,
     workbench_task_service,
 )
-from app.services.workbench_asset_views import check_generate_gate, check_approve_point_gate, check_execute_gate
+from app.services.workbench_asset_views import check_generate_gate, check_approve_point_gate, check_execute_gate, append_quality_snapshot
 from app.services.workbench_generation_api.payloads import GenerateCasePayload as GenerationGenerateCasePayload
 from app.services.workbench_generation_api.usecase_factory import build_generate_case_usecase
 
@@ -1059,6 +1059,10 @@ class WorkbenchFacadeTestPointAssetsMixin:
         )
         detail = self.get_test_point_asset(asset_id=asset_id, project=project, db=db)
         item = detail.get("item", {}) if isinstance(detail.get("item"), dict) else {}
+        # Phase 5.1: 追加 quality snapshot
+        if item:
+            item["project"] = project
+            append_quality_snapshot(item, trigger="upsert")
         return {
             "message": "test point asset saved",
             "count": 1 if item else 0,

@@ -603,6 +603,48 @@ def check_execute_gate(asset: dict[str, Any]) -> None:
         )
 
 
+def append_quality_snapshot(asset: dict[str, Any], *, trigger: str) -> None:
+    """保存 quality snapshot 到 JSONL 文件，用于趋势分析。
+
+    每次 asset 成功保存后调用。不抛异常（降级记录日志）。
+    """
+    try:
+        qr = _build_quality_report(asset)
+        project = str(asset.get("project", "") or "").strip() or "unknown"
+        asset_id = str(asset.get("asset_id", "") or asset.get("case_id", "")).strip()
+        if not asset_id:
+            return
+        snapshot = {
+            "asset_id": asset_id,
+            "version": int(asset.get("version", 0) or 0),
+            "at": (asset.get("updated_at") or state_store.now_iso()),
+            "score": qr["score"],
+            "decision": qr["decision"],
+            "point_count": qr["total_points"],
+            "zero_assertion_count": qr["zero_assertion_count"],
+            "candidate_step_count": qr.get("candidate_step_count", 0),
+            "unprocessed_count": qr.get("unprocessed_count", 0),
+            "quality_warning_count": len(qr.get("quality_warnings", [])),
+            "data_warning_count": len(qr.get("data_warnings", [])),
+            "source_type": str(asset.get("source_type", "")).strip() or "unknown",
+            "trigger": trigger,
+        }
+        import json as _json
+        line = _json.dumps(snapshot, ensure_ascii=False, sort_keys=True)
+        snap_dir = state_store.WEB_UI_STATE_ROOT / "quality-snapshots" / project
+        snap_dir.mkdir(parents=True, exist_ok=True)
+        snap_path = snap_dir / f"{asset_id}.jsonl"
+        with open(snap_path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception:
+        LOGGER.warning(
+            "quality snapshot append failed for %s/%s",
+            asset.get("project", "?"),
+            asset.get("asset_id", asset.get("case_id", "?")),
+            exc_info=True,
+        )
+
+
 def build_test_point_asset_detail(
     *,
     project: str,
