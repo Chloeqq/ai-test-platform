@@ -153,7 +153,7 @@ def test_approve_assertion_missing_blocked() -> None:
     with pytest.raises(HTTPException) as exc:
         check_approve_point_gate(point)
     assert exc.value.status_code == 422
-    assert "gate_reject_blocked" in str(exc.value.detail)
+    assert "quality_gate_blocked" in str(exc.value.detail)
 
 
 def test_approve_zero_assertion_blocked() -> None:

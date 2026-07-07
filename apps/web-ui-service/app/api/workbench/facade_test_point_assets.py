@@ -53,7 +53,10 @@ from app.services import (
     workbench_scheduler_service,
     workbench_task_service,
 )
-from app.services.workbench_asset_views import check_generate_gate, check_approve_point_gate, check_execute_gate, append_quality_snapshot
+from app.services.workbench_asset_views import (
+    check_generate_gate, check_approve_point_gate, check_execute_gate, append_quality_snapshot,
+    REVIEW_STATUS_APPROVED, REVIEW_STATUS_PENDING, REVIEW_STATUS_REJECTED,
+)
 from app.services.workbench_generation_api.payloads import GenerateCasePayload as GenerationGenerateCasePayload
 from app.services.workbench_generation_api.usecase_factory import build_generate_case_usecase
 
@@ -371,9 +374,9 @@ class WorkbenchFacadeTestPointAssetsMixin:
         page_items = items[start:end]
         summary = {
             "total": total_items,
-            "pending_count": sum(1 for item in items if item.get("review_status") == "pending"),
-            "approved_count": sum(1 for item in items if item.get("review_status") == "approved"),
-            "rejected_count": sum(1 for item in items if item.get("review_status") == "rejected"),
+            "pending_count": sum(1 for item in items if item.get("review_status") == REVIEW_STATUS_PENDING),
+            "approved_count": sum(1 for item in items if item.get("review_status") == REVIEW_STATUS_APPROVED),
+            "rejected_count": sum(1 for item in items if item.get("review_status") == REVIEW_STATUS_REJECTED),
             "can_generate_count": sum(1 for item in items if item.get("can_generate") is True),
             "blocked_count": sum(1 for item in items if item.get("can_generate") is not True),
         }
@@ -439,10 +442,10 @@ class WorkbenchFacadeTestPointAssetsMixin:
                 if point_id not in intent_ids:
                     continue
                 # Phase 4.2: Review approve 前检查 point 质量（assertion + candidate_step）
-                if next_status == "approved":
+                if next_status == REVIEW_STATUS_APPROVED:
                     check_approve_point_gate(point)
                 point["review_status"] = next_status
-                point["review_note"] = note if next_status == "rejected" else note
+                point["review_note"] = note if next_status == REVIEW_STATUS_REJECTED else note
                 point["reviewed_at"] = reviewed_at
                 point["reviewed_by"] = reviewed_by
                 metadata = point.get("metadata") if isinstance(point.get("metadata"), dict) else {}
@@ -453,7 +456,7 @@ class WorkbenchFacadeTestPointAssetsMixin:
                         "reviewed_at": reviewed_at,
                         "reviewed_by": reviewed_by,
                         "status": next_status,
-                        "note": note if next_status == "rejected" else note,
+                        "note": note if next_status == REVIEW_STATUS_REJECTED else note,
                     }
                 )
                 metadata["review_history"] = review_history
@@ -1263,7 +1266,7 @@ class WorkbenchFacadeTestPointAssetsMixin:
             check_generate_gate(asset)
             approved_points = []
             for point in points:
-                if not isinstance(point, dict) or _review_status_from_point(point) != "approved":
+                if not isinstance(point, dict) or _review_status_from_point(point) != REVIEW_STATUS_APPROVED:
                     continue
                 point_intent_id = _text(point.get("intent_id") or point.get("key"))
                 if selected_intent_filter and point_intent_id not in selected_intent_filter:

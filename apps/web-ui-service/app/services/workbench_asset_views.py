@@ -28,6 +28,12 @@ from app.services import workbench_state_store as state_store
 import logging
 LOGGER = logging.getLogger(__name__)
 
+# ── Review status constants ──────────────────────────────────────────────
+
+REVIEW_STATUS_APPROVED = "approved"
+REVIEW_STATUS_PENDING = "pending"
+REVIEW_STATUS_REJECTED = "rejected"
+
 
 def _svc():
     """惰性导入以避免循环依赖。"""
@@ -362,6 +368,49 @@ def build_test_point_asset_items(
     }
 
 
+# ── Point-level rule helpers (shared) ────────────────────────────────────
+
+
+def _point_has_assertion(point: dict[str, Any]) -> bool:
+    steps = point.get("steps", []) if isinstance(point.get("steps"), list) else []
+    return any(str(s.get("action", "")).startswith("assert_") for s in steps)
+
+
+def _point_has_candidate_step(point: dict[str, Any]) -> bool:
+    steps = point.get("steps", []) if isinstance(point.get("steps"), list) else []
+    return "candidate_step" in [str(s.get("action", "")) for s in steps]
+
+
+def _point_has_assertion_missing_warning(point: dict[str, Any]) -> bool:
+    warnings = point.get("warnings", []) if isinstance(point.get("warnings"), list) else []
+    return any("assertion_missing" in str(w) for w in warnings)
+
+
+def get_point_gate_violations(point: dict[str, Any]) -> list[dict[str, Any]]:
+    """单 point 的 Gate violation（用于 Review approve）。"""
+    violations: list[dict[str, Any]] = []
+    pid = str(point.get("intent_id", point.get("key", "?")))
+    has_assertion = _point_has_assertion(point)
+    has_candidate = _point_has_candidate_step(point)
+
+    if _point_has_assertion_missing_warning(point):
+        violations.append({
+            "code": "assertion_missing", "severity": "block",
+            "message": f"测试点 {pid} 无可执行断言。", "intent_id": pid,
+        })
+    elif has_candidate and not has_assertion:
+        violations.append({
+            "code": "unprocessed", "severity": "block",
+            "message": f"测试点 {pid} 存在未结构化步骤（candidate_step）。", "intent_id": pid,
+        })
+    elif not has_candidate and not has_assertion:
+        violations.append({
+            "code": "zero_assertion", "severity": "block",
+            "message": f"测试点 {pid} 缺少可执行断言。", "intent_id": pid,
+        })
+    return violations
+
+
 def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
     """从资产数据构建质量报告 (P0-4: 审核页展示 Gate 报告)。
 
@@ -383,10 +432,8 @@ def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
         if pt not in by_type:
             by_type[pt] = {"total": 0, "zero_assertion": 0}
         by_type[pt]["total"] += 1
-        steps = p.get("steps", []) if isinstance(p.get("steps"), list) else []
-        actions = [str(s.get("action", "")) for s in steps]
-        has_assertion = any(a.startswith("assert_") for a in actions)
-        has_candidate = "candidate_step" in actions
+        has_assertion = _point_has_assertion(p)
+        has_candidate = _point_has_candidate_step(p)
 
         if has_candidate:
             candidate_step_count += 1
@@ -533,6 +580,7 @@ def check_generate_gate(asset: dict[str, Any]) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "code": "quality_gate_blocked",
+                "scope": "generate",
                 "message": "质量门禁阻断，无法生成用例。请先修复阻断项后再生成。",
                 "violations": blocking,
             },
@@ -547,43 +595,19 @@ def check_approve_point_gate(point: dict[str, Any]) -> None:
     2. point.steps 无任何 assert_ action（零断言）
     3. candidate_step 存在且无 assert_ action（未结构化）
     """
-    psteps = point.get("steps", []) if isinstance(point.get("steps"), list) else []
-    pactions = [str(s.get("action", "")) for s in psteps]
-    has_assertion = any(a.startswith("assert_") for a in pactions)
-    has_candidate = "candidate_step" in pactions
-    point_warnings = point.get("warnings", []) if isinstance(point.get("warnings"), list) else []
     point_id = str(point.get("intent_id") or point.get("key", "?"))
-
-    # Rule 1: assertion_missing in warnings
-    if any("assertion_missing" in str(w) for w in point_warnings):
+    violations = get_point_gate_violations(point)
+    blocking = [v for v in violations if v.get("severity") == "block"]
+    if blocking:
+        v = blocking[0]
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
-                "code": "gate_reject_blocked",
-                "message": f"测试点 {point_id} 无可执行断言，不可批准。请先修复断言后再审核。",
+                "code": "quality_gate_blocked",
+                "scope": "review",
+                "message": v.get("message", f"测试点 {point_id} 不满足质量要求。"),
                 "intent_id": point_id,
-            },
-        )
-
-    # Rule 2: candidate_step + no assertion → unprocessed
-    if has_candidate and not has_assertion:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": "gate_reject_blocked",
-                "message": f"测试点 {point_id} 存在未结构化步骤（candidate_step），不可批准。请先完成人工结构化后再审核。",
-                "intent_id": point_id,
-            },
-        )
-
-    # Rule 3: no candidate_step + no assertion → zero_assertion
-    if not has_candidate and not has_assertion:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": "gate_reject_blocked",
-                "message": f"测试点 {point_id} 缺少可执行断言，不可批准。请先修复后再审核。",
-                "intent_id": point_id,
+                "violations": blocking,
             },
         )
 
@@ -597,6 +621,7 @@ def check_execute_gate(asset: dict[str, Any]) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "code": "quality_gate_blocked",
+                "scope": "execute",
                 "message": "质量门禁阻断，无法执行。请先修复阻断项后再执行。",
                 "violations": blocking,
             },
