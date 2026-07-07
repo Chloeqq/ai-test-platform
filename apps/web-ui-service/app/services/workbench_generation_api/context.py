@@ -230,7 +230,7 @@ class WorkbenchContext:
     repository: WorkbenchGenerationRepository
     runtime: WorkbenchRuntimeContext
     generation: WorkbenchGenerationContext
-    default_project: str = "mall"
+    default_project: str = ""
 
 
 def build_workbench_runtime_context() -> WorkbenchRuntimeContext:
@@ -653,7 +653,7 @@ def build_workbench_context(db: Session) -> WorkbenchContext:
 
 
 def _resolve_default_project(db: Session) -> str:
-    """从 DB 查询第一个活跃项目作为默认值，查不到回退 'mall'。"""
+    """从 DB 查询第一个活跃项目作为默认值，查不到返回空字符串。"""
     try:
         from app.repositories.test_project_repository import TestProjectRepository
         projects = TestProjectRepository(db).list_all()
@@ -662,4 +662,4 @@ def _resolve_default_project(db: Session) -> str:
                 return p.project_code
     except Exception:
         pass
-    return "mall"
+    return ""

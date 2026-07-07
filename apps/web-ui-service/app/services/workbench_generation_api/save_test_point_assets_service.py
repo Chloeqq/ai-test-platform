@@ -56,6 +56,11 @@ class SaveTestPointAssetsService:
 
         # ── 参数校验 ──
         project = _normalized_text(getattr(payload, "project", "")) or context.default_project
+        if not project:
+            raise runtime.HTTPException(
+                status_code=runtime.status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="project must not be empty and no default project is available",
+            )
         page = runtime.normalize_page_slug(_normalized_text(getattr(payload, "page", "")))
         if not page:
             raise runtime.HTTPException(
