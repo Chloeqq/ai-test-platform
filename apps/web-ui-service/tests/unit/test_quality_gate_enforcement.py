@@ -1,10 +1,14 @@
-"""测试 Phase 4.1: get_quality_gate_violations + check_generate_gate。"""
+"""测试 Phase 4.1 Generate Gate + Phase 4.2 Review Gate。"""
 from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
 
-from app.services.workbench_asset_views import get_quality_gate_violations, check_generate_gate
+from app.services.workbench_asset_views import (
+    get_quality_gate_violations,
+    check_generate_gate,
+    check_approve_point_gate,
+)
 
 
 def _make_asset(*, plan_points: list[dict] | None = None) -> dict:
@@ -133,3 +137,58 @@ def test_empty_asset_no_crash() -> None:
     violations = get_quality_gate_violations(asset)
     assert len(violations) == 0
     check_generate_gate(asset)
+
+
+# ════════════════════════════════════════════════════════════════
+# Phase 4.2: check_approve_point_gate
+# ════════════════════════════════════════════════════════════════
+
+
+def test_approve_assertion_missing_blocked() -> None:
+    """assertion_missing warning → approve blocked。"""
+    point = _make_point("intent-01", steps=[_step("input"), _step("click")], warnings=[
+        "assertion_missing: 无可执行断言",
+    ])
+    with pytest.raises(HTTPException) as exc:
+        check_approve_point_gate(point)
+    assert exc.value.status_code == 422
+    assert "gate_reject_blocked" in str(exc.value.detail)
+
+
+def test_approve_zero_assertion_blocked() -> None:
+    """无 assertion + 无 warning → approve blocked（零断言检测）。"""
+    point = _make_point("intent-01", steps=[_step("input"), _step("click")])
+    with pytest.raises(HTTPException) as exc:
+        check_approve_point_gate(point)
+    assert exc.value.status_code == 422
+
+
+def test_approve_candidate_step_no_assertion_blocked() -> None:
+    """candidate_step + 无断言 → approve blocked。"""
+    point = _make_point("intent-01", steps=[_step("candidate_step")])
+    with pytest.raises(HTTPException) as exc:
+        check_approve_point_gate(point)
+    assert exc.value.status_code == 422
+
+
+def test_approve_pass_success() -> None:
+    """有断言的正常 point → approve 成功。"""
+    point = _make_point("intent-01", steps=[_step("input"), _step("assert_visible")])
+    check_approve_point_gate(point)
+
+
+def test_approve_candidate_step_with_assertion_allowed() -> None:
+    """candidate_step + 有断言 → approve 允许。"""
+    point = _make_point("intent-01", steps=[_step("candidate_step"), _step("assert_visible")], warnings=[
+        "步骤仍需人工结构化",
+    ])
+    check_approve_point_gate(point)
+
+
+def test_approve_data_warning_allowed() -> None:
+    """仅有 data_warning → approve 允许。"""
+    point = _make_point("intent-01", steps=[_step("input"), _step("assert_text")], warnings=[
+        "用户名输入框 的空格输入需要后续由 DSL 数据引用执行",
+        "用户名输入框 输入步骤缺少明确测试数据",
+    ])
+    check_approve_point_gate(point)

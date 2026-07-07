@@ -539,6 +539,55 @@ def check_generate_gate(asset: dict[str, Any]) -> None:
         )
 
 
+def check_approve_point_gate(point: dict[str, Any]) -> None:
+    """Review approve 前检查单个 point 是否允许 approve。
+
+    阻断规则（与 Generate Gate 对齐）：
+    1. assertion_missing 在 point.warnings 中
+    2. point.steps 无任何 assert_ action（零断言）
+    3. candidate_step 存在且无 assert_ action（未结构化）
+    """
+    psteps = point.get("steps", []) if isinstance(point.get("steps"), list) else []
+    pactions = [str(s.get("action", "")) for s in psteps]
+    has_assertion = any(a.startswith("assert_") for a in pactions)
+    has_candidate = "candidate_step" in pactions
+    point_warnings = point.get("warnings", []) if isinstance(point.get("warnings"), list) else []
+    point_id = str(point.get("intent_id") or point.get("key", "?"))
+
+    # Rule 1: assertion_missing in warnings
+    if any("assertion_missing" in str(w) for w in point_warnings):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "gate_reject_blocked",
+                "message": f"测试点 {point_id} 无可执行断言，不可批准。请先修复断言后再审核。",
+                "intent_id": point_id,
+            },
+        )
+
+    # Rule 2: candidate_step + no assertion → unprocessed
+    if has_candidate and not has_assertion:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "gate_reject_blocked",
+                "message": f"测试点 {point_id} 存在未结构化步骤（candidate_step），不可批准。请先完成人工结构化后再审核。",
+                "intent_id": point_id,
+            },
+        )
+
+    # Rule 3: no candidate_step + no assertion → zero_assertion
+    if not has_candidate and not has_assertion:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "gate_reject_blocked",
+                "message": f"测试点 {point_id} 缺少可执行断言，不可批准。请先修复后再审核。",
+                "intent_id": point_id,
+            },
+        )
+
+
 def build_test_point_asset_detail(
     *,
     project: str,

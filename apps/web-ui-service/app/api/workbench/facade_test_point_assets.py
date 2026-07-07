@@ -53,7 +53,7 @@ from app.services import (
     workbench_scheduler_service,
     workbench_task_service,
 )
-from app.services.workbench_asset_views import check_generate_gate
+from app.services.workbench_asset_views import check_generate_gate, check_approve_point_gate
 from app.services.workbench_generation_api.payloads import GenerateCasePayload as GenerationGenerateCasePayload
 from app.services.workbench_generation_api.usecase_factory import build_generate_case_usecase
 
@@ -438,18 +438,9 @@ class WorkbenchFacadeTestPointAssetsMixin:
                 point_id = _text(point.get("intent_id") or point.get("key"))
                 if point_id not in intent_ids:
                     continue
-                # P1-2: 零断言点禁止批准。Gate REJECT 不可被人为绕过。
+                # Phase 4.2: Review approve 前检查 point 质量（assertion + candidate_step）
                 if next_status == "approved":
-                    point_warnings = point.get("warnings") if isinstance(point.get("warnings"), list) else []
-                    if any("assertion_missing" in str(w) for w in point_warnings):
-                        raise HTTPException(
-                            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                            detail={
-                                "code": "gate_reject_blocked",
-                                "message": f"测试点 {point_id} 无可执行断言，不可批准。请先修复断言后再审核。",
-                                "intent_id": point_id,
-                            },
-                        )
+                    check_approve_point_gate(point)
                 point["review_status"] = next_status
                 point["review_note"] = note if next_status == "rejected" else note
                 point["reviewed_at"] = reviewed_at
