@@ -96,9 +96,9 @@ def build_point_quality(point: dict) -> dict:
 
 | # | 功能 | 数据来源 | 新增代码 |
 |---|------|---------|---------|
-| 1 | `point_level_quality` 数组 | 已有 plan.points | `asset_views.py` +30行 |
-| 2 | `project_quality_summary` | 已有 quality_report × N | `asset_views.py` +40行 |
-| 3 | 前端质量仪表板 | API 已有数据 | 前端页面 +80行 |
+| 1 | ✅ point_level_quality | 已实施 (7f0a18a) |
+| 2 | ✅ project_quality_summary | 已实施 (7f0a18a) |
+| 3 | ✅ 前端 Dashboard (P1-1~P1-3) | 已实施 (ffddb87, ebc1c24) |
 
 **不新增:** API 端点、DB 字段、状态机、Agent、规则。
 
