@@ -908,6 +908,27 @@ export function TestPointAssetDetailPage() {
             </div>
           </div>
           <QualityGateCard report={(item.quality_report || {}) as Record<string, unknown>} />
+          {(() => {
+            const qr = (item.quality_report || {}) as Record<string, unknown>;
+            const perPoint = Array.isArray(qr.per_point) ? (qr.per_point as Array<Record<string, unknown>>) : [];
+            const problemPoints = perPoint.filter((p) => !p.has_assertion || p.has_candidate_step);
+            if (!problemPoints.length) return null;
+            const editUrl = `/react/assets/test-points/${encodeURIComponent(assetId)}/edit?project=${encodeURIComponent(project)}`;
+            return (
+              <div className="panel point-quality-summary">
+                <strong>需修复 ({problemPoints.length})</strong>
+                <div className="detail-field-row">
+                  {problemPoints.slice(0, 5).map((p) => (
+                    <span key={String(p.intent_id)} className="tag tag--warning">
+                      {String(p.intent_id)}: {!p.has_assertion ? "零断言" : ""}{p.has_candidate_step ? "占位步骤" : ""}
+                    </span>
+                  ))}
+                  {problemPoints.length > 5 ? <span>...及其他 {problemPoints.length - 5} 个</span> : null}
+                </div>
+                <Link className="button secondary" to={editUrl}>编辑资产修复</Link>
+              </div>
+            );
+          })()}
           <div className={`asset-review-banner asset-review-${assetReviewBadge.tone}`}>
             <strong>{assetReviewBadge.label}</strong>
             <span>
