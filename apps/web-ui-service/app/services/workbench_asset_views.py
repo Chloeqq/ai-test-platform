@@ -472,6 +472,73 @@ def _build_quality_report(asset: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def get_quality_gate_violations(asset: dict[str, Any]) -> list[dict[str, Any]]:
+    """返回 Quality Gate violation 列表。只负责发现，不负责阻断。
+
+    基于 _build_quality_report 的输出，逐条件检查。
+    """
+    qr = _build_quality_report(asset)
+    violations: list[dict[str, Any]] = []
+    per_point = qr.get("per_point", []) if isinstance(qr.get("per_point"), list) else []
+
+    zero_count = int(qr.get("zero_assertion_count", 0) or 0)
+    unprocessed_count = int(qr.get("unprocessed_count", 0) or 0)
+    candidate_count = int(qr.get("candidate_step_count", 0) or 0)
+    quality_warnings = qr.get("quality_warnings", []) if isinstance(qr.get("quality_warnings"), list) else []
+
+    if zero_count > 0:
+        ids = [str(p.get("intent_id", "")) for p in per_point if not p.get("has_assertion") and not p.get("has_candidate_step")]
+        violations.append({
+            "code": "zero_assertion",
+            "severity": "block",
+            "message": f"{zero_count} 个测试点缺少可执行断言，无法验证业务结果。",
+            "intent_ids": ids,
+        })
+
+    if unprocessed_count > 0:
+        ids = [str(p.get("intent_id", "")) for p in per_point if p.get("has_candidate_step") and not p.get("has_assertion")]
+        violations.append({
+            "code": "unprocessed",
+            "severity": "block",
+            "message": f"{unprocessed_count} 个测试点存在 candidate_step 且未生成断言步骤。",
+            "intent_ids": ids,
+        })
+
+    if candidate_count > 0 and unprocessed_count == 0:
+        ids = [str(p.get("intent_id", "")) for p in per_point if p.get("has_candidate_step")]
+        violations.append({
+            "code": "candidate_step",
+            "severity": "review",
+            "message": f"{candidate_count} 个测试点存在 candidate_step（已有断言）。",
+            "intent_ids": ids,
+        })
+
+    if quality_warnings:
+        violations.append({
+            "code": "quality_warning",
+            "severity": "review",
+            "message": f"{len(quality_warnings)} 条质量问题需人工确认。",
+            "intent_ids": [],
+        })
+
+    return violations
+
+
+def check_generate_gate(asset: dict[str, Any]) -> None:
+    """Generate Case 前的质量门禁检查。存在 block 级 violation 时抛 422。"""
+    violations = get_quality_gate_violations(asset)
+    blocking = [v for v in violations if v.get("severity") == "block"]
+    if blocking:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "quality_gate_blocked",
+                "message": "质量门禁阻断，无法生成用例。请先修复阻断项后再生成。",
+                "violations": blocking,
+            },
+        )
+
+
 def build_test_point_asset_detail(
     *,
     project: str,

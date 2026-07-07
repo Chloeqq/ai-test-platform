@@ -53,6 +53,7 @@ from app.services import (
     workbench_scheduler_service,
     workbench_task_service,
 )
+from app.services.workbench_asset_views import check_generate_gate
 from app.services.workbench_generation_api.payloads import GenerateCasePayload as GenerationGenerateCasePayload
 from app.services.workbench_generation_api.usecase_factory import build_generate_case_usecase
 
@@ -1257,6 +1258,7 @@ class WorkbenchFacadeTestPointAssetsMixin:
             priority = _text(asset.get("priority")) or "P1"
             plan = asset.get("plan") if isinstance(asset.get("plan"), dict) else {}
             points = plan.get("points") if isinstance(plan.get("points"), list) else []
+            check_generate_gate(asset)
             approved_points = []
             for point in points:
                 if not isinstance(point, dict) or _review_status_from_point(point) != "approved":
