@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -368,10 +369,22 @@ class SaveTestPointAssetsService:
         # Phase 5.1: 追加 quality snapshot
         try:
             from app.services.workbench_asset_views import append_quality_snapshot
-            snapshot_asset = dict(bundle)
-            snapshot_asset["project"] = project
-            snapshot_asset["asset_id"] = candidate_case_id
-            snapshot_asset["source_type"] = source_type
+            # 从已保存的 asset 文件读取真实 version（bundle.version 固定为 1）
+            actual_version = 1
+            if asset_path_str:
+                try:
+                    asset_payload = json.loads(Path(asset_path_str).read_text(encoding="utf-8"))
+                    actual_version = int(asset_payload.get("version", 1) or 1)
+                except Exception:
+                    pass
+            snapshot_asset = {
+                "project": project,
+                "asset_id": candidate_case_id,
+                "version": actual_version,
+                "source_type": source_type,
+                "plan": {"points": points},
+                "warnings": [],
+            }
             append_quality_snapshot(snapshot_asset, trigger="ai_save")
         except Exception:
             LOGGER.warning(

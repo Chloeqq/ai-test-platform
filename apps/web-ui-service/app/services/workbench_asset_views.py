@@ -615,6 +615,7 @@ def append_quality_snapshot(asset: dict[str, Any], *, trigger: str) -> None:
         if not asset_id:
             return
         snapshot = {
+            "project": project,
             "asset_id": asset_id,
             "version": int(asset.get("version", 0) or 0),
             "at": (asset.get("updated_at") or state_store.now_iso()),

@@ -116,3 +116,37 @@ def test_save_failure_no_snapshot(tmp_state_root):
     # 如果没崩溃，测试通过
     snap_dir = tmp_state_root / "quality-snapshots"
     assert not snap_dir.exists() or list(snap_dir.rglob("*.jsonl")) == []
+
+
+def test_ai_save_version_from_asset(tmp_state_root):
+    """P0: ai_save 路径 version 应来自 asset，不是固定 1。"""
+    asset = _make_asset(version=8, source_type="selection_save")
+    append_quality_snapshot(asset, trigger="ai_save")
+
+    snap_path = tmp_state_root / "quality-snapshots" / "mall" / "test-asset-001.jsonl"
+    snap = json.loads(snap_path.read_text().strip())
+    assert snap["version"] == 8, f"expected version=8, got {snap['version']}"
+    assert snap["trigger"] == "ai_save"
+
+
+def test_snapshot_contains_project(tmp_state_root):
+    """P1: snapshot JSON 行内应包含 project 字段。"""
+    asset = _make_asset(project="atp")
+    append_quality_snapshot(asset, trigger="upsert")
+
+    snap_path = tmp_state_root / "quality-snapshots" / "atp" / "test-asset-001.jsonl"
+    snap = json.loads(snap_path.read_text().strip())
+    assert snap["project"] == "atp", f"expected project=atp, got {snap.get('project', 'MISSING')}"
+
+
+def test_multi_version_sequential(tmp_state_root):
+    """多次保存 → version 严格递增: 1, 2, 3。"""
+    for v in (1, 2, 3):
+        asset = _make_asset(version=v)
+        append_quality_snapshot(asset, trigger="upsert")
+
+    snap_path = tmp_state_root / "quality-snapshots" / "mall" / "test-asset-001.jsonl"
+    lines = snap_path.read_text().strip().split("\n")
+    assert len(lines) == 3
+    versions = [json.loads(line)["version"] for line in lines]
+    assert versions == [1, 2, 3], f"expected [1,2,3], got {versions}"
