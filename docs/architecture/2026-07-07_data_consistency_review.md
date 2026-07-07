@@ -119,3 +119,101 @@
 | 并发安全 | 2 线程同时保存，验证最终数据是最后一次写入的完整版本 |
 | 重试无重复 | 首次 DB 失败，重试后验证只有 1 条 asset 记录 |
 | 无孤儿数据 | 100 次随机故障模拟后，统计文件数 = DB 记录数（允许 `pending` 差异） |
+
+---
+
+## DC-002 补充分析：Source of Truth 代码验证（2026-07-07）
+
+### 逐项回答
+
+**Q1: test_point_assets 是否保存完整测试资产内容？**
+
+✅ 是。`test_point_asset.py` 模型：`raw_payload: Mapped[dict] = mapped_column(JSON, default=dict)`。
+`save_asset()`（`test_point_asset_store.py:63`）将完整 bundle（含 plan + 全部 points）写入 `raw_payload`。数据无损。
+
+**Q2: sync_cache_from_db() 恢复文件时，数据来源是什么？**
+
+✅ DB。代码（`test_point_asset_store.py:111`）：
+```python
+payload = row.raw_payload  # 从 DB 读取
+path.write_text(json.dumps(payload, ...))  # 写入文件
+```
+数据流：`DB raw_payload → JSON string → state/*.json`。不依赖已有文件。
+
+**Q3: 如果 state/*.json 完全删除，是否可以仅依靠 DB 恢复？**
+
+✅ 是。
+```python
+# test_point_asset_store.py:111-135
+for row in rows:                       # 遍历 DB 中所有资产
+    payload = row.raw_payload          # 读 DB 完整数据
+    path.write_text(json.dumps(...))    # 重建文件
+```
+执行：`sync_cache_from_db(db, project, project_dir)` 即可全量恢复。
+
+**Q4: 如果 DB 删除，是否可以仅依靠文件恢复？**
+
+✅ 是。
+```python
+# test_point_asset_store.py:138-155
+for path in sorted(project_dir.glob("*.json")):  # 遍历所有文件
+    bundle = json.loads(path.read_text())         # 读文件
+    repo.upsert(**cols)                           # 写入 DB
+```
+执行：`backfill_from_dir(db, project, project_dir)` 即可全量恢复。
+
+双向恢复能力已完整实现。
+
+**Q5: 当前读取详情接口的数据来源是什么？**
+
+DB 优先，文件回退。代码（`facade_test_point_assets.py:167-174`）：
+```python
+load_test_point_asset = lambda project, case_id: (
+    test_point_asset_store.load_asset(db, ...)              # 1. DB 优先
+    or workbench_asset_service.load_test_point_asset_with_root(...)  # 2. 文件回退
+)
+```
+DB 有数据 → 返回 DB 数据。DB 无数据 → 返回文件数据。
+
+**Q6: 当前列表接口的数据来源是什么？**
+
+⚠️ **混合来源，存在 gap**。代码（`asset_views.py:234-243`）：
+```python
+# 枚举: 仅从文件
+case_ids = set(file.stem for file in project_dir.glob("*.json"))
+
+# 加载: 仅从文件
+asset = _state_svc().load_test_point_asset(project, case_id)
+```
+
+列表枚举和加载都走文件，不查 DB。但 facade 在调用前执行 `sync_cache_from_db()` 保证 DB 资产都有对应文件（`facade_test_point_assets.py:148`）：
+```python
+test_point_asset_store.sync_cache_from_db(db, project=project, project_dir=...)
+```
+
+**正常路径：** `sync_cache_from_db()` 成功 → 文件齐全 → 列表完整 → DB 是事实源
+**异常路径：** `sync_cache_from_db()` 失败（try/catch 吞异常，line 154）→ 只列有文件的资产 → DB 独有资产不可见
+
+---
+
+### 事实总结
+
+| 维度 | DB (test_point_assets) | File (state/*.json) |
+|------|----------------------|-----|
+| 完整数据存储 | ✅ raw_payload JSON | ✅ 同内容 |
+| 写入事务保证 | ✅ ACID | ❌ 无 |
+| 列表枚举来源 | ❌ 不走 DB | ✅ 文件 glob |
+| 详情加载来源 | ✅ 优先 | ✅ 回退 |
+| DB→文件恢复 | - | ✅ sync_cache_from_db |
+| 文件→DB 恢复 | ✅ backfill_from_dir | - |
+| 恢复自动触发 | - | ✅ 每次列表页 |
+
+---
+
+### 结论
+
+**DB 可以作为 source of truth，但有一个 gap 需修复：**
+
+列表接口的文件枚举应并入 DB ID 列表，否则 `sync_cache_from_db` 失败时 DB 独有资产不可见。
+
+**评级：** B（DB source of truth），gap 在 `asset_views.py:234` 的文件枚举。`sync_cache_from_db` 的 try/catch 兜底可以掩盖此问题，但不可靠。
