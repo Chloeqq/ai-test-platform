@@ -1,8 +1,14 @@
 # AI 测试资产质量治理方案
 
-> **日期:** 2026-07-07
+> **日期:** 2026-07-07 | **状态:** V2 反方评审已通过 (见 `quality_governance_v2_review.md`)
 > **触发审计:** Q-001 ~ Q-008（质量审计报告）
 > **范围:** 生成 → Gate → 审核 → 执行的完整质量闭环
+>
+> **V2 评审决策:**
+> - ✅ 保留: 编译后 Gate, 断言强度评分, RULE_008=FATAL, Gate 结果展示
+> - ❌ 删除: Repair Agent (编译器修复即可), quality_status 独立字段, Final Gate 独立阶段
+> - 🔧 修改: RULE_003 按 intent_type 区分, 强制规则 4→2
+> - **MVP: 4 项** (structurer.py 修复 30 行 + 重新保存资产 + 前端展示 Gate + RULE_003 分级)
 
 ---
 
@@ -22,49 +28,44 @@
 
 ---
 
-## 2. 目标架构
+## 2. 目标架构 (V2 精简版)
+
+> ⚠️ V2 评审已删除 Repair Agent 和 Final Gate。修复编译器 (structurer.py) 从源头消除问题。
 
 ```
 AI 生成
   │  candidate test points (自然语言步骤)
   ▼
-编译 → DSL 步骤 (structured_steps_from_candidate)
-  │  ← Phase 2 已模块化
+编译 → DSL 步骤 (structurer.py)           ← 【P0 修复: assert_url→assert_text】
+  │                                          【P0 修复: 零断言兜底】
   ▼
 ┌─────────────┐
 │ Quality Gate │ ← 17 条规则 (已有)
-│  Fatal → REJECT
-│  Error → REPAIR → 修复 Agent
-│  Warning → REVIEW
-│  Info → PASS
+│  FATAL → REJECT
+│  ERROR → REVIEW (强制展示 Gate 报告)      ← 【P0 强化】
+│  WARNING → REVIEW
+│  INFO → PASS
 └──────┬──────┘
        │
-       ├── PASS ──→ 最终 Gate (断言完整性检查)
-       │              │
-       ├── REPAIR ──→ 修复 Agent                ← 【新增】
-       │              │  自动修复: assert_url → assert_text
-       │              │  自动修复: 补 assertion
-       │              │  自动修复: element_code 规范
-       │              ▼
-       │         重新 Gate
+       ├── PASS ──→ 可执行
        │
-       ├── REVIEW ──→ 人工审核                   ← 【已有,需强化】
+       ├── REVIEW ──→ 人工审核               ← 【P0 强化】
        │              │  Gate 结果必须展示
-       │              │  批准后必须通过 Final Gate
+       │              │  gate_score < 60 → 不可批准
        │
-       └── REJECT ──→ 记录驳回原因               ← 【已有】
+       └── REJECT ──→ 记录驳回原因           ← 【已有】
 ```
 
-### 与当前架构的差异
+### V2 vs V1 决策
 
-| 组件 | 当前状态 | 目标状态 |
-|------|---------|---------|
-| Gate 管道 | `evaluate_case_quality()` 存在 | 不变 |
-| REPAIR 决策 | `Decision.REPAIR` 已定义 | **实现修复 Agent** |
-| 修复 Agent | 无 | **新增** `repair_agent.py` |
-| 人工审核 | 可无视 Gate 结果 | **强制展示 Gate 报告** |
-| 最终 Gate | 无 | **新增** 断言完整性检查 |
-| 编译修复 | 无 | **修复** structurer.py 降级 bug |
+| 组件 | V1 方案 | V2 决策 | 理由 |
+|------|--------|---------|------|
+| Repair Agent | 新增 | ❌ 删除 | 编译器修复后不需要 |
+| Final Gate | 新增 | ❌ 删除 | 合并到现有 Gate(assertion=0→REJECT) |
+| quality_status | 新增字段 | ❌ 删除 | 状态爆炸, Decision 枚举已足够 |
+| structurer.py 修复 | 低优先级 | 🔼 P0 | 根因修复, MVP |
+| Gate 强制 | 低优先级 | 🔼 P0 | 审核不能无视 Gate |
+| RULE_003 | FATAL 统一 | 🔧 分级 | 按 intent_type 区分 (V2 review) |
 
 ---
 
@@ -233,28 +234,33 @@ grade = A/B/C/D/F
 
 ---
 
-## 7. 改造优先级
+## 7. 改造优先级 (V2 MVP)
 
-### P0: 编译层修复 (不改 Gate 体系)
+### P0: 编译层修复 (MVP, 预计 30 行代码)
 
-1. **修复 `structurer.py`**: `_build_expected_assertions` 对 negative/boundary 场景优先生成 `assert_text`
-2. **修复 `structurer.py`**: `_build_expected_assertions` 对 functional 场景没有匹配到任何 assertion token 时至少加 `assert_visible`
-3. 重新保存现有 27 个测试点验证修复效果
+| # | 改动 | 文件 | 效果 |
+|---|------|------|------|
+| 1 | `_build_expected_assertions`: negative/boundary/format → 生成 `assert_text` 而非 `assert_url` | `structurer.py` | 消除 23 个弱断言 |
+| 2 | `_build_expected_assertions`: 无 token 匹配时至少加 `assert_visible` 兜底 | `structurer.py` | 消除零断言 |
+| 3 | 重新保存 `mall-web-login-auth-fn-ai-0001` | 操作 | 验证 27 个点 |
+| 4 | 审核页展示 Gate 报告 (`gate_score`, `grade`, 失败规则) | 前端 | Gate 对审核者可见 |
 
-### P1: Gate 强制化 (不新增代码)
+### P1: Gate 强化
 
-4. **审核流程**: 展示 Gate 报告, FATAL 结果不可跳过
-5. **最终 Gate**: 断言完整性检查 (4 条硬规则)
+| # | 改动 | 依赖 |
+|---|------|------|
+| 5 | `gate_score < 60` → `review_blocked = True`, 不可批准 | P0-4 |
+| 6 | RULE_003 按 intent_type 区分 Severity (negative/boundary=FATAL, security=WARNING) | P0-1 |
+| 7 | candidate_step 在编译阶段拒绝而非降级 | P0-2 |
 
-### P2: 修复 Agent (新增代码)
+### P2: 暂不做
 
-6. **Auto-fix assert_url → assert_text**: 从 steps_hint 中读取正确值
-7. **Auto-fix element_code**: 从 element_naming 映射
-
-### P3: 状态模型 (需要新字段)
-
-8. 增加 `quality_status` 字段
-9. 状态机流转
+| # | 原方案 | 删除理由 |
+|---|--------|---------|
+| - | Repair Agent | 编译器修复后不再需要 |
+| - | quality_status 字段 | 状态爆炸; Decision 枚举已足够 |
+| - | Final Gate 独立阶段 | 合并到现有 Gate (assertion=0 → REJECT) |
+| - | Element Registry | 已有 element_binding + page_elements 表 |
 
 ---
 
