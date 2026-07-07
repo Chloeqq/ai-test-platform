@@ -1062,6 +1062,13 @@ class WorkbenchFacadeTestPointAssetsMixin:
         # Phase 5.1: 追加 quality snapshot
         if item:
             item["project"] = project
+            # 从已保存的 asset 文件读取真实 version（API response item 不含 version）
+            if "version" not in item or not item.get("version"):
+                try:
+                    asset_payload = _read_json_file(asset_path) if asset_path.exists() else {}
+                    item["version"] = int(asset_payload.get("version", 1) or 1)
+                except Exception:
+                    item["version"] = 1
             append_quality_snapshot(item, trigger="upsert")
         return {
             "message": "test point asset saved",

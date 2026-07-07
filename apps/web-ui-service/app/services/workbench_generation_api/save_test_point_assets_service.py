@@ -381,7 +381,7 @@ class SaveTestPointAssetsService:
                 "project": project,
                 "asset_id": candidate_case_id,
                 "version": actual_version,
-                "source_type": source_type,
+                "source_type": _c.SOURCE_TYPE_SELECTION_SAVE,
                 "plan": {"points": points},
                 "warnings": [],
             }
