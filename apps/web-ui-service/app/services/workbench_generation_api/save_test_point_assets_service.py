@@ -318,28 +318,3 @@ def _get_page_hook(page: str) -> LoginPasswordVisibilityHook | None:
     if page == "login":
         return LoginPasswordVisibilityHook()
     return None
-
-
-# ── 后向兼容 re-export（测试和旧代码引用这些函数名）──────────────────────
-
-from shared_backend.type_utils import as_text_list as _list_text, append_unique as _append_unique
-from shared_backend.text_utils import extract_input_value as _input_value_from_text
-
-from .compilation.point_builder import build_point as _build_point, _resolve_involved_element_codes
-from .compilation.precondition import fallback_precondition as _fallback_precondition
-from .steps.structurer import structured_steps_from_candidate as _structured_steps_from_candidate
-from .elements.resolver import _data_ref_for_element
-from .hooks.login_password_visibility import (
-    _assertion_step as _password_visibility_assertion_step,
-    _precondition_setup as _password_visibility_precondition_setup,
-)
-from .assets.preview import preview_requirement as _preview_requirement, candidate_snapshot as _candidate_snapshot
-from .assets.queries import (
-    existing_test_point_asset_ids as _existing_test_point_asset_ids,
-    find_existing_page_asset_for_upsert as _find_existing_page_asset_for_upsert,
-)
-from .assets.coverage import coverage_matrix_from_requirement_spec as _coverage_matrix_from_requirement_spec
-from .assets.statistics import (
-    intent_type_distribution as _intent_type_distribution,
-    first_candidate_title as _first_candidate_title,
-)

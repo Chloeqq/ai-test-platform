@@ -9,7 +9,7 @@ import pytest
 
 from app.services import workbench_generation_service
 from app.services.workbench_generation_api import preview_store
-from app.services.workbench_generation_api import save_test_point_assets_service
+from app.services.workbench_generation_api.compilation.point_builder import build_point as _build_point
 from app.services.workbench_generation_api.candidate_normalizer import CandidateNormalizer
 from app.services.workbench_generation_compiler.runtime import generate_pipeline as generate_pipeline_module
 from shared_backend.element_binding import resolve_involved_element_codes
@@ -37,7 +37,7 @@ def test_allocate_case_id_skips_existing_requested_case_id(tmp_path: Path) -> No
 
 
 def test_saved_test_point_structures_login_candidate_for_dsl_v1_1() -> None:
-    point = save_test_point_assets_service._build_point(
+    point = _build_point(
         {
             "intent_id": "intent-01",
             "title": "首次登录成功",
@@ -70,7 +70,7 @@ def test_saved_test_point_structures_login_candidate_for_dsl_v1_1() -> None:
 
 
 def test_saved_test_point_adds_assertion_for_unauthorized_home_redirect() -> None:
-    point = save_test_point_assets_service._build_point(
+    point = _build_point(
         {
             "intent_id": "intent-24",
             "title": "未登录访问首页被拦截",
