@@ -8,7 +8,9 @@ from . import constants as _c
 
 
 class GenerateCasePayload(BaseModel):
-    project: str = Field(default="")
+    # 默认值仅用于向后兼容，生产环境由前端 project selector 传入
+    # Service 层会做必填校验兜底
+    project: str = Field(default="mall")
     page: str = Field(default="")
     page_url: str = Field(default="")
     requirement: str = Field(default="")
@@ -33,7 +35,8 @@ class GenerateCasePayload(BaseModel):
 
 
 class PrecheckSelectedIntentsPayload(BaseModel):
-    project: str = Field(default="")
+    # 默认值仅用于向后兼容，生产环境由前端 project selector 传入
+    project: str = Field(default="mall")
     page: str = Field(default="")
     preview_id: str = Field(default="")
     selected_intent_ids: list[str] = Field(default_factory=list)
