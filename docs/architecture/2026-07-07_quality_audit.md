@@ -1,6 +1,6 @@
 # AI 测试资产质量审计报告
 
-> **日期:** 2026-07-07
+> **日期:** 2026-07-07 | **状态:** P0 已修复 (cea5dd8, 363bc33)
 > **审查范围:** `mall-web-login-auth-fn-ai-0001` (27 个测试点，完整生成链路)
 > **质量门禁:** 17 条规则 (RULE_001 ~ RULE_017)
 
@@ -39,10 +39,10 @@ Result
 
 | ID | 问题 | 等级 | 影响范围 | 证据 | 建议 |
 |----|------|------|---------|------|------|
-| Q-001 | 23/27 测试点使用弱断言 `assert_url:#/login` | 🔴 P0 | 全部 negative/boundary 场景 | 23个点只检查 URL 停留,不检查错误文案 | 编译层修复: assert_text 替代 assert_url |
-| Q-002 | intent-01 零断言已通过审核 | 🔴 P0 | 最核心的 happy path | approved 但 steps=[input,input,click], 无 assertion | 质量门禁必须拦截, 审核流程需严格化 |
-| Q-003 | intent-02 零断言已通过审核 | 🔴 P0 | 登录态保持场景 | approved 但无断言验证 | 同上 |
-| Q-004 | 5 个 candidate_step 占位符 | 🟡 P1 | 3 个测试点 | "输入URL并访问"/"点击退出按钮" 不可执行 | AI 无法映射到页面元素时降级,需人工替换 |
+| Q-001 | assert_url 弱断言 | ✅ 已修复 | cea5dd8: negative→assert_text |
+| Q-002 | intent-01 零断言已通过审核 | ✅ 已修复 | cea5dd8: 零断言标记 requires_review |
+| Q-003 | intent-02 零断言已通过审核 | ✅ 已修复 | cea5dd8: 同 Q-002 |
+| Q-004 | 5 个 candidate_step 占位符 | 🟡 P1 | 待人工替换为可执行步骤 |
 | Q-005 | 4 个已审核点绕过质量门禁 | 🟡 P1 | RULE_003/008 失效 | approved 点中有弱断言/零断言 | 审核流程应展示 gate 决策, 审批时需说明理由 |
 | Q-006 | element_code 映射缺失 | 🟡 P1 | 24/27 点 | `username_input` vs `login-username-input` 不一致 | 已在编译层使用 element_binding,需重新保存资产 |
 | Q-007 | 11 个 input step 的 value=null | 🟡 P1 | boundary 场景 | 实际值只在 raw_text 中描述, 不可执行 | 需要从 steps_hint 回填具体值 |
@@ -107,7 +107,7 @@ Requirement: "平台用户身份验证登录功能"
 
 1. **Q-001**: 编译层修复 — `structurer.py` 中 `_build_expected_assertions` 对 negative/boundary 场景应生成 `assert_text` 而非 `assert_url`
 2. **Q-002/003**: 重新审核 intent-01/02 — 补 assertion 后重新生成
-3. **Q-005**: 审核流程 — 审批时必须展示 gate 决策结果, 不能绕过
+3. **Q-005**: 🔲 P1 — 审核流程强化 (前端展示 Gate 报告, 待前端改动)
 
 ### 🟡 短期优化
 

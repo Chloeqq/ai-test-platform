@@ -241,8 +241,8 @@ grade = A/B/C/D/F
 | # | 改动 | 文件 | 效果 |
 |---|------|------|------|
 | 1 | `_build_expected_assertions`: negative/boundary/format → 生成 `assert_text` 而非 `assert_url` | `structurer.py` | 消除 23 个弱断言 |
-| 2 | `_build_expected_assertions`: 无 token 匹配时至少加 `assert_visible` 兜底 | `structurer.py` | 消除零断言 |
-| 3 | 重新保存 `mall-web-login-auth-fn-ai-0001` | 操作 | 验证 27 个点 |
+| 2 | ✅ 零断言标记 requires_review | `structurer.py` | 已实施 (cea5dd8) |
+| 3 | 🔲 重新保存资产 | 操作 | 待手动执行 |
 | 4 | 审核页展示 Gate 报告 (`gate_score`, `grade`, 失败规则) | 前端 | Gate 对审核者可见 |
 
 ### P1: Gate 强化
