@@ -86,6 +86,60 @@ interface SummaryBadgeConfig {
   raw?: string;
 }
 
+function QualityGateCard({ report }: { report: Record<string, unknown> }) {
+  if (!report || !Object.keys(report).length) {
+    return null;
+  }
+  const score = Number(report.score ?? 0);
+  const decision = String(report.decision || "PASS");
+  const zeroCount = Number(report.zero_assertion_count ?? 0);
+  const total = Number(report.total_points ?? 0);
+  const assertionWarnings = Array.isArray(report.assertion_warnings) ? report.assertion_warnings as string[] : [];
+  const byType = (report.by_point_type || {}) as Record<string, Record<string, number>>;
+
+  const decisionBadge: Record<string, { label: string; tone: string }> = {
+    REJECT: { label: "不可执行", tone: "danger" },
+    REVIEW: { label: "需审核", tone: "warning" },
+    PASS: { label: "质量通过", tone: "success" },
+  };
+  const badge = decisionBadge[decision] || { label: decision, tone: "neutral" };
+
+  return (
+    <div className={`asset-review-banner asset-review-${badge.tone}`}>
+      <div className="detail-field-row">
+        <strong>Quality Gate</strong>
+        <span>Score: {score}/100 · Decision: {badge.label}</span>
+      </div>
+      {zeroCount > 0 ? (
+        <div className="detail-field-row">
+          <span>零断言测试点: {zeroCount}/{total}</span>
+        </div>
+      ) : null}
+      {Object.keys(byType).length > 0 ? (
+        <div className="detail-field-row">
+          {Object.entries(byType).map(([pt, stats]) =>
+            stats.zero_assertion > 0 ? (
+              <span key={pt} className="tag tag--warning">
+                {pt}: {stats.zero_assertion}/{stats.total} 零断言
+              </span>
+            ) : null
+          )}
+        </div>
+      ) : null}
+      {assertionWarnings.length > 0 ? (
+        <div className="detail-field-help">
+          {assertionWarnings.slice(0, 3).map((w, i) => (
+            <div key={i}>⚠️ {w}</div>
+          ))}
+          {assertionWarnings.length > 3 ? (
+            <div>...及其他 {assertionWarnings.length - 3} 条警告</div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 const SOURCE_BADGE_MAP: Record<string, SummaryBadgeConfig> = {
   selection_save: { label: "AI 自动生成", tone: "ai" },
   generate_chain: { label: "AI 自动生成", tone: "ai" },
@@ -853,6 +907,7 @@ export function TestPointAssetDetailPage() {
               {assetReviewBadge.hint ? <small className="detail-field-help">{assetReviewBadge.hint}</small> : null}
             </div>
           </div>
+          <QualityGateCard report={(item.quality_report || {}) as Record<string, unknown>} />
           <div className={`asset-review-banner asset-review-${assetReviewBadge.tone}`}>
             <strong>{assetReviewBadge.label}</strong>
             <span>
