@@ -354,6 +354,18 @@ class SaveTestPointAssetsService:
                 project, candidate_case_id, exc_info=True,
             )
 
+        # ── 清理：已保存的 preview 不再需要保留 ──
+        if preview_id:
+            try:
+                preview_store.delete_preview_snapshot(preview_id)
+            except Exception:
+                pass
+        # 顺手清理 7 天以上旧 preview
+        try:
+            preview_store.cleanup_expired_previews(max_age_days=7)
+        except Exception:
+            pass
+
         return {
             "message": "saved 1 test point asset",
             "count": 1,

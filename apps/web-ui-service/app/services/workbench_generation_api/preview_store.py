@@ -266,3 +266,30 @@ def build_preview_intent_detail(preview_id: str, intent_id: str) -> dict[str, An
         status_code=status.HTTP_404_NOT_FOUND,
         detail={"code": "test_intent_not_found", "message": "test intent not found"},
     )
+
+
+def delete_preview_snapshot(preview_id: str) -> bool:
+    """删除指定 preview 快照文件。已保存为 asset 的 preview 不再需要保留。"""
+    try:
+        path = _preview_path(preview_id)
+        if path.exists():
+            path.unlink()
+            return True
+    except OSError:
+        pass
+    return False
+
+
+def cleanup_expired_previews(*, max_age_days: int = 7) -> int:
+    """清理超过 max_age_days 天的旧 preview 文件。返回删除数量。"""
+    import time
+    cutoff = time.time() - max_age_days * 86400
+    deleted = 0
+    try:
+        for path in PREVIEW_ROOT.glob("*.json"):
+            if path.is_file() and path.stat().st_mtime < cutoff:
+                path.unlink(missing_ok=True)
+                deleted += 1
+    except OSError:
+        pass
+    return deleted
