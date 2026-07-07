@@ -249,8 +249,8 @@ grade = A/B/C/D/F
 
 | # | 改动 | 依赖 |
 |---|------|------|
-| 5 | `gate_score < 60` → `review_blocked = True`, 不可批准 | P0-4 |
-| 6 | RULE_003 按 intent_type 区分 Severity (negative/boundary=FATAL, security=WARNING) | P0-1 |
+| 5 | ✅ Gate 保护 — 零断言点不可批准 | 已实施 (d98b606) |
+| 6 | RULE_003 按 intent_type 分级 | ⬜ P1 |
 | 7 | candidate_step 在编译阶段拒绝而非降级 | P0-2 |
 
 ### P2: 暂不做

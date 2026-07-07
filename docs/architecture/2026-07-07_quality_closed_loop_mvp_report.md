@@ -114,9 +114,9 @@ const steps = splitLines(candidate.stepsText).map((step) => ({
 
 | # | 问题 | 修复方案 |
 |---|------|---------|
-| P1-1 | 编辑页未展示 quality_report | 前端渲染 quality_report section |
-| P1-2 | 无 test_data 编辑入口 | 编辑页增加 data 字段编辑 |
-| P1-3 | 无 Gate 引导修复 | 展示 "建议: 在 expected 中添加'提示'关键词" |
+| P1-1 | ✅ quality_report 展示 | 已实施 (b753b60) |
+| P1-2 | ✅ Gate 保护 — 零断言不可批准 | 已实施 (d98b606) |
+| P1-3 | 无 Gate 引导修复 | ⬜ 延后 |
 
 ## 8. 明确不要做 (P2)
 
