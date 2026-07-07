@@ -110,6 +110,7 @@ export function TestPointAssetsPage() {
   const [keyword, setKeyword] = useState<string>("");
   const [items, setItems] = useState<Array<Record<string, unknown>>>([]);
   const [selectionSummary, setSelectionSummary] = useState<Record<string, unknown>>({});
+  const [qualitySummary, setQualitySummary] = useState<Record<string, unknown>>({});
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [busy, setBusy] = useState<boolean>(false);
@@ -153,6 +154,7 @@ export function TestPointAssetsPage() {
       const rows = Array.isArray(payload.items) ? payload.items : [];
       setItems(rows);
       setSelectionSummary((payload.selection_summary || {}) as Record<string, unknown>);
+      setQualitySummary((payload.quality_summary || {}) as Record<string, unknown>);
       const rowAssetIds = rows
         .map((item) => String(item.asset_id || "").trim())
         .filter(Boolean);
@@ -161,6 +163,7 @@ export function TestPointAssetsPage() {
       setErrorText(error instanceof Error ? error.message : "测试点资产加载失败");
       setItems([]);
       setSelectionSummary({});
+      setQualitySummary({});
       setSelectedAssetIds([]);
     } finally {
       setLoading(false);
@@ -573,6 +576,22 @@ export function TestPointAssetsPage() {
           { label: "阻断", value: numberValue(selectionSummary.blocked_count), tone: "bad" },
         ]}
       />
+
+      {(() => {
+        const qs = qualitySummary;
+        const avgScore = Number(qs.avg_score ?? 0);
+        const decisions = (qs.decision_counts || {}) as Record<string, number>;
+        if (!avgScore && !Object.keys(decisions).length) return null;
+        const tone = avgScore >= 80 ? "good" : avgScore >= 60 ? "warn" : "bad";
+        return (
+          <div className={`panel quality-summary-bar quality-${tone}`}>
+            <strong>Quality Score: {avgScore}/100</strong>
+            {decisions.REJECT ? <span className="tag tag--danger">{decisions.REJECT} REJECT</span> : null}
+            {decisions.REVIEW ? <span className="tag tag--warning">{decisions.REVIEW} REVIEW</span> : null}
+            {decisions.PASS ? <span className="tag tag--success">{decisions.PASS} PASS</span> : null}
+          </div>
+        );
+      })()}
 
       <DataTable loading={loading} loadingText="正在加载测试点资产..." errorText={errorText}>
           <table>
