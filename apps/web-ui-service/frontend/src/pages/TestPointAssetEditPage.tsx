@@ -66,33 +66,10 @@ function listText(value: unknown): string[] {
   return value.map((item) => text(item)).filter(Boolean);
 }
 
-const LOGIN_INVOLVED_ELEMENT_ALIASES: Record<string, string> = {
-  "用户名输入框": "username_input",
-  "账号输入框": "username_input",
-  "用户名": "username_input",
-  "账号": "username_input",
-  "密码输入框": "password_input",
-  "密码": "password_input",
-  "登录按钮": "login_button",
-  "登录": "login_button",
-  "首页菜单": "home_menu",
-  "首页": "home_menu",
-  "工作台首页": "home_menu",
-};
 
-function normalizeInvolvedElements(value: unknown, page: unknown): string[] {
+function normalizeInvolvedElements(value: unknown, _page: unknown): string[] {
   const rows = Array.isArray(value) ? listText(value) : splitElements(String(value || ""));
-  if (String(page || "").trim() !== "login") {
-    return Array.from(new Set(rows));
-  }
-  const normalized: string[] = [];
-  rows.forEach((row) => {
-    const elementCode = LOGIN_INVOLVED_ELEMENT_ALIASES[row] || row;
-    if (elementCode && !normalized.includes(elementCode)) {
-      normalized.push(elementCode);
-    }
-  });
-  return normalized;
+  return Array.from(new Set(rows));
 }
 
 function stepTextList(value: unknown): string[] {
@@ -201,34 +178,6 @@ function candidatesFromItem(item: Record<string, unknown>): EditableCandidate[] 
   return [];
 }
 
-function payloadPoint(candidate: EditableCandidate, index: number, page: unknown): Record<string, unknown> {
-  const expected = text(candidate.expected);
-  const intentId = text(candidate.intentId) || `intent-${String(index + 1).padStart(2, "0")}`;
-  const pointType = text(candidate.intentType) || "functional";
-  const steps = splitLines(candidate.stepsText).map((step) => ({
-    action: "candidate_step",
-    target: "",
-    value: step,
-    raw_text: step,
-  }));
-  return {
-    ...candidate.raw,
-    key: text((candidate.raw || {}).key) || intentId,
-    intent_id: intentId,
-    title: text(candidate.title),
-    description: text(candidate.summary || candidate.title),
-    summary: text(candidate.summary || candidate.title),
-    point_type: pointType,
-    intent_type: pointType,
-    priority: text(candidate.priority) || "P1",
-    precondition: text(candidate.precondition),
-    steps,
-    expected,
-    expected_result: expected,
-    involved_elements: normalizeInvolvedElements(candidate.involvedElementsText, page),
-  };
-}
-
 export function TestPointAssetEditPage() {
   const params = useParams<{ assetId: string }>();
   const location = useLocation();
@@ -331,7 +280,17 @@ export function TestPointAssetEditPage() {
         priority: text(form.priority) || "P1",
         requirement: text(form.requirement) || text(form.title) || assetId,
         source_type: text(form.sourceType) || "manual",
-        points: candidates.map((candidate, index) => payloadPoint(candidate, index, normalizedPage)),
+        selected_candidates: candidates.map((candidate) => ({
+        intent_id: text(candidate.intentId),
+        title: text(candidate.title),
+        summary: text(candidate.summary || candidate.title),
+        intent_type: text(candidate.intentType) || "functional",
+        priority: text(candidate.priority) || "P1",
+        precondition: text(candidate.precondition),
+        steps: splitLines(candidate.stepsText),
+        expected: text(candidate.expected),
+        involved_elements: splitElements(candidate.involvedElementsText),
+      })),
       });
       const item = (payload.item || {}) as Record<string, unknown>;
       const plan = (item.plan || {}) as Record<string, unknown>;

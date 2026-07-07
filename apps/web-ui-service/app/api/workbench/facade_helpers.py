@@ -1307,22 +1307,28 @@ def _workbench_test_case_list_item(
 # Candidate formatting —— 测试点→候选结构 转换
 # ═══════════════════════════════════════════════════════════════
 def _steps_from_candidate(candidate: dict[str, Any]) -> list[dict[str, Any]]:
-    """将候选测试点步骤规范化为结构化用例步骤。"""
-    steps = _text_list(candidate.get("steps"))
-    if not steps:
+    """将候选测试点步骤规范化为结构化 DSL 步骤。
+
+    P0-5: 委托给 steps/structurer.py 的编译器，不再硬编码 candidate_step。
+    """
+    from app.services.workbench_generation_api.steps.structurer import (
+        structured_steps_from_candidate,
+    )
+    raw_steps = _text_list(candidate.get("steps"))
+    if not raw_steps:
         summary = _text(candidate.get("summary")) or _text(candidate.get("title")) or _text(candidate.get("intent_id"))
-        steps = [summary] if summary else []
-    if not steps:
-        steps = ["手工维护测试点"]
-    return [
-        {
-            "action": "candidate_step",
-            "target": "",
-            "value": step,
-            "raw_text": step,
-        }
-        for step in steps
-    ]
+        raw_steps = [summary] if summary else []
+    if not raw_steps:
+        raw_steps = ["手工维护测试点"]
+    expected = _text(candidate.get("expected") or candidate.get("expected_result"))
+    struct_steps, _hints, _data, _warnings, _codes, _assertion_count = (
+        structured_steps_from_candidate(
+            candidate=candidate,
+            steps=raw_steps,
+            expected=expected,
+        )
+    )
+    return struct_steps
 
 
 def _candidate_snapshot_from_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
