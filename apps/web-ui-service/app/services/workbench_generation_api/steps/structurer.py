@@ -289,7 +289,7 @@ def _build_expected_assertions(
     home_name = page_config.home_element_name if page_config else _c.HOME_ELEMENT_NAME
     fallback_code = page_config.fallback_element_code if page_config else _c.LAST_ELEMENT_FALLBACK_CODE
 
-    _is_quality_sensitive = point_type in _c.REVIEW_POINT_TYPES
+    _needs_strong_assertion = point_type in _c.STRONG_ASSERTION_REQUIRED_TYPES
 
     if any(token in expected_text for token in _c.ASSERT_VISIBLE_TOKENS):
         structured_steps.append(
@@ -315,10 +315,10 @@ def _build_expected_assertions(
         )
         append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_TEXT, target_code, error_msg))
     elif any(token in expected_text for token in _c.ASSERT_URL_TOKENS):
-        if not has_negation_before(expected_text, ("登录页", "登录页面")):
+        if not has_negation_before(expected_text, _c.ASSERT_URL_TOKENS):
             # P0: negative/boundary/format 场景禁止只生成 assert_url
             # 必须生成 assert_text 验证错误文案
-            if _is_quality_sensitive:
+            if _needs_strong_assertion:
                 error_msg = extract_error_message(expected_text)
                 target_code = involved_codes[-1] if involved_codes else fallback_code
                 structured_steps.append(

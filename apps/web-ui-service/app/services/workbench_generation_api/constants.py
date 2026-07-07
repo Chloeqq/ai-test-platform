@@ -75,6 +75,11 @@ PRECONDITION_APPLICABLE_POINT_TYPES: frozenset[str] = frozenset({
 # _build_point: 需要人工审核的测试点类型
 REVIEW_POINT_TYPES: frozenset[str] = frozenset({"boundary", "negative", "abnormal"})
 
+# 断言质量敏感类型: 必须使用强断言(assert_text)，不可降级为弱断言(assert_url)
+STRONG_ASSERTION_REQUIRED_TYPES: frozenset[str] = frozenset(
+    {"boundary", "negative", "abnormal", "format", "interaction_exception"},
+)
+
 
 # ── 密码可见性（local: 登录页专属，Phase 2 改为页面 hook）──────────────────
 
