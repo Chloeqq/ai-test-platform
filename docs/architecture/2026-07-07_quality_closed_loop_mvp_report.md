@@ -1,6 +1,6 @@
 # 质量闭环 MVP 优化报告
 
-> **日期:** 2026-07-07 | **状态:** 已评审 (方案 A 选定, 见 `edit_loop_design_review.md`)
+> **日期:** 2026-07-07 | **状态:** ✅ P0-5~P0-8 已实施 (c802738)
 > **审查范围:** TestPointAssetEditPage + save_service 编辑→重新编译闭环
 
 ---
@@ -99,17 +99,16 @@ const steps = splitLines(candidate.stepsText).map((step) => ({
 
 ---
 
-## 6. 阻塞执行的问题 (P0 — 待实现，方案已选定)
+## 6. 阻塞执行的问题 (P0 — ✅ 已实施)
 
-| # | 问题 | 方案 | 改动 |
-|---|------|------|------|
-| P0-5 | `payloadPoint()` 总生成 candidate_step | 前端传 raw text, 后端 build_point() 编译 | `TestPointAssetEditPage.tsx` |
-| P0-6 | `upsert` 直接替换 points 不编译 | 后端收到 raw candidates 调用 build_point() | `facade_test_point_assets.py` |
-| P0-7 | `LOGIN_INVOLVED_ELEMENT_ALIASES` | 全部删除, 后端 ElementResolver 解析 | 同上 |
-| P0-8 | `page !== "login"` 硬编码 | 删除分支, 统一走 API | 同上 |
+| # | 问题 | 方案 | 改动 | 状态 |
+|---|------|------|------|------|
+| P0-5 | `payloadPoint()` 总生成 candidate_step | 前端传 raw text, 后端 build_point() 编译 | `TestPointAssetEditPage.tsx` | ✅ |
+| P0-6 | `upsert` 直接替换 points 不编译 | 后端 `_steps_from_candidate` → `structured_steps_from_candidate` | `facade_helpers.py` | ✅ |
+| P0-7 | `LOGIN_INVOLVED_ELEMENT_ALIASES` | 全部删除, 后端 ElementResolver 解析 | `TestPointAssetEditPage.tsx` | ✅ |
+| P0-8 | `page !== "login"` 硬编码 | 删除分支, 统一走 API | `TestPointAssetEditPage.tsx` | ✅ |
 
-> 方案评审: A(前端raw text→后端编译) ✅ | B(检测candidate_step) ❌ | C(edit_mode) ❌
-> 详见: `edit_loop_design_review.md`
+> commit: `c802738` — 2 文件, +34/-69 行. 验证: 4/4 cases passed.
 
 ## 7. 可以延后 (P1)
 
