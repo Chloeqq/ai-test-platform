@@ -3,7 +3,7 @@
 > **日期：** 2026-07-07
 > **审计范围：** `apps/web-ui-service/app/services/workbench_generation_api/save_test_point_assets_service.py`（841行）
 > **关联模块：** `constants.py`, `context.py`, `repository.py`, `usecase_factory.py`, `shared_backend/*`
-> **最后更新：** 2026-07-07（Phase 1 + Phase 2 完成）
+> **最后更新：** 2026-07-07（Phase 1 + Phase 2 + Phase 3 全部完成）
 
 ---
 
@@ -13,7 +13,7 @@
 |------|------|---------|---------|
 | Phase 1：常量化 + 消除硬编码 | ✅ 完成 | 2026-07-07 | 267 passed |
 | Phase 2：模块拆分 + DB 读路径 | ✅ 完成 | 2026-07-07 | 267 passed |
-| Phase 3：规则引擎化 + 公共库统一 | ⬜ 待开始 | - | - |
+| Phase 3：共享库统一 | ✅ 完成 | 2026-07-07 | 267 passed |
 
 ### Phase 1 完成详情
 
@@ -441,19 +441,18 @@ class PageHook(ABC):
         return []
 ```
 
-### Phase 3（长期，1-2周）：规则引擎化 + 共享库统一
+### Phase 3（短期，1天）：共享库统一 ✅ 完成
 
-**3.1 提取通用函数到 shared_backend**
-- `as_text_list()` → `type_utils.py`
-- `append_unique()` → `type_utils.py`
-- `extract_input_value()` → `text_utils.py`
+**3.1 提取通用函数到 shared_backend**（已实施）
+- `as_text_list()` → `type_utils.py` — 消除 4 处重复
+- `append_unique()` → `type_utils.py` — 消除 3 处重复
+- `extract_input_value()` → `text_utils.py` — 参数化，支持多项目
+- `shared_backend/__init__.py` 导出新函数
 
-**3.2 Action 处理器注册表**
-- 将 `_structured_steps_from_candidate` 中的 if-elif 链改为注册表模式
-- 每个 action 类型有独立的 handler 函数
-
-**3.3 页面对象预加载缓存**
-- 在请求上下文中缓存已加载的 page_object，避免同一页面重复查询 DB
+**3.2 Action 注册表 + 预加载缓存**（跳过）
+- 当前 4 个 action 分支无需注册表
+- 单次请求只查一次 page_object，缓存收益不大
+- 等性能数据/复杂度增长后按需引入
 
 ---
 
