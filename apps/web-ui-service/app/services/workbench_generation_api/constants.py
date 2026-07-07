@@ -61,6 +61,8 @@ LOGGED_IN_TOKENS: tuple[str, ...] = ("已登录",)
 
 NOT_LOGGED_IN_TOKENS: tuple[str, ...] = ("未登录", "拦截")
 
+LOGIN_PAGE_TOKENS: tuple[str, ...] = ("登录",)
+
 DEFAULT_PRECONDITION_LOGGED_IN = "用户已登录并处于首页。"
 DEFAULT_PRECONDITION_NOT_LOGGED_IN = "用户未登录。"
 DEFAULT_PRECONDITION_LOGIN_PAGE = "用户未登录，处于登录页面。"

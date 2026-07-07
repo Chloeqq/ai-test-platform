@@ -27,7 +27,7 @@ from . import constants as _c
 
 from .elements import load_alias_map, ElementResolver
 from .hooks.login_password_visibility import LoginPasswordVisibilityHook
-from .compilation import build_point, fallback_precondition
+from .compilation import build_point
 from .assets import (
     preview_requirement,
     candidate_snapshot,
@@ -315,6 +315,6 @@ class SaveTestPointAssetsService:
 
 def _get_page_hook(page: str) -> LoginPasswordVisibilityHook | None:
     """根据 page code 返回对应的 PageHook，无匹配则返回 None。"""
-    if page == "login":
+    if page == LoginPasswordVisibilityHook().page_code:
         return LoginPasswordVisibilityHook()
     return None

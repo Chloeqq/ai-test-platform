@@ -8,6 +8,7 @@ from shared_backend.element_binding import enrich_candidate_with_element_codes
 
 from .context import WorkbenchContext
 from . import preview_store
+from . import constants as _c
 from ..workbench_generation_compiler.runtime.generate_pipeline import resolve_page_object
 
 
@@ -171,10 +172,10 @@ class GenerateCaseService:
                 for candidate in enriched_candidates
             ]
         batch_candidates = context.candidate_normalizer.normalize_candidates(enriched_candidates)
-        if len(batch_candidates) > 20:
+        if len(batch_candidates) > _c.MAX_CANDIDATES:
             raise runtime.HTTPException(
                 status_code=runtime.status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="selected_candidates exceeds max size 20",
+                detail=f"selected_candidates exceeds max size {_c.MAX_CANDIDATES}",
             )
 
         if not batch_candidates:

@@ -24,6 +24,6 @@ def fallback_precondition(
         return _c.DEFAULT_PRECONDITION_LOGGED_IN
     if any(token in merged for token in _c.NOT_LOGGED_IN_TOKENS):
         return _c.DEFAULT_PRECONDITION_NOT_LOGGED_IN
-    if point_type in _c.PRECONDITION_APPLICABLE_POINT_TYPES or "登录" in merged or expected:
+    if point_type in _c.PRECONDITION_APPLICABLE_POINT_TYPES or any(t in merged for t in _c.LOGIN_PAGE_TOKENS) or expected:
         return _c.DEFAULT_PRECONDITION_LOGIN_PAGE
     return _c.FALLBACK_PRECONDITION

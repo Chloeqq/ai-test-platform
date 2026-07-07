@@ -64,7 +64,7 @@ def test_saved_test_point_structures_login_candidate_for_dsl_v1_1() -> None:
         "input:用户名输入框=admin",
         "input:密码输入框=macro",
         "click:提交按钮",
-        "assert:首页菜单",
+        "assert_visible:首页菜单",
     ]
     assert [step["action"] for step in point["steps"]] == ["input", "input", "click", "assert_visible"]
 
@@ -100,7 +100,7 @@ def test_test_point_plan_normalizer_preserves_dsl_v1_1_fields() -> None:
                     "intent_id": "intent-01",
                     "point_type": "functional",
                     "precondition": "用户未登录，处于登录页面。",
-                    "steps_hint": ["input:用户名输入框=admin", "assert:首页菜单"],
+                    "steps_hint": ["input:用户名输入框=admin", "assert_visible:首页菜单"],
                     "data": {"username": {"source_type": "inline", "value": "admin"}},
                     "steps": [
                         {
@@ -120,7 +120,7 @@ def test_test_point_plan_normalizer_preserves_dsl_v1_1_fields() -> None:
     assert warnings == []
     point = normalized["points"][0]
     assert point["precondition"] == "用户未登录，处于登录页面。"
-    assert point["steps_hint"] == ["input:用户名输入框=admin", "assert:首页菜单"]
+    assert point["steps_hint"] == ["input:用户名输入框=admin", "assert_visible:首页菜单"]
     assert point["data"] == {"username": {"source_type": "inline", "value": "admin"}}
     assert point["steps"][0]["target_name"] == "用户名输入框"
     assert point["steps"][0]["data_ref"] == "username"

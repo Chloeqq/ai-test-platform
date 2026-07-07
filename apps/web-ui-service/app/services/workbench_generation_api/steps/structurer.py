@@ -281,7 +281,7 @@ def _build_expected_assertions(
                 "raw_text": expected_text or _c.ASSERT_VISIBLE_FALLBACK_TEXT,
             }
         )
-        append_unique(steps_hint, format_steps_hint("assert", _c.HOME_ELEMENT_NAME))
+        append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_VISIBLE, _c.HOME_ELEMENT_NAME))
     elif any(token in expected_text for token in _c.ASSERT_TEXT_TOKENS):
         error_msg = extract_error_message(expected_text)
         target_code = involved_codes[-1] if involved_codes else _c.LAST_ELEMENT_FALLBACK_CODE
