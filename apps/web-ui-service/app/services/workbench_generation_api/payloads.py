@@ -4,15 +4,17 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from . import constants as _c
+
 
 class GenerateCasePayload(BaseModel):
-    project: str = Field(default="mall")
+    project: str = Field(default="")
     page: str = Field(default="")
     page_url: str = Field(default="")
     requirement: str = Field(default="")
     title: str = Field(default="")
     case_id: str = Field(default="")
-    priority: str = Field(default="P1")
+    priority: str = Field(default=_c.DEFAULT_PRIORITY)
     tags: list[str] = Field(default_factory=lambda: ["ai-generated"])
     source: str = Field(default="manual")
     input_sources: list[dict[str, Any]] = Field(default_factory=list)
@@ -31,7 +33,7 @@ class GenerateCasePayload(BaseModel):
 
 
 class PrecheckSelectedIntentsPayload(BaseModel):
-    project: str = Field(default="mall")
+    project: str = Field(default="")
     page: str = Field(default="")
     preview_id: str = Field(default="")
     selected_intent_ids: list[str] = Field(default_factory=list)
