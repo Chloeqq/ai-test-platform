@@ -1829,3 +1829,116 @@ class TestIdempotency:
         assert r["items"][0]["case_id"] == "t-case-0001"
         ctx.repository.allocate_case_id.assert_called_once()
         ctx.repository.sync_test_points.assert_called_once()
+
+
+class TestAssertionQuality:
+    """P0 断言质量: negative生成assert_text, functional零断言标记review, security允许assert_url。"""
+
+    def test_negative_case_generates_assert_text_not_assert_url(self):
+        """Negative 场景: expected 含 URL token 但不应降级为 assert_url。"""
+        from app.services.workbench_generation_api.steps.structurer import (
+            structured_steps_from_candidate,
+        )
+        candidate = {
+            "intent_id": "neg-01", "title": "账号为空",
+            "steps": ["清空账号输入框", "点击登录按钮"],
+            "expected": '页面提示"请输入账号"，停留在登录页',
+        }
+        steps, hints, data, warnings, codes, assertion_count = (
+            structured_steps_from_candidate(
+                candidate=candidate,
+                steps=candidate["steps"],
+                expected=candidate["expected"],
+                point_type="negative",
+            )
+        )
+        actions = [s["action"] for s in steps]
+        assert "assert_text" in actions, f"negative must generate assert_text, got {actions}"
+        assert "assert_url" not in actions, f"negative must not use assert_url alone, got {actions}"
+        assert assertion_count >= 1
+
+    def test_boundary_case_generates_assert_text(self):
+        """Boundary 场景: 账号锁定提示应生成 assert_text。"""
+        from app.services.workbench_generation_api.steps.structurer import (
+            structured_steps_from_candidate,
+        )
+        candidate = {
+            "intent_id": "bnd-01", "title": "账号锁定",
+            "steps": ["输入错误密码5次"],
+            "expected": '页面提示"账号已锁定，请15分钟后再尝试"，停留在登录页',
+        }
+        steps, hints, data, warnings, codes, assertion_count = (
+            structured_steps_from_candidate(
+                candidate=candidate,
+                steps=candidate["steps"],
+                expected=candidate["expected"],
+                point_type="boundary",
+            )
+        )
+        actions = [s["action"] for s in steps]
+        assert "assert_text" in actions, f"boundary must generate assert_text, got {actions}"
+        assert assertion_count >= 1
+
+    def test_functional_no_assertion_marked_review(self):
+        """Functional 无可匹配 token: build_point 标记 requires_review。"""
+        from app.services.workbench_generation_api.compilation.point_builder import (
+            build_point,
+        )
+        point = build_point(
+            {
+                "intent_id": "func-no-assert",
+                "title": "无可验证结果的操作",
+                "intent_type": "functional",
+                "steps": ["点击某个按钮"],
+                "expected": "操作完成",
+            },
+            index=1,
+        )
+        assert point["requires_review"] is True
+        assert any("assertion_missing" in w for w in point["warnings"])
+
+    def test_security_assert_url_allowed(self):
+        """Security 场景: assert_url 验证跳转回登录页是合理的。"""
+        from app.services.workbench_generation_api.steps.structurer import (
+            structured_steps_from_candidate,
+        )
+        candidate = {
+            "intent_id": "sec-01", "title": "未登录拦截",
+            "steps": ["访问工作台URL"],
+            "expected": "页面跳转回登录页面，无法访问工作台",
+        }
+        steps, hints, data, warnings, codes, assertion_count = (
+            structured_steps_from_candidate(
+                candidate=candidate,
+                steps=candidate["steps"],
+                expected=candidate["expected"],
+                point_type="security",
+            )
+        )
+        actions = [s["action"] for s in steps]
+        # security allows assert_url (URL 重定向验证是合理的)
+        assert "assert_url" in actions or "assert_visible" in actions, (
+            f"security should have assertions, got {actions}"
+        )
+
+    def test_happy_path_generates_assert_visible(self):
+        """Functional happy path: 成功登录应生成 assert_visible。"""
+        from app.services.workbench_generation_api.steps.structurer import (
+            structured_steps_from_candidate,
+        )
+        candidate = {
+            "intent_id": "func-01", "title": "首次登录成功",
+            "steps": ["输入账号", "输入密码", "点击登录"],
+            "expected": "成功登录，跳转到首页，首页菜单可见",
+        }
+        steps, hints, data, warnings, codes, assertion_count = (
+            structured_steps_from_candidate(
+                candidate=candidate,
+                steps=candidate["steps"],
+                expected=candidate["expected"],
+                point_type="functional",
+            )
+        )
+        actions = [s["action"] for s in steps]
+        assert "assert_visible" in actions, f"happy path must have assert_visible, got {actions}"
+        assert assertion_count >= 1

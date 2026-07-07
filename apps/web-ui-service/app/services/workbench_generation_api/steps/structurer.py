@@ -34,7 +34,8 @@ def structured_steps_from_candidate(
     resolver: ElementResolver | None = None,
     page_hook: PageHook | None = None,
     page_config: Any = None,  # PageConfig (lazy import to avoid circular dep)
-) -> tuple[list[dict[str, Any]], list[str], dict[str, dict[str, Any]], list[str], list[str]]:
+    point_type: str = "",
+) -> tuple[list[dict[str, Any]], list[str], dict[str, dict[str, Any]], list[str], list[str], int]:
     """将候选测试点步骤治理成 DSL V1.1 可消费的结构化步骤、steps_hint 与 data。
 
     返回:
@@ -114,12 +115,13 @@ def structured_steps_from_candidate(
         warnings.append(f"{_c.MSG_NEEDS_MANUAL_STRUCTURING}{step_text}")
 
     # expected 断言
-    _build_expected_assertions(
+    assertion_count = _build_expected_assertions(
         expected=expected,
         involved_codes=involved_codes,
         structured_steps=structured_steps,
         steps_hint=steps_hint,
         page_config=page_config,
+        point_type=point_type,
     )
 
     # 完全为空时用 summary/title 做 fallback
@@ -131,7 +133,7 @@ def structured_steps_from_candidate(
             )
             warnings.append(_c.MSG_NO_STRUCTURABLE_STEPS)
 
-    return structured_steps, steps_hint, data, warnings, involved_codes
+    return structured_steps, steps_hint, data, warnings, involved_codes, assertion_count
 
 
 # ── 内部辅助函数 ──────────────────────────────────────────────────────────────
@@ -272,13 +274,22 @@ def _build_expected_assertions(
     structured_steps: list[dict[str, Any]],
     steps_hint: list[str],
     page_config: Any = None,
-) -> None:
-    """从 expected 文本生成对应的 DSL 断言步骤。"""
+    point_type: str = "",
+) -> int:
+    """从 expected 文本生成对应的 DSL 断言步骤。返回生成的断言数量。
+
+    质量规则 (P0):
+    - negative/boundary/format: 必须用 assert_text 验证错误文案，不可降级为 assert_url
+    - functional: 无可匹配 token 时不捏造断言，由调用方标记 requires_review
+    """
     expected_text = _normalized_text(expected)
+    count_before = len(structured_steps)
 
     home_code = page_config.home_element_code if page_config else _c.HOME_ELEMENT_CODE
     home_name = page_config.home_element_name if page_config else _c.HOME_ELEMENT_NAME
     fallback_code = page_config.fallback_element_code if page_config else _c.LAST_ELEMENT_FALLBACK_CODE
+
+    _is_quality_sensitive = point_type in _c.REVIEW_POINT_TYPES
 
     if any(token in expected_text for token in _c.ASSERT_VISIBLE_TOKENS):
         structured_steps.append(
@@ -305,15 +316,36 @@ def _build_expected_assertions(
         append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_TEXT, target_code, error_msg))
     elif any(token in expected_text for token in _c.ASSERT_URL_TOKENS):
         if not has_negation_before(expected_text, ("登录页", "登录页面")):
-            url_fallback = page_config.login_url if page_config else _c.ASSERT_URL_FALLBACK
-            structured_steps.append(
-                {
-                    "action": ACTION_ASSERT_URL,
-                    "value": url_fallback,
-                    "raw_text": expected_text or _c.ASSERT_URL_FALLBACK_TEXT,
-                }
-            )
-            append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_URL, url_fallback))
+            # P0: negative/boundary/format 场景禁止只生成 assert_url
+            # 必须生成 assert_text 验证错误文案
+            if _is_quality_sensitive:
+                error_msg = extract_error_message(expected_text)
+                target_code = involved_codes[-1] if involved_codes else fallback_code
+                structured_steps.append(
+                    {
+                        "action": ACTION_ASSERT_TEXT,
+                        "target": f"{_c.ELEMENT_PREFIX}{target_code}",
+                        "target_name": target_code,
+                        "value": error_msg,
+                        "raw_text": expected_text or _c.ASSERT_TEXT_FALLBACK_TEXT,
+                    }
+                )
+                append_unique(
+                    steps_hint,
+                    format_steps_hint(ACTION_ASSERT_TEXT, target_code, error_msg),
+                )
+            else:
+                url_fallback = page_config.login_url if page_config else _c.ASSERT_URL_FALLBACK
+                structured_steps.append(
+                    {
+                        "action": ACTION_ASSERT_URL,
+                        "value": url_fallback,
+                        "raw_text": expected_text or _c.ASSERT_URL_FALLBACK_TEXT,
+                    }
+                )
+                append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_URL, url_fallback))
+
+    return len(structured_steps) - count_before
 
 
 # _input_value_from_text 已迁移至 shared_backend.text_utils.extract_input_value

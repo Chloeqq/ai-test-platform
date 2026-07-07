@@ -43,13 +43,16 @@ def build_point(
     if point_type in _c.REVIEW_POINT_TYPES:
         action = _c.POINT_ACTION_REVIEW
 
-    point_steps, steps_hint, data, structure_warnings, involved_codes = structured_steps_from_candidate(
-        candidate=candidate,
-        steps=steps or [summary],
-        expected=expected,
-        resolver=resolver,
-        page_hook=page_hook,
-        page_config=page_config,
+    point_steps, steps_hint, data, structure_warnings, involved_codes, assertion_count = (
+        structured_steps_from_candidate(
+            candidate=candidate,
+            steps=steps or [summary],
+            expected=expected,
+            resolver=resolver,
+            page_hook=page_hook,
+            page_config=page_config,
+            point_type=point_type,
+        )
     )
 
     warnings: list[str] = []
@@ -58,6 +61,9 @@ def build_point(
         warnings.append(_c.MSG_STEPS_MISSING)
     if not involved_elements:
         warnings.append(_c.MSG_ELEMENTS_MISSING)
+    # P0-2: 零断言阻断 — 任何测试点无断言都标记 requires_review
+    if assertion_count == 0:
+        warnings.append("assertion_missing: 无可执行断言，无法验证业务结果")
     involved_elements = _resolve_involved_element_codes(involved_elements, involved_codes, resolver)
 
     return {
