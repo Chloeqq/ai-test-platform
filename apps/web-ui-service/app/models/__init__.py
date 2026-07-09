@@ -35,6 +35,12 @@ from app.models.workbench_state import (
     WorkbenchReviewDecision,
     WorkbenchRuntimeRun,
 )
+from app.models.quality_eval import (
+    QualityEvalDataset,
+    QualityEvalItem,
+    QualityEvalResult,
+    QualityEvalRun,
+)
 
 __all__ = [
     "User",
@@ -66,4 +72,8 @@ __all__ = [
     "WorkbenchHistoryEvent",
     "WorkbenchDefectLink",
     "WorkbenchFailureSourceCalibration",
+    "QualityEvalDataset",
+    "QualityEvalItem",
+    "QualityEvalResult",
+    "QualityEvalRun",
 ]

@@ -1079,4 +1079,4 @@ class TestPointPlan(BaseModel):
 
 *文档版本：1.1*
 *创建日期：2026-03-21*
-*维护团队：AI Test Platform Core Team*
+*维护团队：AI Quality Assurance Platform Core Team*

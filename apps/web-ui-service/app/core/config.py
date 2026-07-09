@@ -124,7 +124,7 @@ def _default_orchestrator_api_key() -> str:
 
 
 class Settings(BaseModel):
-    app_name: str = "AI Test Platform FastAPI"
+    app_name: str = "AI Quality Assurance Platform FastAPI"
     app_env: str = Field(default_factory=lambda: os.getenv("APP_ENV", "dev"))
     orchestrator_url: str = Field(default_factory=lambda: os.getenv("ORCHESTRATOR_URL", "http://127.0.0.1:8000"))
     orchestrator_api_key: str = Field(default_factory=_default_orchestrator_api_key)

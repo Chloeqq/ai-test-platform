@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_ref:
-        description: Optional full image ref (for example ghcr.io/org/ai-test-platform-web:sha-...)
+        description: Optional full image ref (for example ghcr.io/org/ai-quality-platform-web:sha-...)
         required: false
         type: string
       host_port:
@@ -35,7 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           owner="$(echo "${REPO_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          image_repo="ghcr.io/${owner}/ai-test-platform-web"
+          image_repo="ghcr.io/${owner}/ai-quality-platform-web"
           if [[ -n "${DISPATCH_IMAGE_REF}" ]]; then
             image_ref="${DISPATCH_IMAGE_REF}"
           else
@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           host_port="${STAGING_HOST_PORT_INPUT:-${STAGING_HOST_PORT_VAR:-8013}}"
-          container_name="${STAGING_CONTAINER_NAME:-ai-test-platform-web-staging}"
+          container_name="${STAGING_CONTAINER_NAME:-ai-quality-platform-web-staging}"
           env_file="${STAGING_ENV_FILE:-}"
           extra_docker_args="${STAGING_EXTRA_DOCKER_ARGS:-}"
           healthcheck_url="${STAGING_HEALTHCHECK_URL:-http://${STAGING_SSH_HOST}:${host_port}/health/ready}"
@@ -168,7 +168,7 @@ jobs:
           metadata="$(
             ssh -i ~/.ssh/staging_key -p "${ssh_port}" -o StrictHostKeyChecking=yes \
               "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" \
-              "cat /tmp/ai-test-platform-staging-deploy.last 2>/dev/null || true"
+              "cat /tmp/ai-quality-platform-staging-deploy.last 2>/dev/null || true"
           )"
 
           if [[ -n "${metadata}" ]]; then
@@ -198,7 +198,7 @@ jobs:
           echo "=== remote metadata ==="
           ssh -i ~/.ssh/staging_key -p "${ssh_port}" -o StrictHostKeyChecking=yes \
             "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" \
-            "cat /tmp/ai-test-platform-staging-deploy.last 2>/dev/null || true"
+            "cat /tmp/ai-quality-platform-staging-deploy.last 2>/dev/null || true"
           echo "=== docker ps ==="
           ssh -i ~/.ssh/staging_key -p "${ssh_port}" -o StrictHostKeyChecking=yes \
             "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" \

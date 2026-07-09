@@ -296,7 +296,7 @@ def generate_report(results: dict) -> Path:
     return report_file
 
 def main():
-    print_header("🔍 AI Test Platform - 核心链路验证")
+    print_header("🔍 AI Quality Assurance Platform - 核心链路验证")
     print(f"项目根目录：{REPO_ROOT}")
     print(f"开始时间：{datetime.now().isoformat()}")
     

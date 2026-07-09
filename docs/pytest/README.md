@@ -1,4 +1,4 @@
-# AI Test Platform：Pytest 详解
+# AI Quality Assurance Platform：Pytest 详解
 
 本文档描述本仓库中 **pytest 的配置、约定、分层策略与实现细节**，面向需要在本地或 CI 中调试、扩展测试的同学。
 

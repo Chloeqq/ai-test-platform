@@ -679,12 +679,12 @@
 
 | 日期 | 版本 | 变更内容 | 作者 |
 |------|------|---------|------|
-| 2026-03-21 | 1.0 | 初始版本 | AI Test Platform Core Team |
-| 2026-03-21 | 1.1 | 对齐当前现实状态，修正实时进度误导项与 Data Generation 状态 | AI Test Platform Core Team |
+| 2026-03-21 | 1.0 | 初始版本 | AI Quality Assurance Platform Core Team |
+| 2026-03-21 | 1.1 | 对齐当前现实状态，修正实时进度误导项与 Data Generation 状态 | AI Quality Assurance Platform Core Team |
 
 ---
 
 *文档版本：1.1*
 *创建日期：2026-03-21*
 *最后更新：2026-03-21*
-*维护团队：AI Test Platform Core Team*
+*维护团队：AI Quality Assurance Platform Core Team*

@@ -120,7 +120,7 @@ def test_build_report_allure_uses_readable_version_and_keeps_cache_version(tmp_p
             "time": {"stop": 1778566103555},
         },
         read_allure_environment=lambda: [{"name": "Project", "values": ["mall"]}],
-        read_allure_executors=lambda: [{"name": "AI 自动化测试平台", "type": "pytest-playwright"}],
+        read_allure_executors=lambda: [{"name": "AI 质量保障平台", "type": "pytest-playwright"}],
         ensure_allure_snapshot=lambda *, version, snapshot_slug: f"/allure-snapshots/{snapshot_slug}/index.html",
         get_allure_index_version=lambda: 1778566103555927300,
         current_results_dir=tmp_path / "run-artifacts" / "allure-results",
@@ -132,7 +132,7 @@ def test_build_report_allure_uses_readable_version_and_keeps_cache_version(tmp_p
     assert payload["allure_index"] == "/allure-snapshots/Allure-2026-05-12-Run03/index.html"
     assert payload["report_name"] == "AI 自动化测试执行报告 (Allure-2026-05-12-Run03)"
     assert payload["environment"] == [{"name": "Project", "values": ["mall"]}]
-    assert payload["executors"] == [{"name": "AI 自动化测试平台", "type": "pytest-playwright"}]
+    assert payload["executors"] == [{"name": "AI 质量保障平台", "type": "pytest-playwright"}]
 
 
 def test_build_report_allure_uses_version_from_business_report_name(tmp_path: Path) -> None:

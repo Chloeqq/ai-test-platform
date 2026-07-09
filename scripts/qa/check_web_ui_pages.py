@@ -96,7 +96,7 @@ def main(argv: Sequence[str]) -> int:
                     context.add_init_script(
                         script=(
                             "window.localStorage.setItem("
-                            "\"ai_test_platform.access_token\", "
+                            "\"ai_quality_platform.access_token\", "
                             f"{json.dumps(token)}"
                             ");"
                         )

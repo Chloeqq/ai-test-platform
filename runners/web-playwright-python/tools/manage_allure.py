@@ -153,7 +153,7 @@ def write_allure_metadata(results_dir: Path) -> None:
     (results_dir / "executor.json").write_text(
         json.dumps(
             {
-                "name": "AI 自动化测试平台",
+                "name": "AI 质量保障平台",
                 "type": "pytest-playwright",
                 "url": platform_url,
                 "buildName": identity["display_version"],

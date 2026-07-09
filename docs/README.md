@@ -85,7 +85,7 @@
 - `workbench-generate-redesign.md`
 
 #### Rule (`docs/rule/`)
-- `ai_test_platform_governance_v1.0.md`
+- `ai_quality_platform_governance_v1.0.md`
 - `test_case_naming_spec_v1.0.md`
 
 #### Testing (`docs/testing/`)
@@ -208,10 +208,10 @@
 
 ```bash
 # 编辑文档
-vim /Users/bettyhuang/PycharmProjects/ai-test-platform/docs/README.md
+vim /Users/bettyhuang/PycharmProjects/ai-quality-platform/docs/README.md
 
 # 或使用其他编辑器
-code /Users/bettyhuang/PycharmProjects/ai-test-platform/docs/README.md
+code /Users/bettyhuang/PycharmProjects/ai-quality-platform/docs/README.md
 ```
 
 ### 5.2 使用 IDE
@@ -286,10 +286,10 @@ git push origin docs/update-xxx-doc
 
 ```bash
 # 检查所有 md 文件权限
-find /Users/bettyhuang/PycharmProjects/ai-test-platform -name "*.md" -type f -exec ls -la {} \;
+find /Users/bettyhuang/PycharmProjects/ai-quality-platform -name "*.md" -type f -exec ls -la {} \;
 
 # 统计权限分布
-find /Users/bettyhuang/PycharmProjects/ai-test-platform -name "*.md" -type f -exec ls -la {} \; | awk '{print $1}' | sort | uniq -c
+find /Users/bettyhuang/PycharmProjects/ai-quality-platform -name "*.md" -type f -exec ls -la {} \; | awk '{print $1}' | sort | uniq -c
 ```
 
 ### 7.2 预期输出
@@ -320,14 +320,14 @@ chmod 644 docs/new-doc.md
 
 ```bash
 # 检查是否有权限不正确的 md 文件
-find /Users/bettyhuang/PycharmProjects/ai-test-platform -name "*.md" -type f -perm /022
+find /Users/bettyhuang/PycharmProjects/ai-quality-platform -name "*.md" -type f -perm /022
 ```
 
 ### 8.3 批量修复
 
 ```bash
 # 修复所有 md 文件权限
-find /Users/bettyhuang/PycharmProjects/ai-test-platform -name "*.md" -type f -exec chmod 644 {} \;
+find /Users/bettyhuang/PycharmProjects/ai-quality-platform -name "*.md" -type f -exec chmod 644 {} \;
 ```
 
 ---

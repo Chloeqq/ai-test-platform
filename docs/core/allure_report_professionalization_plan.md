@@ -207,7 +207,7 @@ Case Version=v1
 
 ```json
 {
-  "name": "AI 自动化测试平台",
+  "name": "AI 质量保障平台",
   "type": "pytest-playwright",
   "url": "http://127.0.0.1:8013",
   "buildName": "首次登录成功 - v1.r3",

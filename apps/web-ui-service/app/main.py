@@ -37,6 +37,7 @@ from app.routers.workbench_runs import router as workbench_runs_router
 from app.routers.workbench_scheduler import router as workbench_scheduler_router
 from app.routers.workbench_tasks import router as workbench_tasks_router
 from app.routers.quality_dashboard_api import router as quality_dashboard_router
+from app.routers.quality_eval_api import router as quality_eval_router
 from app.routers.ui import router as ui_router
 from app.services.workbench_reporting_service import inject_allure_branding
 from shared_backend.observability import configure_logging, set_request_id, summarize_http_context, summarize_log_value
@@ -111,6 +112,7 @@ app.include_router(workbench_runs_router, dependencies=_jwt_required)
 app.include_router(workbench_scheduler_router, dependencies=_jwt_required)
 app.include_router(workbench_tasks_router, dependencies=_jwt_required)
 app.include_router(quality_dashboard_router, dependencies=_jwt_required)
+app.include_router(quality_eval_router, dependencies=_jwt_required)
 app.include_router(test_cases_router, dependencies=_jwt_required)
 app.include_router(test_data_pools_router, dependencies=_jwt_required)
 app.include_router(test_projects_router, dependencies=_jwt_required)

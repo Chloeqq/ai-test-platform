@@ -18,8 +18,8 @@
 ## 第一步：克隆并启动
 
 ```bash
-git clone <repo-url> ai-test-platform
-cd ai-test-platform
+git clone <repo-url> ai-quality-platform
+cd ai-quality-platform
 
 # 创建环境配置（首次需要）
 cp .env.example .env
@@ -113,7 +113,7 @@ make dev
 ## 项目结构速览
 
 ```
-ai-test-platform/
+ai-quality-platform/
 ├── apps/
 │   ├── web-ui-service/        # Web UI + 核心业务逻辑
 │   │   ├── app/

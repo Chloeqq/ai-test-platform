@@ -1,4 +1,4 @@
-# Ruff configuration for AI Test Platform
+# Ruff configuration for AI Quality Assurance Platform
 target-version = "py311"
 
 [lint]

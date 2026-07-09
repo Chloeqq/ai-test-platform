@@ -1,4 +1,4 @@
-# CLAUDE.md — AI Test Platform 项目规则
+# CLAUDE.md — AI Quality Assurance Platform 项目规则
 
 ## 架构硬约束
 

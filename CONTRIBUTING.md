@@ -45,8 +45,8 @@ make static-baseline-fast
 
 必须同步更新：
 
-1. [orchestrator-openapi.yaml](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/ai-orchestrator/openapi/orchestrator-openapi.yaml)
-2. [apps/ai-orchestrator/README.md](/Users/bettyhuang/PycharmProjects/ai-test-platform/apps/ai-orchestrator/README.md)
+1. [orchestrator-openapi.yaml](/Users/bettyhuang/PycharmProjects/ai-quality-platform/apps/ai-orchestrator/openapi/orchestrator-openapi.yaml)
+2. [apps/ai-orchestrator/README.md](/Users/bettyhuang/PycharmProjects/ai-quality-platform/apps/ai-orchestrator/README.md)
 3. `apps/ai-orchestrator/tests/integration/` 下对应的 pytest 测试
 
 不允许只改实现、不改 OpenAPI 契约。

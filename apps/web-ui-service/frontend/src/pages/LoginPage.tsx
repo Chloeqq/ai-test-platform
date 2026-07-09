@@ -85,7 +85,7 @@ export function LoginPage() {
         <div className="login-brand">
           <div className="login-mark">AT</div>
           <div>
-            <h1>AI Test Platform</h1>
+            <h1>AI Quality Assurance Platform</h1>
             <p>登录后即可将 URL 自动化、确认点审核与操作审计绑定到真实用户。</p>
           </div>
         </div>

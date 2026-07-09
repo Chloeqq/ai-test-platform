@@ -920,4 +920,4 @@ AI 如果参与，也只能作为模板推荐或边界值建议，不能直接�
 *文档版本：1.1*
 *创建日期：2026-03-21*
 *最后更新：2026-03-21*
-*维护团队：AI Test Platform Core Team*
+*维护团队：AI Quality Assurance Platform Core Team*

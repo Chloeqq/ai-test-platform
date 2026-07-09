@@ -47,7 +47,7 @@ docs/bugfixes/2026-05-22_case_center_script_code_execution_chain_fix.md
 
 重点：
 
-- 平台不是单点测试脚本，而是企业级 AI 自动化测试平台。
+- 平台不是单点测试脚本，而是企业级 AI 质量保障平台。
 - 核心能力包括：
   - 确定性自动化测试底座
   - AI 测试点生成
@@ -219,7 +219,7 @@ TODO: 写下现在还不懂的 3 个问题。
 
 先背这个版本，后面每天迭代：
 
-> 这个项目是一个 AI 自动化测试平台，目标是打通从需求输入到测试执行和质量报告的链路。平台底层用 pytest 和 Playwright 做确定性执行，上层用 AI 辅助生成测试点、测试用例和失败分析。`ai-orchestrator` 负责编排 AI Agent 和 runner，`web-ui-service` 负责控制台、资产和任务管理，`shared_backend` 负责共享契约与执行编译。我的接管路径是先跑通测试，再从 `/orchestrate` 主链路开始读代码，逐步补测试和做小功能。
+> 这个项目是一个 AI 质量保障平台，目标是打通从需求输入到测试执行和质量报告的链路。平台底层用 pytest 和 Playwright 做确定性执行，上层用 AI 辅助生成测试点、测试用例和失败分析。`ai-orchestrator` 负责编排 AI Agent 和 runner，`web-ui-service` 负责控制台、资产和任务管理，`shared_backend` 负责共享契约与执行编译。我的接管路径是先跑通测试，再从 `/orchestrate` 主链路开始读代码，逐步补测试和做小功能。
 
 ## D1 自测题
 

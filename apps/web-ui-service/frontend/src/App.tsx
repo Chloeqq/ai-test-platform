@@ -31,6 +31,8 @@ import { QualityDashboardPage } from "./pages/QualityDashboardPage";
 import { QualityFlakyPage } from "./pages/QualityFlakyPage";
 import { QualityGatesPage } from "./pages/QualityGatesPage";
 import { QualityTrendsPage } from "./pages/QualityTrendsPage";
+import { QualityEvalDashboardPage } from "./pages/QualityEvalDashboardPage";
+import { QualityEvalDetailPage } from "./pages/QualityEvalDetailPage";
 import { ReportAllurePage } from "./pages/ReportAllurePage";
 import { ReportContextPage } from "./pages/ReportContextPage";
 import { ReportFailuresPage } from "./pages/ReportFailuresPage";
@@ -88,6 +90,8 @@ export function App() {
         <Route path="/assets/api-contracts" element={<ApiContractsPage />} />
         <Route path="/assets/data-templates" element={<DataTemplatesPage />} />
         <Route path="/quality/dashboard" element={<QualityDashboardPage />} />
+        <Route path="/quality/eval" element={<QualityEvalDashboardPage />} />
+        <Route path="/quality/eval/:runId" element={<QualityEvalDetailPage />} />
         <Route path="/quality/assets/:assetId" element={<QualityAssetDetailPage />} />
         <Route path="/quality/flaky" element={<QualityFlakyPage />} />
         <Route path="/quality/failure-clusters" element={<QualityClustersPage />} />

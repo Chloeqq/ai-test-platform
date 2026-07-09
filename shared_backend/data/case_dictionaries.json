@@ -2,9 +2,9 @@
   "project": [
     {
       "code": "atp",
-      "name": "AI Test Platform",
+      "name": "AI Quality Assurance Platform",
       "enabled": true,
-      "aliases": ["ai-test-platform", "platform"]
+      "aliases": ["ai-quality-platform", "platform"]
     }
   ],
   "client": [

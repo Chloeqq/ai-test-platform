@@ -66,6 +66,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: "失败聚类", to: "/quality/failure-clusters" },
       { label: "趋势分析", to: "/quality/trends" },
       { label: "质量门禁", to: "/quality/gates" },
+      { label: "质量评估中心", to: "/quality/eval" },
       { label: "缺陷看板", to: "/defects" },
     ],
   },
@@ -237,7 +238,7 @@ export function GlobalNavLayout() {
           </button>
           <Link className="platform-brand" to="/dashboard">
             <span className="brand-mark">ATP</span>
-            <span className="brand-text">AI 自动化测试平台</span>
+            <span className="brand-text">AI 质量保障平台</span>
           </Link>
           <span className="env-badge">{environment}</span>
         </div>

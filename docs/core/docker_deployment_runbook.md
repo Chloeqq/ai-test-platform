@@ -2,7 +2,7 @@
 
 ## 目标
 
-本文档记录 AI 自动化测试平台在本地或单机服务器上通过 `docker compose` 部署的标准流程，覆盖构建、启动、健康检查、访问入口、常用运维命令和排障记录。
+本文档记录 AI 质量保障平台在本地或单机服务器上通过 `docker compose` 部署的标准流程，覆盖构建、启动、健康检查、访问入口、常用运维命令和排障记录。
 
 适用范围：
 
@@ -19,8 +19,8 @@
 部署命令使用：
 
 ```bash
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker build web
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker up -d --no-build
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker build web
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker up -d --no-build
 ```
 
 验证结果：
@@ -96,7 +96,7 @@ RUNNER_URL_REWRITE_MAP=http://localhost:5174=http://host.docker.internal:5174;ht
 ### 1. 进入仓库根目录
 
 ```bash
-cd /Users/bettyhuang/PycharmProjects/ai-test-platform
+cd /Users/bettyhuang/PycharmProjects/ai-quality-platform
 ```
 
 ### 2. 校验 Compose 配置
@@ -108,8 +108,8 @@ docker compose --env-file .env.docker config --quiet
 如果本机 Docker Buildx 写入 `~/.docker/buildx/activity` 报权限错误，使用可写的临时 Buildx 配置目录：
 
 ```bash
-mkdir -p /private/tmp/ai-test-platform-buildx
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker config --quiet
+mkdir -p /private/tmp/ai-quality-platform-buildx
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker config --quiet
 ```
 
 ### 3. 构建业务镜像
@@ -117,7 +117,7 @@ BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .en
 推荐先单独构建业务镜像，再启动服务：
 
 ```bash
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker build orchestrator web
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker build orchestrator web
 ```
 
 说明：
@@ -129,13 +129,13 @@ BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .en
 ### 4. 启动服务
 
 ```bash
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker up -d --no-build
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker up -d --no-build
 ```
 
 如果明确需要边构建边启动，也可以使用：
 
 ```bash
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker up -d --build
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker up -d --build
 ```
 
 ## 后端重启与镜像刷新
@@ -173,19 +173,19 @@ docker compose --env-file .env.docker restart web
 本机 Docker Buildx 如果遇到 `~/.docker/buildx/activity` 权限问题，统一使用可写临时目录：
 
 ```bash
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker build web
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker build web
 ```
 
 ### 4. 用新镜像重建后端并刷新 nginx
 
 ```bash
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker up -d --no-build web nginx
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker up -d --no-build web nginx
 docker compose --env-file .env.docker restart nginx
 ```
 
 说明：
 
-- `up -d --no-build web nginx` 会使用刚构建好的 `ai-test-platform-web-ui` 镜像重建 `web` 容器。
+- `up -d --no-build web nginx` 会使用刚构建好的 `ai-quality-platform-web-ui` 镜像重建 `web` 容器。
 - `restart nginx` 用于刷新反向代理连接，避免旧 upstream 连接残留。
 - `postgres`、`redis`、`orchestrator` 不会被重建，只会作为依赖保持运行。
 
@@ -230,8 +230,8 @@ orchestrator.ok=true
 ```bash
 docker compose --env-file .env.docker ps
 docker compose --env-file .env.docker restart web
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker build web
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker up -d --no-build web nginx
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker build web
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker up -d --no-build web nginx
 docker compose --env-file .env.docker restart nginx
 docker compose --env-file .env.docker ps web nginx postgres redis orchestrator
 curl -sS -o /tmp/ai-platform-ready.json -w '%{http_code}' http://127.0.0.1:8013/health/ready
@@ -359,8 +359,8 @@ docker compose --env-file .env.docker restart web nginx
 ### 重新构建并替换 Web 服务
 
 ```bash
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker build web
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker up -d --no-build web nginx
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker build web
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker up -d --no-build web nginx
 ```
 
 ### 停止服务但保留数据卷
@@ -393,8 +393,8 @@ Compose 中的持久化位置：
 建议备份：
 
 ```bash
-docker compose --env-file .env.docker exec postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > /tmp/ai_test_platform_backup.sql
-tar -czf /tmp/ai-test-platform-state.tgz web-ui/state assets/test-cases
+docker compose --env-file .env.docker exec postgres pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > /tmp/ai_quality_platform_backup.sql
+tar -czf /tmp/ai-quality-platform-state.tgz web-ui/state assets/test-cases
 ```
 
 ## 常见问题
@@ -410,8 +410,8 @@ failed to update builder last activity time: open ~/.docker/buildx/activity/...:
 处理：
 
 ```bash
-mkdir -p /private/tmp/ai-test-platform-buildx
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker build web
+mkdir -p /private/tmp/ai-quality-platform-buildx
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker build web
 ```
 
 不要把 `DOCKER_CONFIG` 整体切到临时目录，否则可能导致 Docker 找不到 Compose 插件。
@@ -460,7 +460,7 @@ docker compose --env-file .env.docker ps
 排查：
 
 ```bash
-docker inspect ai-test-platform-elasticsearch-1 --format 'restart_count={{.RestartCount}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{end}}'
+docker inspect ai-quality-platform-elasticsearch-1 --format 'restart_count={{.RestartCount}} oom={{.State.OOMKilled}} exit={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{end}}'
 docker compose --env-file .env.docker logs --tail 200 elasticsearch
 ```
 
@@ -538,20 +538,20 @@ PY
 2. 重新构建业务镜像：
 
 ```bash
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker build orchestrator web
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker build orchestrator web
 ```
 
 3. 重启服务：
 
 ```bash
-BUILDX_CONFIG=/private/tmp/ai-test-platform-buildx docker compose --env-file .env.docker up -d --no-build
+BUILDX_CONFIG=/private/tmp/ai-quality-platform-buildx docker compose --env-file .env.docker up -d --no-build
 ```
 
 生产环境建议后续引入镜像标签和远端镜像仓库，例如：
 
 ```text
-ai-test-platform-web-ui:2026.05.16-<git-sha>
-ai-test-platform-orchestrator:2026.05.16-<git-sha>
+ai-quality-platform-web-ui:2026.05.16-<git-sha>
+ai-quality-platform-orchestrator:2026.05.16-<git-sha>
 ```
 
 ## 安全注意事项

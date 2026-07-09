@@ -1,6 +1,6 @@
-# AI Test Platform
+# AI Quality Assurance Platform
 
-企业级 AI 自动化测试平台。
+企业级 AI 质量保障平台。
 
 这个项目不是单点脚本生成工具，而是一条面向测试研发场景的闭环链路：
 
@@ -32,7 +32,7 @@
 - 执行失败后定位慢，截图、日志、视频、trace、失败原因没有形成结构化闭环。
 - 发布前质量判断依赖人工感觉，缺少稳定质量门和数据支撑。
 
-AI Test Platform 的目标是把这些环节串成平台能力：让 AI 负责生成和分析，让确定性工程底座负责执行、校验和沉淀证据。
+AI Quality Assurance Platform 的目标是把这些环节串成平台能力：让 AI 负责生成和分析，让确定性工程底座负责执行、校验和沉淀证据。
 
 ---
 
@@ -287,7 +287,7 @@ data:                                   # V1.1 数据源
 
 ```mermaid
 flowchart TD
-  U["测试 / 研发 / 质量负责人"] --> P["AI Test Platform"]
+  U["测试 / 研发 / 质量负责人"] --> P["AI Quality Assurance Platform"]
 
   P --> I["输入源管理"]
   I --> I1["需求文本 / PRD"]

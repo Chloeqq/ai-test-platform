@@ -812,5 +812,5 @@ npm --prefix apps/web-ui-service/frontend run build
 若后端容器运行的是挂载代码，完成后重启：
 
 ```bash
-docker restart ai-test-platform-web-1
+docker restart ai-quality-platform-web-1
 ```

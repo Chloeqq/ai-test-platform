@@ -208,12 +208,12 @@ confidence: float  # 0-1
 
 | 日期 | 版本 | 变更内容 | 作者 |
 |------|------|---------|------|
-| 2026-03-21 | 1.5 | 补充 `test-case-design-techniques.md` 专题索引，明确其为已校正的补充设计稿 | AI Test Platform Core Team |
-| 2026-03-21 | 1.4 | 对 01/02/03/04/05/06/07/09 设计稿补充“目标实现 vs 当前实现”护栏，并修正文档中的 `schema.py` / 测试蓝图口径 | AI Test Platform Core Team |
-| 2026-03-21 | 1.1 | 修正文档索引与实际覆盖边界，明确“已补齐设计稿”和“已落地实现”不是同一概念 | AI Test Platform Core Team |
-| 2026-03-21 | 1.2 | 补入 Failure Triage 设计文档索引，并同步更新覆盖范围与实现状态 | AI Test Platform Core Team |
-| 2026-03-21 | 1.3 | 补入 Self-Healing Advisor 设计文档索引，并完成 01-09 覆盖 | AI Test Platform Core Team |
+| 2026-03-21 | 1.5 | 补充 `test-case-design-techniques.md` 专题索引，明确其为已校正的补充设计稿 | AI Quality Assurance Platform Core Team |
+| 2026-03-21 | 1.4 | 对 01/02/03/04/05/06/07/09 设计稿补充“目标实现 vs 当前实现”护栏，并修正文档中的 `schema.py` / 测试蓝图口径 | AI Quality Assurance Platform Core Team |
+| 2026-03-21 | 1.1 | 修正文档索引与实际覆盖边界，明确“已补齐设计稿”和“已落地实现”不是同一概念 | AI Quality Assurance Platform Core Team |
+| 2026-03-21 | 1.2 | 补入 Failure Triage 设计文档索引，并同步更新覆盖范围与实现状态 | AI Quality Assurance Platform Core Team |
+| 2026-03-21 | 1.3 | 补入 Self-Healing Advisor 设计文档索引，并完成 01-09 覆盖 | AI Quality Assurance Platform Core Team |
 
 ---
 
-*维护团队：AI Test Platform Core Team*
+*维护团队：AI Quality Assurance Platform Core Team*
