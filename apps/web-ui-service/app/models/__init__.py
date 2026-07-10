@@ -1,16 +1,25 @@
-from app.models.user import User
 from app.models.orchestration_task import OrchestrationTask
 from app.models.page_object import (
     PageElement,
     PageElementHealthCheck,
-    PageElementLocator,
     PageElementVersion,
     PageObject,
+    PageObjectRef,
+)
+from app.models.page_object import (
+    PageElementLocator,
+    PageObjectGovernanceLog,
+)
+from app.models.page_object_recorder_models import (
     PageObjectCandidateElement,
     PageObjectCandidateGroup,
-    PageObjectGovernanceLog,
-    PageObjectRef,
     PageObjectRecorderSession,
+)
+from app.models.quality_eval import (
+    QualityEvalDataset,
+    QualityEvalItem,
+    QualityEvalResult,
+    QualityEvalRun,
 )
 from app.models.test_case import (
     TestCase,
@@ -20,13 +29,14 @@ from app.models.test_case import (
     TestCaseTreeNode,
     TestCaseVersion,
 )
-from app.models.test_point import TestPoint
-from app.models.test_project import TestProject
 from app.models.test_data_pool import (
     TestDataPool,
-    TestDataPoolItem,
     TestDataPoolAuditLog,
+    TestDataPoolItem,
 )
+from app.models.test_point import TestPoint
+from app.models.test_project import TestProject
+from app.models.user import User
 from app.models.workbench_state import (
     WorkbenchDefectLink,
     WorkbenchExecutionGateDecision,
@@ -34,12 +44,6 @@ from app.models.workbench_state import (
     WorkbenchHistoryEvent,
     WorkbenchReviewDecision,
     WorkbenchRuntimeRun,
-)
-from app.models.quality_eval import (
-    QualityEvalDataset,
-    QualityEvalItem,
-    QualityEvalResult,
-    QualityEvalRun,
 )
 
 __all__ = [
