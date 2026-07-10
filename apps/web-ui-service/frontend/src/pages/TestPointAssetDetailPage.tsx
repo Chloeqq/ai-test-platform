@@ -1157,7 +1157,6 @@ export function TestPointAssetDetailPage() {
                     if (value) return `${action}:${target}=${value}`;
                     return `${action}:${target}`;
                   });
-                  const elements = listText(row.involved_elements);
                   const pointId = pointIdOf(row);
                   return (
                     <tr key={`${pointId || index}-${index}`}>
@@ -1193,7 +1192,7 @@ export function TestPointAssetDetailPage() {
                       <td className="mono" style={{ fontSize: "0.8rem", lineHeight: "1.4" }}>
                         {instructions.length
                           ? instructions.map((inst, i) => <div key={i}>{inst}</div>)
-                          : elements.length ? elements.join(", ") : "-"}
+                          : "-"}
                       </td>
                       <td>
                         <div className="table-row-actions">
