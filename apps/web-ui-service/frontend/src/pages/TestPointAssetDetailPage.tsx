@@ -617,7 +617,7 @@ function pointRows(item: Record<string, unknown>): Array<Record<string, unknown>
             const issues: string[] = [];
             if (!point.has_assertion) issues.push("零断言");
             if (point.has_candidate_step) issues.push("含未结构化步骤");
-            if (point.warning_count > 0) issues.push(`${point.warning_count}个警告`);
+            if (Number(point.warning_count || 0) > 0) issues.push(`${point.warning_count}个警告`);
             return issues;
           })(),
         };
