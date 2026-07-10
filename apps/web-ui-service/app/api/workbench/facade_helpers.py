@@ -1321,10 +1321,11 @@ def _workbench_test_case_list_item(
 # ═══════════════════════════════════════════════════════════════
 # Candidate formatting —— 测试点→候选结构 转换
 # ═══════════════════════════════════════════════════════════════
-def _steps_from_candidate(candidate: dict[str, Any]) -> list[dict[str, Any]]:
+def _steps_from_candidate(candidate: dict[str, Any], db: Any = None) -> list[dict[str, Any]]:
     """将候选测试点步骤规范化为结构化 DSL 步骤。
 
     P0-5: 委托给 steps/structurer.py 的编译器，不再硬编码 candidate_step。
+    Phase 2: 如果 structurer 未生成断言，从 Behavior Registry 注入。
     """
     from app.services.workbench_generation_api.steps.structurer import (
         structured_steps_from_candidate,
@@ -1343,7 +1344,71 @@ def _steps_from_candidate(candidate: dict[str, Any]) -> list[dict[str, Any]]:
             expected=expected,
         )
     )
+
+    # Phase 2: 如果 structurer 没生成断言，从 Behavior Registry 获取
+    if _assertion_count == 0 and db is not None:
+        from app.services.assertion_resolver import resolve_and_compile
+        page_code = _text(candidate.get("page_code") or "")
+        point_type = _text(candidate.get("intent_type"))  # AI: "functional"/"negative"/"boundary"
+        scenario = _map_point_type_to_scenario(point_type)
+        intent_type = _classify_intent(expected, point_type)
+        if intent_type:
+            result = resolve_and_compile(
+                intent_type=intent_type,
+                scenario=scenario,
+                page_code=page_code,
+                db=db,
+            )
+            if result["status"] == "resolved":
+                for a in result["assertions"]:
+                    step = {
+                        "action": a["action"],
+                        "target": f"element:{a['target']}" if a["target"] else "",
+                        "value": a["value"] or None,
+                        "raw_text": f"[Registry] {a.get('description', '')}",
+                    }
+                    struct_steps.append(step)
+
     return struct_steps
+
+
+def _map_point_type_to_scenario(point_type: str) -> str:
+    """Map AI's point_type to registry scenario."""
+    mapping = {
+        "functional": "positive",
+        "security": "negative",
+        "negative": "negative",
+        "boundary": "boundary",
+        "format": "negative",
+        "interaction_exception": "negative",
+    }
+    return mapping.get(point_type, "positive")
+
+
+def _classify_intent(expected: str, point_type: str) -> str:
+    """Lightweight intent classifier based on expected text + point_type.
+
+    Phase 2 transitional: maps expected_result keywords to registry intent_type.
+    Phase 4 will be replaced by AI's intent_type output.
+    """
+    e = expected.lower()
+    pt = point_type.lower()
+
+    # Auth failure signatures
+    if any(kw in e for kw in ("密码", "账号", "用户", "登录", "认证", "credential")):
+        if pt in ("negative", "boundary", "format"):
+            return "AUTH_LOGIN"
+        return "AUTH_LOGIN"
+
+    # Access control
+    if any(kw in e for kw in ("拦截", "跳转", "访问", "redirect", "access", "未登录")):
+        return "AUTH_ACCESS"
+
+    # Input validation
+    if any(kw in e for kw in ("为空", "空格", "长度", "特殊字符", "格式", "validation", "请输入", "不能为空")):
+        return "INPUT_VALIDATION"
+
+    return ""
 
 
 def _candidate_snapshot_from_candidate(candidate: dict[str, Any]) -> dict[str, Any]:

@@ -145,14 +145,17 @@ def resolve_and_compile(
             "reason": f"No behavior mapping for {intent_type}+{scenario}",
         }
 
-    # Step 2: Look up in Behavior Registry
+    # Step 2: Look up in Behavior Registry by behavior_code (not intent+scenario)
     repo = BehaviorRegistryRepository(db)
-    registry_entry = repo.find_by_intent(
-        intent_type=intent_type,
-        scenario=scenario,
-        page_code=page_code,
-        context_filter=context_filter,
-    )
+    registry_entry = repo.find_by_code(behavior_code)
+    if not registry_entry or registry_entry.page_code != page_code:
+        # Try domain-level lookup
+        registry_entry = repo.find_by_intent(
+            intent_type=intent_type,
+            scenario=scenario,
+            page_code=page_code,
+            context_filter=context_filter,
+        )
 
     if not registry_entry:
         _log_result(db, behavior_code, intent_type, scenario, 0, "not_configured")
