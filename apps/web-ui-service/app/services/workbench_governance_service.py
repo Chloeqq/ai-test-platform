@@ -684,7 +684,6 @@ from app.services.workbench_governance_views import (  # noqa: E402
     build_flaky_top5,
     build_governance_overview,
     build_governance_trend,
-    governance_overview,
 )
 
 

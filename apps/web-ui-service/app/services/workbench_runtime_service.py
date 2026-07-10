@@ -466,7 +466,6 @@ def load_execution_record_payload(
 # 以下 import 保持向后兼容：所有外部调用者通过 workbench_runtime_service 访问这些函数。
 
 from app.services.workbench_runtime_views import (  # noqa: E402
-    build_runtime_execution_record,
     load_runtime_execution_record_from_artifacts,
     runtime_view_from_entry,
     runtime_view_with_execution_record_preferred,
