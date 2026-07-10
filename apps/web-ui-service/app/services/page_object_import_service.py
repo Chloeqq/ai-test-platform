@@ -11,8 +11,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models.page_object import PageElement, PageObject
-from app.models.page_object_recorder_models import PageElementLocator
+from app.models.page_object import PageElement, PageElementLocator, PageObject
 from app.repositories.page_object_repository import PageObjectRepository
 from app.services import page_object_service, test_project_service
 from shared_backend.case_ids import normalize_client_code

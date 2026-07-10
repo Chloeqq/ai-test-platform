@@ -10,12 +10,10 @@ from sqlalchemy import delete, func, select
 from app.models.page_object import (
     PageElement,
     PageElementHealthCheck,
+    PageElementLocator,
     PageElementVersion,
     PageObject,
     PageObjectRef,
-)
-from app.models.page_object_recorder_models import (
-    PageElementLocator,
 )
 
 from .base import BaseRepository

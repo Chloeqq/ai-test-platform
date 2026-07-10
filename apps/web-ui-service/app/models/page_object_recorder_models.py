@@ -4,8 +4,19 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
@@ -147,55 +158,3 @@ class PageObjectCandidateElement(Base):
         onupdate=func.now(),
         index=True,
     )
-
-class PageElementLocator(Base):
-    __tablename__ = "page_element_locators"
-    __table_args__ = (
-        UniqueConstraint(
-            "page_element_id",
-            "locator_type",
-            "locator_value",
-            "role",
-            name="uq_page_element_locators_identity",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    page_element_id: Mapped[int] = mapped_column(ForeignKey("page_elements.id", ondelete="CASCADE"), index=True)
-    locator_type: Mapped[str] = mapped_column(String(30), default="")
-    locator_value: Mapped[str] = mapped_column(String(512), default="")
-    role: Mapped[str] = mapped_column(String(60), default="")
-    locator_source: Mapped[str] = mapped_column(String(20), default="")
-    priority: Mapped[int] = mapped_column(Integer, default=100)
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
-    health_status: Mapped[str] = mapped_column(String(20), default="unknown", index=True)
-    verification_status: Mapped[str] = mapped_column(String(20), default="unknown", index=True)
-    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-    created_by: Mapped[str] = mapped_column(String(60), default="system")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        index=True,
-    )
-
-class PageObjectGovernanceLog(Base):
-    __tablename__ = "page_object_governance_logs"
-    __table_args__ = (
-        Index("ix_page_object_governance_logs_page", "project_code", "client", "page_code"),
-        Index("ix_page_object_governance_logs_entity", "entity_type", "entity_key"),
-        Index("ix_page_object_governance_logs_action", "action"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    project_code: Mapped[str] = mapped_column(String(20), default="mall", index=True)
-    client: Mapped[str] = mapped_column(String(10), default="web", index=True)
-    page_code: Mapped[str] = mapped_column(String(40), index=True)
-    entity_type: Mapped[str] = mapped_column(String(40), default="")
-    entity_key: Mapped[str] = mapped_column(String(160), default="")
-    action: Mapped[str] = mapped_column(String(40), default="")
-    operator: Mapped[str] = mapped_column(String(60), default="system", index=True)
-    before_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    after_payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
