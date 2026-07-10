@@ -1,3 +1,8 @@
+from app.models.behavior_registry import (
+    AssertionExecutionLog,
+    AssertionTemplate,
+    BehaviorRegistry,
+)
 from app.models.orchestration_task import OrchestrationTask
 from app.models.page_object import (
     PageElement,
@@ -48,6 +53,9 @@ from app.models.workbench_state import (
 
 __all__ = [
     "User",
+    "BehaviorRegistry",
+    "AssertionTemplate",
+    "AssertionExecutionLog",
     "OrchestrationTask",
     "TestProject",
     "PageObject",
