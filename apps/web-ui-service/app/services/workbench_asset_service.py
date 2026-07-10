@@ -1,24 +1,20 @@
 from __future__ import annotations
 
-import json
 import re
-from datetime import datetime
-from shared_backend.datetime_compat import UTC
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-import yaml
-from fastapi import HTTPException, status
 from shared_backend.case_ids import normalize_case_id
-from shared_backend.case_rules import enrich_case_metadata, validate_case_payload
 from shared_backend.type_utils import (
     dict_value as _dict_value,
-    float_value as _float_value,
+)
+from shared_backend.type_utils import (
     int_value as _int_value,
+)
+from shared_backend.type_utils import (
     list_value as _list_value,
 )
-
-from . import workbench_state_store as state_store
 
 NormalizeTestPointPlanPayload = Callable[[dict[str, Any], bool], dict[str, Any]]
 NowIsoFn = Callable[[], str]
@@ -63,7 +59,6 @@ def _safe_case_id(raw: str) -> str:
 
 
 from shared_backend.type_utils import dedup_keep_order as _dedup_keep_order
-
 
 _SOURCE_TYPE_LABELS = {
     "selection_save": "来自 AI 生成",
@@ -537,22 +532,18 @@ def build_test_point_asset_coverage_matrix(
 
 # ---- 以下函数体已移至 workbench_asset_state.py 和 workbench_asset_views.py ----
 # 导入放在文件末尾以避免循环依赖
+
 from app.services.workbench_asset_state import (  # noqa: E402
-    _state_test_points_root, _state_project_dir, _state_case_file,
-    state_project_dir, state_case_file, state_case_versions_dir,
-    resolve_case_yaml_path, collect_case_items, derive_points,
-    save_case_state, infer_targets, save_test_point_plan,
-    upsert_test_point_asset_snapshot, load_test_point_asset,
     load_test_point_asset_with_root,
+    save_test_point_plan,
+    state_project_dir,
+    upsert_test_point_asset_snapshot,
 )
 from app.services.workbench_asset_views import (  # noqa: E402
-    build_cases_payload, build_case_detail, read_case_yaml, write_case_yaml,
-    paginate_case_items, build_saved_case_payload,
-    build_test_point_asset_items, build_test_point_asset_detail,
-    build_test_point_asset_selection_summary,
-    build_test_point_asset_gate_context,
-    build_test_point_asset_summary,
     build_test_point_asset_coverage_summary,
+    build_test_point_asset_detail,
+    build_test_point_asset_items,
+    build_test_point_asset_selection_summary,
     build_test_point_asset_traceability_summary,
     latest_run_snapshot_for_case,
 )
