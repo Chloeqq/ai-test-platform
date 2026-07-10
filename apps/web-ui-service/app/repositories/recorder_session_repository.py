@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from sqlalchemy import func, select
 
-from app.models.page_object import (
+from app.models.page_object_recorder_models import (
     PageObjectRecorderSession,
 )
 

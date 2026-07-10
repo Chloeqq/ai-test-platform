@@ -5,13 +5,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, status
-from shared_backend.case_ids import normalize_client_code
-from shared_backend.type_utils import json_dict as _json_dict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -19,32 +17,23 @@ from app.models.page_object import (
     PageElement,
     PageElementLocator,
     PageElementVersion,
-    PageObject,
+)
+from app.models.page_object_recorder_models import (
     PageObjectCandidateElement,
     PageObjectCandidateGroup,
-    PageObjectGovernanceLog,
-    PageObjectRecorderSession,
-    PageObjectRef,
-)
-from app.schemas.page_object import (
-    CandidateElementBatchDeletePayload,
-    CandidateGroupBatchDeletePayload,
-    CandidateGroupMergePayload,
-    CandidateGroupPromotePayload,
-    CandidateRejectPayload,
-    PageElementCreate,
-    PageElementUpdate,
-    PageElementVersionCreate,
-    PageObjectCreate,
-    PageObjectRefCreate,
-    PageObjectUpdate,
 )
 from app.repositories.page_object_repository import PageObjectRepository
 from app.repositories.recorder_repository import RecorderRepository
+from app.schemas.page_object import (
+    CandidateGroupMergePayload,
+    CandidateGroupPromotePayload,
+    CandidateRejectPayload,
+)
 from app.services.page_object_normalizers import (
     CANDIDATE_PROMOTION_STATUS_VALUES,
     CANDIDATE_STATUS_VALUES,
 )
+from shared_backend.case_ids import normalize_client_code
 from shared_backend.type_utils import json_list as _json_list
 
 _RECORDER_ROOT = (Path(__file__).resolve().parents[4] / "artifacts" / "page-recorder").resolve()
@@ -67,12 +56,9 @@ from .page_object_serializers import (
     _element_locators_for_serialization,
     _serialize_candidate_element,
     _serialize_candidate_group,
-    _serialize_element_locator,
-    _serialize_element_version,
     _serialize_page_element,
-    _serialize_page_object,
-    _serialize_ref,
 )
+
 
 def list_candidate_groups(
     db: Session,
@@ -388,7 +374,7 @@ def promote_candidate_group(
             created_by=operator,
         )
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     before_group = _serialize_candidate_group(group)
     for row in candidate_rows:
         if str(row.candidate_status or "") in {"rejected", "merged"}:
@@ -474,7 +460,7 @@ def merge_candidate_group(
     review_note = str(payload.review_note or "").strip()
     before_group = _serialize_candidate_group(group)
     before_target_governance = _svc()._element_governance_payload(target)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     locator_count = 0
     if bool(payload.write_locator):
         seen_locator_keys = {
@@ -630,7 +616,7 @@ def reject_candidate_group(
     operator = str(payload.operator or "").strip() or "admin"
     review_note = str(payload.review_note or "").strip()
     before_group = _serialize_candidate_group(group)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rejected_count = 0
     for row in candidate_rows:
         if str(row.candidate_status or "") in {"promoted", "merged"}:
@@ -695,7 +681,7 @@ def reject_candidate_element(
     operator = str(payload.operator or "").strip() or "admin"
     item.candidate_status = "rejected"
     item.reviewed_by = operator
-    item.reviewed_at = datetime.now(timezone.utc)
+    item.reviewed_at = datetime.now(UTC)
     item.review_note = str(payload.review_note or "").strip()
     db.add(item)
     group = _svc()._candidate_group_or_404(
