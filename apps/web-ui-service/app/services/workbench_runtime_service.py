@@ -4,28 +4,31 @@ import json
 import logging
 import os
 import selectors
+import subprocess
+import sys
 import threading
 import time
 import uuid
-import subprocess
-import sys
-import yaml
+from collections.abc import Callable
 from datetime import datetime
-from shared_backend.datetime_compat import UTC
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from shared_backend.case_ids import normalize_case_id
-from shared_backend.type_utils import dict_value as _dict_value
-from sqlalchemy import select, text as _text
+import yaml
+from sqlalchemy import text as _text
 from sqlalchemy.orm import Session
 
 from app.api.workbench._helpers import (
     parse_iso_datetime as _parse_iso_datetime,
-    text as _text,
 )
-from app.models.test_case import TestCase, TestCaseExecution
+from app.api.workbench._helpers import (
+    text as _text,  # noqa: F811
+)
+from app.models.test_case import TestCaseExecution
 from app.repositories.test_case_repository import TestCaseRepository
+from shared_backend.case_ids import normalize_case_id
+from shared_backend.datetime_compat import UTC
+from shared_backend.type_utils import dict_value as _dict_value
 
 NormalizeExecutionRecordPayload = Callable[[dict[str, Any]], dict[str, Any]]
 NormalizePageSlug = Callable[[str], str]
@@ -461,6 +464,7 @@ def load_execution_record_payload(
 
 # runtime_view_with_execution_record_preferred → 移至 workbench_runtime_views.py
 # 以下 import 保持向后兼容：所有外部调用者通过 workbench_runtime_service 访问这些函数。
+
 from app.services.workbench_runtime_views import (  # noqa: E402
     load_runtime_execution_record_from_artifacts,
     runtime_view_from_entry,
@@ -638,7 +642,7 @@ def _execute_setup_sql(
                     continue
                 session.execute(_text(stmt))
             session.commit()
-        log_fp.write(f"[setup_sql] executed successfully\n")
+        log_fp.write("[setup_sql] executed successfully\n")
         return False
     except Exception as exc:
         log_fp.write(f"[setup_sql] execution failed: {exc}\n")
@@ -938,8 +942,11 @@ def _resolve_pool_data(yaml_text: str) -> str:
     if not pool_refs:
         return yaml_text
 
-    from shared_backend.data_pool_resolver import PoolResolutionError, resolve_pool_reference
     from app.services.test_data_pool_service import load_runner_data_pool_snapshot
+    from shared_backend.data_pool_resolver import (
+        PoolResolutionError,
+        resolve_pool_reference,
+    )
 
     pool_snapshot = load_runner_data_pool_snapshot(None)
     resolved = False
