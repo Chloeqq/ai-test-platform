@@ -753,3 +753,6 @@ from app.services.workbench_analysis_risk import (  # noqa: E402
     build_self_healing_summary,
     reviewer_display_name,
 )
+from app.services.workbench_page_surface_service import (  # noqa: E402
+    extract_page_from_url,
+)
