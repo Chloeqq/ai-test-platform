@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import json
-import shutil
-import re
-from datetime_compat import UTC
-from datetime import datetime
 import logging
-from pathlib import Path
-from typing import Any, Callable
+import re
 import uuid
+from collections.abc import Callable
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from datetime_compat import UTC
 from shared_backend.case_ids import normalize_case_id
 from shared_backend.type_utils import dict_value as _dict_value
-
 
 ReadDefectItems = Callable[[], list[dict[str, Any]]]
 WriteDefectItems = Callable[[list[dict[str, Any]]], None]
@@ -968,19 +968,17 @@ def build_report_context(
 
 # build_report_performance / Allure 函数 → 移至 workbench_reporting_views.py
 # 以下 import 保持向后兼容：所有外部调用者通过 workbench_reporting_service 访问这些函数。
+
 from app.services.workbench_reporting_views import (  # noqa: E402
-    build_report_performance,
     build_report_allure,
-    build_report_allure_pending,
-    build_report_allure_refresh,
-    refresh_allure_report,
+    build_report_performance,
+    ensure_allure_snapshot,
     find_latest_run_allure_results,
     get_allure_index_version,
-    build_allure_report_identity,
-    read_allure_summary,
     read_allure_environment,
     read_allure_executors,
-    ensure_allure_snapshot,
+    read_allure_summary,
+    refresh_allure_report,
 )
 
 

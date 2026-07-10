@@ -747,7 +747,6 @@ def build_page_object_quality(
 # 以下 import 保持向后兼容：所有外部调用者通过 workbench_analysis_service 访问这些函数。
 
 from app.services.workbench_analysis_risk import (  # noqa: E402
-    build_page_semantic_summary,
     build_review_section,
     build_risk_report_summary,
     build_risk_review_items,
