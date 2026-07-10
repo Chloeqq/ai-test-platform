@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import json
-from datetime import datetime
-from shared_backend.datetime_compat import UTC
 import importlib.util
+import json
 import os
-from pathlib import Path
 import re
 import shutil
 import signal
@@ -13,50 +10,43 @@ import subprocess
 import sys
 import time
 import uuid
+from datetime import datetime
+from pathlib import Path
 
 from fastapi import HTTPException, status
-from shared_backend.case_ids import normalize_client_code
-from shared_backend.type_utils import normalize_project_code_strict as _normalize_project_code_strict
-from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.models.page_object import PageObject, PageObjectCandidateElement, PageObjectCandidateGroup, PageObjectRecorderSession
-from app.repositories.page_object_repository import PageObjectRepository
-from app.repositories.recorder_repository import RecorderRepository
-from app.repositories.recorder_session_repository import RecorderSessionRepository
-from app.repositories.test_project_repository import TestProjectRepository
-from app.models.test_project import TestProject
-from app.schemas.page_object import PageObjectCreate, PageObjectRefCreate
-from app.schemas.page_object_recorder import (
-    RecorderSessionCreateCasePayload,
-    RecorderSessionCreate,
-    RecorderSessionHeartbeatPayload,
-    RecorderSessionStopPayload,
+from app.models.page_object_recorder_models import (
+    PageObjectCandidateElement,
+    PageObjectCandidateGroup,
+    PageObjectRecorderSession,
 )
-from app.schemas.test_case import TestCaseCreate
-from app.services.page_object_source_semantics import SourceSemanticCatalog, build_source_semantic_catalog
-from app.services import page_object_service, test_case_service, test_project_service
+from app.repositories.recorder_repository import RecorderRepository
+from app.repositories.test_project_repository import TestProjectRepository
 from app.services.page_object_locator_scoring import (
-    _ParsedLocator,
-    _ParsedStep,
-    _build_element_candidates,
     _business_domain_guess,
     _candidate_key_for_locator,
-    _derive_page_url,
-    _derive_precondition_state,
     _group_key_for_locator,
     _infer_locator_category,
-    _is_locator_blocked_for_ingest,
     _locator_key,
     _locator_source,
     _looks_dynamic_text_locator,
     _normalize_business_element_code,
     _normalize_metric_text_locator,
     _normalize_page_route,
-    _probe_availability,
+    _ParsedLocator,
+    _ParsedStep,
     _score_to_tier,
     _short_hash,
     _source_enhanced_candidate_semantics,
+)
+from app.services.page_object_source_semantics import (
+    SourceSemanticCatalog,
+    build_source_semantic_catalog,
+)
+from shared_backend.datetime_compat import UTC
+from shared_backend.type_utils import (
+    normalize_project_code_strict as _normalize_project_code_strict,
 )
 
 SESSION_STATUS_VALUES = {"active", "stopped", "failed"}
@@ -132,7 +122,7 @@ def _normalize_project_code(value: str) -> str:
     try:
         return _normalize_project_code_strict(value, max_len=20)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 def _normalize_page_code(value: str) -> str:
@@ -882,21 +872,4 @@ def _save_recorded_steps(script_path: Path, steps: list[dict[str, object]]) -> N
 # 导入放在文件末尾以避免循环依赖（新模块需要从此文件导入 helper 函数）
 from app.services.page_object_recorder_cases import (  # noqa: E402
     _load_recorded_steps,
-    _ensure_page_object,
-    _load_page_object_snapshot,
-    create_recorder_session,
-    heartbeat_recorder_session,
-    get_recorder_session,
-    list_recorder_sessions,
-    batch_delete_recorder_sessions,
-    get_recorder_session_playback,
-    replay_recorder_session,
-    cleanup_orphan_recorder_artifacts,
-    _normalize_step_value,
-    _build_case_steps_from_recorded_steps,
-    _build_case_script_from_recorded_steps,
-    _dedupe_text_items,
-    _link_case_refs_for_recorded_elements,
-    create_test_case_draft_from_session,
-    stop_recorder_session,
 )

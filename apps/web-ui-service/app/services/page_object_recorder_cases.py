@@ -5,20 +5,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
-import yaml
 from fastapi import HTTPException, status
-from shared_backend.case_ids import normalize_client_code
-from shared_backend.datetime_compat import UTC
-from shared_backend.type_utils import normalize_project_code_strict as _normalize_project_code_strict
 from sqlalchemy.orm import Session
 
-from app.models.page_object import PageObjectCandidateElement, PageObjectRecorderSession
+from app.models.page_object_recorder_models import PageObjectRecorderSession
 from app.repositories.page_object_repository import PageObjectRepository
 from app.repositories.recorder_repository import RecorderRepository
 from app.repositories.recorder_session_repository import RecorderSessionRepository
@@ -34,8 +30,9 @@ from app.services.page_object_locator_scoring import (
     _locator_key,
     _probe_availability,
 )
+from shared_backend.case_ids import normalize_client_code
+from shared_backend.datetime_compat import UTC
 
-import logging
 LOGGER = logging.getLogger(__name__)
 
 
@@ -705,7 +702,7 @@ def stop_recorder_session(
     script_path = Path(item.script_path)
     parsed_steps = _svc()._parse_codegen_steps(script_path)
     parsed_locators_all = _svc()._parse_codegen_script(script_path, include_dynamic_text=True)
-    parsed_locators = [locator for locator in parsed_locators_all if not _is_locator_blocked_for_ingest(locator)[0]]
+    [locator for locator in parsed_locators_all if not _is_locator_blocked_for_ingest(locator)[0]]
     step_hit_count_by_key: dict[tuple[str, str, str], int] = {}
     for step in parsed_steps:
         if step.locator_type == "url":
