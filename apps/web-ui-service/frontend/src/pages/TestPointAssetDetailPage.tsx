@@ -421,6 +421,7 @@ function candidatePayloadFromRow(row: Record<string, unknown>, page: unknown): R
       value: step,
       raw_text: step,
     })),
+    raw_steps: asRecordList(row.steps),  // preserve original structured steps for machine instructions
     expected,
     expected_result: expected,
     involved_elements: normalizeInvolvedElements(row.involved_elements, page),
@@ -1147,7 +1148,8 @@ export function TestPointAssetDetailPage() {
               {pagedDetailRows.length ? (
                 pagedDetailRows.map((row, index) => {
                   const steps = stepTextList(row.steps);
-                  const instructions = asRecordList(row.steps).map((s) => {
+                  const sourceSteps = asRecordList(row.raw_steps).length ? asRecordList(row.raw_steps) : asRecordList(row.steps);
+                  const instructions = sourceSteps.map((s) => {
                     const action = text(s.action);
                     const target = text(s.target).replace("element:", "");
                     const value = s.value != null ? String(s.value) : "";
