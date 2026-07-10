@@ -536,6 +536,7 @@ def build_test_point_asset_coverage_matrix(
 from app.services.workbench_asset_state import (  # noqa: E402
     collect_case_items,
     derive_points,
+    infer_targets,
     load_test_point_asset,
     load_test_point_asset_with_root,
     resolve_case_yaml_path,

@@ -748,11 +748,14 @@ def build_page_object_quality(
 
 from app.services.workbench_analysis_risk import (  # noqa: E402
     build_review_section,
+    build_risk_report,
     build_risk_report_summary,
     build_risk_review_items,
     build_self_healing_summary,
+    evaluate_risk_report,
     reviewer_display_name,
 )
 from app.services.workbench_page_surface_service import (  # noqa: E402
     extract_page_from_url,
+    resolve_page_url,
 )
