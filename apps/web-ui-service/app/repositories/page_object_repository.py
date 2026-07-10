@@ -12,10 +12,10 @@ from app.models.page_object import (
     PageElementHealthCheck,
     PageElementVersion,
     PageObject,
+    PageObjectRef,
 )
 from app.models.page_object_recorder_models import (
     PageElementLocator,
-    PageObjectRef,
 )
 
 from .base import BaseRepository
