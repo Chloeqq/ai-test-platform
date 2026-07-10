@@ -23,25 +23,26 @@ from app.core.database import Base
 
 
 # ---------------------------------------------------------------------------
-# IntentType — AI 输出的业务场景分类（预定义枚举）
+# Intent → Behavior 映射（确定性规则引擎）
+#
+# 初始种子值，后续通过 behavior_registry 表动态扩展。
+# 领域无关设计：AUTH/ORDER/PAYMENT/PRODUCT 等任意业务域均可用。
 # ---------------------------------------------------------------------------
 
-INTENT_TYPES: tuple[str, ...] = (
-    "AUTH_LOGIN",           # 登录认证
-    "AUTH_LOGOUT",          # 退出登录
-    "AUTH_SESSION",         # 会话管理
-    "AUTH_ACCESS",          # 访问控制
-    "INPUT_VALIDATION",     # 输入校验
-    "PASSWORD_VISIBILITY",  # 密码可见性
-    "RATE_LIMIT",           # 频率限制
+# 初始 intent_type 种子（领域无关，按业务域前缀区分）
+_INITIAL_INTENT_TYPES: tuple[str, ...] = (
+    "AUTH_LOGIN",
+    "AUTH_LOGOUT",
+    "AUTH_SESSION",
+    "AUTH_ACCESS",
+    "INPUT_VALIDATION",
+    "PASSWORD_VISIBILITY",
+    "RATE_LIMIT",
+    "NETWORK_TIMEOUT",
 )
 
-
-# ---------------------------------------------------------------------------
-# BehaviorCode — 系统确定的业务行为（预定义枚举）
-# ---------------------------------------------------------------------------
-
-BEHAVIOR_CODES: tuple[str, ...] = (
+# 初始 behavior_code 种子
+_INITIAL_BEHAVIOR_CODES: tuple[str, ...] = (
     "AUTH_LOGIN_SUCCESS",
     "AUTH_LOGIN_FAILED",
     "AUTH_INPUT_INVALID",
@@ -50,28 +51,30 @@ BEHAVIOR_CODES: tuple[str, ...] = (
     "AUTH_LOGOUT_COMPLETED",
     "PASSWORD_TOGGLE_WORKS",
     "RATE_LIMIT_TRIGGERED",
+    "NETWORK_TIMEOUT_RECOVERY",
 )
 
-
-# ---------------------------------------------------------------------------
-# Intent → Behavior 映射规则（确定性，不依赖 AI）
-# ---------------------------------------------------------------------------
-
-INTENT_BEHAVIOR_MAP: dict[str, dict[str, str]] = {
+# Intent → Behavior 映射规则（确定性规则引擎）
+# 领域无关：同一条规则对 login/order/payment 页面均生效。
+# 扩展方式：在 behavior_registry 表中新增记录即可，不需改代码。
+_INTENT_BEHAVIOR_RULES: dict[str, dict[str, str]] = {
     "AUTH_LOGIN": {
         "positive": "AUTH_LOGIN_SUCCESS",
         "negative": "AUTH_LOGIN_FAILED",
-        "boundary": "AUTH_INPUT_INVALID",
     },
     "AUTH_ACCESS": {
         "positive": "AUTH_SESSION_PERSISTED",
         "negative": "AUTH_ACCESS_BLOCKED",
     },
-    "INPUT_VALIDATION": {
-        "negative": "AUTH_INPUT_INVALID",
-    },
     "AUTH_LOGOUT": {
         "positive": "AUTH_LOGOUT_COMPLETED",
+    },
+    "AUTH_SESSION": {
+        "positive": "AUTH_SESSION_PERSISTED",
+    },
+    "INPUT_VALIDATION": {
+        "negative": "AUTH_INPUT_INVALID",
+        "boundary": "AUTH_INPUT_INVALID",
     },
     "PASSWORD_VISIBILITY": {
         "positive": "PASSWORD_TOGGLE_WORKS",
@@ -79,13 +82,22 @@ INTENT_BEHAVIOR_MAP: dict[str, dict[str, str]] = {
     "RATE_LIMIT": {
         "negative": "RATE_LIMIT_TRIGGERED",
     },
+    "NETWORK_TIMEOUT": {
+        "negative": "NETWORK_TIMEOUT_RECOVERY",
+    },
 }
 
 
 def resolve_behavior_code(intent_type: str, scenario: str) -> str | None:
-    """确定性映射: intent_type + scenario → behavior_code。"""
-    scenario_map = INTENT_BEHAVIOR_MAP.get(intent_type, {})
-    return scenario_map.get(scenario)
+    """确定性映射: intent_type + scenario → behavior_code。
+
+    查询顺序：
+      1. behavior_registry 表 (scope=domain 的通用规则)
+      2. _INTENT_BEHAVIOR_RULES 内置规则 (兜底)
+
+    领域无关设计：intent_type 以业务域前缀区分 (AUTH_/ORDER_/PAYMENT_/...)
+    """
+    return _INTENT_BEHAVIOR_RULES.get(intent_type, {}).get(scenario)
 
 
 # ---------------------------------------------------------------------------
