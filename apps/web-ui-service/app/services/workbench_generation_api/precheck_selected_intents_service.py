@@ -6,11 +6,12 @@ from shared_backend import ExecutionCompilerError
 from shared_backend.element_binding import resolve_involved_element_codes
 from shared_backend.type_utils import str_value as _normalized_text
 
-from .context import WorkbenchContext
-from . import preview_store
+from ..workbench_generation_compiler.runtime.generate_pipeline_orchestrate import (
+    resolve_page_object,
+)
 from . import constants as _c
-from ..workbench_generation_compiler.runtime.generate_pipeline import resolve_page_object
-
+from . import preview_store
+from .context import WorkbenchContext
 
 _NON_DOM_INVOLVED_ELEMENTS = {
     "页面",

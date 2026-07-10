@@ -3,13 +3,15 @@ from __future__ import annotations
 from typing import Any
 
 from shared_backend.case_ids import normalize_case_id
-from shared_backend.execution_compiler import ExecutionCompilerError
 from shared_backend.element_binding import enrich_candidate_with_element_codes
+from shared_backend.execution_compiler import ExecutionCompilerError
 
-from .context import WorkbenchContext
-from . import preview_store
+from ..workbench_generation_compiler.runtime.generate_pipeline_orchestrate import (
+    resolve_page_object,
+)
 from . import constants as _c
-from ..workbench_generation_compiler.runtime.generate_pipeline import resolve_page_object
+from . import preview_store
+from .context import WorkbenchContext
 
 
 class GenerateCaseService:
