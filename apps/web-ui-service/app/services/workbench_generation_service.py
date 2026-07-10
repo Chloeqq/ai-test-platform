@@ -11,25 +11,31 @@ Boundary note:
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
-from shared_backend.case_ids import build_case_id, match_case_id, next_case_sequence, normalize_case_id
+from app.services.workbench_generation_api import preview_store
 from app.services.workbench_generation_compiler.debug import (
     build_trace_id,
     debug_enabled,
     log_debug_event,
 )
-from app.services.workbench_generation_compiler.runtime.generate_pipeline import (
+from app.services.workbench_generation_compiler.runtime.generate_pipeline_steps import (
     run_generate_pipeline,
 )
 from app.services.workbench_generation_compiler.runtime.preview_pipeline import (
     run_preview_pipeline,
 )
-from app.services.workbench_generation_api import preview_store
-from shared_backend.type_utils import dict_value as _dict_value, list_value as _list_value
-
+from shared_backend.case_ids import (
+    build_case_id,
+    match_case_id,
+    next_case_sequence,
+    normalize_case_id,
+)
+from shared_backend.type_utils import dict_value as _dict_value
+from shared_backend.type_utils import list_value as _list_value
 
 BuildSystemRequirement = Callable[..., str]
 RunOrchestratorParse = Callable[..., dict[str, Any]]
