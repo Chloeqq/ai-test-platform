@@ -115,6 +115,7 @@ export interface TestPointAssetsResponse {
   items?: Array<Record<string, unknown>>;
   selection_summary?: Record<string, unknown>;
   coverage_summary?: Record<string, unknown>;
+  quality_summary?: Record<string, unknown>;
 }
 
 export interface TestPointAssetDetailResponse {

@@ -6,7 +6,10 @@ interface DataTableProps {
   loading?: boolean;
   loadingText?: string;
   errorText?: string;
-  children: ReactNode;
+  children?: ReactNode;
+  // backward-compat for pages still using old API
+  columns?: Array<Record<string, unknown>>;
+  rows?: Array<Record<string, unknown>>;
 }
 
 export function DataTable({
