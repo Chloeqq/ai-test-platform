@@ -1,19 +1,14 @@
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlencode
 
 from datetime_compat import UTC
-from sqlalchemy.orm import Session
-
-from app.api.workbench._helpers import default_overview, to_utc
-from app.models.test_case import TestCase, TestCaseExecution
-from app.repositories.test_case_repository import TestCaseRepository
-from app.services import test_case_service
-from shared_backend.type_utils import dict_value as _dict_value, float_value as _float_value, int_value as _int_value, list_value as _list_value
+from shared_backend.type_utils import dict_value as _dict_value
+from shared_backend.type_utils import float_value as _float_value
+from shared_backend.type_utils import int_value as _int_value
 
 LOGGER = logging.getLogger(__name__)
 
@@ -683,11 +678,12 @@ def _build_action_items(
 # build_governance_trend / build_governance_overview / build_flaky_top5 / build_dashboard_overview
 # → 移至 workbench_governance_views.py
 # 以下 import 保持向后兼容：所有外部调用者通过 workbench_governance_service 访问这些函数。
+
 from app.services.workbench_governance_views import (  # noqa: E402
-    build_governance_trend,
-    build_governance_overview,
-    build_flaky_top5,
     build_dashboard_overview,
+    build_flaky_top5,
+    build_governance_overview,
+    build_governance_trend,
 )
 
 

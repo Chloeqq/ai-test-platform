@@ -4,11 +4,9 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import yaml
-
-from shared_backend.type_utils import dict_value as _dict_value
 
 from app.core import page_analysis_rules
 from app.core.page_analysis_pipeline import (
@@ -16,31 +14,14 @@ from app.core.page_analysis_pipeline import (
     normalize_page_object_model,
     normalize_test_point_plan_model,
 )
-
 from app.services.workbench_page_surface_service import (
-    _dedup_keep_order,
     _clamp_confidence,
+    _dedup_keep_order,
     _list_value,
-    extract_page_from_url,
-    resolve_page_url,
-    route_signature,
-    is_allowed_host_pattern,
-    is_private_or_local_hostname,
-    validate_page_surface_url,
-    build_surface_element_candidate,
-    build_surface_element_candidates,
     surface_confidence_summary,
     surface_inferred_elements,
-    build_surface_result_from_snapshot,
-    normalize_page_surface,
-    compute_surface_stability,
-    wait_for_surface_stable,
-    collect_frame_surface,
-    extract_page_surface,
-    _surface_candidate_confidence_index,
-    surface_candidate_confidence_index,
-    inherit_test_point_confidence_from_surface,
 )
+from shared_backend.type_utils import dict_value as _dict_value
 
 LOGGER = logging.getLogger(__name__)
 
@@ -764,22 +745,12 @@ def build_page_object_quality(
 
 # _normalize_risk_factors / build_risk_report / ... → 移至 workbench_analysis_risk.py
 # 以下 import 保持向后兼容：所有外部调用者通过 workbench_analysis_service 访问这些函数。
+
 from app.services.workbench_analysis_risk import (  # noqa: E402
-    _normalize_risk_factors,
-    normalize_risk_factors,
-    _build_risk_evidence,
-    build_risk_evidence,
-    _build_semantic_risk_evidence,
-    build_semantic_risk_evidence,
-    _build_risk_factor_summary,
-    build_risk_factor_summary,
-    build_risk_report_summary,
-    build_self_healing_summary,
-    build_failure_analysis_for_risk,
-    evaluate_risk_report,
-    build_risk_review_items,
-    _reviewer_display_name,
-    reviewer_display_name,
+    build_page_semantic_summary,
     build_review_section,
-    build_risk_report,
+    build_risk_report_summary,
+    build_risk_review_items,
+    build_self_healing_summary,
+    reviewer_display_name,
 )
