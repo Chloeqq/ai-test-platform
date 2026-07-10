@@ -8,8 +8,10 @@ from sqlalchemy import delete, func, select
 
 from app.models.page_object import (
     PageElement,
-    # PageElementLocator,  # TODO: model missing — need migration
     PageObject,
+)
+from app.models.page_object_recorder_models import (
+    PageElementLocator,
     PageObjectGovernanceLog,
 )
 
@@ -109,9 +111,22 @@ class PageObjectGovernanceRepository(BaseRepository):
         stmt = stmt.order_by(PageElement.id.asc())
         return list(self.db.execute(stmt).scalars().all())
 
-    # ---- Locator listing (disabled — PageElementLocator model missing) ----
-    # def list_locators_by_element_id(self, element_id: int):
-    #     ...
+    # ---- Locator listing ----
+
+    def list_locators_by_element_id(
+        self, element_id: int
+    ) -> list[PageElementLocator]:
+        return list(
+            self.db.execute(
+                select(PageElementLocator)
+                .where(PageElementLocator.page_element_id == element_id)
+                .order_by(
+                    PageElementLocator.is_primary.desc(),
+                    PageElementLocator.priority.asc(),
+                    PageElementLocator.id.asc(),
+                )
+            ).scalars().all()
+        )
 
     # ---- GovernanceLog delete ----
 

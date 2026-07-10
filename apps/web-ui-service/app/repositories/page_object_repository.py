@@ -12,8 +12,10 @@ from app.models.page_object import (
     PageElementHealthCheck,
     PageElementVersion,
     PageObject,
-    # PageElementLocator,  # TODO: model missing — need migration
-    # PageObjectRef,        # TODO: model missing — need migration
+)
+from app.models.page_object_recorder_models import (
+    PageElementLocator,
+    PageObjectRef,
 )
 
 from .base import BaseRepository
