@@ -613,6 +613,13 @@ function pointRows(item: Record<string, unknown>): Array<Record<string, unknown>
           review_note: String(point.review_note || snapshot.review_note || "").trim(),
           reviewed_at: String(point.reviewed_at || snapshot.reviewed_at || "").trim(),
           reviewed_by: String(point.reviewed_by || snapshot.reviewed_by || "").trim(),
+          gate_issues: (() => {
+            const issues: string[] = [];
+            if (!point.has_assertion) issues.push("零断言");
+            if (point.has_candidate_step) issues.push("含未结构化步骤");
+            if (point.warning_count > 0) issues.push(`${point.warning_count}个警告`);
+            return issues;
+          })(),
         };
       });
   }
@@ -1142,6 +1149,7 @@ export function TestPointAssetDetailPage() {
                 <th>步骤</th>
                 <th>预期结果</th>
                 <th>机器指令</th>
+                <th>Gate</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -1196,6 +1204,17 @@ export function TestPointAssetDetailPage() {
                         {instructions.length
                           ? instructions.map((inst, i) => <div key={i}>{inst}</div>)
                           : "-"}
+                      </td>
+                      <td>
+                        {Array.isArray(row.gate_issues) && (row.gate_issues as string[]).length
+                          ? (row.gate_issues as string[]).map((issue, i) => (
+                              <span key={i} className="gate-issue-tag" style={{
+                                display: "inline-block", background: "#fff3cd", color: "#856404",
+                                padding: "1px 6px", borderRadius: "3px", fontSize: "0.75rem",
+                                marginRight: "4px", marginBottom: "2px"
+                              }}>{issue}</span>
+                            ))
+                          : <span style={{ color: "#28a745", fontSize: "0.8rem" }}>✅</span>}
                       </td>
                       <td>
                         <div className="table-row-actions">
