@@ -1,49 +1,41 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, status
-from shared_backend.case_ids import normalize_client_code
-from shared_backend.type_utils import json_dict as _json_dict
-from sqlalchemy import delete, func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.page_object import (
     PageElement,
-    PageElementLocator,
     PageElementVersion,
     PageObject,
+    PageObjectGovernanceLog,
+)
+from app.models.page_object_recorder_models import (
     PageObjectCandidateElement,
     PageObjectCandidateGroup,
-    PageObjectGovernanceLog,
-    PageObjectRecorderSession,
-    PageObjectRef,
 )
-from app.schemas.page_object import (
-    CandidateGroupMergePayload,
-    CandidateGroupPromotePayload,
-    CandidateRejectPayload,
-    PageElementCreate,
-    PageElementUpdate,
-    PageElementVersionCreate,
-    PageObjectCreate,
-    PageObjectRefCreate,
-    PageObjectUpdate,
+from app.repositories.page_object_governance_repository import (
+    PageObjectGovernanceRepository,
 )
 from app.repositories.page_object_repository import PageObjectRepository
-from app.repositories.page_object_governance_repository import PageObjectGovernanceRepository
 from app.repositories.recorder_repository import RecorderRepository
 from app.repositories.recorder_session_repository import RecorderSessionRepository
+from app.schemas.page_object import (
+    PageElementCreate,
+    PageObjectCreate,
+    PageObjectUpdate,
+)
 from app.services import test_project_service
-
 from app.services.page_object_normalizers import (
-    CANDIDATE_PROMOTION_STATUS_VALUES,
-    CANDIDATE_STATUS_VALUES,
     _locator_identity_key,
     _locator_relaxed_key,
+    _normalize_binary_health_status,
+    _normalize_business_domain,
     _normalize_business_type,
     _normalize_formal_element_code,
     _normalize_governance_status,
@@ -54,15 +46,9 @@ from app.services.page_object_normalizers import (
     _normalize_page_element_status,
     _normalize_page_object_status,
     _normalize_project_code,
-    _normalize_binary_health_status,
-    _normalize_business_domain,
-    _normalize_reference_type,
-    _normalize_review_status,
-    _normalize_stability_level,
-    _locator_source_from_type,
-    _stability_from_locator_source,
-    _validate_formal_element_governance_qualification,
 )
+from shared_backend.case_ids import normalize_client_code
+from shared_backend.type_utils import json_dict as _json_dict
 
 _RECORDER_ROOT = (Path(__file__).resolve().parents[4] / "artifacts" / "page-recorder").resolve()
 _RECORDER_CLEANABLE_STATUSES = {"stopped", "failed"}
@@ -236,13 +222,8 @@ def _cleanup_page_recorder_assets(
 
 from .page_object_serializers import (
     _element_locators_for_serialization,
-    _serialize_candidate_element,
-    _serialize_candidate_group,
-    _serialize_element_locator,
-    _serialize_element_version,
     _serialize_page_element,
     _serialize_page_object,
-    _serialize_ref,
 )
 
 
@@ -599,9 +580,11 @@ def _sync_case_urls_in_db(
     db: Session, project_code: str, page_code: str, new_url: str
 ) -> None:
     """同步页面对象 URL 到 DB 中关联用例的 test_steps 和 script_code。"""
-    from app.repositories.test_case_repository import TestCaseRepository  # noqa: E402
-    from sqlalchemy.orm.attributes import flag_modified
     import re
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from app.repositories.test_case_repository import TestCaseRepository  # noqa: E402
     repo = TestCaseRepository(db)
     cases = repo.list_filtered(project_code=project_code, page_code=page_code)
     for case in cases:
@@ -619,6 +602,7 @@ def _sync_case_urls_in_db(
 def _replace_url_in_steps(case: Any, new_url: str) -> None:
     """替换 test_steps JSON 列中残留的旧 URL。"""
     import re
+
     from sqlalchemy.orm.attributes import flag_modified
     if not isinstance(case.test_steps, list):
         return
@@ -1039,18 +1023,3 @@ def create_page_element(
 
 # ---- 以下函数体已移至 page_object_elements.py 和 page_object_candidates.py ----
 # 导入放在文件末尾以避免循环依赖
-from app.services.page_object_elements import (  # noqa: E402
-    update_page_element, delete_page_element, _unique_non_empty,
-    batch_delete_page_elements,
-    _refresh_or_delete_candidate_group_after_physical_delete,
-    batch_delete_candidate_groups, batch_delete_candidate_elements,
-    create_page_element_version, list_page_element_versions,
-    create_page_object_ref, list_page_object_refs,
-)
-from app.services.page_object_candidates import (  # noqa: E402
-    list_candidate_groups, list_candidate_elements, get_candidate_group,
-    _candidate_rows_for_group, _refresh_group_status_from_candidates,
-    _primary_candidate_locator,
-    promote_candidate_group, merge_candidate_group,
-    reject_candidate_group, reject_candidate_element,
-)

@@ -1,7 +1,5 @@
 from typing import Any
 
-from shared_backend.type_utils import json_dict as _json_dict
-
 from sqlalchemy.orm import Session
 
 from app.models.page_object import (
@@ -9,24 +7,23 @@ from app.models.page_object import (
     PageElementLocator,
     PageElementVersion,
     PageObject,
-    PageObjectCandidateElement,
-    PageObjectCandidateGroup,
     PageObjectRef,
 )
-from app.repositories.page_object_governance_repository import PageObjectGovernanceRepository
+from app.models.page_object_recorder_models import (
+    PageObjectCandidateElement,
+    PageObjectCandidateGroup,
+)
+from app.repositories.page_object_governance_repository import (
+    PageObjectGovernanceRepository,
+)
 from app.services.page_element_code_policy import suggest_business_element_code
-
+from shared_backend.type_utils import bounded_score as _bounded_score
+from shared_backend.type_utils import json_dict as _json_dict
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-
 from shared_backend.type_utils import json_list as _json_list
-
-
-from shared_backend.type_utils import bounded_score as _bounded_score
-
 
 # ---------------------------------------------------------------------------
 # Serializers
