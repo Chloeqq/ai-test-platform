@@ -7,24 +7,20 @@ from __future__ import annotations
 
 import json
 import logging
-
 import re
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import Any, Sequence
-import yaml
-from shared_backend.case_ids import match_case_id
-from shared_backend.element_binding import build_element_alias_map, resolve_element_code, resolve_involved_element_codes
-from sqlalchemy.orm import Session
+from typing import Any
 
+import yaml
 from app.api.workbench import constants, store
-from app.core.config import get_settings
 from app.core import page_analysis_rules
-from app.repositories.page_object_repository import PageObjectRepository
-from app.repositories.test_case_repository import TestCaseRepository
+from app.core.config import get_settings
 from app.models.page_object import PageElement
 from app.models.test_case import TestCase, TestCaseExecution
+from app.repositories.page_object_repository import PageObjectRepository
+from app.repositories.test_case_repository import TestCaseRepository
 from app.services import (
     workbench_analysis_service,
     workbench_asset_service,
@@ -32,12 +28,31 @@ from app.services import (
     workbench_review_service,
     workbench_runtime_service,
 )
+from sqlalchemy.orm import Session
+
+from shared_backend.case_ids import match_case_id
+from shared_backend.element_binding import (
+    build_element_alias_map,
+    resolve_element_code,
+    resolve_involved_element_codes,
+)
+
 from ._helpers import (
     normalize_optional_project_code as _normalize_optional_project_code,
+)
+from ._helpers import (
     normalize_test_point_review_status as _normalize_test_point_review_status,
+)
+from ._helpers import (
     python_literal as _python_literal,
+)
+from ._helpers import (
     safe_python_identifier as _safe_python_identifier,
+)
+from ._helpers import (
     text as _text,
+)
+from ._helpers import (
     text_list as _text_list,
 )
 from .service import (
@@ -1417,7 +1432,11 @@ def _point_step_texts(point_steps: list[Any]) -> list[str]:
 
 
 def _steps_hint_from_current_steps(point_steps: list[Any], involved_elements: list[str]) -> list[str]:
-    """根据当前测试点步骤推导脚本生成可使用的步骤提示。"""
+    """从 structured steps 重建 steps_hint 文本（仅展示/兜底用途）。
+
+    FIX(Phase A): 此函数不再是权威数据源。AI 原始的 snapshot.steps_hint
+    优先于本函数的重建结果。仅在 snapshot.steps_hint 不存在时作为兜底。
+    """
     hints: list[str] = []
     for row in point_steps:
         if not isinstance(row, dict):
@@ -1491,17 +1510,23 @@ def _candidate_from_asset_point(point: dict[str, Any], *, fallback_title: str, f
     steps: list[str] = current_steps or _text_list(point.get("steps_hint")) or snapshot_steps or _text_list(snapshot.get("steps_hint"))
     involved_elements = _text_list(point.get("involved_elements")) or _text_list(snapshot.get("involved_elements"))
     current_steps_hint = _steps_hint_from_current_steps(point_steps, involved_elements)
-    saved_steps_hint = _text_list(point.get("steps_hint")) or _text_list(snapshot.get("steps_hint"))
-    # current_steps_hint 是从结构化 point.steps 按顺序重建的权威序列，本身
-    # 就可能合法包含重复动作（如先建立态再执行真正动作），不能对它做去重；
-    # 只对"current 已覆盖的内容"跳过 saved 里的重复项，把 saved 中确实不同
-    # 的提示（如旧版遗留的不同取值）追加在后面，两者都保留即可。
-    merged_steps_hint = list(current_steps_hint)
-    seen_hints = set(current_steps_hint)
-    for hint in saved_steps_hint:
-        if hint not in seen_hints:
-            seen_hints.add(hint)
-            merged_steps_hint.append(hint)
+    saved_steps_hint = _text_list(snapshot.get("steps_hint")) or _text_list(point.get("steps_hint"))
+    # FIX(Phase A): AI 原始 snapshot.steps_hint 优先于平台重建版。
+    # snapshot 是 AI 生成时的原始快照，不可被 _steps_hint_from_current_steps 覆盖。
+    # 平台重建版仅作为补充：追加 snapshot 中不存在的步骤。
+    # 如果两个 hint 的 action 前缀相同但值不同，保留 saved（AI 原始）。
+    merged_steps_hint = list(saved_steps_hint)
+    seen_hints = set(saved_steps_hint)
+    saved_actions = {h.split(":")[0] for h in saved_steps_hint if ":" in h}
+    for hint in current_steps_hint:
+        if hint in seen_hints:
+            continue
+        # 相同 action 已在 saved 中存在 → 不追加（避免 saved 和 current 对同一操作有不同值）
+        action_prefix = hint.split(":")[0] if ":" in hint else ""
+        if action_prefix and action_prefix in saved_actions:
+            continue
+        seen_hints.add(hint)
+        merged_steps_hint.append(hint)
     return {
         "intent_id": intent_id or "manual-intent",
         "title": title,

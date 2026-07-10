@@ -1,0 +1,48 @@
+[
+  {
+    "intent_name": "intent-01-login-success",
+    "scenario": "positive",
+    "original_ui_assertions": [],
+    "issue": "零断言：input → input → click，3步操作无任何可执行验证",
+    "risk": "FALSE_PASS_HIGH",
+    "audit_finding": "Runner只要不抛异常就返回passed。API返回500但前端静默吞掉也passed。"
+  },
+  {
+    "intent_name": "intent-04-empty-username",
+    "scenario": "negative",
+    "original_ui_assertions": [
+      {"type": "assert_text", "target": "login-submit-btn", "expected": "请输入账号"}
+    ],
+    "issue": "断言目标错误 + 文案AI推测",
+    "risk": "FALSE_PASS_HIGH",
+    "audit_finding": "assert_text target是button而非error/toast元素。'请输入账号'为AI推测，真实系统返回'username不能为空'。"
+  },
+  {
+    "intent_name": "intent-02-session-persist",
+    "scenario": "positive",
+    "original_ui_assertions": [
+      {"type": "assert_url", "target": "", "expected": "#/login"}
+    ],
+    "issue": "断言逻辑颠倒 — assert_url期望/login但意图是验证不跳转",
+    "risk": "FALSE_PASS_HIGH",
+    "audit_finding": "测试意图'已登录用户不会被重定向到登录页'，但assert_url断言URL等于/login。PASS=系统有Bug，FAIL=系统正常。"
+  },
+  {
+    "intent_name": "intent-16-wrong-password",
+    "scenario": "negative",
+    "original_ui_assertions": [
+      {"type": "assert_text", "target": "login-submit-btn", "expected": "密码错误"}
+    ],
+    "issue": "断言目标错误 + AI推测文案",
+    "risk": "FALSE_PASS_HIGH",
+    "audit_finding": "AI推测文案'密码错误'，真实系统返回'密码不正确'。断言在button上找文本，错误提示在toast上。"
+  },
+  {
+    "intent_name": "intent-19-double-click",
+    "scenario": "negative",
+    "original_ui_assertions": [],
+    "issue": "零断言 + 步骤缺失 — '重复点击'只有一次click",
+    "risk": "FALSE_PASS_HIGH",
+    "audit_finding": "意图是验证防重复提交，但只实现了单次click且无断言。完全无法验证'只发起一次请求'。"
+  }
+]

@@ -1,21 +1,19 @@
-from contextlib import asynccontextmanager
 import json
 import logging
 import stat
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.error import URLError
-from urllib.request import urlopen
 
-from fastapi import Depends as _Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends as _Depends
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
+
 from app.core.config import get_settings
 from app.core.database import Base, engine
-from app.core.redis_client import ping_redis
 from app.core.security import get_current_user
 from app.routers.auth import router as auth_router
 from app.routers.dashboard import router as dashboard_router
@@ -24,9 +22,12 @@ from app.routers.page_objects import router as page_objects_router
 from app.routers.page_objects_candidates import router as page_objects_candidates_router
 from app.routers.page_objects_elements import router as page_objects_elements_router
 from app.routers.page_objects_recorder import router as page_objects_recorder_router
+from app.routers.quality_dashboard_api import router as quality_dashboard_router
+from app.routers.quality_eval_api import router as quality_eval_router
 from app.routers.test_cases import router as test_cases_router
 from app.routers.test_data_pools import router as test_data_pools_router
 from app.routers.test_projects import router as test_projects_router
+from app.routers.ui import router as ui_router
 from app.routers.workbench_assets import router as workbench_assets_router
 from app.routers.workbench_assets_cases import router as workbench_assets_cases_router
 from app.routers.workbench_gate import router as workbench_gate_router
@@ -35,12 +36,15 @@ from app.routers.workbench_reporting import router as workbench_reporting_router
 from app.routers.workbench_reviews import router as workbench_reviews_router
 from app.routers.workbench_runs import router as workbench_runs_router
 from app.routers.workbench_scheduler import router as workbench_scheduler_router
+from app.routers.atp_api import router as atp_api_router
 from app.routers.workbench_tasks import router as workbench_tasks_router
-from app.routers.quality_dashboard_api import router as quality_dashboard_router
-from app.routers.quality_eval_api import router as quality_eval_router
-from app.routers.ui import router as ui_router
 from app.services.workbench_reporting_service import inject_allure_branding
-from shared_backend.observability import configure_logging, set_request_id, summarize_http_context, summarize_log_value
+from shared_backend.observability import (
+    configure_logging,
+    set_request_id,
+    summarize_http_context,
+    summarize_log_value,
+)
 
 settings = get_settings()
 configure_logging(service_name="web-ui-service")
@@ -100,6 +104,7 @@ app.mount("/allure-snapshots", BrandedAllureStaticFiles(directory=str(ALLURE_SNA
 
 app.include_router(ui_router)
 app.include_router(health_router)
+app.include_router(atp_api_router)  # no JWT: public analysis endpoint
 app.include_router(auth_router)
 app.include_router(dashboard_router, dependencies=_jwt_required)
 app.include_router(workbench_assets_router, dependencies=_jwt_required)

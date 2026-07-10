@@ -1,0 +1,43 @@
+[
+  {
+    "name": "login_success",
+    "scenario": "positive",
+    "api_request": {
+      "method": "POST",
+      "path": "/admin/login",
+      "body": {"username": "admin", "password": "macro123"}
+    },
+    "assertions": [
+      {"type": "status", "expected": 200},
+      {"type": "json", "path": "code", "expected": 200},
+      {"type": "json", "path": "data.token", "operator": "not_empty"}
+    ]
+  },
+  {
+    "name": "login_failed_wrong_password",
+    "scenario": "negative",
+    "api_request": {
+      "method": "POST",
+      "path": "/admin/login",
+      "body": {"username": "admin", "password": "wrong_password"}
+    },
+    "assertions": [
+      {"type": "status", "expected": 200},
+      {"type": "json", "path": "code", "expected": 500},
+      {"type": "json", "path": "message", "operator": "contains", "expected": "密码"}
+    ]
+  },
+  {
+    "name": "login_failed_empty_username",
+    "scenario": "negative",
+    "api_request": {
+      "method": "POST",
+      "path": "/admin/login",
+      "body": {"username": "", "password": "macro123"}
+    },
+    "assertions": [
+      {"type": "status", "expected": 200},
+      {"type": "json", "path": "code", "expected": 404}
+    ]
+  }
+]

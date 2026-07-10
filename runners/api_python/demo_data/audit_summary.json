@@ -1,0 +1,16 @@
+{
+  "total_cases": 24,
+  "false_positive_rate": "40%",
+  "false_positive_count": 8,
+  "non_executable_rate": "25%",
+  "non_executable_count": 5,
+  "ai_hallucination_rate": "50%",
+  "ai_hallucination_count": 10,
+  "gate_results": {
+    "REJECT": 16,
+    "PASS": 7,
+    "REVIEW": 1
+  },
+  "audit_date": "2026-07-10",
+  "source": "docs/architecture/2026-07-10_ai_generated_test_case_quality_audit.md"
+}

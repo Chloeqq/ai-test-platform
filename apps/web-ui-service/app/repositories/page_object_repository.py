@@ -5,18 +5,15 @@
 """
 from __future__ import annotations
 
-from typing import Any
-
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
 
 from app.models.page_object import (
     PageElement,
     PageElementHealthCheck,
-    PageElementLocator,
     PageElementVersion,
     PageObject,
-    PageObjectRef,
+    # PageElementLocator,  # TODO: model missing — need migration
+    # PageObjectRef,        # TODO: model missing — need migration
 )
 
 from .base import BaseRepository

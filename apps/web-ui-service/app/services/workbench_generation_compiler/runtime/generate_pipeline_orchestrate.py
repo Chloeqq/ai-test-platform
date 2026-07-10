@@ -1,56 +1,50 @@
 """generate_pipeline 编排与页面解析 —— 提取自 generate_pipeline.py。"""
 from __future__ import annotations
 
-import logging
-import re
-from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any
+
 import yaml
 from sqlalchemy.exc import OperationalError
 
 # SessionLocal imported from .generate_pipeline
 from app.models.page_object import PageElement, PageObject
 from app.repositories.page_object_repository import PageObjectRepository
-
-from ..debug import debug_enabled, log_debug_event
-from shared_backend.observability import summarize_http_context
-from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
-from shared_backend.quality_gate.models import detect_account_state
 from shared_backend.element_binding import build_element_alias_map
+from shared_backend.execution_compiler import (
+    ExecutionCompilerError,
+)
 from shared_backend.intent_mapping import resolve_explicit_step
-from shared_backend.schemas.contracts import normalize_test_point_plan_v1
-from shared_backend.schemas.validator import ContractValidator
+from shared_backend.quality_gate.models import detect_account_state
 from shared_backend.type_utils import str_value as _normalized_text
-
-from .generate_pipeline_precondition import compile_preconditions, route_identity_data_to_pool
-from .generate_pipeline_locator import _normalize_step_locators  # noqa: E402
-
 
 # 从上游模块导入（无循环：File 1→File 2→File 3 单向依赖）
 from .generate_pipeline import (
-    SessionLocal,  # noqa: E402
-    _normalized_text, _LOGGER, _YAML_PAGE_OBJECT_ROOT,
-    _normalized_key, _normalize_json_list, _is_qualified_formal_element,
-    _element_display_name, _infer_element_aliases, _list_text,
-    _extract_selected_intent_ids, _execution_intent_ids,
-    _find_candidate_snapshot_by_intent, _candidate_steps,
-    _normalize_candidate_snapshot, _point_type_from_intent_type,
-    _candidate_identity, _direct_candidate_requirement_lines,
-    _scope_points_to_selected_intents, _filter_requirement_spec_by_selected_intents,
-    _is_precondition_point, _looks_like_password_toggle_element,
+    _LOGGER,
+    _YAML_PAGE_OBJECT_ROOT,
+    _candidate_identity,
+    _direct_candidate_requirement_lines,
+    _element_display_name,
+    _execution_intent_ids,
+    _infer_element_aliases,
     _intent_product_metadata,
+    _is_qualified_formal_element,
+    _list_text,
+    _normalize_candidate_snapshot,
+    _normalize_json_list,
+    _normalized_text,  # noqa: F811
+    _point_type_from_intent_type,
 )
 from .generate_pipeline_format import (  # noqa: E402
-    _product_description, _product_page_load_expected, _product_element_name,
-    _product_locator, _product_element_meta, _trusted_page_url,
-    _product_step_expected, _format_product_execution_steps,
-    _append_login_success_assertion, _step_element_code,
-    _normalize_dsl_data_sources, _enrich_dsl_v1_1_data_bindings,
-    _normalize_top_level_assertion, _assertion_signature,
-    _normalize_dsl_v1_1_assertions, _is_ai_automated_case,
-    _validate_dsl_v1_1_minimum_contract, _enrich_product_case_yaml_v1_1,
-    _normalized_data_source_type, _normalize_data_source_entry,
+    _enrich_product_case_yaml_v1_1,
+    _format_product_execution_steps,
+    _product_description,
 )
+from .generate_pipeline_locator import _normalize_step_locators  # noqa: E402
+from .generate_pipeline_precondition import (
+    compile_preconditions,
+    route_identity_data_to_pool,
+)
+
 
 def _svc():
     """惰性查找主模块，支持测试 monkeypatch。"""
@@ -89,7 +83,10 @@ def _enrich_v3_0_metadata(
     无硬编码模块名，纯字段透传+枚举校验。
     """
     from .generate_pipeline_metadata import (
-        _RISK_LEVELS, _ENVIRONMENTS, _NETWORK_PROFILES, _ACTOR_ROLES,
+        _ACTOR_ROLES,
+        _ENVIRONMENTS,
+        _NETWORK_PROFILES,
+        _RISK_LEVELS,
         _validate_enum,
     )
 
@@ -431,16 +428,22 @@ def _build_direct_candidate_orchestrator_result(
     intent_id, title = _candidate_identity(candidate)
     steps: list[dict[str, Any]] = []
     involved_codes: list[str] = []
-    for index, hint in enumerate(_list_text(candidate.get("steps_hint"))):
+    # FIX(Phase D): 保留 AI 原始自然语言作为 raw_text，不被 steps_hint 格式替换。
+    # steps_hint 是给 Compiler 解析用的结构化提示；自然语言 steps 是人可读的操作描述。
+    # raw_text 应优先使用 steps（自然语言），仅在 steps 不够长时用 hint 兜底。
+    raw_nl_steps = _list_text(candidate.get("steps"))
+    for _index, hint in enumerate(_list_text(candidate.get("steps_hint"))):
         action, target, value = resolve_explicit_step(
             steps_hint=[hint],
             page=page,
             page_element_alias_map=alias_map,
         )
+        # 优先使用对应索引的自然语言描述；无对应时用 hint（但标注来源）
+        raw_text = raw_nl_steps[_index] if _index < len(raw_nl_steps) else f"[from steps_hint] {hint}"
         step: dict[str, Any] = {
             "action": action,
             "target": target or "",
-            "raw_text": hint,
+            "raw_text": raw_text,
             "description": hint,
         }
         if action == "assert_attribute" and isinstance(value, dict):
