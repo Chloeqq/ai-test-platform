@@ -1139,7 +1139,7 @@ export function TestPointAssetDetailPage() {
                 <th>前置条件</th>
                 <th>步骤</th>
                 <th>预期结果</th>
-                <th>涉及元素</th>
+                <th>机器指令</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -1147,6 +1147,16 @@ export function TestPointAssetDetailPage() {
               {pagedDetailRows.length ? (
                 pagedDetailRows.map((row, index) => {
                   const steps = stepTextList(row.steps);
+                  const instructions = asRecordList(row.steps).map((s) => {
+                    const action = text(s.action);
+                    const target = text(s.target).replace("element:", "");
+                    const value = s.value != null ? String(s.value) : "";
+                    if (action === "goto" || action === "assert_url") return `${action}:${value}`;
+                    if (action === "assert_text" || action === "assert_visible") return `${action}:${target}=${value}`;
+                    if (action === "assert_attribute") return `${action}:${target}.${text(s.attribute)}=${value}`;
+                    if (value) return `${action}:${target}=${value}`;
+                    return `${action}:${target}`;
+                  });
                   const elements = listText(row.involved_elements);
                   const pointId = pointIdOf(row);
                   return (
@@ -1180,7 +1190,11 @@ export function TestPointAssetDetailPage() {
                       <td>{text(row.precondition)}</td>
                       <td>{steps.length ? steps.join(" / ") : "-"}</td>
                       <td>{text(row.expected)}</td>
-                      <td className="mono">{elements.length ? elements.join(", ") : "-"}</td>
+                      <td className="mono" style={{ fontSize: "0.8rem", lineHeight: "1.4" }}>
+                        {instructions.length
+                          ? instructions.map((inst, i) => <div key={i}>{inst}</div>)
+                          : elements.length ? elements.join(", ") : "-"}
+                      </td>
                       <td>
                         <div className="table-row-actions">
                           <button
