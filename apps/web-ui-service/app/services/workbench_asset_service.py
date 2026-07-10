@@ -534,19 +534,31 @@ def build_test_point_asset_coverage_matrix(
 # 导入放在文件末尾以避免循环依赖
 
 from app.services.workbench_asset_state import (  # noqa: E402
+    collect_case_items,
+    derive_points,
+    load_test_point_asset,
     load_test_point_asset_with_root,
+    resolve_case_yaml_path,
+    save_case_state,
     save_test_point_plan,
+    state_case_file,
+    state_case_versions_dir,
     state_project_dir,
     upsert_test_point_asset_snapshot,
 )
 from app.services.workbench_asset_views import (  # noqa: E402
+    build_case_detail,
     build_cases_payload,
-    build_test_point_asset_coverage_summary,
     build_saved_case_payload,
-    paginate_case_items,
+    build_test_point_asset_coverage_summary,
     build_test_point_asset_detail,
+    build_test_point_asset_gate_context,
     build_test_point_asset_items,
     build_test_point_asset_selection_summary,
+    build_test_point_asset_summary,
     build_test_point_asset_traceability_summary,
     latest_run_snapshot_for_case,
+    paginate_case_items,
+    read_case_yaml,
+    write_case_yaml,
 )
