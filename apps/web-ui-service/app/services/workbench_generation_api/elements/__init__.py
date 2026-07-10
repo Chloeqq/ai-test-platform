@@ -4,7 +4,7 @@
 步骤中的元素名解析为规范 element_code 的能力。
 """
 
-from .loader import load_alias_map, load_page_config, PageConfig
+from .loader import PageConfig, load_alias_map, load_page_config
 from .resolver import ElementResolver
 
 __all__ = ["load_alias_map", "load_page_config", "PageConfig", "ElementResolver"]

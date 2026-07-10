@@ -8,23 +8,22 @@ import json
 import re
 import shutil
 from datetime import datetime
-from datetime_compat import UTC
 from pathlib import Path
-from typing import Any, Callable
-
-from shared_backend.type_utils import dict_value as _dict_value
+from typing import Any
 
 from app.services.workbench_reporting_service import (
-    ReadAllureSummary,
-    ReadAllureEnvironment,
-    ReadAllureExecutors,
+    CollectExecutionRecords,
     EnsureAllureSnapshot,
     GetAllureIndexVersion,
-    RunCommand,
-    CollectExecutionRecords,
     NormalizeExecutionMeta,
+    ReadAllureEnvironment,
+    ReadAllureExecutors,
+    ReadAllureSummary,
+    RunCommand,
     _safe_report_slug,
 )
+from datetime_compat import UTC
+from shared_backend.type_utils import dict_value as _dict_value
 
 
 def build_report_allure_pending(*, reason: str, message: str, legacy_available: bool = False) -> dict[str, Any]:

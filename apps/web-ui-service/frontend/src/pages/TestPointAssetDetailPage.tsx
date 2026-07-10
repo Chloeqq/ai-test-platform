@@ -605,6 +605,7 @@ function pointRows(item: Record<string, unknown>): Array<Record<string, unknown>
           priority: String(point.priority || snapshot.priority || "P1").trim(),
           precondition: String(point.precondition || snapshot.precondition || "").trim(),
           steps: pointSteps.length ? pointSteps : stepTextList(snapshot.steps),
+          raw_steps: asRecordList(point.steps),  // machine instructions
           expected: String(point.expected || point.expected_result || snapshot.expected || "").trim(),
           expected_result: String(point.expected_result || point.expected || snapshot.expected || "").trim(),
           involved_elements: pointElements.length ? pointElements : normalizeInvolvedElements(snapshot.involved_elements, page),

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared_backend.type_utils import str_value as _normalized_text, as_text_list
+from shared_backend.type_utils import as_text_list
+from shared_backend.type_utils import str_value as _normalized_text
 
 
 def coverage_matrix_from_requirement_spec(

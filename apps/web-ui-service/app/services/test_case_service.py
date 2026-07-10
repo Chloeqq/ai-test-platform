@@ -3,33 +3,18 @@ from __future__ import annotations
 import difflib
 import os
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Sequence, TypeAlias
+from typing import Any, TypeAlias
 
-from datetime_compat import UTC
-from fastapi import HTTPException, status
-from shared_backend.case_ids import (
-    build_case_id,
-    build_case_metadata,
-    infer_client_code,
-    match_case_id,
-    next_case_sequence,
-    normalize_case_id,
-    normalize_case_type as normalize_business_case_type,
-    normalize_client_code,
-    normalize_source_code,
-)
-from shared_backend.type_utils import normalize_project_code as _normalize_project_code_raw
-from shared_backend.step_fields import STEP_FIELD_NAMES
-from sqlalchemy import delete, or_, select
-from sqlalchemy.orm import Session
 import yaml
+from fastapi import HTTPException, status
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
 
 from app.models.page_object import PageObjectRef
-from app.repositories.test_case_repository import TestCaseRepository
-from app.repositories.test_project_repository import TestProjectRepository
 from app.models.test_case import (
     TestCase,
     TestCaseDefect,
@@ -39,6 +24,8 @@ from app.models.test_case import (
     TestCaseVersion,
 )
 from app.models.test_project import TestProject
+from app.repositories.test_case_repository import TestCaseRepository
+from app.repositories.test_project_repository import TestProjectRepository
 from app.schemas.test_case import (
     BatchStatusUpdatePayload,
     BatchTagsUpdatePayload,
@@ -47,8 +34,11 @@ from app.schemas.test_case import (
     TestCaseScriptUpdate,
     TestCaseUpdate,
 )
+from app.services import test_project_service
 from app.services.test_case_bootstrap_service import (
     ensure_seed_data,
+)
+from app.services.test_case_bootstrap_service import (
     get_module_tree_items as get_module_tree_items,
 )
 from app.services.test_case_data_service import (
@@ -59,21 +49,40 @@ from app.services.test_case_data_service import (
     normalize_data_config,
     normalize_markers,
     normalize_optional_text,
-    normalize_report_url as normalize_report_url,
     normalize_status,
     normalize_tags,
     normalize_test_case_type,
     normalize_test_steps,
     normalize_text_list,
     positive_ids,
-    render_test_steps_text,
     refresh_existing_data_driven_script,
+    render_test_steps_text,
+)
+from app.services.test_case_data_service import (
+    normalize_report_url as normalize_report_url,
 )
 from app.services.test_case_search_service import (
     build_test_case_search_context,
     parse_test_case_search_query,
 )
-from app.services import test_project_service
+from datetime_compat import UTC
+from shared_backend.case_ids import (
+    build_case_id,
+    build_case_metadata,
+    infer_client_code,
+    match_case_id,
+    next_case_sequence,
+    normalize_case_id,
+    normalize_client_code,
+    normalize_source_code,
+)
+from shared_backend.case_ids import (
+    normalize_case_type as normalize_business_case_type,
+)
+from shared_backend.step_fields import STEP_FIELD_NAMES
+from shared_backend.type_utils import (
+    normalize_project_code as _normalize_project_code_raw,
+)
 
 PaginationPayload: TypeAlias = dict[str, int | bool | None]
 FilterOptionsPayload: TypeAlias = dict[str, list[str]]
@@ -287,28 +296,71 @@ def _infer_step_action_for_repair(step: dict[str, Any]) -> str:
 
 from app.services.test_case_login_repair_service import (
     _best_role_element as _best_role_element,
+)
+from app.services.test_case_login_repair_service import (
     _build_login_element_map as _build_login_element_map,
+)
+from app.services.test_case_login_repair_service import (
     _build_login_scenario_context as _build_login_scenario_context,
+)
+from app.services.test_case_login_repair_service import (
     _classify_login_element_role as _classify_login_element_role,
+)
+from app.services.test_case_login_repair_service import (
     _dedupe_exact_steps as _dedupe_exact_steps,
+)
+from app.services.test_case_login_repair_service import (
     _default_expected_for_login_step as _default_expected_for_login_step,
+)
+from app.services.test_case_login_repair_service import (
     _friendly_target_name_for_login as _friendly_target_name_for_login,
+)
+from app.services.test_case_login_repair_service import (
     _has_login_key_elements as _has_login_key_elements,
+)
+from app.services.test_case_login_repair_service import (
     _is_negative_login_expected as _is_negative_login_expected,
+)
+from app.services.test_case_login_repair_service import (
     _is_positive_login_expected as _is_positive_login_expected,
+)
+from app.services.test_case_login_repair_service import (
     _is_weak_login_locator as _is_weak_login_locator,
+)
+from app.services.test_case_login_repair_service import (
     _load_login_success_data_testid_elements as _load_login_success_data_testid_elements,
+)
+from app.services.test_case_login_repair_service import (
     _load_page_elements_for_step_repair as _load_page_elements_for_step_repair,
+)
+from app.services.test_case_login_repair_service import (
     _looks_like_login_step_payload as _looks_like_login_step_payload,
+)
+from app.services.test_case_login_repair_service import (
     _pick_login_element_for_step as _pick_login_element_for_step,
+)
+from app.services.test_case_login_repair_service import (
     _prefer_login_data_testid_counterpart as _prefer_login_data_testid_counterpart,
+)
+from app.services.test_case_login_repair_service import (
     _repair_execution_steps_for_storage as _repair_execution_steps_for_storage,
+)
+from app.services.test_case_login_repair_service import (
     _repair_expected_result_for_storage as _repair_expected_result_for_storage,
+)
+from app.services.test_case_login_repair_service import (
     _sanitize_workbench_script_code_for_storage as _sanitize_workbench_script_code_for_storage,
+)
+from app.services.test_case_login_repair_service import (
     _score_login_role_element as _score_login_role_element,
+)
+from app.services.test_case_login_repair_service import (
     _should_preserve_login_semantic_target as _should_preserve_login_semantic_target,
+)
+from app.services.test_case_login_repair_service import (
     _stable_locator_for_login_role as _stable_locator_for_login_role,
 )
+
 
 def _repair_case_detail_payload_in_storage(db: Session, *, case: TestCase) -> None:
     if not _env_flag("AUTO_RETRY_FIX_ENABLED", True):

@@ -9,8 +9,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from shared_backend.quality_gate import SeedDataProvider
-
 
 class SimpleSeedDataProvider:
     """基于内存快照的 SeedDataProvider 实现。
@@ -86,7 +84,7 @@ class SimpleSeedDataProvider:
         if not value or not value.strip():
             return True  # 空值不视为外部依赖
 
-        for pool_name, items in self._pools.items():
+        for _pool_name, items in self._pools.items():
             for item_key, item_value in items.items():
                 # 检查 item_key 是否匹配（如 username_admin → admin）
                 if self._item_key_matches(item_key, value, field=field):

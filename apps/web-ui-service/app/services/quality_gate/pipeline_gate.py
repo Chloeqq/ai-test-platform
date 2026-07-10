@@ -81,7 +81,9 @@ def _build_seed_data_provider() -> tuple[SimpleSeedDataProvider, bool]:
     db_available = False
     try:
         with SessionLocal() as session:
-            from app.repositories.test_data_pool_repository import TestDataPoolRepository
+            from app.repositories.test_data_pool_repository import (
+                TestDataPoolRepository,
+            )
 
             repo = TestDataPoolRepository(session)
             rows = repo.list_active_items_with_pool_name()

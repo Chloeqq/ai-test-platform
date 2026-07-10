@@ -2,7 +2,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
 
-
 ALLOWED_SELF_REGISTER_ROLES = frozenset({"viewer", "tester", "developer"})
 
 

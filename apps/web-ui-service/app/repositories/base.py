@@ -1,7 +1,7 @@
 """Repository 基类。"""
 from __future__ import annotations
 
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 

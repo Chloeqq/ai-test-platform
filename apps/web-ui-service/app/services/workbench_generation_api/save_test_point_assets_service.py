@@ -19,26 +19,25 @@ import os
 from pathlib import Path
 from typing import Any
 
-from shared_backend.type_utils import str_value as _normalized_text, as_text_list
-
 from app.services import workbench_asset_service, workbench_state_store
+from shared_backend.type_utils import as_text_list
+from shared_backend.type_utils import str_value as _normalized_text
 
-from .context import WorkbenchContext
-from . import preview_store
 from . import constants as _c
-
-from .elements import load_page_config, ElementResolver
-from .hooks import get_page_hook
-from .compilation import build_point
+from . import preview_store
 from .assets import (
-    preview_requirement,
     candidate_snapshot,
+    coverage_matrix_from_requirement_spec,
     existing_test_point_asset_ids,
     find_existing_page_asset_for_upsert,
-    coverage_matrix_from_requirement_spec,
-    intent_type_distribution,
     first_candidate_title,
+    intent_type_distribution,
+    preview_requirement,
 )
+from .compilation import build_point
+from .context import WorkbenchContext
+from .elements import ElementResolver, load_page_config
+from .hooks import get_page_hook
 
 LOGGER = logging.getLogger(__name__)
 

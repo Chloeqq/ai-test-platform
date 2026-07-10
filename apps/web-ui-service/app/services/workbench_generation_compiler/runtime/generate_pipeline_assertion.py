@@ -31,7 +31,9 @@ def _append_login_error_assertion(
 
     # lazy imports — 避免循环引用
     from .generate_pipeline_format import (
-        _normalized_text, _product_element_meta, _product_element_name,
+        _normalized_text,
+        _product_element_meta,
+        _product_element_name,
     )
 
     elements = page_object.get("elements") if isinstance(page_object.get("elements"), dict) else {}

@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from shared_backend.type_utils import str_value as _normalized_text
-
 from app.services import workbench_asset_service, workbench_state_store
+from shared_backend.type_utils import str_value as _normalized_text
 
 
 def existing_test_point_asset_ids(project: str) -> list[str]:

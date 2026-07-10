@@ -9,12 +9,23 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from shared_backend.quality_gate import (
-    GateContext, Rule, RuleCategory, RuleResult, Severity, register_rule,
+    GateContext,
+    Rule,
+    RuleCategory,
+    RuleResult,
+    Severity,
+    register_rule,
 )
-from ._common import has_assert_for_block_intercept, has_assert_for_error_message, normalized
+
+from ._common import (
+    has_assert_for_block_intercept,
+    has_assert_for_error_message,
+    normalized,
+)
 
 _CheckFn = Callable[[list[dict[str, Any]]], bool]
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from ..debug import log_debug_event
-
 
 RunOrchestratorParse = Callable[..., dict[str, Any]]
 RenderRequirementSpecMarkdown = Callable[[dict[str, Any]], str]

@@ -21,6 +21,7 @@ from app.schemas.quality_eval import (
     RunResponse,
 )
 from app.services.quality_eval_service import (
+    EvaluationExecutionError,
     build_run_report,
     execute_evaluation_run,
 )
@@ -229,9 +230,9 @@ def execute_run(
         result = execute_evaluation_run(db, run_id)
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"评测执行失败: {e}")
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except EvaluationExecutionError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/api/quality-eval/runs/{run_id}")
@@ -265,7 +266,9 @@ def list_run_results(
             result_id=r.result_id,
             run_id=r.run_id,
             item_id=r.item_id,
-            requirement_text=item_map.get(r.item_id, QualityEvalItem()).requirement_text if item_map.get(r.item_id) else "",
+            requirement_text=(
+                matched.requirement_text if (matched := item_map.get(r.item_id)) else ""
+            ),
             coverage_score=r.coverage_score,
             coverage_detail=r.coverage_detail or {},
             assertion_score=r.assertion_score,
@@ -293,7 +296,7 @@ def get_run_report(
         report = build_run_report(db, run_id)
         return RunReportResponse(**report)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.delete("/api/quality-eval/runs/{run_id}")

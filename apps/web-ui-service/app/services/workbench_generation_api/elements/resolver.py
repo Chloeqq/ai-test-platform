@@ -5,10 +5,8 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from shared_backend.element_binding import resolve_element_code
-from shared_backend.element_naming import element_display_name, element_data_key
+from shared_backend.element_naming import element_data_key, element_display_name
 from shared_backend.type_utils import str_value as _normalized_text
 
 

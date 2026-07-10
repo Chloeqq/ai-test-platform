@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from shared_backend.case_ids import build_case_id, match_case_id, next_case_sequence, normalize_case_id
+import yaml
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-import yaml
 
 from app.models.test_case import TestCase, TestCaseStep
+from shared_backend.case_ids import (
+    build_case_id,
+    match_case_id,
+    next_case_sequence,
+    normalize_case_id,
+)
 
 
 class WorkbenchGenerationRepository:

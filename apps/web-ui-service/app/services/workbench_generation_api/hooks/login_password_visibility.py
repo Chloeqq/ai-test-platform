@@ -10,7 +10,9 @@ from __future__ import annotations
 from typing import Any
 
 from shared_backend.step_fields import (
-    ACTION_INPUT, ACTION_CLICK, ACTION_ASSERT_ATTRIBUTE,
+    ACTION_ASSERT_ATTRIBUTE,
+    ACTION_CLICK,
+    ACTION_INPUT,
 )
 
 from .. import constants as _c

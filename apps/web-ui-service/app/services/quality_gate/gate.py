@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 from shared_backend.quality_gate import (
-    Decision,
     GateContext,
     RuleEngine,
     ValidationReport,

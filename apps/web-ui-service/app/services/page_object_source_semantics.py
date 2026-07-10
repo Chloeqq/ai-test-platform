@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import os
 import json
 import logging
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +25,7 @@ SourceCatalogCacheKey: TypeAlias = tuple[
     int,
     int,
 ]
-_SOURCE_CATALOG_CACHE: dict[SourceCatalogCacheKey, "SourceSemanticCatalog"] = {}
+_SOURCE_CATALOG_CACHE: dict[SourceCatalogCacheKey, SourceSemanticCatalog] = {}
 _SOURCE_CATALOG_CACHE_MAX_SIZE = 128
 logger = logging.getLogger(__name__)
 

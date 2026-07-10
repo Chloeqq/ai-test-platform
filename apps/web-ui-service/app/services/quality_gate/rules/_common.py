@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 # 结构化 precondition type 集合的唯一事实源在 shared_backend，此处 re-export
 # 以兼容现有 `from ._common import PRECONDITION_TYPES` 调用点。

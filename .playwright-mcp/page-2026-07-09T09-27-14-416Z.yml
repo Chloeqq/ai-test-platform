@@ -1,0 +1,139 @@
+- generic [ref=f1e2]:
+  - generic [ref=f1e3]:
+    - heading "黄贝蒂" [level=1] [ref=f1e4]
+    - generic [ref=f1e5]:
+      - generic [ref=f1e6]: AI 质量工程师 / 测试架构师
+      - generic [ref=f1e7]: ·
+      - generic [ref=f1e8]: 广州
+      - generic [ref=f1e9]: ·
+      - generic [ref=f1e10]: 期望 35-50K
+      - generic [ref=f1e11]: ·
+      - generic [ref=f1e12]: 8 年经验
+      - generic [ref=f1e13]: ·
+      - generic [ref=f1e14]: 2016 年本科毕业
+  - generic [ref=f1e15]:
+    - generic [ref=f1e16]: 专业总结
+    - generic [ref=f1e17]:
+      - text: 8 年+ 软件测试经验，3 年+ 10 人团队管理。深耕政务云、亿级电商、海外商业化质量保障。
+      - strong [ref=f1e18]: 近一年独立设计并主导开发 AI 质量保障平台
+      - text: （291 commits / 10 万行代码 / 9 个 LLM Agent），探索 AI 在测试全链路的工程落地。核心能力是用 8 年测试经验定义"测试该怎么做"，再用 AI 工具链把方案变成可运行的系统。
+    - generic [ref=f1e19]:
+      - generic [ref=f1e20]: ▸ 测试专业判断 — 设计质量策略、用例体系、门禁规则，这是 AI 做不到的
+      - generic [ref=f1e21]: ▸ AI 增效能力 — 熟练运用 AI 编程工具，将想法高效落地为产品
+      - generic [ref=f1e22]: ▸ 从 0 到 1 — 无论是 10 人团队还是 AI 质量保障平台，都能从零搭建
+  - generic [ref=f1e23]:
+    - generic [ref=f1e24]: 核心能力
+    - generic [ref=f1e25]:
+      - generic [ref=f1e26]: 测试专业
+      - generic [ref=f1e27]: 分层测试策略、质量指标体系搭建、缺陷生命周期管理、用例工程、需求评审与风险识别
+    - generic [ref=f1e28]:
+      - generic [ref=f1e29]: AI 测试
+      - generic [ref=f1e30]: LLM 测试场景设计、Prompt Engineering、AI Agent 链路编排、输出质量评估（一致性/幻觉识别/鲁棒性测试）
+    - generic [ref=f1e31]:
+      - generic [ref=f1e32]: 质量工程
+      - generic [ref=f1e33]: 质量门禁、自动化框架设计、CI/CD 测试集成、测试数据集与评测基准、Flaky Test 检测
+    - generic [ref=f1e34]:
+      - generic [ref=f1e35]: AI 增效开发
+      - generic [ref=f1e36]: 运用 AI 编程工具进行全栈快速开发，熟悉 Python / FastAPI / React，能审查 AI 生成代码
+    - generic [ref=f1e37]:
+      - generic [ref=f1e38]: 团队管理
+      - generic [ref=f1e39]: 从 0 组建 10 人团队、外包质量管控、新人培养体系、跨团队协作
+    - generic [ref=f1e40]:
+      - generic [ref=f1e41]: 工具链
+      - generic [ref=f1e42]: Pytest · Playwright · Docker · PostgreSQL · Nginx · Jenkins · ELK · Prometheus+Grafana
+  - generic [ref=f1e43]:
+    - generic [ref=f1e44]: 工作经历
+    - generic [ref=f1e45]:
+      - generic [ref=f1e46]:
+        - generic [ref=f1e47]: AI 质量保障平台 · 架构设计与产品研发
+        - generic [ref=f1e48]: 2024.12 - 至今
+      - generic [ref=f1e49]: 独立项目 / 远程 · 项目规模：291 commits · 10 万行 Python + 2 万行 TypeScript · 41 个页面 · 9 个 AI Agent · 134 篇技术文档
+      - list [ref=f1e50]:
+        - listitem [ref=f1e51]:
+          - text: —
+          - emphasis [ref=f1e52]: 产品架构
+          - text: ——用 8 年测试经验抽象出"需求→测试点→用例→脚本→执行→分析→质量门禁"全链路，设计双服务架构（FastAPI 中台 + Flask AI 编排），定义 9 个 AI Agent 的职责边界与协作链路
+        - listitem [ref=f1e53]:
+          - text: —
+          - emphasis [ref=f1e54]: 规则引擎
+          - text: ——设计 DSL 编译器的 6 条铁律（元素绑定/断言匹配/禁止占位等），设计质量门禁三级决策标准（PASS/REVIEW/REJECT）及失败分析→自愈策略的完整判定逻辑，全部来自真实测试经验
+        - listitem [ref=f1e55]:
+          - text: —
+          - emphasis [ref=f1e56]: AI 增效
+          - text: ——运用 AI 编程工具将"想法到可运行系统"的周期从传统团队数月压缩到数周，建立 Prompt 工程 + 代码审查的 AI 协作范式
+        - listitem [ref=f1e57]:
+          - text: —
+          - emphasis [ref=f1e58]: 工程落地
+          - text: ——Docker 8 容器编排一键部署，ELK + Prometheus + Grafana 全栈监控（可用性 99.9%），CI/CD 集成 + 架构合规自动检查
+      - generic [ref=f1e59]: ▸ 代码仓库及架构文档备索。可现场演示：需求输入 → AI生成用例 → 自动执行 → 质量报告的完整闭环。
+    - generic [ref=f1e60]:
+      - generic [ref=f1e61]:
+        - generic [ref=f1e62]: 广州航天云宏技术有限公司 · 测试负责人
+        - generic [ref=f1e63]: 2023.3 - 2024.12
+      - generic [ref=f1e64]: 汇报部门总监 · 10 人团队 · 省级政务云平台（等保三级）
+      - list [ref=f1e65]:
+        - listitem [ref=f1e66]:
+          - text: —
+          - emphasis [ref=f1e67]: 团队建设
+          - text: ——从 0 组建 10 人测试团队，制定工作规范、考核标准及新人培养体系，团队效能提升 40%
+        - listitem [ref=f1e68]:
+          - text: —
+          - emphasis [ref=f1e69]: 质量体系
+          - text: ——设计分层测试策略（单元/集成/系统/验收），建立量化指标体系（缺陷密度/逃逸率/MTTR），严重缺陷率 ≤1%，通过等保三级认证
+        - listitem [ref=f1e70]:
+          - text: —
+          - emphasis [ref=f1e71]: 自动化
+          - text: ——主导搭建 Python+Pytest 接口自动化框架，覆盖率 70%，回归周期从 5 人日缩短至 1 人日
+        - listitem [ref=f1e72]:
+          - text: —
+          - emphasis [ref=f1e73]: 外包管理
+          - text: ——制定外包验收标准与 Checklist，交付缺陷率降低 40%
+    - generic [ref=f1e74]:
+      - generic [ref=f1e75]:
+        - generic [ref=f1e76]: 广州方舟健客有限公司 · 高级测试工程师
+        - generic [ref=f1e77]: 2021.1 - 2022.12
+      - generic [ref=f1e78]: 亿级医药电商平台 · 日均 UV 千万级 · 协调 5+ 跨团队协作
+      - list [ref=f1e79]:
+        - listitem [ref=f1e80]: — 主导 Web/H5/小程序/App 多端及 3 大管理后台测试，线上缺陷率 ≤0.5%
+        - listitem [ref=f1e81]: — 搭建 Jenkins+Pytest+Python 自动化环境，开发 456+ 测试用例，50+ 轮回归，效率提升 60%
+        - listitem [ref=f1e82]: — 优化需求评审流程，引入 Checklist 机制，需求变更率下降 50%
+        - listitem [ref=f1e83]: — 推动 900+ 缺陷全流程闭环管控
+    - generic [ref=f1e84]:
+      - generic [ref=f1e85]:
+        - generic [ref=f1e86]: 久邦数码 · 软件测试工程师
+        - generic [ref=f1e87]: 2017.3 - 2020.12
+      - generic [ref=f1e88]: 短视频商业化 + 社交 App · SDK 测试
+      - list [ref=f1e89]:
+        - listitem [ref=f1e90]: — 独立负责短视频商业化广告 SDK 全流程测试，支撑 10+ 款 App 商业化变现，广告加载成功率 99.9%
+        - listitem [ref=f1e91]: — 主导广告/订阅/游戏 SDK 企业级测试与文档输出，建立标准化测试体系和接入指南
+        - listitem [ref=f1e92]: — 制定性能与稳定性测试方案，包体体积优化 10%
+        - listitem [ref=f1e93]: — 负责新人全体系培训，制定标准化课件，培养 5+ 测试工程师
+  - generic [ref=f1e94]:
+    - generic [ref=f1e95]: 项目经历
+    - generic [ref=f1e96]:
+      - generic [ref=f1e97]:
+        - generic [ref=f1e98]: AI 质量保障平台
+        - generic [ref=f1e99]: 2024.12 - 至今
+      - generic [ref=f1e100]: 架构设计与产品负责人
+      - generic [ref=f1e101]: 详见工作经历第一条。
+    - generic [ref=f1e102]:
+      - generic [ref=f1e103]:
+        - generic [ref=f1e104]: 广东省政务云平台（粤基座）
+        - generic [ref=f1e105]: 2023.3 - 2024.12
+      - generic [ref=f1e106]: 测试负责人
+      - generic [ref=f1e107]: 省级数字政府重点项目，对接数十个政务部门，需通过等保三级。设计分层测试策略，建立量化质量指标体系，核心项目严重缺陷率 ≤1%，降低外包交付风险 40%。
+    - generic [ref=f1e108]:
+      - generic [ref=f1e109]:
+        - generic [ref=f1e110]: 健客网上药店电商平台
+        - generic [ref=f1e111]: 2021.1 - 2022.12
+      - generic [ref=f1e112]: 测试核心骨干
+      - generic [ref=f1e113]: 亿级用户医药电商平台，日均 UV 千万级。主导全平台测试计划与执行，线上缺陷率 0.5%，900+ 缺陷闭环，搭建 Python+Pytest+Jenkins 自动化环境，回归效率提升 60%。
+    - generic [ref=f1e114]:
+      - generic [ref=f1e115]:
+        - generic [ref=f1e116]: 短视频商业化 SDK 企业级落地
+        - generic [ref=f1e117]: 2017.3 - 2020.12
+      - generic [ref=f1e118]: 核心测试人员
+      - generic [ref=f1e119]: 支撑 10+ 款 App 商业化变现的 SDK 质量保障。主导全流程测试，建立标准化测试体系，广告加载成功率 99.9%，包体体积优化 10%。
+  - generic [ref=f1e120]:
+    - generic [ref=f1e121]: 教育背景
+    - generic [ref=f1e122]: 本科 · 计算机科学 / 软件工程 · 2016 年毕业

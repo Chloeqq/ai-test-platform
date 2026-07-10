@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any
 
-from shared_backend.case_ids import match_case_id, normalize_case_id
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.repositories.test_case_repository import TestCaseRepository
-
-from app.models.test_case import TestCase
+from shared_backend.case_ids import match_case_id, normalize_case_id
 
 RecordCaseIdResolver = Callable[[dict[str, Any]], Any]
 

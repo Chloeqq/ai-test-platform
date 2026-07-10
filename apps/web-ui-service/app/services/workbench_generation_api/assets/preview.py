@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared_backend.type_utils import dict_value as _dict_value, str_value as _normalized_text, as_text_list
+from shared_backend.type_utils import as_text_list
+from shared_backend.type_utils import dict_value as _dict_value
+from shared_backend.type_utils import str_value as _normalized_text
 
 from .. import constants as _c
 from .. import preview_store

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 from datetime_compat import UTC
-
 
 PageNormalizer = Callable[[str], str]
 

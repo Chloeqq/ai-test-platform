@@ -3,7 +3,10 @@ from __future__ import annotations
 import shlex
 from dataclasses import dataclass
 
-from app.services.test_case_data_service import normalize_status, normalize_test_case_type
+from app.services.test_case_data_service import (
+    normalize_status,
+    normalize_test_case_type,
+)
 
 
 @dataclass(frozen=True)

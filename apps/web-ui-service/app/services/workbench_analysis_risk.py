@@ -4,31 +4,14 @@
 """
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-import yaml
-
-from shared_backend.type_utils import dict_value as _dict_value
-
-from app.core import page_analysis_rules
-from app.services.workbench_analysis_service import (
-    build_page_analysis_context,
-    load_latest_self_healing_result,
-)
 from app.services.workbench_page_surface_service import (
     _clamp_confidence,
-    _dedup_keep_order,
-    _list_value,
-    _surface_candidate_confidence_index,
-    build_surface_element_candidates,
-    build_surface_result_from_snapshot,
-    extract_page_surface,
-    surface_candidate_confidence_index,
-    surface_confidence_summary,
 )
+from shared_backend.type_utils import dict_value as _dict_value
 
 LOGGER = logging.getLogger(__name__)
 
@@ -296,7 +279,7 @@ def evaluate_risk_report(
     analysis_context = build_page_analysis_context_fn(
         page=page,
         project=project,
-        case_id=str((run_id or "")).strip(),
+        case_id=str(run_id or "").strip(),
         page_url="",
         page_surface=page_surface if isinstance(page_surface, dict) else {"confidence_summary": page_surface_summary or {}},
         page_object=page_object if isinstance(page_object, dict) else {"summary": page_object_summary or {}},

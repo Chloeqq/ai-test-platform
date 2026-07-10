@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import json
 import logging
 import os
-from pathlib import Path
 import threading
+from copy import deepcopy
+from pathlib import Path
 from typing import Any
-
 
 _TRUTHY = {"1", "true", "yes", "on"}
 _SNAPSHOT_LOCK = threading.Lock()

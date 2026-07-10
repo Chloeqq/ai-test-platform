@@ -11,11 +11,15 @@ RULE_002/008 已覆盖 data 缺失和无断言检查，本规则不重复。
 
 from __future__ import annotations
 
-from typing import Any
-
 from shared_backend.quality_gate import (
-    GateContext, Rule, RuleCategory, RuleResult, Severity, register_rule,
+    GateContext,
+    Rule,
+    RuleCategory,
+    RuleResult,
+    Severity,
+    register_rule,
 )
+
 from ._common import normalized
 
 

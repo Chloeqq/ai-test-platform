@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, NamedTuple
 
 from sqlalchemy.orm import Session

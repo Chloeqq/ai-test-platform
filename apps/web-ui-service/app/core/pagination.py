@@ -7,7 +7,7 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Generic, Optional, TypeVar, cast
+from typing import Any, Generic, TypeVar, cast
 
 from sqlalchemy import Select, func, select
 
@@ -34,12 +34,12 @@ class PageMeta:
         return self.page < self.total_pages
 
     @property
-    def prev_page(self) -> Optional[int]:
+    def prev_page(self) -> int | None:
         """上一页码"""
         return self.page - 1 if self.has_prev else None
 
     @property
-    def next_page(self) -> Optional[int]:
+    def next_page(self) -> int | None:
         """下一页码"""
         return self.page + 1 if self.has_next else None
 
@@ -86,9 +86,9 @@ class CursorPage(Generic[T]):
     """游标分页结果（用于无限滚动）"""
 
     items: list[T]  # 当前页数据
-    next_cursor: Optional[str] = None  # 下一页游标
+    next_cursor: str | None = None  # 下一页游标
     has_next: bool = False  # 是否有下一页
-    total_count: Optional[int] = None  # 总数（可选，性能考虑）
+    total_count: int | None = None  # 总数（可选，性能考虑）
 
 
 def paginate(
@@ -199,7 +199,7 @@ def decode_cursor(cursor: str) -> dict:
 def paginate_cursor(
     query: Select,
     db_session,
-    cursor: Optional[str] = None,
+    cursor: str | None = None,
     limit: int = 20,
     sort_field: str = "id",
     sort_order: str = "desc",

@@ -39,7 +39,8 @@ _RUN_JOBS: dict[str, dict[str, Any]] = {}
 
 
 from shared_backend.type_utils import now_iso  # noqa: F401 — 重新导出为模块级函数
-now_iso = state_store.now_iso  # 保持兼容
+
+now_iso = state_store.now_iso  # noqa: F811 保持兼容
 
 
 def ensure_dirs() -> None:

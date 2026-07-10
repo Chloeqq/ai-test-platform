@@ -5,9 +5,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.api.workbench.facade import build_workbench_facade
-
+from app.core.database import get_db
 
 router = APIRouter(tags=["workbench-tasks"])
 facade = build_workbench_facade()

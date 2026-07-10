@@ -4,12 +4,11 @@ from typing import Any
 
 from app.services import workbench_generation_service
 from shared_backend.execution_compiler import (
-    extract_quality_gate,
-    normalize_page_slug,
-    render_requirement_spec_markdown,
     build_system_requirement,
     has_multisource_inputs,
+    normalize_page_slug,
 )
+
 from .orchestrator_client_factory import build_orchestrator_client
 
 

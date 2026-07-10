@@ -5,78 +5,24 @@
 """
 from __future__ import annotations
 
-import json
 import logging
-import os
-import re
-import shutil
-import subprocess
-from collections import defaultdict
-from datetime import datetime, timedelta
-from shared_backend.datetime_compat import UTC
-from functools import partial
-from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, Sequence
-import yaml
-
-from fastapi import HTTPException, Response, status
-from shared_backend import get_dictionary_items
-from shared_backend.case_ids import match_case_id, normalize_case_id
-from shared_backend.element_binding import build_element_alias_map, resolve_element_code, resolve_involved_element_codes
-from shared_backend.schemas.contracts import normalize_test_point_plan_v1
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from typing import Any
 
 from app.api.workbench import constants, store
-from app.core.config import get_settings
-from app.core.database import SessionLocal
-from app.core import page_analysis_rules
-from app.repositories.page_object_repository import PageObjectRepository
-from app.repositories.test_case_repository import TestCaseRepository
-from app.models.page_object import PageElement
-from app.models.test_case import TestCase, TestCaseExecution
 from app.services import (
-    test_project_service,
-    test_case_service,
-    test_data_pool_service,
-    workbench_analysis_service,
     workbench_asset_service,
     workbench_case_consistency_service,
-    workbench_gate_service,
-    workbench_governance_service,
-    workbench_history_service,
-    workbench_reporting_service,
-    workbench_review_service,
-    workbench_runtime_service,
-    workbench_scheduler_service,
-    workbench_task_service,
 )
-from app.services.workbench_generation_api.payloads import GenerateCasePayload as GenerationGenerateCasePayload
-from app.services.workbench_generation_api.usecase_factory import build_generate_case_usecase
+from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
-from ._http import get_json as _get_json
+from shared_backend import get_dictionary_items
+
 from ._helpers import (
-    build_empty_trend as _build_empty_trend,
-    default_overview as _default_overview,
     is_within as _is_within,
-    normalize_generation_case_source as _normalize_generation_case_source,
-    normalize_optional_project_code as _normalize_optional_project_code,
-    normalize_test_point_review_status as _normalize_test_point_review_status,
-    parse_iso_datetime as _parse_iso_datetime,
-    python_literal as _python_literal,
-    read_json_file as _read_json_file,
-    safe_python_identifier as _safe_python_identifier,
-    safe_rollback_or_invalidate as _safe_rollback_or_invalidate,
-    text as _text,
-    text_list as _text_list,
-    to_utc as _to_utc,
-    utc_now as _utc_now,
-    validate_test_point_review_status as _validate_test_point_review_status,
-    write_json_file as _write_json_file,
 )
-from .service import WorkbenchService
 from .service import (
+    WorkbenchService,
     _append_history,
     _append_runtime_run,
     _build_execution_task_summary,
@@ -99,74 +45,17 @@ from .service import (
     _update_runtime_run,
     _write_json_list,
 )
-import logging
+
 LOGGER = logging.getLogger(__name__)
 
 # ---- 以下 helper 函数已移至 facade_helpers.py ----
 from .facade_helpers import (  # noqa: E402
-    _GENERATION_CASE_SOURCE_VALUES,
-    _REVIEW_STATUS_ALIASES,
-    _RUN_ID_PATTERN,
-    _VIRTUAL_TEST_POINT_ELEMENTS,
-    _active_state_from_case,
-    _append_find_element_line,
-    _append_script_line_from_hint,
-    _append_unique_intent_id,
-    _asset_title_index,
-    _attach_test_point_asset_summary,
-    _build_generation_diagnostics_for_asset,
-    _build_runtime_view_from_entry,
-    _build_test_point_script_preview,
-    _candidate_from_asset_point,
-    _candidate_snapshot_from_candidate,
-    _candidate_snapshot_from_point,
-    _canonical_involved_elements_for_page,
-    _case_family_prefix,
-    _element_bindings_for_review,
-    _element_name_from_step,
-    _existing_case_id_for_source_intent,
-    _generated_case_plan_items,
-    _generation_failure_index,
-    _generation_failure_summary,
-    _input_value_from_step,
-    _intent_ids_from_case_steps,
-    _intent_type_from_case,
-    _is_generation_qualified_element,
-    _is_virtual_test_point_element,
-    _latest_execution_map,
-    _locator_preview_for_element,
-    _manual_point_from_candidate,
-    _normalize_points_involved_elements,
-    _page_object_generation_context,
-    _page_object_url_map,
-    _persist_runtime_run_to_case_center,
-    _point_review_status,
-    _point_step_texts,
-    _point_title,
-    _record_generation_failure,
-    _resolve_history_project_code,
-    _review_history_from_point,
-    _review_status_from_candidate,
-    _review_status_from_point,
-    _review_summary_from_points,
-    _selenium_by_expression,
-    _selenium_locator,
     _settings,
-    _source_asset_for_case,
-    _source_asset_index,
-    _source_identity_from_case,
-    _steps_from_candidate,
-    _steps_hint_from_current_steps,
-    _structured_requirement_metadata_from_case,
-    _test_point_asset_state_paths,
-    _test_point_generation_state,
-    _workbench_test_case_list_item,
-    _xpath_literal,
 )
+from .facade_reporting import WorkbenchFacadeReportingMixin  # noqa: E402
 
 # 以下方法体已移至 facade_test_point_assets.py 和 facade_reporting.py 的混入类
 from .facade_test_point_assets import WorkbenchFacadeTestPointAssetsMixin  # noqa: E402
-from .facade_reporting import WorkbenchFacadeReportingMixin  # noqa: E402
 
 
 class WorkbenchFacade(WorkbenchFacadeTestPointAssetsMixin, WorkbenchFacadeReportingMixin):

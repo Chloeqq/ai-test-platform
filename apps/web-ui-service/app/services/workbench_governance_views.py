@@ -8,9 +8,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
-from urllib.parse import urlencode
 
-from datetime_compat import UTC
 from sqlalchemy.orm import Session
 
 from app.api.workbench._helpers import default_overview, to_utc
@@ -18,23 +16,26 @@ from app.models.test_case import TestCase, TestCaseExecution
 from app.repositories.test_case_repository import TestCaseRepository
 from app.services import test_case_service
 from app.services.workbench_governance_service import (
-    _risk_level,
-    _risk_summary,
-    _parse_timestamp,
-    _issue_status,
-    _query_href,
-    _severity_score,
-    _build_governance_item_score_breakdown,
-    _build_strict_manifest_policy,
-    _build_risk_score_breakdown,
+    _build_action_items,
+    _build_execution_strategy,
     _build_failure_cluster_analysis,
     _build_flaky_analysis,
-    _build_execution_strategy,
-    _default_gate_recommendation,
+    _build_governance_item_score_breakdown,
     _build_manager_summary,
-    _build_action_items,
+    _build_risk_score_breakdown,
+    _build_strict_manifest_policy,
+    _default_gate_recommendation,
+    _issue_status,
+    _parse_timestamp,
+    _query_href,
+    _risk_level,
+    _risk_summary,
 )
-from shared_backend.type_utils import dict_value as _dict_value, float_value as _float_value, int_value as _int_value, list_value as _list_value
+from datetime_compat import UTC
+from shared_backend.type_utils import dict_value as _dict_value
+from shared_backend.type_utils import float_value as _float_value
+from shared_backend.type_utils import int_value as _int_value
+from shared_backend.type_utils import list_value as _list_value
 
 LOGGER = logging.getLogger(__name__)
 
@@ -552,7 +553,6 @@ def build_flaky_top5(
     算法：transition_ratio * 70 + failed_ratio * 30（≥2 次执行时），
     否则基于 case_id 种子值降级估算。
     """
-    from collections import defaultdict
 
     case_runs: dict[int, list[TestCaseExecution]] = defaultdict(list)
     for item in executions:

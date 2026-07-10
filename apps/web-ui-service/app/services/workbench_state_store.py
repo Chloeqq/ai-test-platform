@@ -15,8 +15,6 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, select
-
 from app.core.database import SessionLocal
 from app.models.workbench_state import (
     WorkbenchDefectLink,

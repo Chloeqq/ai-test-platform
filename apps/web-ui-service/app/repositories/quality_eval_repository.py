@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
-from app.models.quality_eval import QualityEvalDataset, QualityEvalItem, QualityEvalResult, QualityEvalRun
+from app.models.quality_eval import (
+    QualityEvalDataset,
+    QualityEvalItem,
+    QualityEvalResult,
+    QualityEvalRun,
+)
 from app.repositories.base import BaseRepository
 
 
@@ -46,7 +50,7 @@ class QualityEvalRepository(BaseRepository):
         ds = self.get_dataset(dataset_id)
         if ds:
             ds.item_count = max(0, ds.item_count + delta)
-            ds.updated_at = datetime.now(timezone.utc)
+            ds.updated_at = datetime.now(UTC)
             self.db.flush()
 
     # ── Items ────────────────────────────────────────────────

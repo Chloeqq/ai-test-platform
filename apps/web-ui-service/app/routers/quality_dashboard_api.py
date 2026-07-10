@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.services.quality_dashboard_service import (
-    build_summary,
-    build_ranking,
     build_issue_distribution,
+    build_ranking,
+    build_summary,
     build_timeline,
 )
 

@@ -9,7 +9,6 @@ from app.api.workbench.facade import build_workbench_facade
 from app.api.workbench.schemas import WorkbenchReviewPayload
 from app.core.database import get_db
 
-
 router = APIRouter(tags=["workbench-reviews"])
 facade = build_workbench_facade()
 

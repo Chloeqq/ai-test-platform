@@ -1,0 +1,25 @@
+- main [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: AT
+      - generic [ref=e7]:
+        - heading "AI Quality Assurance Platform" [level=1] [ref=e8]
+        - paragraph [ref=e9]: 登录后即可将 URL 自动化、确认点审核与操作审计绑定到真实用户。
+    - generic [ref=e10]:
+      - heading "登录平台" [level=2] [ref=e11]
+      - paragraph [ref=e12]: 这一步只做确定性认证，不涉及 AI 推断。成功后会把 token 写入浏览器，并自动回到你原来的页面。
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - text: 用户名
+        - textbox "用户名" [ref=e15]:
+          - /placeholder: 请输入用户名
+      - generic [ref=e16]:
+        - text: 密码
+        - textbox "密码" [ref=e17]:
+          - /placeholder: 请输入密码
+      - generic [ref=e18]:
+        - checkbox "记住登录状态" [checked] [ref=e19]
+        - generic [ref=e20]: 记住登录状态
+      - button "登录并返回" [ref=e21] [cursor=pointer]
+    - generic [ref=e22]: 请输入账号密码。
+    - paragraph [ref=e23]: 说明：若页面上方已显示真实用户名，你可以直接返回工作台，无需重复登录。

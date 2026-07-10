@@ -1,0 +1,467 @@
+- generic [ref=f4e3]:
+  - banner [ref=f4e4]:
+    - generic [ref=f4e5]:
+      - link "ATP AI 质量保障平台" [ref=f4e6] [cursor=pointer]:
+        - /url: /react/dashboard
+        - generic [ref=f4e7]: ATP
+        - generic [ref=f4e8]: AI 质量保障平台
+      - generic [ref=f4e9]: 生产环境
+    - group [ref=f4e89]:
+      - generic "admin" [ref=f4e90] [cursor=pointer]
+  - complementary [ref=f4e12]:
+    - generic [ref=f4e13]:
+      - strong [ref=f4e14]: 导航
+      - button "收起侧栏" [ref=f4e15] [cursor=pointer]: «
+    - navigation [ref=f4e16]:
+      - generic [ref=f4e17]:
+        - button "仪表盘 -" [ref=f4e18] [cursor=pointer]:
+          - generic [ref=f4e19]: 仪表盘
+          - generic [ref=f4e20]: "-"
+        - link "总览" [ref=f4e22] [cursor=pointer]:
+          - /url: /react/dashboard
+      - generic [ref=f4e23]:
+        - button "AI 生成 -" [ref=f4e24] [cursor=pointer]:
+          - generic [ref=f4e25]: AI 生成
+          - generic [ref=f4e26]: "-"
+        - generic [ref=f4e27]:
+          - link "生成工作台" [ref=f4e28] [cursor=pointer]:
+            - /url: /react/ai-generation
+          - link "生成历史" [ref=f4e29] [cursor=pointer]:
+            - /url: /react/ai-generation/history
+          - link "提示词管理" [ref=f4e30] [cursor=pointer]:
+            - /url: /react/ai-generation/prompts
+      - generic [ref=f4e31]:
+        - button "测试资产 -" [ref=f4e32] [cursor=pointer]:
+          - generic [ref=f4e33]: 测试资产
+          - generic [ref=f4e34]: "-"
+        - generic [ref=f4e35]:
+          - link "用例中心" [ref=f4e36] [cursor=pointer]:
+            - /url: /react/cases
+          - link "待审核用例" [ref=f4e37] [cursor=pointer]:
+            - /url: /react/cases/review
+          - link "用例版本" [ref=f4e38] [cursor=pointer]:
+            - /url: /react/cases/versions
+          - link "标签治理" [ref=f4e39] [cursor=pointer]:
+            - /url: /react/cases/tags
+          - link "测试点资产" [ref=f4e40] [cursor=pointer]:
+            - /url: /react/assets/test-points
+          - link "页面对象" [ref=f4e41] [cursor=pointer]:
+            - /url: /react/assets/page-objects
+          - link "接口契约" [ref=f4e42] [cursor=pointer]:
+            - /url: /react/assets/api-contracts
+          - link "数据模板" [ref=f4e43] [cursor=pointer]:
+            - /url: /react/assets/data-templates
+      - generic [ref=f4e44]:
+        - button "执行与报告 -" [ref=f4e45] [cursor=pointer]:
+          - generic [ref=f4e46]: 执行与报告
+          - generic [ref=f4e47]: "-"
+        - generic [ref=f4e48]:
+          - link "执行计划" [ref=f4e49] [cursor=pointer]:
+            - /url: /react/execution/plans
+          - link "执行记录" [ref=f4e50] [cursor=pointer]:
+            - /url: /react/execution/runs
+          - link "结果总览" [ref=f4e51] [cursor=pointer]:
+            - /url: /react/execution/results
+          - link "失败分析" [ref=f4e52] [cursor=pointer]:
+            - /url: /react/execution/results/failures
+          - link "上下文" [ref=f4e53] [cursor=pointer]:
+            - /url: /react/execution/results/context
+          - link "性能分析" [ref=f4e54] [cursor=pointer]:
+            - /url: /react/execution/results/performance
+          - link "Allure 报告" [ref=f4e55] [cursor=pointer]:
+            - /url: /react/execution/results/allure
+      - generic [ref=f4e56]:
+        - button "质量治理 -" [ref=f4e57] [cursor=pointer]:
+          - generic [ref=f4e58]: 质量治理
+          - generic [ref=f4e59]: "-"
+        - generic [ref=f4e60]:
+          - link "Flaky 分析" [ref=f4e61] [cursor=pointer]:
+            - /url: /react/quality/flaky
+          - link "失败聚类" [ref=f4e62] [cursor=pointer]:
+            - /url: /react/quality/failure-clusters
+          - link "趋势分析" [ref=f4e63] [cursor=pointer]:
+            - /url: /react/quality/trends
+          - link "质量门禁" [ref=f4e64] [cursor=pointer]:
+            - /url: /react/quality/gates
+          - link "缺陷看板" [ref=f4e65] [cursor=pointer]:
+            - /url: /react/defects
+      - generic [ref=f4e66]:
+        - button "系统设置 -" [ref=f4e67] [cursor=pointer]:
+          - generic [ref=f4e68]: 系统设置
+          - generic [ref=f4e69]: "-"
+        - generic [ref=f4e70]:
+          - link "项目管理" [ref=f4e71] [cursor=pointer]:
+            - /url: /react/system/projects
+          - link "源码管理" [ref=f4e72] [cursor=pointer]:
+            - /url: /react/system/source-config
+          - link "任务调度" [ref=f4e73] [cursor=pointer]:
+            - /url: /react/settings/scheduler
+          - link "环境管理" [ref=f4e74] [cursor=pointer]:
+            - /url: /react/system/environments
+          - link "节点管理" [ref=f4e75] [cursor=pointer]:
+            - /url: /react/system/nodes
+          - link "集成配置" [ref=f4e76] [cursor=pointer]:
+            - /url: /react/system/integrations
+          - link "权限角色" [ref=f4e77] [cursor=pointer]:
+            - /url: /react/system/roles
+    - generic [ref=f4e78]:
+      - paragraph [ref=f4e79]: 最近访问
+      - generic [ref=f4e80]:
+        - link "测试点资产" [ref=f4e81] [cursor=pointer]:
+          - /url: /react/assets/test-points/mall-web-login-auth-fn-ai-0001
+        - link "用例中心" [ref=f4e82] [cursor=pointer]:
+          - /url: /react/cases
+        - link "测试点资产" [ref=f4e83] [cursor=pointer]:
+          - /url: /react/assets/test-points
+  - generic [ref=f4e84]:
+    - navigation "面包屑" [ref=f4e91]:
+      - list [ref=f4e92]:
+        - listitem [ref=f4e93]:
+          - link "测试资产" [ref=f4e94] [cursor=pointer]:
+            - /url: /react/cases
+        - listitem [ref=f4e95]:
+          - text: /
+          - link "测试点资产" [ref=f4e161] [cursor=pointer]:
+            - /url: /react/assets/test-points?project=mall
+        - listitem [ref=f4e162]:
+          - text: /
+          - generic [ref=f4e163]: 测试点资产详情
+    - main [ref=f4e164]:
+      - generic [ref=f4e165]:
+        - heading "测试点资产详情" [level=1] [ref=f4e167]
+        - generic [ref=f4e168]:
+          - button "生成已通过用例" [ref=f4e169] [cursor=pointer]
+          - link "用例中心" [ref=f4e170] [cursor=pointer]:
+            - /url: /react/cases?project=mall
+          - link "编辑资产" [ref=f4e171] [cursor=pointer]:
+            - /url: /react/assets/test-points/mall-web-login-auth-fn-ai-0001/edit?project=mall
+          - link "返回资产列表" [ref=f4e172] [cursor=pointer]:
+            - /url: /react/assets/test-points?project=mall
+      - generic [ref=f4e173]:
+        - generic "资产基础信息" [ref=f4e174]:
+          - generic [ref=f4e175]:
+            - generic [ref=f4e176]: 标题
+            - strong [ref=f4e177]: login 页面测试点资产集
+          - generic [ref=f4e178]:
+            - generic [ref=f4e179]: 资产编码
+            - strong [ref=f4e180]: mall-web-login-auth-fn-ai-0001
+          - generic [ref=f4e181]:
+            - generic [ref=f4e182]: 页面
+            - strong [ref=f4e183]: login
+          - generic [ref=f4e184]:
+            - generic [ref=f4e185]: 优先级
+            - strong [ref=f4e186]: P0
+          - generic [ref=f4e187]:
+            - generic [ref=f4e188]: 来源
+            - strong [ref=f4e189]:
+              - generic "selection_save" [ref=f4e190]: AI 自动生成
+          - generic [ref=f4e191]:
+            - generic [ref=f4e192]: 点位数
+            - strong [ref=f4e193]: "27"
+            - generic [ref=f4e194]: 可维护测试点
+          - generic [ref=f4e195]:
+            - generic [ref=f4e196]: 置信度
+            - strong [ref=f4e197]: "0.95"
+            - generic [ref=f4e198]: AI 解析参考值
+          - generic [ref=f4e199]:
+            - generic [ref=f4e200]: 状态
+            - strong [ref=f4e201]:
+              - generic "部分通过" [ref=f4e202]
+            - generic [ref=f4e203]: 已通过 4/27 条，可基于已通过测试点继续推进
+        - generic [ref=f4e204]:
+          - strong [ref=f4e205]: 部分通过
+          - generic [ref=f4e206]: 共 27 条测试点，已通过 4 条，已驳回 0 条，待审核 23 条。
+        - generic [ref=f4e207]:
+          - strong [ref=f4e208]: 生成覆盖诊断
+          - generic [ref=f4e209]: 当前未发现已通过测试点未生成或重复生成项。
+        - generic [ref=f4e210]:
+          - generic [ref=f4e211]:
+            - generic [ref=f4e212]:
+              - paragraph [ref=f4e213]:
+                - strong [ref=f4e214]: 需求原文
+              - text: 默认展示前 3 行，展开后查看完整业务目标、关键流程和验收点。
+            - button "展开全部" [ref=f4e215] [cursor=pointer]
+          - generic [ref=f4e216]:
+            - generic [ref=f4e217]:
+              - strong [ref=f4e218]: 业务目标
+              - generic [ref=f4e219]: 实现平台用户的身份验证登录功能，保障用户可通过账号密码完成身份校验，成功访问平台有权限的功能，同时对异常输入、非法访问做拦截与提示，保障登录安全。
+            - strong [ref=f4e221]: 关键流程
+            - generic [ref=f4e222]:
+              - generic [ref=f4e223]: "1"
+              - generic [ref=f4e224]: 未登录用户访问平台任意页面，自动跳转至登录页面，页面展示账号输入框、密码输入框、记住密码复选框、登录按钮；
+      - generic [ref=f4e225]:
+        - generic [ref=f4e226]:
+          - strong [ref=f4e227]: 测试点明细（与候选预览对齐）
+          - generic [ref=f4e229]: 共 27 条，当前 27 条
+        - table [ref=f4e230]:
+          - rowgroup [ref=f4e231]:
+            - row "选择当前页测试点 intent_id 标题 类型 全部 优先级 全部 审核状态 全部 前置条件 步骤 预期结果 涉及元素 操作" [ref=f4e232]:
+              - columnheader "选择当前页测试点" [ref=f4e233]:
+                - checkbox "选择当前页测试点" [ref=f4e234]
+              - columnheader "intent_id" [ref=f4e235]
+              - columnheader "标题" [ref=f4e236]
+              - columnheader "类型 全部" [ref=f4e237]:
+                - generic [ref=f4e238]:
+                  - generic [ref=f4e239]: 类型
+                  - combobox "类型筛选" [ref=f4e240]:
+                    - option "全部" [selected]
+                    - option "安全 (1)"
+                    - option "边界 (8)"
+                    - option "格式 (2)"
+                    - option "功能 (6)"
+                    - option "交互异常 (2)"
+                    - option "异常 (8)"
+              - columnheader "优先级 全部" [ref=f4e241]:
+                - generic [ref=f4e242]:
+                  - generic [ref=f4e243]: 优先级
+                  - combobox "优先级筛选" [ref=f4e244]:
+                    - option "全部" [selected]
+                    - option "P0 (7)"
+                    - option "P1 (18)"
+                    - option "P2 (2)"
+              - columnheader "审核状态 全部" [ref=f4e245]:
+                - generic [ref=f4e246]:
+                  - generic [ref=f4e247]: 审核状态
+                  - combobox "审核状态筛选" [ref=f4e248]:
+                    - option "全部" [selected]
+                    - option "待审核 (23)"
+                    - option "已通过 (4)"
+              - columnheader "前置条件" [ref=f4e249]
+              - columnheader "步骤" [ref=f4e250]
+              - columnheader "预期结果" [ref=f4e251]
+              - columnheader "涉及元素" [ref=f4e252]
+              - columnheader "操作" [ref=f4e253]
+          - rowgroup [ref=f4e254]:
+            - row "选择测试点 intent-01 intent-01 首次登录成功 功能 P0 已通过 用户未登录，访问任意页面跳转到登录页 在账号输入框输入admin / 在密码输入框输入macro123 / 点击登录按钮 页面跳转至工作台首页，顶部显示当前登录用户名admin，左侧加载权限导航菜单 login-username-input, login-password-input, login-submit-btn 通过 驳回 删除" [ref=f4e255]:
+              - cell "选择测试点 intent-01" [ref=f4e256]:
+                - checkbox "选择测试点 intent-01" [ref=f4e257]
+              - cell "intent-01" [ref=f4e258]
+              - cell "首次登录成功" [ref=f4e259]
+              - cell "功能" [ref=f4e260]:
+                - generic [ref=f4e261]: 功能
+              - cell "P0" [ref=f4e262]:
+                - generic [ref=f4e263]: P0
+              - cell "已通过" [ref=f4e264]:
+                - generic [ref=f4e265]: 已通过
+              - cell "用户未登录，访问任意页面跳转到登录页" [ref=f4e266]
+              - cell "在账号输入框输入admin / 在密码输入框输入macro123 / 点击登录按钮" [ref=f4e267]
+              - cell "页面跳转至工作台首页，顶部显示当前登录用户名admin，左侧加载权限导航菜单" [ref=f4e268]
+              - cell "login-username-input, login-password-input, login-submit-btn" [ref=f4e269]
+              - cell "通过 驳回 删除" [ref=f4e270]:
+                - generic [ref=f4e271]:
+                  - button "通过" [disabled] [ref=f4e272]
+                  - button "驳回" [ref=f4e273] [cursor=pointer]
+                  - button "删除" [ref=f4e274] [cursor=pointer]
+            - row "选择测试点 intent-02 intent-02 已登录态访问首页保持可用 功能 P0 已通过 用户已登录，处于工作台首页 刷新当前页面 / 页面正常显示，用户信息、权限菜单保持不变，未跳转回登录页 页面正常显示，用户信息、权限菜单保持不变，未跳转回登录页 dashboard 通过 驳回 删除" [ref=f4e275]:
+              - cell "选择测试点 intent-02" [ref=f4e276]:
+                - checkbox "选择测试点 intent-02" [ref=f4e277]
+              - cell "intent-02" [ref=f4e278]
+              - cell "已登录态访问首页保持可用" [ref=f4e279]
+              - cell "功能" [ref=f4e280]:
+                - generic [ref=f4e281]: 功能
+              - cell "P0" [ref=f4e282]:
+                - generic [ref=f4e283]: P0
+              - cell "已通过" [ref=f4e284]:
+                - generic [ref=f4e285]: 已通过
+              - cell "用户已登录，处于工作台首页" [ref=f4e286]
+              - cell "刷新当前页面 / 页面正常显示，用户信息、权限菜单保持不变，未跳转回登录页" [ref=f4e287]
+              - cell "页面正常显示，用户信息、权限菜单保持不变，未跳转回登录页" [ref=f4e288]
+              - cell "dashboard" [ref=f4e289]
+              - cell "通过 驳回 删除" [ref=f4e290]:
+                - generic [ref=f4e291]:
+                  - button "通过" [disabled] [ref=f4e292]
+                  - button "驳回" [ref=f4e293] [cursor=pointer]
+                  - button "删除" [ref=f4e294] [cursor=pointer]
+            - row "选择测试点 intent-03 intent-03 未登录访问工作台自动跳转登录页 安全 P0 待审核 用户未登录，清除所有登录态 在浏览器地址栏直接输入工作台URL并访问 / 页面自动跳转至登录页，无法访问工作台内容 页面自动跳转至登录页，无法访问工作台内容 dashboard 通过 驳回 删除" [ref=f4e295]:
+              - cell "选择测试点 intent-03" [ref=f4e296]:
+                - checkbox "选择测试点 intent-03" [ref=f4e297]
+              - cell "intent-03" [ref=f4e298]
+              - cell "未登录访问工作台自动跳转登录页" [ref=f4e299]
+              - cell "安全" [ref=f4e300]:
+                - generic [ref=f4e301]: 安全
+              - cell "P0" [ref=f4e302]:
+                - generic [ref=f4e303]: P0
+              - cell "待审核" [ref=f4e304]:
+                - generic [ref=f4e305]: 待审核
+              - cell "用户未登录，清除所有登录态" [ref=f4e306]
+              - cell "在浏览器地址栏直接输入工作台URL并访问 / 页面自动跳转至登录页，无法访问工作台内容" [ref=f4e307]
+              - cell "页面自动跳转至登录页，无法访问工作台内容" [ref=f4e308]
+              - cell "dashboard" [ref=f4e309]
+              - cell "通过 驳回 删除" [ref=f4e310]:
+                - generic [ref=f4e311]:
+                  - button "通过" [ref=f4e312] [cursor=pointer]
+                  - button "驳回" [ref=f4e313] [cursor=pointer]
+                  - button "删除" [ref=f4e314] [cursor=pointer]
+            - row "选择测试点 intent-04 intent-04 账号为空点击登录 异常 P1 已通过 用户未登录，处于登录页 清空账号输入框 / 在密码输入框输入任意密码 / 点击登录按钮 / 页面提示“请输入账号” 页面提示“请输入账号” login-username-input, login-password-input, login-submit-btn 通过 驳回 删除" [ref=f4e315]:
+              - cell "选择测试点 intent-04" [ref=f4e316]:
+                - checkbox "选择测试点 intent-04" [ref=f4e317]
+              - cell "intent-04" [ref=f4e318]
+              - cell "账号为空点击登录" [ref=f4e319]
+              - cell "异常" [ref=f4e320]:
+                - generic [ref=f4e321]: 异常
+              - cell "P1" [ref=f4e322]:
+                - generic [ref=f4e323]: P1
+              - cell "已通过" [ref=f4e324]:
+                - generic [ref=f4e325]: 已通过
+              - cell "用户未登录，处于登录页" [ref=f4e326]
+              - cell "清空账号输入框 / 在密码输入框输入任意密码 / 点击登录按钮 / 页面提示“请输入账号”" [ref=f4e327]
+              - cell "页面提示“请输入账号”" [ref=f4e328]
+              - cell "login-username-input, login-password-input, login-submit-btn" [ref=f4e329]
+              - cell "通过 驳回 删除" [ref=f4e330]:
+                - generic [ref=f4e331]:
+                  - button "通过" [disabled] [ref=f4e332]
+                  - button "驳回" [ref=f4e333] [cursor=pointer]
+                  - button "删除" [ref=f4e334] [cursor=pointer]
+            - row "选择测试点 intent-05 intent-05 密码为空点击登录 异常 P1 待审核 用户未登录，处于登录页 在账号输入框输入admin / 清空密码输入框 / 点击登录按钮 / 页面提示“请输入密码” 页面提示“请输入密码” login-username-input, login-password-input, login-submit-btn 通过 驳回 删除" [ref=f4e335]:
+              - cell "选择测试点 intent-05" [ref=f4e336]:
+                - checkbox "选择测试点 intent-05" [ref=f4e337]
+              - cell "intent-05" [ref=f4e338]
+              - cell "密码为空点击登录" [ref=f4e339]
+              - cell "异常" [ref=f4e340]:
+                - generic [ref=f4e341]: 异常
+              - cell "P1" [ref=f4e342]:
+                - generic [ref=f4e343]: P1
+              - cell "待审核" [ref=f4e344]:
+                - generic [ref=f4e345]: 待审核
+              - cell "用户未登录，处于登录页" [ref=f4e346]
+              - cell "在账号输入框输入admin / 清空密码输入框 / 点击登录按钮 / 页面提示“请输入密码”" [ref=f4e347]
+              - cell "页面提示“请输入密码”" [ref=f4e348]
+              - cell "login-username-input, login-password-input, login-submit-btn" [ref=f4e349]
+              - cell "通过 驳回 删除" [ref=f4e350]:
+                - generic [ref=f4e351]:
+                  - button "通过" [ref=f4e352] [cursor=pointer]
+                  - button "驳回" [ref=f4e353] [cursor=pointer]
+                  - button "删除" [ref=f4e354] [cursor=pointer]
+            - row "选择测试点 intent-06 intent-06 账号和密码均为空点击登录 异常 P1 待审核 用户未登录，处于登录页 清空账号输入框 / 清空密码输入框 / 点击登录按钮 / 页面提示“请输入账号”或“请输入密码” 页面提示“请输入账号”或“请输入密码” login-username-input, login-password-input, login-submit-btn 通过 驳回 删除" [ref=f4e355]:
+              - cell "选择测试点 intent-06" [ref=f4e356]:
+                - checkbox "选择测试点 intent-06" [ref=f4e357]
+              - cell "intent-06" [ref=f4e358]
+              - cell "账号和密码均为空点击登录" [ref=f4e359]
+              - cell "异常" [ref=f4e360]:
+                - generic [ref=f4e361]: 异常
+              - cell "P1" [ref=f4e362]:
+                - generic [ref=f4e363]: P1
+              - cell "待审核" [ref=f4e364]:
+                - generic [ref=f4e365]: 待审核
+              - cell "用户未登录，处于登录页" [ref=f4e366]
+              - cell "清空账号输入框 / 清空密码输入框 / 点击登录按钮 / 页面提示“请输入账号”或“请输入密码”" [ref=f4e367]
+              - cell "页面提示“请输入账号”或“请输入密码”" [ref=f4e368]
+              - cell "login-username-input, login-password-input, login-submit-btn" [ref=f4e369]
+              - cell "通过 驳回 删除" [ref=f4e370]:
+                - generic [ref=f4e371]:
+                  - button "通过" [ref=f4e372] [cursor=pointer]
+                  - button "驳回" [ref=f4e373] [cursor=pointer]
+                  - button "删除" [ref=f4e374] [cursor=pointer]
+            - row "选择测试点 intent-07 intent-07 账号和密码均为空格点击登录 异常 P1 待审核 用户未登录，处于登录页 在账号输入框输入空格 / 在密码输入框输入空格 / 点击登录按钮 / 页面提示“请输入账号”或“请输入密码” 页面提示“请输入账号”或“请输入密码” login-username-input, login-password-input, login-submit-btn 通过 驳回 删除" [ref=f4e375]:
+              - cell "选择测试点 intent-07" [ref=f4e376]:
+                - checkbox "选择测试点 intent-07" [ref=f4e377]
+              - cell "intent-07" [ref=f4e378]
+              - cell "账号和密码均为空格点击登录" [ref=f4e379]
+              - cell "异常" [ref=f4e380]:
+                - generic [ref=f4e381]: 异常
+              - cell "P1" [ref=f4e382]:
+                - generic [ref=f4e383]: P1
+              - cell "待审核" [ref=f4e384]:
+                - generic [ref=f4e385]: 待审核
+              - cell "用户未登录，处于登录页" [ref=f4e386]
+              - cell "在账号输入框输入空格 / 在密码输入框输入空格 / 点击登录按钮 / 页面提示“请输入账号”或“请输入密码”" [ref=f4e387]
+              - cell "页面提示“请输入账号”或“请输入密码”" [ref=f4e388]
+              - cell "login-username-input, login-password-input, login-submit-btn" [ref=f4e389]
+              - cell "通过 驳回 删除" [ref=f4e390]:
+                - generic [ref=f4e391]:
+                  - button "通过" [ref=f4e392] [cursor=pointer]
+                  - button "驳回" [ref=f4e393] [cursor=pointer]
+                  - button "删除" [ref=f4e394] [cursor=pointer]
+            - row "选择测试点 intent-08 intent-08 账号长度小于最小值 边界 P1 待审核 用户未登录，处于登录页 在账号输入框输入长度为1的账号（假设最小长度为2） / 在密码输入框输入macro123 / 点击登录按钮 / 页面提示“账号或密码错误”或“账号格式不正确” 页面提示“账号或密码错误”或“账号格式不正确” login-username-input, login-password-input, login-submit-btn 通过 驳回 删除" [ref=f4e395]:
+              - cell "选择测试点 intent-08" [ref=f4e396]:
+                - checkbox "选择测试点 intent-08" [ref=f4e397]
+              - cell "intent-08" [ref=f4e398]
+              - cell "账号长度小于最小值" [ref=f4e399]
+              - cell "边界" [ref=f4e400]:
+                - generic [ref=f4e401]: 边界
+              - cell "P1" [ref=f4e402]:
+                - generic [ref=f4e403]: P1
+              - cell "待审核" [ref=f4e404]:
+                - generic [ref=f4e405]: 待审核
+              - cell "用户未登录，处于登录页" [ref=f4e406]
+              - cell "在账号输入框输入长度为1的账号（假设最小长度为2） / 在密码输入框输入macro123 / 点击登录按钮 / 页面提示“账号或密码错误”或“账号格式不正确”" [ref=f4e407]
+              - cell "页面提示“账号或密码错误”或“账号格式不正确”" [ref=f4e408]
+              - cell "login-username-input, login-password-input, login-submit-btn" [ref=f4e409]
+              - cell "通过 驳回 删除" [ref=f4e410]:
+                - generic [ref=f4e411]:
+                  - button "通过" [ref=f4e412] [cursor=pointer]
+                  - button "驳回" [ref=f4e413] [cursor=pointer]
+                  - button "删除" [ref=f4e414] [cursor=pointer]
+            - row "选择测试点 intent-09 intent-09 账号长度等于最小值 边界 P1 待审核 用户未登录，处于登录页 在账号输入框输入长度为2的账号（假设最小长度为2） / 在密码输入框输入macro123 / 点击登录按钮 / 根据账号是否存在，提示“账号或密码错误”或登录成功 根据账号是否存在，提示“账号或密码错误”或登录成功 login-username-input, login-password-input, login-submit-btn 通过 驳回 删除" [ref=f4e415]:
+              - cell "选择测试点 intent-09" [ref=f4e416]:
+                - checkbox "选择测试点 intent-09" [ref=f4e417]
+              - cell "intent-09" [ref=f4e418]
+              - cell "账号长度等于最小值" [ref=f4e419]
+              - cell "边界" [ref=f4e420]:
+                - generic [ref=f4e421]: 边界
+              - cell "P1" [ref=f4e422]:
+                - generic [ref=f4e423]: P1
+              - cell "待审核" [ref=f4e424]:
+                - generic [ref=f4e425]: 待审核
+              - cell "用户未登录，处于登录页" [ref=f4e426]
+              - cell "在账号输入框输入长度为2的账号（假设最小长度为2） / 在密码输入框输入macro123 / 点击登录按钮 / 根据账号是否存在，提示“账号或密码错误”或登录成功" [ref=f4e427]
+              - cell "根据账号是否存在，提示“账号或密码错误”或登录成功" [ref=f4e428]
+              - cell "login-username-input, login-password-input, login-submit-btn" [ref=f4e429]
+              - cell "通过 驳回 删除" [ref=f4e430]:
+                - generic [ref=f4e431]:
+                  - button "通过" [ref=f4e432] [cursor=pointer]
+                  - button "驳回" [ref=f4e433] [cursor=pointer]
+                  - button "删除" [ref=f4e434] [cursor=pointer]
+            - row "选择测试点 intent-10 intent-10 账号长度等于最大值 边界 P1 待审核 用户未登录，处于登录页 在账号输入框输入长度为20的账号（假设最大长度为20） / 在密码输入框输入macro123 / 点击登录按钮 / 根据账号是否存在，提示“账号或密码错误”或登录成功 根据账号是否存在，提示“账号或密码错误”或登录成功 login-username-input, login-password-input, login-submit-btn 通过 驳回 删除" [ref=f4e435]:
+              - cell "选择测试点 intent-10" [ref=f4e436]:
+                - checkbox "选择测试点 intent-10" [ref=f4e437]
+              - cell "intent-10" [ref=f4e438]
+              - cell "账号长度等于最大值" [ref=f4e439]
+              - cell "边界" [ref=f4e440]:
+                - generic [ref=f4e441]: 边界
+              - cell "P1" [ref=f4e442]:
+                - generic [ref=f4e443]: P1
+              - cell "待审核" [ref=f4e444]:
+                - generic [ref=f4e445]: 待审核
+              - cell "用户未登录，处于登录页" [ref=f4e446]
+              - cell "在账号输入框输入长度为20的账号（假设最大长度为20） / 在密码输入框输入macro123 / 点击登录按钮 / 根据账号是否存在，提示“账号或密码错误”或登录成功" [ref=f4e447]
+              - cell "根据账号是否存在，提示“账号或密码错误”或登录成功" [ref=f4e448]
+              - cell "login-username-input, login-password-input, login-submit-btn" [ref=f4e449]
+              - cell "通过 驳回 删除" [ref=f4e450]:
+                - generic [ref=f4e451]:
+                  - button "通过" [ref=f4e452] [cursor=pointer]
+                  - button "驳回" [ref=f4e453] [cursor=pointer]
+                  - button "删除" [ref=f4e454] [cursor=pointer]
+        - generic [ref=f4e455]:
+          - generic [ref=f4e456]:
+            - generic [ref=f4e457]: 共 27 条
+            - generic [ref=f4e458]: 第 1-10 条
+            - generic [ref=f4e459]: 第 1 / 3 页
+          - generic [ref=f4e460]:
+            - button "上一页" [disabled] [ref=f4e461]
+            - button "下一页" [ref=f4e462] [cursor=pointer]
+            - generic [ref=f4e463]:
+              - text: 每页
+              - combobox "每页" [ref=f4e464]:
+                - option "10 条" [selected]
+                - option "20 条"
+                - option "50 条"
+      - generic [ref=f4e465]:
+        - generic [ref=f4e466]:
+          - strong [ref=f4e467]: 覆盖矩阵
+          - generic [ref=f4e469]: 已覆盖 ｜ 已覆盖 27 ｜ 部分覆盖 0 ｜ 缺口0 ｜ 待关联 0
+        - table [ref=f4e470]:
+          - rowgroup [ref=f4e471]:
+            - row "追溯状态 来源 覆盖意图数 说明" [ref=f4e472]:
+              - columnheader "追溯状态" [ref=f4e473]
+              - columnheader "来源" [ref=f4e474]
+              - columnheader "覆盖意图数" [ref=f4e475]
+              - columnheader "说明" [ref=f4e476]
+          - rowgroup [ref=f4e477]:
+            - row "已覆盖 手动输入 覆盖的意图：intent-01, intent-02, intent-03, intent-04, intent-05, intent-06, intent-07, intent-08, intent-09, intent-10, intent-11, intent-12, intent-13, intent-14, intent-15, intent-16, intent-17, intent-18, intent-19, intent-20, intent-21, intent-22, intent-23, intent-24, intent-25, intent-26, intent-27 -" [ref=f4e478]:
+              - cell "已覆盖" [ref=f4e479]:
+                - generic [ref=f4e480]: 已覆盖
+              - cell "手动输入" [ref=f4e481]
+              - cell "覆盖的意图：intent-01, intent-02, intent-03, intent-04, intent-05, intent-06, intent-07, intent-08, intent-09, intent-10, intent-11, intent-12, intent-13, intent-14, intent-15, intent-16, intent-17, intent-18, intent-19, intent-20, intent-21, intent-22, intent-23, intent-24, intent-25, intent-26, intent-27" [ref=f4e482]:
+                - generic "覆盖的意图：intent-01, intent-02, intent-03, intent-04, intent-05, intent-06, intent-07, intent-08, intent-09, intent-10, intent-11, intent-12, intent-13, intent-14, intent-15, intent-16, intent-17, intent-18, intent-19, intent-20, intent-21, intent-22, intent-23, intent-24, intent-25, intent-26, intent-27" [ref=f4e483]: 27 个意图
+              - cell "-" [ref=f4e484]

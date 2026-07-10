@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared_backend.type_utils import str_value as _normalized_text, as_text_list, append_unique
+from shared_backend.type_utils import append_unique, as_text_list
+from shared_backend.type_utils import str_value as _normalized_text
 
 from .. import constants as _c
+from ..assets.preview import candidate_snapshot
 from ..elements.resolver import ElementResolver
 from ..hooks.base import PageHook
-from ..assets.preview import candidate_snapshot
-from .precondition import fallback_precondition
 from ..steps.structurer import structured_steps_from_candidate
+from .precondition import fallback_precondition
 
 
 def build_point(

@@ -3,21 +3,22 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import HTTPException, status
-from shared_backend.type_utils import normalize_project_code_strict as _normalize_project_code_strict
 from sqlalchemy import Select, func, inspect, select
 from sqlalchemy.orm import Session
 
-from app.models.test_case import TestCase
+from app.core.constants import DEFAULT_PROJECT_CODE
 from app.models.test_project import TestProject
-from app.repositories.test_project_repository import TestProjectRepository
 from app.models.workbench_state import (
     WorkbenchExecutionGateDecision,
     WorkbenchReviewDecision,
     WorkbenchRuntimeRun,
 )
+from app.repositories.test_project_repository import TestProjectRepository
 from app.schemas.test_project import TestProjectCreate, TestProjectUpdate
-from app.core.constants import DEFAULT_PROJECT_CODE
 from app.services.test_case_bootstrap_service import ensure_project_seed
+from shared_backend.type_utils import (
+    normalize_project_code_strict as _normalize_project_code_strict,
+)
 
 PROJECT_STATUS_VALUES = {"active", "inactive"}
 
@@ -35,7 +36,7 @@ def _normalize_project_code(value: str) -> str:
     try:
         return _normalize_project_code_strict(value, max_len=10)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 def _normalize_project_status(value: str) -> str:

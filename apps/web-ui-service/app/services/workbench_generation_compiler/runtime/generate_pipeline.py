@@ -2,23 +2,13 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Protocol
-import yaml
-from sqlalchemy.exc import OperationalError
+from typing import Any, Protocol
 
-from shared_backend.db import get_db_session as SessionLocal
-from shared_backend.step_fields import STEP_FIELD_NAMES
-from app.models.page_object import PageElement, PageObject
-from app.repositories.page_object_repository import PageObjectRepository
-
-from ..debug import debug_enabled, log_debug_event
+from app.models.page_object import PageElement
 from shared_backend.observability import summarize_http_context
-from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
-from shared_backend.element_binding import build_element_alias_map
-from shared_backend.intent_mapping import resolve_explicit_step
-from shared_backend.schemas.contracts import normalize_test_point_plan_v1
-from shared_backend.schemas.validator import ContractValidator
+from shared_backend.step_fields import STEP_FIELD_NAMES
 from shared_backend.type_utils import str_value as _normalized_text
 
 _YAML_PAGE_OBJECT_ROOT = Path(__file__).resolve().parents[6] / "assets" / "page-objects" / "web"
@@ -687,40 +677,3 @@ def _intent_product_metadata(
 
 # ---- 函数体已移至子模块（单向依赖: format → orchestrate → steps）----
 # 导入放在文件末尾：子模块 import 本文件时，所有 leaf 函数定义（线 1-703）已加载完毕
-from .generate_pipeline_format import (  # noqa: E402
-    _product_description, _product_page_load_expected, _product_element_name,
-    _product_locator, _product_element_meta, _trusted_page_url,
-    _product_step_expected, _format_product_execution_steps,
-    _append_login_success_assertion, _step_element_code,
-    _is_variable_template, _variable_template_key,
-    _data_key_for_input, _variable_name_for_input,
-    _reserve_data_key, _reserve_variable_name,
-    _normalized_data_source_type, _normalize_data_source_entry,
-    _normalize_dsl_data_sources, _enrich_dsl_v1_1_data_bindings,
-    _infer_data_subtype, _is_natural_language_description, _DSL_DATA_SUBTYPES,
-    _normalize_top_level_assertion, _assertion_signature,
-    _normalize_dsl_v1_1_assertions, _is_ai_automated_case,
-    _validate_dsl_v1_1_minimum_contract, _enrich_product_case_yaml_v1_1,
-)
-from .generate_pipeline_locator import _normalize_step_locators  # noqa: E402
-from .generate_pipeline_variable import _is_test_data_ref, _parse_test_data_ref  # noqa: E402
-from .generate_pipeline_assertion import _append_login_error_assertion  # noqa: E402
-from .generate_pipeline_metadata import (  # noqa: E402
-    _RISK_LEVELS, _ENVIRONMENTS, _NETWORK_PROFILES, _ACTOR_ROLES, _validate_enum,
-)
-from .generate_pipeline_precondition import compile_preconditions  # noqa: E402
-from .generate_pipeline_orchestrate import (  # noqa: E402
-    _format_product_case_yaml, _enrich_v3_0_metadata, _attach_point_expected_results,
-    _build_direct_candidate_orchestrator_result,
-    _extract_candidate_snapshots,
-    _enrich_test_points_with_candidate_snapshots,
-    _resolve_page_object_from_db, _load_cross_page_data_testid_element,
-    _load_page_object_from_db, _resolve_page_object_from_assets,
-    resolve_page_object,
-)
-from .generate_pipeline_steps import (  # noqa: E402
-    _handle_generation_exception, _call_orchestrator_and_parse,
-    _normalize_and_scope_test_points, _validate_and_compile_steps,
-    _allocate_and_format_case_id, _persist_and_build_response,
-    run_generate_pipeline,
-)

@@ -1,20 +1,19 @@
 import hashlib
 import secrets
-
-from datetime_compat import UTC
 from datetime import datetime, timedelta
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.exc import UnknownHashError
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
+from datetime_compat import UTC
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")

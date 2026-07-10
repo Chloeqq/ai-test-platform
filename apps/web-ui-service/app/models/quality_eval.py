@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -43,12 +43,12 @@ class QualityEvalDataset(Base):
     )
 
     # ── 级联关系 ──
-    items: Mapped[list["QualityEvalItem"]] = relationship(
+    items: Mapped[list[QualityEvalItem]] = relationship(
         back_populates="dataset",
         cascade="all, delete-orphan",
         lazy="select",
     )
-    runs: Mapped[list["QualityEvalRun"]] = relationship(
+    runs: Mapped[list[QualityEvalRun]] = relationship(
         back_populates="dataset",
         cascade="all, delete-orphan",
         lazy="select",
@@ -77,8 +77,8 @@ class QualityEvalItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # ── 级联关系 ──
-    dataset: Mapped["QualityEvalDataset"] = relationship(back_populates="items")
-    results: Mapped[list["QualityEvalResult"]] = relationship(
+    dataset: Mapped[QualityEvalDataset] = relationship(back_populates="items")
+    results: Mapped[list[QualityEvalResult]] = relationship(
         back_populates="item",
         cascade="all, delete-orphan",
         lazy="select",
@@ -118,8 +118,8 @@ class QualityEvalRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # ── 级联关系 ──
-    dataset: Mapped["QualityEvalDataset"] = relationship(back_populates="runs")
-    results: Mapped[list["QualityEvalResult"]] = relationship(
+    dataset: Mapped[QualityEvalDataset] = relationship(back_populates="runs")
+    results: Mapped[list[QualityEvalResult]] = relationship(
         back_populates="run",
         cascade="all, delete-orphan",
         lazy="select",
@@ -161,5 +161,5 @@ class QualityEvalResult(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # ── 双向关系（只读取，不设 cascade，由 Item/Run 侧管理级联） ──
-    run: Mapped["QualityEvalRun"] = relationship(back_populates="results")
-    item: Mapped["QualityEvalItem"] = relationship(back_populates="results")
+    run: Mapped[QualityEvalRun] = relationship(back_populates="results")
+    item: Mapped[QualityEvalItem] = relationship(back_populates="results")

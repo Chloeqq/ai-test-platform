@@ -1,9 +1,12 @@
 import re
-from typing import Any
+
 from fastapi import HTTPException, status
-from shared_backend.type_utils import normalize_project_code_strict as _normalize_project_code_strict
+
 from app.models.page_object import PageElement
 from app.services.page_element_code_policy import require_valid_element_code
+from shared_backend.type_utils import (
+    normalize_project_code_strict as _normalize_project_code_strict,
+)
 
 PAGE_OBJECT_STATUS_VALUES = {"draft", "review", "published", "retired"}
 PAGE_ELEMENT_STATUS_VALUES = {"active", "inactive", "deprecated"}
@@ -39,7 +42,7 @@ def _normalize_project_code(value: str) -> str:
     try:
         return _normalize_project_code_strict(value, max_len=20)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 def _normalize_identifier(value: str, *, field_name: str, min_length: int = 2, max_length: int = 80) -> str:

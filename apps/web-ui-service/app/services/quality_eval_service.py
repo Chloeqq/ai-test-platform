@@ -13,27 +13,28 @@
 
 from __future__ import annotations
 
-
-import json
 import logging
-
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
-from typing import Any, Callable
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.models.quality_eval import (
-    QualityEvalDataset,
     QualityEvalItem,
     QualityEvalResult,
-    QualityEvalRun,
 )
 from app.repositories.quality_eval_repository import QualityEvalRepository
 
 LOGGER = logging.getLogger(__name__)
+
+
+class EvaluationExecutionError(Exception):
+    """评估执行错误 — 由 Router 层转换为 HTTP 500。"""
+    pass
 
 # ── 评分权重（可配置）─────────────────────────────────────────
 DEFAULT_WEIGHTS: dict[str, float] = {
@@ -321,7 +322,7 @@ class ConsistencyEvaluator(QualityEvaluator):
 
     @staticmethod
     def _cosine_sim(a: list[int], b: list[int]) -> float:
-        dot = sum(x * y for x, y in zip(a, b))
+        dot = sum(x * y for x, y in zip(a, b, strict=True))
         norm_a = (sum(x * x for x in a)) ** 0.5
         norm_b = (sum(x * x for x in b)) ** 0.5
         if norm_a == 0 or norm_b == 0:
@@ -419,9 +420,7 @@ _DEFAULT_EVALUATORS: dict[str, type[QualityEvaluator]] = {
 # ID 生成器 — 从 app.core.id_gen 重导出，避免调用方同时 import 两个模块
 from app.core.id_gen import (  # noqa: E402
     generate_case_id,
-    generate_item_id,
     generate_result_id,
-    generate_run_id,
     hash_text_slug,
 )
 
@@ -645,7 +644,7 @@ def execute_evaluation_run(
         }
 
     run.status = "completed"
-    run.finished_at = datetime.now(timezone.utc)
+    run.finished_at = datetime.now(UTC)
     db.flush()
 
     return {
@@ -696,7 +695,6 @@ def build_run_report(db: Session, run_id: str) -> dict[str, Any]:
         raise ValueError(f"Run not found: {run_id}")
 
     dataset = repo.get_dataset(run.dataset_id)
-    results = repo.list_results(run_id)
 
     # 查找上一次同 dataset 的运行做对比
     all_runs = repo.list_runs(project_code=run.project_code, dataset_id=run.dataset_id)

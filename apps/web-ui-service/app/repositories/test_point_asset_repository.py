@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import delete as sa_delete, select
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import select
 
 from app.models.test_point_asset import TestPointAsset
+
 from .base import BaseRepository
 
 

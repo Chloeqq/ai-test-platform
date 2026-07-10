@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 
 from .context import build_workbench_context
 from .generate_case_service import GenerateCaseService
-from .save_test_point_assets_service import SaveTestPointAssetsService
 from .precheck_selected_intents_service import PrecheckSelectedIntentsService
+from .save_test_point_assets_service import SaveTestPointAssetsService
 
 
 def build_generate_case_usecase(db: Session) -> GenerateCaseService:

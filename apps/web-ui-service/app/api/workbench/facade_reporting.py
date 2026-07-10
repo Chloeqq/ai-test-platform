@@ -4,108 +4,58 @@
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
-import shutil
 import subprocess
-from collections import defaultdict
-from datetime import datetime, timedelta
-from shared_backend.datetime_compat import UTC
-from functools import partial
-from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, Sequence
-import yaml
-
-from fastapi import HTTPException, Response, status
-from shared_backend import get_dictionary_items
-from shared_backend.case_ids import match_case_id, normalize_case_id
-from shared_backend.element_binding import build_element_alias_map, resolve_element_code, resolve_involved_element_codes
-from shared_backend.schemas.contracts import normalize_test_point_plan_v1
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from datetime import datetime
+from typing import Any
 
 from app.api.workbench import constants, store
-from app.core.config import get_settings
-from app.core.database import SessionLocal
-from app.core import page_analysis_rules
-from app.repositories.page_object_repository import PageObjectRepository
 from app.repositories.test_case_repository import TestCaseRepository
-from app.models.page_object import PageElement
-from app.models.test_case import TestCase, TestCaseExecution
 from app.services import (
-    test_project_service,
     test_case_service,
-    test_data_pool_service,
+    test_project_service,
     workbench_analysis_service,
-    workbench_asset_service,
     workbench_case_consistency_service,
     workbench_gate_service,
     workbench_governance_service,
     workbench_history_service,
     workbench_reporting_service,
-    workbench_review_service,
     workbench_runtime_service,
     workbench_scheduler_service,
-    workbench_task_service,
 )
-from app.services.workbench_generation_api.payloads import GenerateCasePayload as GenerationGenerateCasePayload
-from app.services.workbench_generation_api.usecase_factory import build_generate_case_usecase
+from fastapi import HTTPException, Response, status
+from sqlalchemy.orm import Session
 
-from ._http import get_json as _get_json
+from shared_backend.datetime_compat import UTC
+
 from ._helpers import (
-    build_empty_trend as _build_empty_trend,
-    default_overview as _default_overview,
     is_within as _is_within,
-    normalize_generation_case_source as _normalize_generation_case_source,
-    normalize_optional_project_code as _normalize_optional_project_code,
-    normalize_test_point_review_status as _normalize_test_point_review_status,
-    parse_iso_datetime as _parse_iso_datetime,
-    python_literal as _python_literal,
-    read_json_file as _read_json_file,
-    safe_python_identifier as _safe_python_identifier,
-    safe_rollback_or_invalidate as _safe_rollback_or_invalidate,
-    text as _text,
-    text_list as _text_list,
-    to_utc as _to_utc,
-    utc_now as _utc_now,
-    validate_test_point_review_status as _validate_test_point_review_status,
-    write_json_file as _write_json_file,
 )
-from .service import WorkbenchService
+from ._helpers import (
+    normalize_optional_project_code as _normalize_optional_project_code,
+)
+from ._helpers import (
+    text as _text,
+)
+from ._http import get_json as _get_json
 from .service import (
-    _append_history,
-    _append_runtime_run,
     _build_execution_task_summary,
     _build_execution_task_view,
     _collect_execution_records_with_meta,
-    _collect_failure_entries,
     _collect_failure_entries_with_meta,
-    _ensure_dirs,
-    _execution_record_time_value,
-    _load_runtime_execution_record_from_artifacts,
-    _normalize_execution_record_payload,
     _normalize_failure_entry_view,
-    _read_json_list,
-    _runtime_run_id,
-    _runtime_view_from_entry,
     _runtime_view_with_execution_record_preferred,
-    _safe_case_id,
-    _sync_stage_a_workbench_state,
-    _sync_stage_b_workbench_gate,
-    _update_runtime_run,
-    _write_json_list,
 )
-import logging
+
 LOGGER = logging.getLogger(__name__)
 _RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
 
 # 从 facade 导入模块级 helper 函数
 from .facade_helpers import (  # noqa: E402
-    _settings, _build_runtime_view_from_entry, _resolve_history_project_code,
-    _attach_test_point_asset_summary, _point_review_status,
+    _resolve_history_project_code,
+    _settings,
 )
 
 

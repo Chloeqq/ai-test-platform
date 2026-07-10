@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.models.test_point import TestPoint
+
 from .base import BaseRepository
 
 

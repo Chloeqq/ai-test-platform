@@ -8,15 +8,14 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import delete, func, select
-from sqlalchemy.orm import Session
 
 from app.models.test_case import (
     TestCase,
     TestCaseDefect,
     TestCaseExecution,
     TestCaseStep,
-    TestCaseVersion,
     TestCaseTreeNode,
+    TestCaseVersion,
 )
 
 from .base import BaseRepository

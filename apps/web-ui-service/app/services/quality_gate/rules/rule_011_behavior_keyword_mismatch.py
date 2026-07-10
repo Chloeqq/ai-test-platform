@@ -10,7 +10,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from shared_backend.quality_gate import (
     GateContext,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 __all__ = [
     "generate_case_id",
@@ -26,7 +26,7 @@ def generate_case_id() -> str:
 
 def generate_run_id() -> str:
     """生成评测运行 ID：run-YYYYMMDD-HHMMSS-xxxxxx"""
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     return f"run-{ts}-{_short_hex(6)}"
 
 

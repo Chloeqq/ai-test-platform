@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from shared_backend.type_utils import dict_value as _dict_value, int_value as _int_value, list_value as _list_value
+from shared_backend.type_utils import dict_value as _dict_value
+from shared_backend.type_utils import int_value as _int_value
+from shared_backend.type_utils import list_value as _list_value
 
 
 def dedup_keep_order(items: list[str]) -> list[str]:

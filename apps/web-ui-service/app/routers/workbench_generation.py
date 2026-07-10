@@ -6,18 +6,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.services.workbench_generation_api import preview_store
 from app.services.workbench_generation_api.payloads import (
     GenerateCasePayload,
     PrecheckSelectedIntentsPayload,
 )
-from app.services.workbench_generation_api.preview_test_points_usecase import build_preview_usecase
-from app.services.workbench_generation_api import preview_store
+from app.services.workbench_generation_api.preview_test_points_usecase import (
+    build_preview_usecase,
+)
 from app.services.workbench_generation_api.usecase_factory import (
     build_precheck_selected_intents_usecase,
     build_save_test_point_assets_usecase,
 )
 from shared_backend import ExecutionCompilerError
-
 
 router = APIRouter(tags=["workbench-generation"])
 # ARCHITECTURE GUARANTEE:

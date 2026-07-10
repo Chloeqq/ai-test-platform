@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from app.api.workbench.facade import build_workbench_facade
 from app.core.database import get_db
 
-
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 facade = build_workbench_facade()
 

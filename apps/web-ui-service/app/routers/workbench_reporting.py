@@ -5,8 +5,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.workbench.facade import build_workbench_facade
@@ -14,7 +13,6 @@ from app.api.workbench.schemas import DefectPayload
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.test_case import TestCase, TestCaseExecution
 from app.repositories.test_case_repository import TestCaseRepository
 from shared_backend.observability import get_request_id, summarize_http_context
 

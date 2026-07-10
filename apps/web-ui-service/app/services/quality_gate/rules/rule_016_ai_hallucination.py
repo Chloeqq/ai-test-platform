@@ -11,11 +11,15 @@ RULE_006/012/014 已覆盖 element/locator 单项检查，本规则不重复。
 
 from __future__ import annotations
 
-from typing import Any
-
 from shared_backend.quality_gate import (
-    GateContext, Rule, RuleCategory, RuleResult, Severity, register_rule,
+    GateContext,
+    Rule,
+    RuleCategory,
+    RuleResult,
+    Severity,
+    register_rule,
 )
+
 from ._common import extract_element_code, normalized
 
 

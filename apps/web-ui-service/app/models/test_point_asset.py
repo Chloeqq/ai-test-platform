@@ -7,7 +7,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, JSON, String, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base

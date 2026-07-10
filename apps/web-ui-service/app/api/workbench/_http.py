@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-import socket
 import time
 from typing import Any
 from urllib import error as url_error
 from urllib import request as url_request
 
 from fastapi import HTTPException, status
+
 from shared_backend.observability import get_request_id, summarize_http_context
 
 
@@ -67,7 +67,7 @@ def get_json(url: str, *, timeout_seconds: int = 300) -> dict[str, Any]:
             ),
         )
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"orchestrator unavailable: {exc.reason}") from exc
-    except TimeoutError as exc:
+    except TimeoutError as exc:  # noqa: B025
         logging.getLogger(__name__).warning(
             "orchestrator_get_timeout %s",
             summarize_http_context(
@@ -79,7 +79,7 @@ def get_json(url: str, *, timeout_seconds: int = 300) -> dict[str, Any]:
             ),
         )
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="orchestrator request timed out") from exc
-    except socket.timeout as exc:
+    except TimeoutError as exc:  # noqa: B025
         logging.getLogger(__name__).warning(
             "orchestrator_get_timeout %s",
             summarize_http_context(

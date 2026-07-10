@@ -1,0 +1,121 @@
+- generic [ref=f3e3]:
+  - banner [ref=f3e4]:
+    - generic [ref=f3e5]:
+      - link "ATP AI 质量保障平台" [ref=f3e6] [cursor=pointer]:
+        - /url: /react/dashboard
+        - generic [ref=f3e7]: ATP
+        - generic [ref=f3e8]: AI 质量保障平台
+      - generic [ref=f3e9]: 生产环境
+    - generic [ref=f3e10]: 登录校验中...
+  - complementary [ref=f3e12]:
+    - generic [ref=f3e13]:
+      - strong [ref=f3e14]: 导航
+      - button "收起侧栏" [ref=f3e15] [cursor=pointer]: «
+    - navigation [ref=f3e16]:
+      - generic [ref=f3e17]:
+        - button "仪表盘 -" [ref=f3e18] [cursor=pointer]:
+          - generic [ref=f3e19]: 仪表盘
+          - generic [ref=f3e20]: "-"
+        - link "总览" [ref=f3e22] [cursor=pointer]:
+          - /url: /react/dashboard
+      - generic [ref=f3e23]:
+        - button "AI 生成 -" [ref=f3e24] [cursor=pointer]:
+          - generic [ref=f3e25]: AI 生成
+          - generic [ref=f3e26]: "-"
+        - generic [ref=f3e27]:
+          - link "生成工作台" [ref=f3e28] [cursor=pointer]:
+            - /url: /react/ai-generation
+          - link "生成历史" [ref=f3e29] [cursor=pointer]:
+            - /url: /react/ai-generation/history
+          - link "提示词管理" [ref=f3e30] [cursor=pointer]:
+            - /url: /react/ai-generation/prompts
+      - generic [ref=f3e31]:
+        - button "测试资产 -" [ref=f3e32] [cursor=pointer]:
+          - generic [ref=f3e33]: 测试资产
+          - generic [ref=f3e34]: "-"
+        - generic [ref=f3e35]:
+          - link "用例中心" [ref=f3e36] [cursor=pointer]:
+            - /url: /react/cases
+          - link "待审核用例" [ref=f3e37] [cursor=pointer]:
+            - /url: /react/cases/review
+          - link "用例版本" [ref=f3e38] [cursor=pointer]:
+            - /url: /react/cases/versions
+          - link "标签治理" [ref=f3e39] [cursor=pointer]:
+            - /url: /react/cases/tags
+          - link "测试点资产" [ref=f3e40] [cursor=pointer]:
+            - /url: /react/assets/test-points
+          - link "页面对象" [ref=f3e41] [cursor=pointer]:
+            - /url: /react/assets/page-objects
+          - link "接口契约" [ref=f3e42] [cursor=pointer]:
+            - /url: /react/assets/api-contracts
+          - link "数据模板" [ref=f3e43] [cursor=pointer]:
+            - /url: /react/assets/data-templates
+      - generic [ref=f3e44]:
+        - button "执行与报告 -" [ref=f3e45] [cursor=pointer]:
+          - generic [ref=f3e46]: 执行与报告
+          - generic [ref=f3e47]: "-"
+        - generic [ref=f3e48]:
+          - link "执行计划" [ref=f3e49] [cursor=pointer]:
+            - /url: /react/execution/plans
+          - link "执行记录" [ref=f3e50] [cursor=pointer]:
+            - /url: /react/execution/runs
+          - link "结果总览" [ref=f3e51] [cursor=pointer]:
+            - /url: /react/execution/results
+          - link "失败分析" [ref=f3e52] [cursor=pointer]:
+            - /url: /react/execution/results/failures
+          - link "上下文" [ref=f3e53] [cursor=pointer]:
+            - /url: /react/execution/results/context
+          - link "性能分析" [ref=f3e54] [cursor=pointer]:
+            - /url: /react/execution/results/performance
+          - link "Allure 报告" [ref=f3e55] [cursor=pointer]:
+            - /url: /react/execution/results/allure
+      - generic [ref=f3e56]:
+        - button "质量治理 -" [ref=f3e57] [cursor=pointer]:
+          - generic [ref=f3e58]: 质量治理
+          - generic [ref=f3e59]: "-"
+        - generic [ref=f3e60]:
+          - link "质量仪表盘" [ref=f3e61] [cursor=pointer]:
+            - /url: /react/quality/dashboard
+          - link "Flaky 分析" [ref=f3e62] [cursor=pointer]:
+            - /url: /react/quality/flaky
+          - link "失败聚类" [ref=f3e63] [cursor=pointer]:
+            - /url: /react/quality/failure-clusters
+          - link "趋势分析" [ref=f3e64] [cursor=pointer]:
+            - /url: /react/quality/trends
+          - link "质量门禁" [ref=f3e65] [cursor=pointer]:
+            - /url: /react/quality/gates
+          - link "质量评估中心" [ref=f3e66] [cursor=pointer]:
+            - /url: /react/quality/eval
+          - link "缺陷看板" [ref=f3e67] [cursor=pointer]:
+            - /url: /react/defects
+      - generic [ref=f3e68]:
+        - button "系统设置 -" [ref=f3e69] [cursor=pointer]:
+          - generic [ref=f3e70]: 系统设置
+          - generic [ref=f3e71]: "-"
+        - generic [ref=f3e72]:
+          - link "项目管理" [ref=f3e73] [cursor=pointer]:
+            - /url: /react/system/projects
+          - link "源码管理" [ref=f3e74] [cursor=pointer]:
+            - /url: /react/system/source-config
+          - link "任务调度" [ref=f3e75] [cursor=pointer]:
+            - /url: /react/settings/scheduler
+          - link "环境管理" [ref=f3e76] [cursor=pointer]:
+            - /url: /react/system/environments
+          - link "节点管理" [ref=f3e77] [cursor=pointer]:
+            - /url: /react/system/nodes
+          - link "集成配置" [ref=f3e78] [cursor=pointer]:
+            - /url: /react/system/integrations
+          - link "权限角色" [ref=f3e79] [cursor=pointer]:
+            - /url: /react/system/roles
+    - generic [ref=f3e80]:
+      - paragraph [ref=f3e81]: 最近访问
+      - generic [ref=f3e82]:
+        - link "测试点资产" [ref=f3e83] [cursor=pointer]:
+          - /url: /react/assets/test-points/mall-web-login-auth-fn-ai-0001
+        - link "用例中心" [ref=f3e84] [cursor=pointer]:
+          - /url: /react/cases
+        - link "测试点资产" [ref=f3e85] [cursor=pointer]:
+          - /url: /react/assets/test-points
+  - generic [ref=f3e88]:
+    - heading "正在校验登录状态" [level=2] [ref=f3e89]
+    - paragraph [ref=f3e90]: 请稍候，我们正在确认你的身份并恢复会话。

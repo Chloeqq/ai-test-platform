@@ -4,28 +4,27 @@
 """
 from __future__ import annotations
 
-import json
-import re
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 from fastapi import HTTPException, status
-from shared_backend.case_ids import normalize_case_id
+
+from app.services import workbench_state_store as state_store
 from shared_backend.case_rules import enrich_case_metadata, validate_case_payload
 from shared_backend.datetime_compat import UTC
 from shared_backend.type_utils import (
     dedup_keep_order as _dedup_keep_order,
+)
+from shared_backend.type_utils import (
     dict_value as _dict_value,
-    float_value as _float_value,
-    int_value as _int_value,
+)
+from shared_backend.type_utils import (
     list_value as _list_value,
 )
 
-from app.services import workbench_state_store as state_store
-
-import logging
 LOGGER = logging.getLogger(__name__)
 
 # ── Review status constants ──────────────────────────────────────────────

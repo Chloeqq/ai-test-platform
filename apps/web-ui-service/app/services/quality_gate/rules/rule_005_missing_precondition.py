@@ -8,7 +8,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from shared_backend.quality_gate import (
     GateContext,
@@ -18,8 +19,8 @@ from shared_backend.quality_gate import (
     Severity,
     register_rule,
 )
-from ._common import normalized
 
+from ._common import normalized
 
 # ---------------------------------------------------------------------------
 # Setup 检查函数 — 每种 check_type 对应一个检查函数
@@ -192,6 +193,8 @@ class MissingPreconditionRule(Rule):
         """V2.0: 验证结构化 preconditions 块。"""
         from shared_backend.quality_gate import (
             PRECONDITION_TYPES as ALLOWED_TYPES,
+        )
+        from shared_backend.quality_gate import (
             RESERVED_PRECONDITION_TYPES as RESERVED_TYPES,
         )
         issues: list[str] = []

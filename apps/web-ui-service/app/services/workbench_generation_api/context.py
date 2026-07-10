@@ -3,12 +3,12 @@ from __future__ import annotations
 import os
 import subprocess
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from shared_backend.datetime_compat import UTC
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -25,6 +25,7 @@ from app.services import (
     workbench_runtime_service,
     workbench_state_store,
 )
+from shared_backend.datetime_compat import UTC
 
 from .candidate_normalizer import CandidateNormalizer
 from .feature_flags import FeatureFlags

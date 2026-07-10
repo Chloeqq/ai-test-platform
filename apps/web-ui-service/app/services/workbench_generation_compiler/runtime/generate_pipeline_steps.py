@@ -2,52 +2,36 @@
 from __future__ import annotations
 
 import logging
-import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Protocol
-import yaml
-from sqlalchemy.exc import OperationalError
+from typing import Any
 
 # SessionLocal imported from .generate_pipeline
-from app.models.page_object import PageElement, PageObject
-from app.repositories.page_object_repository import PageObjectRepository
-
-from ..debug import debug_enabled, log_debug_event
-from shared_backend.observability import summarize_http_context
-from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
-from shared_backend.element_binding import build_element_alias_map
-from shared_backend.intent_mapping import resolve_explicit_step
+from shared_backend.execution_compiler import (
+    ExecutionCompilerError,
+    compile_execution_steps,
+)
 from shared_backend.schemas.contracts import normalize_test_point_plan_v1
 from shared_backend.schemas.validator import ContractValidator
 from shared_backend.type_utils import str_value as _normalized_text
 
+from ..debug import debug_enabled, log_debug_event
 
 # 从上游模块导入（无循环：File 1→File 2→File 3→File 4 单向依赖）
 from .generate_pipeline import (
-    SessionLocal,  # noqa: E402
-    _normalized_text, _LOGGER, _YAML_PAGE_OBJECT_ROOT,
-    _COMPILER_ERROR_CODES, _DSL_DATA_SOURCE_TYPES,
-    _log_generation_failure, _redact_generation_payload,
-    _normalized_key, _normalize_json_list, _is_qualified_formal_element,
-    _element_display_name, _infer_element_aliases, _list_text,
-    _extract_selected_intent_ids, _execution_intent_ids,
-    _find_candidate_snapshot_by_intent, _candidate_steps,
-    _normalize_candidate_snapshot, _point_type_from_intent_type,
-    _candidate_identity, _direct_candidate_requirement_lines,
-    _scope_points_to_selected_intents, _filter_requirement_spec_by_selected_intents,
-    _is_precondition_point, _looks_like_password_toggle_element,
-    _looks_like_generic_recorded_name,
+    _COMPILER_ERROR_CODES,
+    _LOGGER,
+    _extract_selected_intent_ids,
+    _filter_requirement_spec_by_selected_intents,
+    _log_generation_failure,
+    _normalized_text,  # noqa: F811
+    _redact_generation_payload,
+    _scope_points_to_selected_intents,
 )
 from .generate_pipeline_format import (  # noqa: E402
-    _product_description, _product_page_load_expected, _product_element_name,
-    _product_locator, _product_element_meta, _trusted_page_url,
-    _product_step_expected, _format_product_execution_steps,
-    _append_login_success_assertion, _step_element_code,
-    _normalize_dsl_data_sources, _enrich_dsl_v1_1_data_bindings,
-    _normalize_top_level_assertion, _assertion_signature,
-    _normalize_dsl_v1_1_assertions, _is_ai_automated_case,
-    _validate_dsl_v1_1_minimum_contract, _enrich_product_case_yaml_v1_1,
+    _trusted_page_url,
 )
+
 
 def _svc():
     """惰性查找主模块。"""
@@ -55,14 +39,11 @@ def _svc():
     return _svc_mod
 
 from .generate_pipeline_orchestrate import (  # noqa: E402
-    _format_product_case_yaml, _attach_point_expected_results,
+    _attach_point_expected_results,
     _build_direct_candidate_orchestrator_result,
-    _extract_candidate_snapshots,
     _enrich_test_points_with_candidate_snapshots,
-    _resolve_page_object_from_db,
-    _load_cross_page_data_testid_element,
-    _load_page_object_from_db,
-    _resolve_page_object_from_assets,
+    _extract_candidate_snapshots,
+    _format_product_case_yaml,
 )
 
 
@@ -289,7 +270,7 @@ def _normalize_and_scope_test_points(
         }
         normalized_plan, _contract_warnings = normalize_test_point_plan_v1(plan_wrapper)
         test_points = normalized_plan.get("points", test_points)
-    except Exception:
+    except Exception as exc:
         raise http_exception_cls(
             status_code=unprocessable_entity_status,
             detail={
@@ -298,7 +279,7 @@ def _normalize_and_scope_test_points(
                 "reason": "normalize_test_point_plan_v1 raised an exception",
                 "stage": "run_generate_pipeline",
             },
-        )
+        ) from exc
 
     requirement_spec = (
         orchestrator_result.get("requirement_spec")
@@ -512,7 +493,7 @@ def _evaluate_case_quality_gate(
     requirement_spec: dict[str, Any] | None,
     test_points: list[dict[str, Any]],
     project: str,
-) -> tuple["ValidationReport", bool]:
+) -> tuple[ValidationReport, bool]:
     """调用 CaseQualityGate 对生成的用例执行质量门禁评估。
 
     返回 (ValidationReport, seed_data_available)。

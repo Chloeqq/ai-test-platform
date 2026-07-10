@@ -5,8 +5,8 @@ import ipaddress
 import logging
 import os
 import socket
-from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from urllib import parse as url_parse
 
 from app.core import page_analysis_rules
@@ -14,7 +14,8 @@ from app.core.page_analysis_pipeline import (
     normalize_page_surface_model,
     normalize_test_point_plan_model,
 )
-from shared_backend.type_utils import dict_value as _dict_value, list_value as _list_value
+from shared_backend.type_utils import dict_value as _dict_value
+from shared_backend.type_utils import list_value as _list_value
 
 LOGGER = logging.getLogger(__name__)
 

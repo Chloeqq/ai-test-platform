@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from shared_backend.type_utils import normalize_project_code_strict as _normalize_project_code
 from sqlalchemy.orm import Session
 
 import app.schemas.test_project as test_project_schema
 from app.core.constants import DEFAULT_PROJECT_CODE
 from app.services import test_project_service
+from shared_backend.type_utils import (
+    normalize_project_code_strict as _normalize_project_code,
+)
 
 
 def list_project_items(db: Session, *, state_root: Path | None = None) -> list[dict[str, object]]:

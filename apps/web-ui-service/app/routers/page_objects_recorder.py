@@ -4,14 +4,14 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.schemas.page_object import RecorderSessionBatchDeletePayload
 from app.schemas.page_object_recorder import (
-    RecorderSessionCreateCasePayload,
     RecorderSessionCreate,
+    RecorderSessionCreateCasePayload,
     RecorderSessionHeartbeatPayload,
     RecorderSessionReplayPayload,
     RecorderSessionStopPayload,
 )
-from app.schemas.page_object import RecorderSessionBatchDeletePayload
 from app.services import page_object_recorder_service
 
 router = APIRouter(prefix="/api/page-objects/recorder", tags=["page-objects-recorder"])

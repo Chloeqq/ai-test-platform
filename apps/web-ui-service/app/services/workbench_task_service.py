@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from datetime_compat import UTC
 from shared_backend.case_ids import normalize_case_id
-from shared_backend.type_utils import dict_value as _dict_value, int_value as _int_value, list_value as _list_value
+from shared_backend.type_utils import dict_value as _dict_value
+from shared_backend.type_utils import int_value as _int_value
+from shared_backend.type_utils import list_value as _list_value
 
 NormalizeExecutionRecordPayload = Callable[[dict[str, Any]], dict[str, Any]]
 NormalizeEvidenceManifestPayload = Callable[[dict[str, Any]], dict[str, Any]]

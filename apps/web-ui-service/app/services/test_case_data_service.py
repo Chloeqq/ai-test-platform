@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Sequence, TypeAlias
+from collections.abc import Sequence
+from typing import Any, TypeAlias
 
 from app.schemas.test_case import TestCaseDataConfig
 from shared_backend.step_fields import STEP_FIELD_NAMES

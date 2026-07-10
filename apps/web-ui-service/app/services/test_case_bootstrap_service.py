@@ -4,14 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from datetime_compat import UTC
-from shared_backend.case_ids import (
-    build_case_metadata,
-    infer_client_code,
-    normalize_case_id,
-)
-from shared_backend.type_utils import normalize_project_code as _normalize_project_code_raw
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.models.test_case import (
@@ -34,12 +27,24 @@ from app.services.test_case_data_service import (
     normalize_text_list,
     render_test_steps_text,
 )
-from app.services.workbench_generation_api.repository import WorkbenchGenerationRepository
+from app.services.workbench_generation_api.repository import (
+    WorkbenchGenerationRepository,
+)
+from datetime_compat import UTC
+from shared_backend.case_ids import (
+    build_case_metadata,
+    infer_client_code,
+    normalize_case_id,
+)
+from shared_backend.type_utils import (
+    normalize_project_code as _normalize_project_code_raw,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 ASSETS_CASES_ROOT = REPO_ROOT / "assets" / "test-cases"
 AI_CASES_ROOT = ASSETS_CASES_ROOT / "ai-generated"
 from app.core.constants import DEFAULT_PROJECT_CODE
+
 DEFAULT_PROJECT_NAME = "Mall"
 DEFAULT_PROJECT_SOURCE_TERMS = {
     "商品货号": "product_sn",

@@ -5,30 +5,30 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
-
-from shared_backend.case_ids import normalize_case_id
-from shared_backend.type_utils import dict_value as _dict_value
+from typing import Any
 
 from app.services.workbench_runtime_service import (
-    NormalizeEvidenceManifestPayload,
-    NormalizeExecutionRecordPayload,
-    NormalizePageSlug,
-    BuildPageAnalysisContext,
-    BuildItemReviewState,
-    BuildRunReviewStateFromDecisions,
-    BuildTestPointAssetGateContext,
     BuildExecutionGate,
+    BuildItemReviewState,
+    BuildPageAnalysisContext,
     BuildReviewAuditSummary,
     BuildReviewAuditTimeline,
     BuildRiskReportSummary,
+    BuildRunReviewStateFromDecisions,
     BuildSelfHealingSummary,
+    BuildTestPointAssetGateContext,
     ExecutionGateDecisionForRun,
     LoadRuntimeExecutionRecordFromArtifacts,
+    NormalizeEvidenceManifestPayload,
+    NormalizeExecutionRecordPayload,
+    NormalizePageSlug,
     build_runtime_execution_record,
     runtime_run_id,
 )
+from shared_backend.case_ids import normalize_case_id
+from shared_backend.type_utils import dict_value as _dict_value
 
 
 def load_runtime_execution_record_from_artifacts(

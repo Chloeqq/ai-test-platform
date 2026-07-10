@@ -1,7 +1,7 @@
 import os
-from urllib.parse import urlsplit
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
 

@@ -6,11 +6,18 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from shared_backend.quality_gate import (
-    GateContext, Rule, RuleCategory, RuleResult, Severity, register_rule,
+    GateContext,
+    Rule,
+    RuleCategory,
+    RuleResult,
+    Severity,
+    register_rule,
 )
+
 from ._common import normalized
 
 _CheckFn = Callable[[list[dict[str, Any]]], bool]

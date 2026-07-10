@@ -1,43 +1,36 @@
 """generate_pipeline 产品格式化与 DSL V1.1 —— 提取自 generate_pipeline.py。"""
 from __future__ import annotations
 
-import logging
-import re
-from pathlib import Path
-from typing import Any, Callable, Protocol
-import yaml
-from sqlalchemy.exc import OperationalError
+from typing import Any
 
-from shared_backend.db import get_db_session as SessionLocal
-from app.models.page_object import PageElement, PageObject
-from app.repositories.page_object_repository import PageObjectRepository
-
-from ..debug import debug_enabled, log_debug_event
-from shared_backend.observability import summarize_http_context
-from shared_backend.execution_compiler import ExecutionCompilerError, compile_execution_steps
-from shared_backend.quality_gate.models import NEGATIVE_SCENARIO_KEYWORDS, LOGIN_SUCCESS_SIGNAL_KEYWORDS
-from shared_backend.element_binding import build_element_alias_map
-from shared_backend.intent_mapping import resolve_explicit_step
-from shared_backend.schemas.contracts import normalize_test_point_plan_v1
-from shared_backend.schemas.validator import ContractValidator
-from shared_backend.type_utils import str_value as _normalized_text
+from shared_backend.execution_compiler import (
+    ExecutionCompilerError,
+)
+from shared_backend.quality_gate.models import (
+    LOGIN_SUCCESS_SIGNAL_KEYWORDS,
+    NEGATIVE_SCENARIO_KEYWORDS,
+)
 from shared_backend.step_fields import STEP_FIELD_NAMES
-
-
-# 从主模块导入 leaf 工具函数（无循环：主模块的所有定义在线 1-703 已加载）
-from .generate_pipeline_variable import _is_test_data_ref, _parse_test_data_ref  # noqa: E402
-from .generate_pipeline_assertion import _append_login_error_assertion  # noqa: E402
+from shared_backend.type_utils import str_value as _normalized_text
 
 from .generate_pipeline import (  # noqa: E402
-    _normalized_text, _LOGGER, _YAML_PAGE_OBJECT_ROOT,
-    _COMPILER_ERROR_CODES, _SUPPORTED_TOP_LEVEL_ASSERTIONS,
-    _TOP_LEVEL_ASSERTION_KEYS, _VARIABLE_TEMPLATE_RE, _DSL_DATA_SOURCE_TYPES,
-    _normalized_key, _normalize_json_list, _is_qualified_formal_element,
-    _element_display_name, _infer_element_aliases,
-    _looks_like_password_toggle_element, _is_password_input_element,
-    _execution_intent_ids, _intent_product_metadata,
-    _find_candidate_snapshot_by_intent,
+    _DSL_DATA_SOURCE_TYPES,
+    _LOGGER,
+    _SUPPORTED_TOP_LEVEL_ASSERTIONS,
+    _TOP_LEVEL_ASSERTION_KEYS,
+    _VARIABLE_TEMPLATE_RE,
+    _normalized_key,
+    _normalized_text,  # noqa: F811
 )
+from .generate_pipeline_assertion import _append_login_error_assertion  # noqa: E402
+
+# 从主模块导入 leaf 工具函数（无循环：主模块的所有定义在线 1-703 已加载）
+from .generate_pipeline_variable import (  # noqa: E402
+    _is_test_data_ref,
+    _parse_test_data_ref,
+)
+
+
 def _product_description(title: str, expected: str) -> str:
     """
     生成用例的"产品化描述"（给人类看的标题，不是内部 ID）。
@@ -754,7 +747,7 @@ def _enrich_dsl_v1_1_data_bindings(product_yaml: dict[str, Any], *, page: str) -
             if data_key not in data:
                 raise ExecutionCompilerError(
                     code="dsl_v1_1_missing_input_data_source",
-                    message=f"DSL V1.1 input step requires declared data source",
+                    message="DSL V1.1 input step requires declared data source",
                     reason=f"input step {index} references $test_data.{entry}.{field} but data key '{data_key}' not found",
                     stage="dsl_v1_1_enrichment",
                 )

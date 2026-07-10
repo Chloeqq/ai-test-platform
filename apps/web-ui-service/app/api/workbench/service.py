@@ -1,34 +1,33 @@
 from __future__ import annotations
 
-from functools import partial
 import os
 import subprocess
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
-from fastapi import HTTPException, status
-from datetime_compat import UTC
-from shared_backend.case_ids import normalize_case_id
-
+from app.api.workbench import constants, store
 from app.core import page_analysis_rules
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.services import (
+    test_data_pool_service,
+    test_project_service,
     workbench_analysis_service,
     workbench_asset_service,
-    workbench_gate_service,
-    test_project_service,
     workbench_case_consistency_service,
+    workbench_gate_service,
+    workbench_project_service,
     workbench_reporting_service,
     workbench_review_service,
-    workbench_task_service,
     workbench_runtime_service,
-    test_data_pool_service,
+    workbench_task_service,
 )
+from fastapi import HTTPException, status
 
-from app.api.workbench import constants, store
-from app.services import workbench_project_service
+from datetime_compat import UTC
+from shared_backend.case_ids import normalize_case_id
 
 
 def _safe_case_id(raw: str) -> str:

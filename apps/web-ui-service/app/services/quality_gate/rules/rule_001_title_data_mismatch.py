@@ -11,7 +11,8 @@ data 段中对应字段的实际值语义一致。
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from shared_backend.quality_gate import (
     GateContext,
@@ -21,6 +22,7 @@ from shared_backend.quality_gate import (
     Severity,
     register_rule,
 )
+
 
 def _extract_value(data_entry: Any, *, field: str = "", provider: Any = None) -> str | None:
     """从 data 条目中提取实际数据值。

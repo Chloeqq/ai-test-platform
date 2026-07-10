@@ -6,7 +6,6 @@ from fastapi import APIRouter, Query
 
 from app.api.workbench.facade import build_workbench_facade
 
-
 router = APIRouter(tags=["workbench-scheduler"])
 facade = build_workbench_facade()
 

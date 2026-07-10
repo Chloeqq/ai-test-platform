@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.api.workbench.facade import build_workbench_facade
-from app.api.workbench.schemas import ExecutionGateDecisionActionPayload, ExecutionGateDecisionPayload
+from app.api.workbench.schemas import (
+    ExecutionGateDecisionActionPayload,
+    ExecutionGateDecisionPayload,
+)
 from app.core.database import get_db
-
 
 router = APIRouter(tags=["workbench-gate"])
 facade = build_workbench_facade()

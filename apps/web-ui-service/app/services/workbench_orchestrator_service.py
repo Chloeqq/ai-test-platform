@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
-import socket
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 from urllib import error as url_error
 from urllib import request as url_request
 
@@ -98,7 +98,7 @@ def post_json(
             status_code=bad_gateway_status,
             detail=f"orchestrator unavailable: {exc.reason}",
         ) from exc
-    except TimeoutError as exc:
+    except TimeoutError as exc:  # noqa: B025
         _LOGGER.warning(
             "orchestrator_post_timeout %s",
             summarize_http_context(
@@ -113,7 +113,7 @@ def post_json(
             status_code=gateway_timeout_status,
             detail="orchestrator request timed out",
         ) from exc
-    except socket.timeout as exc:
+    except TimeoutError as exc:  # noqa: B025
         _LOGGER.warning(
             "orchestrator_post_timeout %s",
             summarize_http_context(

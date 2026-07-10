@@ -9,10 +9,9 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from .routes import PREVIEW_INTENT_DETAIL, PREVIEW_DIAGNOSTICS
-
 from app.services import workbench_state_store
 
+from .routes import PREVIEW_DIAGNOSTICS, PREVIEW_INTENT_DETAIL
 
 PREVIEW_ROOT = workbench_state_store.WEB_UI_STATE_ROOT / "preview-test-points"
 _PREVIEW_ID_RE = re.compile(r"^preview-[a-f0-9]{16}$")

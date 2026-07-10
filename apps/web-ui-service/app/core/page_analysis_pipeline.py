@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.core.page_analysis_rules import build_page_semantic_model
 from shared_backend.schemas import (
     normalize_page_analysis_bundle_v1,
     normalize_page_object_draft_v1,
@@ -10,8 +11,8 @@ from shared_backend.schemas import (
     normalize_page_surface_v1,
     normalize_test_point_plan_v1,
 )
-from app.core.page_analysis_rules import build_page_semantic_model
-from shared_backend.type_utils import dict_value as _dict_value, list_value as _list_value
+from shared_backend.type_utils import dict_value as _dict_value
+from shared_backend.type_utils import list_value as _list_value
 
 LOGGER = logging.getLogger(__name__)
 

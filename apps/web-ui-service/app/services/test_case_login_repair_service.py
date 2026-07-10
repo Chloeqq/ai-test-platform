@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import yaml
 from sqlalchemy.orm import Session
 
-from app.models.page_object import PageElement, PageObject
-from app.repositories.page_object_governance_repository import PageObjectGovernanceRepository
+from app.models.page_object import PageElement
+from app.repositories.page_object_governance_repository import (
+    PageObjectGovernanceRepository,
+)
 from app.repositories.page_object_repository import PageObjectRepository
 from app.services.test_case_data_service import normalize_optional_text
 from app.services.test_case_service import (

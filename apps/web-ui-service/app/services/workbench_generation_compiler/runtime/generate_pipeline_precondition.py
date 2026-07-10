@@ -21,6 +21,8 @@ from typing import Any
 from shared_backend.execution_compiler import ExecutionCompilerError
 from shared_backend.quality_gate import (
     PRECONDITION_TYPES as _PRECONDITION_TYPES,
+)
+from shared_backend.quality_gate import (
     RESERVED_PRECONDITION_TYPES as _RESERVED_PRECONDITION_TYPES,
 )
 from shared_backend.type_utils import str_value as _normalized_text

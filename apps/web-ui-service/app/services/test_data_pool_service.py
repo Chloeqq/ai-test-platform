@@ -3,15 +3,18 @@ from __future__ import annotations
 import json
 import logging
 from typing import Any
-import yaml
 
+import yaml
 from fastapi import HTTPException, status
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.models.test_case import TestCase
-from app.models.test_data_pool import TestDataPool, TestDataPoolAuditLog, TestDataPoolItem
+from app.models.test_data_pool import (
+    TestDataPool,
+    TestDataPoolAuditLog,
+    TestDataPoolItem,
+)
 from app.repositories.test_case_repository import TestCaseRepository
 from app.repositories.test_data_pool_repository import TestDataPoolRepository
 from app.services.test_case_data_service import normalize_optional_text

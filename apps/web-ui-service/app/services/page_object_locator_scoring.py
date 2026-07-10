@@ -3,11 +3,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-import subprocess
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable
 from urllib.parse import unquote, urlsplit
 
 from app.services.page_element_code_policy import suggest_business_element_code

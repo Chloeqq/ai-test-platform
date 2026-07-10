@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from . import workbench_quality_gate_summary_service
-
 
 PageNormalizer = Callable[[str], str]
 SnapshotResolver = Callable[[str], dict[str, Any]]

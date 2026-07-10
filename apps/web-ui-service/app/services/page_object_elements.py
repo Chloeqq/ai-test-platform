@@ -4,58 +4,34 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, status
-from shared_backend.case_ids import normalize_client_code
-from shared_backend.type_utils import json_dict as _json_dict, json_list as _json_list
-from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.page_object import (
-    PageElement,
-    PageElementLocator,
-    PageElementVersion,
-    PageObject,
-    PageObjectCandidateElement,
-    PageObjectCandidateGroup,
-    PageObjectGovernanceLog,
-    PageObjectRecorderSession,
     PageObjectRef,
 )
+from app.repositories.page_object_repository import PageObjectRepository
+from app.repositories.recorder_repository import RecorderRepository
 from app.schemas.page_object import (
-    CandidateGroupMergePayload,
-    CandidateGroupPromotePayload,
-    CandidateRejectPayload,
-    PageElementCreate,
     PageElementUpdate,
     PageElementVersionCreate,
-    PageObjectCreate,
     PageObjectRefCreate,
-    PageObjectUpdate,
 )
-from app.repositories.page_object_repository import PageObjectRepository
-from app.repositories.page_object_governance_repository import PageObjectGovernanceRepository
-from app.repositories.recorder_repository import RecorderRepository
-from app.repositories.recorder_session_repository import RecorderSessionRepository
 from app.services import test_project_service
-
-from app.services.page_object_normalizers import (
-    CANDIDATE_PROMOTION_STATUS_VALUES,
-    CANDIDATE_STATUS_VALUES,
-)
-from app.services.page_object_serializers import (
-    _serialize_page_element,
-    _serialize_element_version,
-    _serialize_ref,
-)
 from app.services.page_object_candidates import (
     _candidate_rows_for_group,
     _refresh_group_status_from_candidates,
 )
+from app.services.page_object_serializers import (
+    _serialize_element_version,
+    _serialize_page_element,
+    _serialize_ref,
+)
+from shared_backend.case_ids import normalize_client_code
+from shared_backend.type_utils import json_list as _json_list
+
 
 def _svc():
     """惰性导入以避免循环依赖。"""

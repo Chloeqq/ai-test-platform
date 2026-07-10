@@ -4,12 +4,18 @@ import csv
 import io
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, TypeAlias
+from typing import Any, TypeAlias
 
 import yaml
 
-from app.models.test_case import TestCase, TestCaseDefect, TestCaseExecution, TestCaseVersion
+from app.models.test_case import (
+    TestCase,
+    TestCaseDefect,
+    TestCaseExecution,
+    TestCaseVersion,
+)
 from app.schemas.test_case import TestCaseDataConfig
 from shared_backend.type_utils import str_value as _text
 
