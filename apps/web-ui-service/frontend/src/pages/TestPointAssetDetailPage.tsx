@@ -615,9 +615,11 @@ function pointRows(item: Record<string, unknown>): Array<Record<string, unknown>
           reviewed_by: String(point.reviewed_by || snapshot.reviewed_by || "").trim(),
           gate_issues: (() => {
             const issues: string[] = [];
-            if (!point.has_assertion) issues.push("零断言");
-            if (point.has_candidate_step) issues.push("含未结构化步骤");
-            if (Number(point.warning_count || 0) > 0) issues.push(`${point.warning_count}个警告`);
+            const rawSteps = asRecordList(point.steps);
+            const hasAssert = rawSteps.some((s) => String(s.action || "").startsWith("assert"));
+            const hasCandidate = rawSteps.some((s) => String(s.action || "") === "candidate_step");
+            if (!hasAssert) issues.push("零断言");
+            if (hasCandidate) issues.push("含未结构化步骤");
             return issues;
           })(),
         };
