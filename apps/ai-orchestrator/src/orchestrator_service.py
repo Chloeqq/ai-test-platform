@@ -1191,6 +1191,16 @@ class OrchestratorService:
             runtime_logs=runtime_logs,
         )
         self._attach_requirement_quality_gate(parsed, stage="parse")
+        scope_text = self._requirement_parse_support.build_scope_text(
+            requirement=requirement,
+            prd_text=prd_text,
+            user_story=user_story,
+            git_diff=git_diff,
+            defect_ticket=defect_ticket,
+            runtime_logs=runtime_logs,
+            input_sources=input_sources,
+        )
+        parsed["scope_estimate"] = self._requirement_parse_support.estimate_input_scope(scope_text)
         self._record_requirement_parse_telemetry(
             requirement_spec=parsed,
             stage="parse",
