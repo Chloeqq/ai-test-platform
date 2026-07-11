@@ -37,6 +37,7 @@ from app.routers.workbench_reviews import router as workbench_reviews_router
 from app.routers.workbench_runs import router as workbench_runs_router
 from app.routers.workbench_scheduler import router as workbench_scheduler_router
 from app.routers.atp_api import router as atp_api_router
+from app.routers.behavior_registry_api import router as behavior_registry_api_router
 from app.routers.workbench_tasks import router as workbench_tasks_router
 from app.services.workbench_reporting_service import inject_allure_branding
 from shared_backend.observability import (
@@ -105,6 +106,7 @@ app.mount("/allure-snapshots", BrandedAllureStaticFiles(directory=str(ALLURE_SNA
 app.include_router(ui_router)
 app.include_router(health_router)
 app.include_router(atp_api_router)  # no JWT: public analysis endpoint
+app.include_router(behavior_registry_api_router, dependencies=_jwt_required)
 app.include_router(auth_router)
 app.include_router(dashboard_router, dependencies=_jwt_required)
 app.include_router(workbench_assets_router, dependencies=_jwt_required)
