@@ -12,7 +12,7 @@ from app.schemas.page_object_recorder import (
     RecorderSessionReplayPayload,
     RecorderSessionStopPayload,
 )
-from app.services import page_object_recorder_service
+from app.services import page_object_recorder_cases
 
 router = APIRouter(prefix="/api/page-objects/recorder", tags=["page-objects-recorder"])
 
@@ -22,7 +22,7 @@ def create_recorder_session(
     payload: RecorderSessionCreate,
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_recorder_service.create_recorder_session(db, payload)
+    item = page_object_recorder_cases.create_recorder_session(db, payload)
     return {"item": item}
 
 
@@ -36,7 +36,7 @@ def list_recorder_sessions(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    return page_object_recorder_service.list_recorder_sessions(
+    return page_object_recorder_cases.list_recorder_sessions(
         db,
         project_code=project_code,
         client=client,
@@ -52,7 +52,7 @@ def get_recorder_session(
     session_id: str,
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_recorder_service.get_recorder_session(db, session_id=session_id)
+    item = page_object_recorder_cases.get_recorder_session(db, session_id=session_id)
     return {"item": item}
 
 
@@ -63,7 +63,7 @@ def batch_delete_recorder_sessions(
     client: str = Query(default="web", min_length=2, max_length=10),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_recorder_service.batch_delete_recorder_sessions(
+    item = page_object_recorder_cases.batch_delete_recorder_sessions(
         db,
         project_code=project_code,
         client=client,
@@ -78,7 +78,7 @@ def get_recorder_session_playback(
     session_id: str,
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_recorder_service.get_recorder_session_playback(db, session_id=session_id)
+    item = page_object_recorder_cases.get_recorder_session_playback(db, session_id=session_id)
     return {"item": item}
 
 
@@ -88,7 +88,7 @@ def replay_recorder_session(
     payload: RecorderSessionReplayPayload | None = None,
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_recorder_service.replay_recorder_session(
+    item = page_object_recorder_cases.replay_recorder_session(
         db,
         session_id=session_id,
         timeout_seconds=(payload.timeout_seconds if payload else 120),
@@ -102,7 +102,7 @@ def heartbeat_recorder_session(
     payload: RecorderSessionHeartbeatPayload,
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_recorder_service.heartbeat_recorder_session(db, session_id=session_id, payload=payload)
+    item = page_object_recorder_cases.heartbeat_recorder_session(db, session_id=session_id, payload=payload)
     return {"item": item}
 
 
@@ -112,7 +112,7 @@ def stop_recorder_session(
     payload: RecorderSessionStopPayload,
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_recorder_service.stop_recorder_session(db, session_id=session_id, payload=payload)
+    item = page_object_recorder_cases.stop_recorder_session(db, session_id=session_id, payload=payload)
     return item
 
 
@@ -120,7 +120,7 @@ def stop_recorder_session(
 def cleanup_orphan_recorder_artifacts(
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_recorder_service.cleanup_orphan_recorder_artifacts(db)
+    item = page_object_recorder_cases.cleanup_orphan_recorder_artifacts(db)
     return {"item": item}
 
 
@@ -130,7 +130,7 @@ def create_test_case_draft_from_recorder_session(
     payload: RecorderSessionCreateCasePayload,
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_recorder_service.create_test_case_draft_from_session(
+    item = page_object_recorder_cases.create_test_case_draft_from_session(
         db,
         session_id=session_id,
         payload=payload,

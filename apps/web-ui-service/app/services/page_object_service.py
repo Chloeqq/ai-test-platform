@@ -46,6 +46,7 @@ from app.services.page_object_normalizers import (
     _normalize_page_element_status,
     _normalize_page_object_status,
     _normalize_project_code,
+    _validate_formal_element_governance_qualification,
 )
 from shared_backend.case_ids import normalize_client_code
 from shared_backend.type_utils import json_dict as _json_dict
