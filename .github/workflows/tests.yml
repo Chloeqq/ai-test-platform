@@ -39,7 +39,7 @@ jobs:
       - name: Architecture guard (file/function size, repo enforcement, layer imports)
         run: make check-architecture
 
-      - name: Run unit tests (两批: facade/precheck + 其余)
+      - name: "Run unit tests (两批: facade/precheck + 其余)"
         run: make test-unit
 
   static-baseline:
