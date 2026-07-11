@@ -133,11 +133,18 @@ def resolve_explicit_step(
     if hint_action == "login":
         return "login", None, None
 
-    if hint_action in {"click", "wait_for", "assert_visible", "assert_text"}:
+    if hint_action in {"click", "wait_for", "assert_visible"}:
         resolved_target = _resolve_target_code(explicit_target, page_element_alias_map)
         if not resolved_target:
             raise ValueError(f"{hint_action} step requires explicit target")
         return hint_action, resolved_target, None
+
+    # assert_text 必须保留断言文案；不能像 click/assert_visible 一样返回 None。
+    if hint_action == "assert_text":
+        resolved_target = _resolve_target_code(explicit_target, page_element_alias_map)
+        if not resolved_target:
+            raise ValueError("assert_text step requires explicit target")
+        return "assert_text", resolved_target, explicit_value
 
     if hint_action == "assert_attribute":
         resolved_target = _resolve_target_code(explicit_target, page_element_alias_map)

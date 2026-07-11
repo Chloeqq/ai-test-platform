@@ -303,8 +303,29 @@ def _is_business_type_allowed_for_action(action_type: str, assertion: str, busin
         return True, ""
 
     if action_type == "assert":
-        if assertion in {"visible", "text", "attribute"}:
+        if assertion == "text":
+            interactive_types = {
+                "button",
+                "link",
+                "menu",
+                "tab",
+                "switch",
+                "checkbox",
+                "radio",
+                "password_toggle",
+                "input",
+                "searchbox",
+                "textarea",
+            }
+            if normalized_type in interactive_types:
+                return False, (
+                    f"business_type `{normalized_type}` cannot be used as assert_text target"
+                )
             return True, ""
+
+        if assertion in {"visible", "attribute"}:
+            return True, ""
+
         return False, f"business_type `{normalized_type}` cannot be used for assertion `{assertion}`"
 
     return True, ""
