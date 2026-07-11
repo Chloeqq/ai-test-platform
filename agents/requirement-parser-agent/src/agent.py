@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,8 @@ from .schema import (
 from .tools.document_fetcher import DocumentFetchError, fetch_document
 from .tools.local_file_reader import LocalFileReadError, read_local_file
 from .tools.user_story_parser import parse_user_story
+
+_LOGGER = logging.getLogger(__name__)
 
 SOURCE_TYPE_ALIASES = {
     "swagger": "openapi",
@@ -243,18 +246,23 @@ class RequirementParserAgent:
 
     def _safe_fetch_document(self, url: str) -> dict[str, Any]:
         try:
-            return fetch_document(url)
-        except DocumentFetchError:
+            return fetch_document(url=url)
+        except DocumentFetchError as exc:
+            _LOGGER.warning("fetch_document failed for url=%s: %s", url, exc)
             return {}
         except Exception:
+            _LOGGER.exception("unexpected error fetching document url=%s", url)
             return {}
 
     def _safe_read_local_file(self, path: str) -> str:
         try:
-            return read_local_file(path, base_dir=str(self.repo_root))
-        except LocalFileReadError:
+            result = read_local_file(path=path, repo_root=self.repo_root)
+            return str(result.get("text", "")) if isinstance(result, dict) else ""
+        except LocalFileReadError as exc:
+            _LOGGER.warning("read_local_file failed for path=%s: %s", path, exc)
             return ""
         except Exception:
+            _LOGGER.exception("unexpected error reading local file path=%s", path)
             return ""
 
     @staticmethod
