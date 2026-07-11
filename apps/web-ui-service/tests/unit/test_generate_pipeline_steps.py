@@ -12,7 +12,7 @@ from pathlib import Path
 src_root = Path(__file__).resolve().parents[3] / "app" / "services" / "workbench_generation_compiler" / "runtime"
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from app.services.workbench_generation_compiler.runtime.generate_pipeline import (
+from app.services.workbench_generation_compiler.runtime.generate_pipeline_steps import (
     _allocate_and_format_case_id,
 )
 
@@ -86,7 +86,7 @@ class TestAllocateAndFormatCaseId:
 
 class TestNormalizeAndScopeTestPoints:
     def test_returns_expected_keys(self, monkeypatch) -> None:
-        from app.services.workbench_generation_compiler.runtime.generate_pipeline import (
+        from app.services.workbench_generation_compiler.runtime.generate_pipeline_steps import (
             _normalize_and_scope_test_points,
         )
 
@@ -108,7 +108,7 @@ class TestNormalizeAndScopeTestPoints:
         assert "test_points_payload" in result
 
     def test_scopes_to_selected_intents(self, monkeypatch) -> None:
-        from app.services.workbench_generation_compiler.runtime.generate_pipeline import (
+        from app.services.workbench_generation_compiler.runtime.generate_pipeline_steps import (
             _normalize_and_scope_test_points,
         )
 
@@ -140,7 +140,7 @@ class TestNormalizeAndScopeTestPoints:
 
 class TestHandleGenerationException:
     def test_reraises_execution_compiler_error(self) -> None:
-        from app.services.workbench_generation_compiler.runtime.generate_pipeline import (
+        from app.services.workbench_generation_compiler.runtime.generate_pipeline_steps import (
             _handle_generation_exception,
         )
         from shared_backend.execution_compiler import ExecutionCompilerError
@@ -160,7 +160,7 @@ class TestHandleGenerationException:
             )
 
     def test_reraises_unexpected_exception(self) -> None:
-        from app.services.workbench_generation_compiler.runtime.generate_pipeline import (
+        from app.services.workbench_generation_compiler.runtime.generate_pipeline_steps import (
             _handle_generation_exception,
         )
 

@@ -4,10 +4,10 @@ from __future__ import annotations
 from app.services.workbench_reporting_service import (
     normalize_failure_source_value,
     normalize_failure_evidence_meta,
-    build_report_allure_pending,
     _safe_report_slug,
     _parse_last_json_object,
 )
+from app.services.workbench_reporting_views import build_report_allure_pending
 
 
 class TestNormalizeFailureSourceValue:

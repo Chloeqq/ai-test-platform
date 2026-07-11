@@ -2,12 +2,14 @@ import json
 
 import pytest
 
-from app.api.workbench.facade import (
+from app.api.workbench._helpers import (
+    read_json_file as _read_json_file,
+    write_json_file as _write_json_file,
+)
+from app.api.workbench.facade_helpers import (
     _candidate_from_asset_point,
     _point_review_status,
-    _read_json_file,
     _review_status_from_point,
-    _write_json_file,
 )
 from app.services import workbench_asset_service
 
