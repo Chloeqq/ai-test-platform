@@ -313,88 +313,11 @@ def _build_expected_assertions(
 ) -> int:
     """从 expected 文本生成对应的 DSL 断言步骤。返回生成的断言数量。
 
-    质量规则 (P0):
-    - negative/boundary/format: 必须用 assert_text 验证错误文案，不可降级为 assert_url
-    - functional: 无可匹配 token 时不捏造断言，由调用方标记 requires_review
+    Phase 5: 硬编码 token 匹配已移除。
+    断言生成由 Behavior Registry 接管（调用方在 _steps_from_candidate 中处理）。
+    此函数保留作为未来扩展点（如 PageHook 的 post_click_assertions）。
     """
-    expected_text = _normalized_text(expected)
-    count_before = len(structured_steps)
-
-    home_code = page_config.home_element_code if page_config else _c.HOME_ELEMENT_CODE
-    home_name = page_config.home_element_name if page_config else _c.HOME_ELEMENT_NAME
-    fallback_code = page_config.fallback_element_code if page_config else _c.LAST_ELEMENT_FALLBACK_CODE
-
-    _needs_strong_assertion = point_type in _c.STRONG_ASSERTION_REQUIRED_TYPES
-
-    if any(token in expected_text for token in _c.ASSERT_VISIBLE_TOKENS):
-        structured_steps.append(
-            {
-                "action": ACTION_ASSERT_VISIBLE,
-                "target": f"{_c.ELEMENT_PREFIX}{home_code}",
-                "target_name": home_name,
-                "raw_text": expected_text or _c.ASSERT_VISIBLE_FALLBACK_TEXT,
-            }
-        )
-        append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_VISIBLE, home_name))
-    elif any(token in expected_text for token in _c.ASSERT_TEXT_TOKENS):
-        error_msg = extract_error_message(expected_text)
-        # FIX(Phase B): 不使用 involved_codes[-1] 作为 assert_text 的 target。
-        # 最后一个操作元素通常是 button(如 login-submit-btn)，错误信息不会出现在 button 上。
-        # 查找 role 匹配的元素，找不到则留空标记 RESOLVE_NEEDED。
-        target_code = _find_assert_target(involved_codes)
-        if target_code:
-            structured_steps.append(
-                {
-                    "action": ACTION_ASSERT_TEXT,
-                    "target": f"{_c.ELEMENT_PREFIX}{target_code}",
-                    "target_name": target_code,
-                    "value": error_msg,
-                    "raw_text": expected_text or _c.ASSERT_TEXT_FALLBACK_TEXT,
-                }
-            )
-            append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_TEXT, target_code, error_msg))
-        else:
-            warnings.append(
-                _c.MSG_NEEDS_MANUAL_STRUCTURING + f"assert_text target not found for '{error_msg[:30]}'"
-            )
-    elif any(token in expected_text for token in _c.ASSERT_URL_TOKENS):
-        if not has_negation_before(expected_text, _c.ASSERT_URL_TOKENS):
-            # P0: negative/boundary/format 场景禁止只生成 assert_url
-            # 必须生成 assert_text 验证错误文案
-            if _needs_strong_assertion:
-                error_msg = extract_error_message(expected_text)
-                # FIX(Phase B): 同上方修复，不使用 involved_codes[-1] 作为 target
-                target_code = _find_assert_target(involved_codes)
-                if target_code:
-                    structured_steps.append(
-                        {
-                            "action": ACTION_ASSERT_TEXT,
-                            "target": f"{_c.ELEMENT_PREFIX}{target_code}",
-                            "target_name": target_code,
-                            "value": error_msg,
-                            "raw_text": expected_text or _c.ASSERT_TEXT_FALLBACK_TEXT,
-                        }
-                    )
-                    append_unique(
-                        steps_hint,
-                        format_steps_hint(ACTION_ASSERT_TEXT, target_code, error_msg),
-                    )
-                else:
-                    warnings.append(
-                        _c.MSG_NEEDS_MANUAL_STRUCTURING + f"strong assertion target not found for '{error_msg[:30]}'"
-                    )
-            else:
-                url_fallback = page_config.login_url if page_config else _c.ASSERT_URL_FALLBACK
-                structured_steps.append(
-                    {
-                        "action": ACTION_ASSERT_URL,
-                        "value": url_fallback,
-                        "raw_text": expected_text or _c.ASSERT_URL_FALLBACK_TEXT,
-                    }
-                )
-                append_unique(steps_hint, format_steps_hint(ACTION_ASSERT_URL, url_fallback))
-
-    return len(structured_steps) - count_before
+    return 0  # Token matching removed — Behavior Registry handles assertion generation
 
 
 
