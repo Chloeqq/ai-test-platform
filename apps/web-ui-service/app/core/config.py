@@ -143,6 +143,21 @@ class Settings(BaseModel):
     redis_url: str = Field(default_factory=lambda: os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0"))
     redis_enabled: bool = Field(default_factory=lambda: _env_bool("REDIS_ENABLED", True))
     redis_prefix: str = Field(default_factory=lambda: os.getenv("REDIS_PREFIX", "aitest"))
+    minio_enabled: bool = Field(default_factory=lambda: _env_bool("MINIO_ENABLED", False))
+    minio_endpoint: str = Field(default_factory=lambda: os.getenv("MINIO_ENDPOINT", ""))
+    minio_access_key: str = Field(default_factory=lambda: os.getenv("MINIO_ACCESS_KEY", ""))
+    minio_secret_key: str = Field(default_factory=lambda: os.getenv("MINIO_SECRET_KEY", ""))
+    minio_requirement_bucket: str = Field(
+        default_factory=lambda: os.getenv("MINIO_REQUIREMENT_BUCKET", "ai-requirements")
+    )
+    minio_secure: bool = Field(default_factory=lambda: _env_bool("MINIO_SECURE", False))
+    minio_region: str = Field(default_factory=lambda: os.getenv("MINIO_REGION", ""))
+    requirement_upload_max_bytes: int = Field(
+        default_factory=lambda: int(os.getenv("REQUIREMENT_UPLOAD_MAX_BYTES", str(20 * 1024 * 1024)))
+    )
+    requirement_upload_allowed_exts: str = Field(
+        default_factory=lambda: os.getenv("REQUIREMENT_UPLOAD_ALLOWED_EXTS", ".docx,.pdf,.md")
+    )
     orchestrator_timeout_seconds: int = Field(default_factory=lambda: int(os.getenv("ORCHESTRATOR_TIMEOUT_SECONDS", "300")))
     jwt_secret_key: str = Field(default_factory=_default_jwt_secret_key)
     jwt_algorithm: str = Field(default_factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))

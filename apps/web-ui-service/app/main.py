@@ -39,6 +39,7 @@ from app.routers.workbench_scheduler import router as workbench_scheduler_router
 from app.routers.atp_api import router as atp_api_router
 from app.routers.behavior_registry_api import router as behavior_registry_api_router
 from app.routers.workbench_tasks import router as workbench_tasks_router
+from app.routers.requirement_documents import router as requirement_documents_router
 from app.services.workbench_reporting_service import inject_allure_branding
 from shared_backend.observability import (
     configure_logging,
@@ -118,6 +119,7 @@ app.include_router(workbench_reviews_router, dependencies=_jwt_required)
 app.include_router(workbench_runs_router, dependencies=_jwt_required)
 app.include_router(workbench_scheduler_router, dependencies=_jwt_required)
 app.include_router(workbench_tasks_router, dependencies=_jwt_required)
+app.include_router(requirement_documents_router, dependencies=_jwt_required)
 app.include_router(quality_dashboard_router, dependencies=_jwt_required)
 app.include_router(quality_eval_router, dependencies=_jwt_required)
 app.include_router(test_cases_router, dependencies=_jwt_required)

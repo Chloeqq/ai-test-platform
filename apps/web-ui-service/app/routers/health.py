@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.database import engine
+from app.core.minio_client import ping_minio
 from app.core.redis_client import ping_redis
 
 router = APIRouter(tags=["health"])
@@ -29,6 +30,8 @@ def readiness() -> dict[str, object]:
 
     redis_ok = ping_redis()
 
+    minio_ok = ping_minio() if settings.minio_enabled else False
+
     orchestrator_ok = False
     orchestrator_url = settings.orchestrator_url.rstrip("/")
     if orchestrator_url:
@@ -47,6 +50,10 @@ def readiness() -> dict[str, object]:
         "redis": {
             "enabled": settings.redis_enabled,
             "ok": redis_ok if settings.redis_enabled else None,
+        },
+        "minio": {
+            "enabled": settings.minio_enabled,
+            "ok": minio_ok if settings.minio_enabled else None,
         },
         "orchestrator": {"url": orchestrator_url, "ok": orchestrator_ok},
     }

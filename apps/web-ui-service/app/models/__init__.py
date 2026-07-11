@@ -26,6 +26,7 @@ from app.models.quality_eval import (
     QualityEvalResult,
     QualityEvalRun,
 )
+from app.models.requirement_document import RequirementDocument
 from app.models.test_case import (
     TestCase,
     TestCaseDefect,
@@ -88,4 +89,5 @@ __all__ = [
     "QualityEvalItem",
     "QualityEvalResult",
     "QualityEvalRun",
+    "RequirementDocument",
 ]

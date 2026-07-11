@@ -39,6 +39,13 @@ services:
       PAGE_OBJECT_SOURCE_ROOTS: ${PAGE_OBJECT_SOURCE_ROOTS:-/workspace/mall-admin-web}
       PAGE_OBJECT_SOURCE_ROOTS_BY_PROJECT: '${PAGE_OBJECT_SOURCE_ROOTS_BY_PROJECT:-{"mall":"/workspace/mall-admin-web"}}'
       PAGE_OBJECT_SOURCE_ROOTS_MALL: ${PAGE_OBJECT_SOURCE_ROOTS_MALL:-/workspace/mall-admin-web}
+      MINIO_ENABLED: ${MINIO_ENABLED:-true}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_REQUIREMENT_BUCKET: ${MINIO_REQUIREMENT_BUCKET:-ai-requirements}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+      MINIO_REGION: ${MINIO_REGION:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -53,6 +60,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
       orchestrator:
         condition: service_healthy
@@ -147,6 +156,26 @@ services:
     networks:
       - platform
 
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "${MINIO_HOST_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.3
     restart: unless-stopped
@@ -200,6 +229,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  minio_data:
   elasticsearch_data:
   platform_logs:
 
