@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from app.models.page_object import PageElement
+from shared_backend.db import get_db_session as SessionLocal
 from shared_backend.observability import summarize_http_context
 from shared_backend.step_fields import STEP_FIELD_NAMES
 from shared_backend.type_utils import str_value as _normalized_text
@@ -676,4 +677,16 @@ def _intent_product_metadata(
 
 
 # ---- 函数体已移至子模块（单向依赖: format → orchestrate → steps）----
-# 导入放在文件末尾：子模块 import 本文件时，所有 leaf 函数定义（线 1-703）已加载完毕
+# 导入放在文件末尾：子模块 import 本文件时，所有 leaf 函数定义已加载完毕
+# re-exports for _svc() lazy-lookup (restored after accidental deletion in f3adab3)
+from .generate_pipeline_format import _enrich_product_case_yaml_v1_1  # noqa: E402
+from .generate_pipeline_orchestrate import (  # noqa: E402
+    _build_direct_candidate_orchestrator_result,
+    _enrich_test_points_with_candidate_snapshots,
+    _extract_candidate_snapshots,
+    _format_product_case_yaml,
+    _load_page_object_from_db,
+    _resolve_page_object_from_assets,
+    _resolve_page_object_from_db,
+    resolve_page_object,
+)
