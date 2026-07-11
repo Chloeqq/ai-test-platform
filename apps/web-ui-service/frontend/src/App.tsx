@@ -11,6 +11,7 @@ import { CaseTagsPage } from "./pages/CaseTagsPage";
 import { CaseVersionsPage } from "./pages/CaseVersionsPage";
 import { ApiContractsPage } from "./pages/ApiContractsPage";
 import { DataTemplatesPage } from "./pages/DataTemplatesPage";
+import { BehaviorRegistryPage } from "./pages/BehaviorRegistryPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DefectsPage } from "./pages/DefectsPage";
 import { ExecutionPlansPage } from "./pages/ExecutionPlansPage";
@@ -88,6 +89,7 @@ export function App() {
         <Route path="/assets/page-objects/recorder" element={<PageObjectRecorderPage />} />
         <Route path="/assets/page-objects/recorder/sessions/:sessionId" element={<PageObjectRecorderPage />} />
         <Route path="/assets/api-contracts" element={<ApiContractsPage />} />
+        <Route path="/assets/behavior-registry" element={<BehaviorRegistryPage />} />
         <Route path="/assets/data-templates" element={<DataTemplatesPage />} />
         <Route path="/quality/dashboard" element={<QualityDashboardPage />} />
         <Route path="/quality/eval" element={<QualityEvalDashboardPage />} />
