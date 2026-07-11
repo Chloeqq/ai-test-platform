@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import http from "../utils/http";
+import http from "../lib/http";
 
 interface Behavior {
   id: number; behavior_code: string; intent_type: string; scenario: string;
