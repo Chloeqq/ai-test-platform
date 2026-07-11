@@ -1,6 +1,29 @@
 from __future__ import annotations
 
-from app.services.page_object_import_service import _element_name, parse_data_testid_guidelines
+from app.services.page_object_import_service import _element_name, parse_data_testid_guidelines, parse_data_testid_inventory
+
+
+def test_parse_data_testid_inventory_includes_login_error_messages() -> None:
+    markdown = """# data-testid 全量导出清单
+
+## 按页面汇总
+
+### src/views/normal/login/index.vue
+
+- 文件：`src/views/normal/login/index.vue`
+
+| testid | 类型 | 动态 | Playwright 定位 | 行号 |
+| --- | --- | --- | --- | --- |
+| `login-page` | page | 否 | `page.getByTestId('login-page')` | 91 |
+| `login-username-error` | error-message | 否 | `page.getByTestId('login-username-error')` | 109 |
+| `login-password-error` | error-message | 否 | `page.getByTestId('login-password-error')` | 131 |
+"""
+
+    rows = {row.element_code: row for row in parse_data_testid_inventory(markdown, page_code_filter="login")}
+
+    assert set(rows) == {"login-page", "login-username-error", "login-password-error"}
+    assert rows["login-username-error"].page_code == "login"
+    assert rows["login-username-error"].business_type == "text"
 
 
 def test_parse_data_testid_guidelines_prefers_chinese_heading_for_page_name() -> None:

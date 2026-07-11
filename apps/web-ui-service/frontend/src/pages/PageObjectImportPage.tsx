@@ -74,6 +74,7 @@ export function PageObjectImportPage() {
   const [searchParams] = useSearchParams();
   const [projectCode, setProjectCode] = useState<string>(normalizeProjectCode(searchParams.get("project") || DEFAULT_PROJECT_CODE));
   const [pageCode, setPageCode] = useState<string>(String(searchParams.get("page_code") || "").trim());
+  const [sourceType, setSourceType] = useState<"data_testid_guidelines" | "data_testid_inventory">("data_testid_inventory");
   const [dataTestidFile, setDataTestidFile] = useState<File | null>(null);
   const [runtimeDomFile, setRuntimeDomFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
@@ -100,11 +101,11 @@ export function PageObjectImportPage() {
 
   async function handlePreview() {
     if (!dataTestidFile) {
-      setErrorText("请先上传 data-testid-guidelines.md。");
+      setErrorText("请先上传 data-testid 清单。");
       return;
     }
     if (dataTestidFile.size <= 0) {
-      setErrorText("data-testid-guidelines.md 文件为空，请重新选择包含“已落地清单”的 Markdown 文件。");
+      setErrorText("data-testid 清单文件为空，请重新选择有效的 Markdown 文件。");
       return;
     }
     setBusy(true);
@@ -114,7 +115,7 @@ export function PageObjectImportPage() {
       const payload = await previewPageObjectImport({
         project_code: projectCode,
         client: "web",
-        source_type: "data_testid_guidelines",
+        source_type: sourceType,
         page_code: pageCode,
         data_testid_guidelines: dataTestidFile,
         runtime_dom_selectors: runtimeDomFile,
@@ -188,6 +189,13 @@ export function PageObjectImportPage() {
             <input value={pageCode} onChange={(event) => setPageCode(event.target.value.trim())} placeholder="可选，例如 login / product" disabled={busy} />
           </label>
           <label>
+            清单格式
+            <select value={sourceType} onChange={(event) => setSourceType(event.target.value as typeof sourceType)} disabled={busy}>
+              <option value="data_testid_inventory">data-testid-inventory.md（推荐）</option>
+              <option value="data_testid_guidelines">data-testid-guidelines.md（兼容旧格式）</option>
+            </select>
+          </label>
+          <label>
             权威清单
             <input
               type="file"
@@ -198,7 +206,7 @@ export function PageObjectImportPage() {
                 setPreview(null);
                 setApplyResult(null);
                 if (file && file.size <= 0) {
-                  setErrorText("data-testid-guidelines.md 文件为空，请重新选择包含“已落地清单”的 Markdown 文件。");
+                  setErrorText("data-testid 清单文件为空，请重新选择有效的 Markdown 文件。");
                 } else {
                   setErrorText("");
                 }
@@ -206,7 +214,9 @@ export function PageObjectImportPage() {
               disabled={busy}
             />
             <small>
-              必填：data-testid-guidelines.md，只解析“已落地清单”。
+              {sourceType === "data_testid_inventory"
+                ? "必填：data-testid-inventory.md，解析“按页面汇总”中的 data-testid 表格。"
+                : "必填：data-testid-guidelines.md，只解析“已落地清单”。"}
               {dataTestidFile ? ` 当前文件：${dataTestidFile.name} / ${formatFileSize(dataTestidFile.size)}` : ""}
             </small>
           </label>
