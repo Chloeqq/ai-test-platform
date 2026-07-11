@@ -169,7 +169,7 @@ def resolve_explicit_step(
             raise ValueError("assert_metric step requires explicit target")
         rule = explicit_value
         if rule is None or str(rule).strip() == "":
-            rule = "number"
+            raise ValueError("assert_metric step requires explicit rule")
         return "assert_metric", resolved_target, rule
 
     if hint_action == "assert_url":
