@@ -179,10 +179,31 @@ class RequirementParseSupport:
             # Pure-LLM path: keep parser output as-is, no secondary rule harmonization.
             return parsed
         except Exception as exc:
-            reason_prefix = "requirement parser failed under forced llm mode"
-            if not force_llm_mode:
-                reason_prefix = "requirement parser failed (pure llm mode, fallback removed)"
-            raise RuntimeError(f"{reason_prefix}: {str(exc)[:240]}") from exc
+            if force_llm_mode:
+                raise RuntimeError(
+                    f"requirement parser failed under forced llm mode: {str(exc)[:240]}"
+                ) from exc
+            # FIX: LLM failure → fall back to deterministic mock parser
+            _LOGGER.warning(
+                "requirement parser LLM failed (model=%s), falling back to mock parser: %s",
+                os.getenv("OPENAI_MODEL", ""),
+                str(exc)[:120],
+            )
+            return self._build_pytest_requirement_spec(
+                requirement=requirement,
+                page=page,
+                source=source,
+                input_sources=input_sources,
+                openapi_spec=openapi_spec,
+                prd_text=prd_text,
+                prd_url=prd_url,
+                user_story=user_story,
+                git_diff=git_diff,
+                git_diff_path=git_diff_path,
+                openapi_url=openapi_url,
+                defect_ticket=defect_ticket,
+                runtime_logs=runtime_logs,
+            )
         finally:
             if isinstance(temp_path, Path):
                 try:
