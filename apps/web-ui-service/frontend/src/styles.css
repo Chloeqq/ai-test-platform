@@ -5073,6 +5073,37 @@ th {
   display: block;
 }
 
+.aiw-warning-box-soft {
+  border-color: #ffe3b3;
+  background: #fffdf7;
+}
+
+.aiw-doc-upload {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.aiw-doc-upload-btn {
+  cursor: pointer;
+  margin: 0;
+}
+
+.aiw-doc-upload-btn.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.aiw-doc-upload-hint {
+  font-size: 12px;
+}
+
+.aiw-doc-upload-msg {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .aiw-error-box {
   border: 1px solid #f3b2b2;
   border-radius: 10px;

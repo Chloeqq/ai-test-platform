@@ -1,4 +1,4 @@
-import { deleteJson, getJson, postJson, putJson } from "../lib/http";
+import { deleteJson, getJson, postFormData, postJson, putJson } from "../lib/http";
 
 export interface ProjectItem {
   project_code: string;
@@ -223,6 +223,32 @@ function toLooseQuery(params: Record<string, string>): string {
 
 export async function listProjects(): Promise<ListProjectsResponse> {
   return getJson<ListProjectsResponse>("/api/workbench/projects");
+}
+
+export interface RequirementDocumentUploadItem {
+  document_id: number;
+  parsed_text: string;
+  parse_status: string; // pending | parsed | partial | failed
+  object_key: string;
+  filename: string;
+  source_type: string;
+}
+
+export interface RequirementDocumentUploadResponse {
+  item: RequirementDocumentUploadItem;
+}
+
+export async function uploadRequirementDocument(
+  projectCode: string,
+  file: File,
+): Promise<RequirementDocumentUploadResponse> {
+  const formData = new FormData();
+  formData.append("project_code", projectCode);
+  formData.append("file", file);
+  return postFormData<RequirementDocumentUploadResponse>(
+    "/api/workbench/requirement-documents/upload",
+    formData,
+  );
 }
 
 export async function listTestProjects(): Promise<{ items?: Array<ProjectItem & Record<string, unknown>> }> {

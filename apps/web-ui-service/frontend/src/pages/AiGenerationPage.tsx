@@ -10,6 +10,7 @@ import {
   previewTestPoints,
   type PreviewTestPointsResponse,
   type ProjectItem,
+  uploadRequirementDocument,
 } from "../api/workbench";
 import { DEFAULT_PROJECT_CODE, normalizeProjectCode, projectOptions } from "../config/projects";
 
@@ -65,6 +66,20 @@ function nowText(): string {
 
 function toText(value: unknown): string {
   return String(value || "").trim();
+}
+
+// 文档解析结果与用户手动补充用分隔符区分，便于追溯哪些是文档原文。
+const DOC_RESULT_MARKER = "--- 文档解析结果 ---";
+const USER_SUPPLEMENT_MARKER = "--- 用户补充 ---";
+
+function mergeDocumentIntoRequirement(existing: string, parsedText: string): string {
+  const supplementIndex = existing.indexOf(USER_SUPPLEMENT_MARKER);
+  // 保留用户补充段：若已存在标记，取其后内容；否则把原有整段视作用户补充。
+  const supplement =
+    supplementIndex >= 0
+      ? existing.slice(supplementIndex + USER_SUPPLEMENT_MARKER.length).replace(/^\s+/, "").trimEnd()
+      : existing.trim();
+  return `${DOC_RESULT_MARKER}\n${parsedText.trim()}\n\n${USER_SUPPLEMENT_MARKER}\n${supplement}`;
 }
 
 function normalizeSteps(value: unknown): string[] {
@@ -286,6 +301,9 @@ export function AiGenerationPage() {
   const [precheckErrorText, setPrecheckErrorText] = useState<string>("");
   const [precheckByIntentId, setPrecheckByIntentId] = useState<Record<string, CandidatePrecheckState>>({});
   const [lastSyncedSignature, setLastSyncedSignature] = useState<string>("");
+  const [uploadingDoc, setUploadingDoc] = useState<boolean>(false);
+  const [uploadDocError, setUploadDocError] = useState<string>("");
+  const [uploadDocNote, setUploadDocNote] = useState<string>("");
 
   function appendEvent(event: Omit<PipelineEvent, "id" | "at">) {
     setEvents((prev) => [
@@ -346,6 +364,11 @@ export function AiGenerationPage() {
   const qualityDecision = toText(qualityGate.decision).toLowerCase() || "unknown";
   const qualityBlocked = qualityDecision === "block";
   const blockers = Array.isArray(qualityGate.blockers) ? qualityGate.blockers : [];
+  const scopeEstimate = previewItem.scope_estimate && typeof previewItem.scope_estimate === "object"
+    ? (previewItem.scope_estimate as Record<string, unknown>)
+    : {};
+  const scopeLevel = toText(scopeEstimate.level).toLowerCase();
+  const scopeMessage = toText(scopeEstimate.message);
   const parseConfidence = Number(previewItem.parse_confidence || requirementSpec.parse_confidence || 0);
   const selectedPrecheckStates = selectedCandidates
     .map((candidate) => precheckByIntentId[candidate.intentId])
@@ -698,7 +721,42 @@ export function AiGenerationPage() {
     || (activeStep === 2 && (!previewPayload || extracting))
     || (activeStep === 3 && (!candidates.length || qualityBlocked));
 
+  async function handleRequirementFileUpload(file: File | null): Promise<void> {
+    if (!file) {
+      return;
+    }
+    const projectCode = form.project.trim();
+    if (!projectCode) {
+      setUploadDocError("请先选择项目再上传需求文档。");
+      setUploadDocNote("");
+      return;
+    }
+    setUploadingDoc(true);
+    setUploadDocError("");
+    setUploadDocNote("");
+    try {
+      const response = await uploadRequirementDocument(projectCode, file);
+      const item = response.item;
+      const parsed = toText(item.parsed_text);
+      if (parsed) {
+        setForm((prev) => ({ ...prev, requirement: mergeDocumentIntoRequirement(prev.requirement, parsed) }));
+      }
+      if (item.parse_status === "parsed") {
+        setUploadDocNote(`已解析并填入需求描述：${toText(item.filename) || "文档"}`);
+      } else if (item.parse_status === "partial") {
+        setUploadDocNote("部分解析成功，请检查解析结果后再提取测试点。");
+      } else {
+        setUploadDocError("未能从文档提取到有效内容，原始文件已存档，可手动输入需求。");
+      }
+    } catch (error) {
+      setUploadDocError(error instanceof Error ? error.message : "需求文档上传失败");
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+
   function renderStepMain() {
+    const uploadDisabled = uploadingDoc || extracting || !form.project.trim();
     if (activeStep === 1) {
       return (
         <section className="panel aiw-panel">
@@ -768,6 +826,27 @@ export function AiGenerationPage() {
                 disabled={extracting}
               />
             </label>
+            <div className="span-3 aiw-doc-upload">
+              <label className={`button aiw-doc-upload-btn${uploadDisabled ? " is-disabled" : ""}`}>
+                {uploadingDoc ? "解析中…" : "上传需求文档"}
+                <input
+                  type="file"
+                  accept=".docx,.pdf,.md"
+                  style={{ display: "none" }}
+                  disabled={uploadDisabled}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    void handleRequirementFileUpload(file);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              <span className="muted aiw-doc-upload-hint">
+                支持 .docx / .pdf / .md，≤20MB；解析为结构化 Markdown 后填入下方需求描述
+              </span>
+              {uploadDocError ? <p className="error aiw-doc-upload-msg">{uploadDocError}</p> : null}
+              {uploadDocNote ? <p className="muted aiw-doc-upload-msg">{uploadDocNote}</p> : null}
+            </div>
             <label className="span-3">
               需求描述
               <textarea
@@ -824,6 +903,12 @@ export function AiGenerationPage() {
               <strong>{blockers.length}</strong>
             </article>
           </div>
+          {scopeMessage && (scopeLevel === "warn" || scopeLevel === "block") ? (
+            <section className={`aiw-warning-box ${scopeLevel === "block" ? "" : "aiw-warning-box-soft"}`}>
+              <strong>{scopeLevel === "block" ? "输入范围超上限" : "输入范围偏大"}</strong>
+              <p className="muted">{scopeMessage}</p>
+            </section>
+          ) : null}
           {qualityBlocked ? (
             <section className="aiw-warning-box">
               <strong>门禁阻断，当前不可进入生成阶段。</strong>
