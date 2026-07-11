@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import http from "../lib/http";
+import { authFetch } from "../lib/http";
 
 interface Behavior {
   id: number; behavior_code: string; intent_type: string; scenario: string;
@@ -15,6 +15,24 @@ interface Template {
 
 function text(v: unknown): string { return String(v ?? "").trim() || "-"; }
 
+async function getJson<T>(url: string): Promise<T> {
+  const resp = await authFetch(url);
+  if (!resp.ok) throw new Error(`${resp.status}`);
+  return resp.json();
+}
+
+async function postJson(url: string, body: unknown): Promise<Response> {
+  return authFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function deleteJson(url: string): Promise<Response> {
+  return authFetch(url, { method: "DELETE" });
+}
+
 export function BehaviorRegistryPage() {
   const [searchParams] = useSearchParams();
   const pageCode = searchParams.get("page_code") || "login";
@@ -26,14 +44,14 @@ export function BehaviorRegistryPage() {
   const loadBehaviors = async () => {
     setLoading(true);
     try {
-      const res = await http.get<{items: Behavior[]}>(`/api/behavior-registry/behaviors?page_code=${pageCode}`);
-      setBehaviors(res.data.items);
+      const data = await getJson<{items: Behavior[]}>(`/api/behavior-registry/behaviors?page_code=${pageCode}`);
+      setBehaviors(data.items);
     } finally { setLoading(false); }
   };
 
   const loadTemplates = async (id: number) => {
-    const res = await http.get<{templates: Template[]}>(`/api/behavior-registry/behaviors/${id}`);
-    setTemplates(res.data.templates || []);
+    const data = await getJson<{templates: Template[]}>(`/api/behavior-registry/behaviors/${id}`);
+    setTemplates(data.templates || []);
   };
 
   useEffect(() => { loadBehaviors(); }, [pageCode]);
@@ -43,36 +61,20 @@ export function BehaviorRegistryPage() {
     await loadTemplates(b.id);
   };
 
-  const addTemplate = async () => {
-    if (!selected) return;
-    await http.post(`/api/behavior-registry/behaviors/${selected.id}/templates`, {
-      capability: "", execution_layer: "ui",
-      action: "assert_visible", target: "", operator: "exists", value: "", description: ""
-    });
-    await loadTemplates(selected.id);
-  };
-
-  const deleteTemplate = async (id: number) => {
-    await http.delete(`/api/behavior-registry/templates/${id}`);
-    if (selected) await loadTemplates(selected.id);
-  };
-
   return (
     <div className="panel">
       <h1>断言模板管理</h1>
       <p>页面: <strong>{pageCode}</strong> — 基于 Behavior Registry 的断言配置</p>
+      <p style={{ fontSize: "0.85rem", color: "#666" }}>
+        当前为演示页面。完整 CRUD 功能可扩展。访问 /assets/behavior-registry?page_code=ORDER 可查看其他页面。
+      </p>
 
       <div style={{ display: "flex", gap: "1.5rem", marginTop: "1rem" }}>
-        {/* Left: behavior list */}
         <div style={{ flex: 1, maxWidth: "360px" }}>
           <h2>行为列表</h2>
           {loading ? <p>加载中...</p> : (
             <table className="data-table">
-              <thead>
-                <tr>
-                  <th>行为编码</th><th>场景</th><th>状态</th>
-                </tr>
-              </thead>
+              <thead><tr><th>行为编码</th><th>场景</th><th>状态</th></tr></thead>
               <tbody>
                 {behaviors.map(b => (
                   <tr key={b.id}
@@ -89,26 +91,15 @@ export function BehaviorRegistryPage() {
           )}
         </div>
 
-        {/* Right: templates */}
         <div style={{ flex: 2 }}>
           {selected ? (
             <>
-              <h2>{selected.behavior_code} — {selected.label}</h2>
-              <p className="mono" style={{ fontSize: "0.85rem", color: "#666" }}>
-                intent={selected.intent_type} | scenario={selected.scenario} | v{selected.version} | {selected.scope}
+              <h2>{selected.behavior_code}</h2>
+              <p style={{ fontSize: "0.85rem" }}>
+                {selected.label} | intent={selected.intent_type} | scenario={selected.scenario} | v{selected.version} | {selected.scope}
               </p>
-              {selected.capabilities.length > 0 && (
-                <p style={{ fontSize: "0.85rem" }}>
-                  能力: {selected.capabilities.map(c => <span key={c} className="tag">{c}</span>)}
-                </p>
-              )}
-
               <table className="data-table" style={{ marginTop: "1rem" }}>
-                <thead>
-                  <tr>
-                    <th>层</th><th>动作</th><th>目标</th><th>值</th><th>操作符</th><th>说明</th><th></th>
-                  </tr>
-                </thead>
+                <thead><tr><th>层</th><th>动作</th><th>目标</th><th>值</th><th>说明</th></tr></thead>
                 <tbody>
                   {templates.map(t => (
                     <tr key={t.id}>
@@ -116,18 +107,12 @@ export function BehaviorRegistryPage() {
                       <td className="mono">{t.action}</td>
                       <td className="mono">{text(t.target)}</td>
                       <td className="mono">{text(t.value)}</td>
-                      <td>{t.operator}</td>
                       <td style={{ fontSize: "0.85rem" }}>{text(t.description)}</td>
-                      <td>
-                        <button className="link-button danger-text" onClick={() => deleteTemplate(t.id)}>删除</button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <button className="button" onClick={addTemplate} style={{ marginTop: "0.5rem" }}>
-                + 添加断言模板
-              </button>
+              {templates.length === 0 && <p style={{ color: "#999" }}>该行为暂无断言模板</p>}
             </>
           ) : (
             <p>选择一个行为查看断言模板</p>
