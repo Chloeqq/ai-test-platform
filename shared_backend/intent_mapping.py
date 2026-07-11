@@ -144,6 +144,8 @@ def resolve_explicit_step(
         resolved_target = _resolve_target_code(explicit_target, page_element_alias_map)
         if not resolved_target:
             raise ValueError("assert_text step requires explicit target")
+        if explicit_value is None or _normalized_text(explicit_value) == "":
+            raise ValueError("assert_text step requires explicit expected value")
         return "assert_text", resolved_target, explicit_value
 
     if hint_action == "assert_attribute":
