@@ -458,6 +458,92 @@ def parse_data_testid_guidelines(markdown_text: str, *, page_code_filter: str = 
             )
     return rows
 
+
+def _inventory_business_type(raw_type: str, testid: str) -> str:
+    """Map the inventory's emitted type to ATP's action-compatibility type."""
+    normalized = str(raw_type or "").strip().lower()
+    if normalized in {"error-message", "message-content", "message", "notification"}:
+        return "text"
+    if normalized in {"button", "input", "switch", "radio", "checkbox", "dialog", "table", "menu", "link"}:
+        return normalized
+    return _business_type(testid)
+
+
+def parse_data_testid_inventory(markdown_text: str, *, page_code_filter: str = "") -> list[ParsedTestIdElement]:
+    """Parse mall-admin-web's generated data-testid-inventory.md format.
+
+    The inventory is organized by source-file headings and Markdown table rows,
+    unlike the hand-maintained "已落地清单" used by the legacy importer.
+    """
+    blocks: list[tuple[str, str, list[tuple[str, str]]]] = []
+    current_section = ""
+    current_source = ""
+    current_tokens: list[tuple[str, str]] = []
+
+    def flush_block() -> None:
+        nonlocal current_tokens
+        if current_tokens:
+            blocks.append((current_section, current_source, current_tokens))
+        current_tokens = []
+
+    for raw_line in str(markdown_text or "").splitlines():
+        line = raw_line.rstrip()
+        heading = _HEADING_RE.match(line)
+        if heading:
+            flush_block()
+            current_section = heading.group(1).strip()
+            current_source = ""
+            continue
+        source_from_line = _extract_source_path(line)
+        if source_from_line:
+            current_source = source_from_line
+            continue
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        tokens = [value.strip() for value in _BACKTICK_RE.findall(cells[0]) if _is_testid_token(value)]
+        for token in tokens:
+            current_tokens.append((token, cells[1]))
+    flush_block()
+
+    rows: list[ParsedTestIdElement] = []
+    normalized_filter = str(page_code_filter or "").strip().lower()
+    for section, source_path, token_rows in blocks:
+        tokens = [token for token, _ in token_rows]
+        dominant_page = _dominant_page_code(tokens)
+        for token, raw_type in token_rows:
+            is_template = bool(_TEMPLATE_TOKEN_RE.search(token))
+            element_code = _template_safe_code(token) if is_template else token
+            derived_page = _normalize_page_code_for_testid(_derive_prefix(token))
+            page_code = dominant_page if dominant_page and element_code.startswith(f"{dominant_page}-") else derived_page
+            if normalized_filter and page_code != normalized_filter:
+                continue
+            business_type = _inventory_business_type(raw_type, token)
+            page_name = _PAGE_NAME_BY_CODE.get(page_code) or _source_name(source_path, section)
+            semantic_tags = ["data-testid-import", "inventory-export"]
+            if page_code == "layout":
+                semantic_tags.append("shared-layout")
+            if is_template:
+                semantic_tags.append("dynamic-row-template")
+            rows.append(
+                ParsedTestIdElement(
+                    testid=token,
+                    element_code=element_code,
+                    page_code=page_code,
+                    page_name=page_name,
+                    source_path=source_path,
+                    source_section=section,
+                    business_type=business_type,
+                    business_domain=_business_domain(token),
+                    is_key_element=_is_key_element(token, business_type),
+                    match_strategy="template" if is_template else "exact",
+                    semantic_tags=semantic_tags,
+                )
+            )
+    return rows
+
 def _element_name(row: ParsedTestIdElement) -> str:
     safe = _template_safe_code(row.testid)
     exact_name = _ELEMENT_EXACT_NAMES.get(safe)
@@ -692,28 +778,36 @@ def create_import_preview(
     runtime_dom_content: bytes | None = None,
     page_code_filter: str = "",
 ) -> dict[str, Any]:
-    if source_type != "data_testid_guidelines":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="source_type must be data_testid_guidelines")
+    if source_type not in {"data_testid_guidelines", "data_testid_inventory"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="source_type must be data_testid_guidelines or data_testid_inventory",
+        )
     normalized_project_code = page_object_service._normalize_project_code(project_code)
     test_project_service.ensure_project_active_for_write(db, normalized_project_code)
     normalized_client = normalize_client_code(client)
     if not data_testid_content:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="data-testid-guidelines.md 上传文件为空，请重新选择包含“已落地清单”的 Markdown 文件。",
+            detail="data-testid 导入文件为空，请重新选择有效的 Markdown 文件。",
         )
     try:
         markdown = data_testid_content.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="data-testid-guidelines.md 必须是 UTF-8 编码的 Markdown 文件。",
+            detail="data-testid 导入文件必须是 UTF-8 编码的 Markdown 文件。",
         ) from exc
-    rows = parse_data_testid_guidelines(markdown, page_code_filter=page_code_filter)
+    rows = (
+        parse_data_testid_guidelines(markdown, page_code_filter=page_code_filter)
+        if source_type == "data_testid_guidelines"
+        else parse_data_testid_inventory(markdown, page_code_filter=page_code_filter)
+    )
     if not rows:
+        expected = "“已落地清单”章节" if source_type == "data_testid_guidelines" else "“按页面汇总”中的 data-testid 表格"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="未解析到“已落地清单”中的 data-testid，请确认文件包含“## 3. 已落地清单”章节且章节内存在反引号包裹的 data-testid。",
+            detail=f"未解析到 {expected}，请确认上传了正确的导出文件。",
         )
 
     preview = _build_preview(db, project_code=normalized_project_code, client=normalized_client, rows=rows)

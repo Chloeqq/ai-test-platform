@@ -12,7 +12,7 @@ from app.schemas.page_object import (
     CandidateGroupPromotePayload,
     CandidateRejectPayload,
 )
-from app.services import page_object_service
+from app.services import page_object_candidates
 
 router = APIRouter(prefix="/api/page-objects", tags=["page-objects"])
 
@@ -27,7 +27,7 @@ def list_candidate_groups(
     session_id: str = Query(default=""),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    items = page_object_service.list_candidate_groups(
+    items = page_object_candidates.list_candidate_groups(
         db, page_code=page_code, project_code=project_code, client=client,
         promotion_status=promotion_status, quality_tier=quality_tier,
         session_id=session_id,
@@ -45,7 +45,7 @@ def list_candidate_elements(
     candidate_status: str = Query(default=""),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    items = page_object_service.list_candidate_elements(
+    items = page_object_candidates.list_candidate_elements(
         db, page_code=page_code, project_code=project_code, client=client,
         group_key=group_key, session_id=session_id, candidate_status=candidate_status,
     )
@@ -58,7 +58,7 @@ def get_candidate_group(
     project_code: str = Query(default="mall"), client: str = Query(default="web"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_service.get_candidate_group(
+    item = page_object_candidates.get_candidate_group(
         db, page_code=page_code, group_key=group_key,
         project_code=project_code, client=client,
     )
@@ -71,7 +71,7 @@ def batch_delete_candidate_groups(
     project_code: str = Query(default="mall"), client: str = Query(default="web"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_service.batch_delete_candidate_groups(
+    item = page_object_candidates.batch_delete_candidate_groups(
         db, page_code=page_code, project_code=project_code, client=client,
         group_keys=payload.group_keys,
     )
@@ -84,7 +84,7 @@ def batch_delete_candidate_elements(
     project_code: str = Query(default="mall"), client: str = Query(default="web"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_service.batch_delete_candidate_elements(
+    item = page_object_candidates.batch_delete_candidate_elements(
         db, page_code=page_code, project_code=project_code, client=client,
         candidate_keys=payload.candidate_keys,
     )
@@ -97,7 +97,7 @@ def promote_candidate_group(
     project_code: str = Query(default="mall"), client: str = Query(default="web"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_service.promote_candidate_group(
+    item = page_object_candidates.promote_candidate_group(
         db, page_code=page_code, group_key=group_key,
         project_code=project_code, client=client, payload=payload,
     )
@@ -110,7 +110,7 @@ def merge_candidate_group(
     project_code: str = Query(default="mall"), client: str = Query(default="web"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_service.merge_candidate_group(
+    item = page_object_candidates.merge_candidate_group(
         db, page_code=page_code, group_key=group_key,
         project_code=project_code, client=client, payload=payload,
     )
@@ -123,7 +123,7 @@ def reject_candidate_group(
     project_code: str = Query(default="mall"), client: str = Query(default="web"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_service.reject_candidate_group(
+    item = page_object_candidates.reject_candidate_group(
         db, page_code=page_code, group_key=group_key,
         project_code=project_code, client=client, payload=payload,
     )
@@ -136,7 +136,7 @@ def reject_candidate_element(
     project_code: str = Query(default="mall"), client: str = Query(default="web"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    item = page_object_service.reject_candidate_element(
+    item = page_object_candidates.reject_candidate_element(
         db, page_code=page_code, candidate_key=candidate_key,
         project_code=project_code, client=client, payload=payload,
     )

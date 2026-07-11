@@ -76,3 +76,28 @@ def test_resolve_explicit_step_supports_assert_metric_alias() -> None:
     assert action == "assert_metric"
     assert target == "weekly_sales_metric_label"
     assert value == ">=1000"
+
+def test_resolve_explicit_step_preserves_assert_text_value() -> None:
+    alias_map = build_element_alias_map(
+        {
+            "elements": {
+                "login-error-tip": {
+                    "selector": "login-error-tip",
+                    "element_name": "登录错误提示",
+                    "role": "alert",
+                    "business_type": "text",
+                    "aliases": ["errorTip"],
+                }
+            }
+        }
+    )
+
+    action, target, value = resolve_explicit_step(
+        steps_hint=["assert_text:errorTip=请输入账号"],
+        page="login",
+        page_element_alias_map=alias_map,
+    )
+
+    assert action == "assert_text"
+    assert target == "login-error-tip"
+    assert value == "请输入账号"
