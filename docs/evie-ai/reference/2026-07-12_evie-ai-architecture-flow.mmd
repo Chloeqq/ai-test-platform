@@ -1,0 +1,318 @@
+flowchart TB
+
+    %% =========================================================
+    %% 1. 多元输入与自然语言生成域
+    %% =========================================================
+    subgraph INPUT["1. 多元输入与自然语言生成域"]
+        ENTRY["Web 前端 / API / CI 调用"]
+
+        REQ["需求文档 / OpenAPI / 缺陷 / 日志"]
+        MANUAL["手工录入 / 批量导入测试资产"]
+
+        CONTEXT["生成上下文<br/>项目 / 需求 / 文档 / 章节 / 页面 / 批次"]
+
+        AI["AI 生成自然语言测试点<br/>只生成业务内容，不生成机器语言"]
+
+        ENTRY --> REQ
+        ENTRY --> MANUAL
+        REQ --> CONTEXT --> AI
+    end
+
+    %% =========================================================
+    %% 2. 自然语言测试资产域
+    %% =========================================================
+    subgraph ASSET["2. 自然语言测试资产域"]
+        INTAKE["统一资产入库服务<br/>补齐 ID / 来源关系"]
+
+        IDEMPOTENCY["幂等检查<br/>重复请求返回已有资产"]
+
+        DEDUP["重复检测<br/>精确重复处理 / 语义重复标记"]
+
+        ASSETDB[("自然语言测试资产<br/>TestAsset + TestAssetVersion")]
+
+        PRESCREEN["异步智能评估<br/>置信度 / 自动标签 / 场景建议<br/>不阻止入库"]
+
+        CENTER["测试资产中心<br/>查看 / 编辑 / 删除 / 恢复<br/>内容审核 / 版本 / 重复管理"]
+
+        DUPREL[("重复关系与合并记录")]
+
+        AI --> INTAKE
+        MANUAL --> INTAKE
+
+        INTAKE --> IDEMPOTENCY
+
+        IDEMPOTENCY -->|"首次请求"| DEDUP
+        IDEMPOTENCY -->|"已处理"| ASSETDB
+
+        DEDUP --> ASSETDB
+        DEDUP --> DUPREL
+
+        ASSETDB --> PRESCREEN
+        PRESCREEN -.->|"写入标签和提示"| ASSETDB
+
+        ASSETDB --> CENTER
+        CENTER --> ASSETDB
+    end
+
+    %% =========================================================
+    %% 3. Asset-to-Case 转换与统一拦截域
+    %% =========================================================
+    subgraph CONVERSION["3. Asset-to-Case 转换与统一拦截域"]
+        REQUEST["内容审核通过<br/>发起保存为测试用例"]
+
+        ATTEMPT[("ConversionAttempt<br/>资产版本 / 状态 / 错误 / 资源绑定")]
+
+        ANALYZE["场景识别与执行需求分析"]
+
+        MANIFEST["Execution Requirement Manifest<br/>描述需要哪些执行资源"]
+
+        ORCHESTRATE["公共资源编排<br/>解析并绑定实际资源"]
+
+        BOUNDPLAN["Bound Execution Plan<br/>setup / data / environment<br/>steps / assertions / cleanup<br/>runner_type / resource_versions"]
+
+        EXPAND["测试用例矩阵展开<br/>数据 / 环境 / 设备 / 场景组合"]
+
+        GATE["统一转换质量门<br/>所有执行规则和拦截集中于此"]
+
+        COMPILER_ROUTER["Compiler Router<br/>选择对应编译器"]
+
+        CASE_BUILD["测试用例生成与版本服务"]
+
+        ASSETDB --> REQUEST --> ATTEMPT
+        ATTEMPT --> ANALYZE --> MANIFEST
+
+        MANIFEST --> ORCHESTRATE
+        ORCHESTRATE --> BOUNDPLAN
+        BOUNDPLAN --> EXPAND --> GATE
+
+        GATE -->|"通过"| COMPILER_ROUTER --> CASE_BUILD
+
+        GATE -->|"失败：记录结构化错误"| ATTEMPT
+        GATE -.->|"返回人工修复"| CENTER
+    end
+
+    %% =========================================================
+    %% 4. 公共资源与能力域
+    %% =========================================================
+    subgraph RESOURCE["4. 公共资源与能力域"]
+        PAGE["页面对象中心<br/>页面 / 元素 / Alias / Locator<br/>Supported Actions / Version"]
+
+        DATA["测试数据工厂<br/>数据集 / 动态生成 / 数据约束<br/>setup / cleanup / Version"]
+
+        ENV["环境中心<br/>Base URL / 服务地址 / 环境类型<br/>浏览器设备 / 能力白名单"]
+
+        SECRET["凭证与密钥中心<br/>账号 / Token / 密钥引用"]
+
+        MOCK["Mock 服务中心<br/>Stub / Response Profile / Version"]
+
+        FAULT["异常能力中心<br/>断网 / 弱网 / 延迟 / 丢包<br/>故障注入 / 恢复 / 清理"]
+
+        SECURITY["安全能力中心<br/>Payload / 权限模型 / Token 场景<br/>治理规则 / 审批要求"]
+
+        PERF["性能能力中心<br/>负载模型 / 并发 / 持续时间<br/>性能阈值 / 执行器配置"]
+
+        ATOMIC["原子能力注册中心<br/>可复用动作 / 断言 / Hook"]
+
+        POLICY["规则与治理策略中心<br/>环境限制 / 审批 / 安全规则<br/>转换规则 / 质量策略"]
+
+        GATEWAY["资源能力网关<br/>统一查询 / 权限检查 / 版本化绑定"]
+
+        PAGE --> GATEWAY
+        DATA --> GATEWAY
+        ENV --> GATEWAY
+        SECRET --> GATEWAY
+        MOCK --> GATEWAY
+        FAULT --> GATEWAY
+        SECURITY --> GATEWAY
+        PERF --> GATEWAY
+        ATOMIC --> GATEWAY
+
+        GATEWAY --> ORCHESTRATE
+        POLICY --> GATE
+    end
+
+    %% =========================================================
+    %% 5. 测试用例、执行、证据与反馈域
+    %% =========================================================
+    subgraph CASE_DOMAIN["5. 测试用例、执行、证据与反馈域"]
+        CASEDB[("可执行测试用例<br/>test_cases / script_code<br/>source_asset_version<br/>resource_binding_snapshot<br/>runner_type")]
+
+        CASE_LIFECYCLE["用例版本与失效管理<br/>ready / stale / disabled"]
+
+        SCHEDULER["任务调度中心<br/>优先级 / 队列 / 并发"]
+
+        EXEC_CONTROL["执行控制中心<br/>环境锁 / 资源锁 / 超时<br/>重试 / 强制清理 / 清理确认"]
+
+        RUNNER_ROUTER["Runner Router"]
+
+        RUNNER["执行引擎<br/>UI / API / Performance<br/>Security / Chaos Runner"]
+
+        EXECDB[("执行记录<br/>Execution / Status / Environment<br/>Case Version / Retry / Timing")]
+
+        ASSERT["断言评估引擎<br/>业务断言 / 技术断言 / 指标断言"]
+
+        EVIDENCE[("证据存储<br/>截图 / 视频 / Trace / 日志<br/>网络记录 / 性能指标 / 扫描结果")]
+
+        REPORT["报告服务<br/>Allure / JSON / Markdown / Dashboard"]
+
+        FEEDBACK["缺陷管理与失效分析<br/>失败归因 / 资源问题 / 用例失效"]
+
+        CASE_BUILD --> CASEDB
+
+        CASEDB --> CASE_LIFECYCLE
+        CASEDB --> SCHEDULER
+
+        SCHEDULER --> EXEC_CONTROL
+        EXEC_CONTROL --> RUNNER_ROUTER --> RUNNER
+
+        EXEC_CONTROL --> EXECDB
+        RUNNER --> EXECDB
+        RUNNER --> ASSERT
+        RUNNER --> EVIDENCE
+
+        ASSERT --> EXECDB
+        EXECDB --> REPORT
+        ASSERT --> REPORT
+        EVIDENCE --> REPORT
+
+        REPORT --> FEEDBACK
+
+        FEEDBACK -.->|"修复自然语言资产"| CENTER
+        FEEDBACK -.->|"修复公共资源"| GATEWAY
+
+        GATEWAY -.->|"资源版本发生变化"| CASE_LIFECYCLE
+        CASE_LIFECYCLE -.->|"标记 stale"| CASEDB
+    end
+
+    %% =========================================================
+    %% 6. 平台控制面
+    %% =========================================================
+    subgraph CONTROL["6. 平台控制面"]
+        PROJECT["项目作用域与数据隔离"]
+        IDTRACE["统一 ID / Trace / Batch 管理"]
+        VERSION["版本管理<br/>资产 / 资源 / 用例"]
+        AUDIT["审计日志与变更记录"]
+        JOB["异步任务与事件总线"]
+        AUTH["认证授权 / RBAC"]
+        FEATURE["Feature Flag / 灰度切换"]
+        API_GW["API Gateway / BFF"]
+    end
+
+    PROJECT -.-> CONTEXT
+    PROJECT -.-> INTAKE
+    PROJECT -.-> GATEWAY
+
+    IDTRACE -.-> CONTEXT
+    IDTRACE -.-> INTAKE
+    IDTRACE -.-> ATTEMPT
+    IDTRACE -.-> EXECDB
+
+    VERSION -.-> ASSETDB
+    VERSION -.-> GATEWAY
+    VERSION -.-> CASEDB
+
+    AUDIT -.-> CENTER
+    AUDIT -.-> ATTEMPT
+    AUDIT -.-> CASEDB
+
+    JOB -.-> PRESCREEN
+    JOB -.-> ATTEMPT
+    JOB -.-> SCHEDULER
+
+    AUTH -.-> ENTRY
+    AUTH -.-> CENTER
+    AUTH -.-> REQUEST
+
+    FEATURE -.-> AI
+    FEATURE -.-> CONVERSION
+
+    API_GW -.-> ENTRY
+
+    %% =========================================================
+    %% 7. 技术基础设施域
+    %% =========================================================
+    subgraph INFRA["7. 技术基础设施域"]
+        K8S["容器平台<br/>Kubernetes / Docker"]
+
+        STORAGE["存储层<br/>MySQL / Redis / 对象存储"]
+
+        MQ["消息与任务基础设施<br/>Kafka / RabbitMQ / Worker"]
+
+        CICD["CI/CD<br/>Jenkins / GitLab CI"]
+
+        MONITOR["可观测性<br/>Metrics / Logs / Traces<br/>Prometheus / Grafana"]
+
+        CONFIG["配置中心<br/>Apollo / Nacos"]
+
+        VAULT["密钥基础设施<br/>Vault / KMS"]
+
+        BACKUP["备份与灾难恢复"]
+    end
+
+    STORAGE -.-> ASSETDB
+    STORAGE -.-> DUPREL
+    STORAGE -.-> ATTEMPT
+    STORAGE -.-> CASEDB
+    STORAGE -.-> EXECDB
+    STORAGE -.-> EVIDENCE
+
+    MQ -.-> JOB
+    MQ -.-> SCHEDULER
+    MQ -.-> PRESCREEN
+
+    VAULT -.-> SECRET
+
+    MONITOR -.-> AI
+    MONITOR -.-> ORCHESTRATE
+    MONITOR -.-> RUNNER
+    MONITOR -.-> EXEC_CONTROL
+
+    CONFIG -.-> CONTROL
+    K8S -.-> RUNNER
+    K8S -.-> AI
+    CICD -.-> K8S
+    BACKUP -.-> STORAGE
+
+    %% =========================================================
+    %% 样式优化
+    %% =========================================================
+    %% 子图 – 保持柔和底色，提高边框宽度与对比度
+    style INPUT fill:#EAF2FA,stroke:#2471A3,stroke-width:3px,color:#154360
+    style ASSET fill:#E8F8F5,stroke:#117A65,stroke-width:3px,color:#0E6251
+    style CONVERSION fill:#FEF9E7,stroke:#B7950B,stroke-width:3px,color:#7D6608
+    style RESOURCE fill:#F4ECF7,stroke:#7D3C98,stroke-width:3px,color:#4A235A
+    style CASE_DOMAIN fill:#FDEBD0,stroke:#CA6F1E,stroke-width:3px,color:#78281F
+    style CONTROL fill:#EBF5FB,stroke:#2E86C1,stroke-width:3px,color:#1B4F72
+    style INFRA fill:#F2F4F4,stroke:#7F8C8D,stroke-width:3px,color:#2C3E50
+
+    %% 节点类 – 统一圆角与边框粗细，保证文字清晰
+    classDef inputNode fill:#D6EAF8,stroke:#2980B9,stroke-width:2px,color:#1B4F72
+    classDef assetNode fill:#D1F2EB,stroke:#148F77,stroke-width:2px,color:#0B5345
+    classDef convNode  fill:#FCF3CF,stroke:#B7950B,stroke-width:2px,color:#7D6608
+    classDef resourceNode fill:#E8DAEF,stroke:#7D3C98,stroke-width:2px,color:#4A235A
+    classDef caseNode  fill:#FAE5D3,stroke:#CA6F1E,stroke-width:2px,color:#78281F
+    classDef controlNode fill:#D4E6F1,stroke:#2471A3,stroke-width:2px,color:#1B4F72
+    classDef infraNode fill:#E5E7E9,stroke:#797D7F,stroke-width:2px,color:#2C3E50
+    classDef dbNode    fill:#FFFFFF,stroke:#717D7E,stroke-width:2px,color:#2C3E50
+    classDef keyNode   fill:#FCF3CF,stroke:#D4AC0D,stroke-width:3px,color:#7D6608,font-weight:bold
+
+    %% 应用节点类
+    class ENTRY,REQ,MANUAL,CONTEXT,AI inputNode
+
+    class INTAKE,IDEMPOTENCY,DEDUP,PRESCREEN,CENTER assetNode
+    class ASSETDB,DUPREL dbNode
+
+    class REQUEST,ANALYZE,MANIFEST,BOUNDPLAN,EXPAND,COMPILER_ROUTER,CASE_BUILD convNode
+    class ATTEMPT dbNode
+    %% 关键编排节点突出
+    class ORCHESTRATE,GATE keyNode
+
+    class PAGE,DATA,ENV,SECRET,MOCK,FAULT,SECURITY,PERF,ATOMIC,POLICY resourceNode
+    class GATEWAY keyNode
+
+    class CASE_LIFECYCLE,SCHEDULER,EXEC_CONTROL,RUNNER_ROUTER,RUNNER,ASSERT,REPORT,FEEDBACK caseNode
+    class CASEDB,EXECDB,EVIDENCE dbNode
+
+    class PROJECT,IDTRACE,VERSION,AUDIT,JOB,AUTH,FEATURE,API_GW controlNode
+
+    class K8S,STORAGE,MQ,CICD,MONITOR,CONFIG,VAULT,BACKUP infraNode
