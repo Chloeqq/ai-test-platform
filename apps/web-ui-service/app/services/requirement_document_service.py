@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
@@ -230,6 +231,13 @@ def download_document(db: Session, *, doc_id: int) -> tuple[bytes, str, str]:
 # 章节选择 support
 # ---------------------------------------------------------------------------
 
+def _stable_section_id(title: str, parent_id: str | None) -> str:
+    """基于标题 + 父节点生成稳定 section ID。重新解析后相同章节 ID 不变。"""
+    seed = f"{parent_id or 'root'}:{title}"
+    digest = hashlib.md5(seed.encode("utf-8")).hexdigest()[:8]
+    return f"sec-{digest}"
+
+
 def blocks_to_sections(blocks: list[dict[str, Any]], source_type: str) -> list[dict[str, Any]]:
     """将解析 blocks 转为章节树。借鉴 BrickCore requirement_document.py:blocks_to_sections。"""
     if not blocks:
@@ -244,7 +252,7 @@ def _sections_from_pdf(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
     for i, b in enumerate(blocks):
         sections.append({
-            "id": f"page-{i + 1}",
+            "id": f"page-{i + 1}",  # PDF 按页,页码天然稳定
             "title": f"第 {i + 1} 页",
             "level": 1,
             "block_ids": [b.get("id", f"b{i}")],
@@ -287,7 +295,7 @@ def _sections_from_headings(blocks: list[dict[str, Any]]) -> list[dict[str, Any]
     for b in indexed:
         if b.get("type") == "heading" and b["level"] >= first_heading_level:
             sec = {
-                "id": f"sec-{len(sections) + 1}",
+                "id": _stable_section_id(str(b.get("text", "")).strip(), None),
                 "title": str(b.get("text", "")).strip(),
                 "level": b["level"],
                 "block_ids": [b["_id"]],
