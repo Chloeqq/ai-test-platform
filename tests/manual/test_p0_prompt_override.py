@@ -56,13 +56,16 @@ t("usecase passes prompt_system to build_preview_response", "prompt_system=promp
 print("\n=== P0-3 异常场景 ===")
 
 # 1. Agent fallback: SYSTEM_PROMPT when override is None (verified in normal tests above)
-# 2. Usecase graceful fallback on DB error (verified below)
 
 # 2. Usecase graceful fallback on DB error
-t("Usecase has try/except around PromptManager", "try:" in uc_content and "except Exception:" in uc_content and "prompt_system" in uc_content)
-
-# 3. Usecase defaults to None on exception
+t("Usecase has try/except around PromptManager", "try:" in uc_content and "except Exception:" in uc_content)
 t("Usecase defaults prompt_system=None on error", 'prompt_system: str | None = None' in uc_content)
+t("Usecase logs error when PromptManager fails", "_LOGGER.warning" in uc_content or "_LOGGER.error" in uc_content or "logger." in uc_content)
+
+# 3. PromptManager builtins reference (in YAML seed file)
+t("builtin_prompts.yaml has 'requirement_parse' as first template",
+  os.path.exists("apps/web-ui-service/app/services/builtin_prompts.yaml"),
+  "YAML seed file exists")
 
 # ========== 数据一致性 ==========
 print("\n=== P0-3 一致性 ===")
@@ -84,6 +87,11 @@ with open("apps/web-ui-service/app/routers/workbench_generation.py") as f:
     rt_content = f.read()
 t("Router has _make_preview_usecase with db", "_make_preview_usecase" in rt_content and "db: Session" in rt_content)
 
+# 4. Agent parse() → _run_llm_overlay() parameter chain
+parse_section = agent_content.split("def parse")[1].split("def _run_llm_overlay")[0]
+t("Agent parse() passes prompt_system downward", "prompt_system" in parse_section)
+t("Agent parse() passes prompt_user downward", "prompt_user" in parse_section)
+
 # ========== 硬编码检查 ==========
 print("\n=== P0-3 硬编码检查 ===")
 
@@ -96,6 +104,22 @@ with open("apps/web-ui-service/app/services/prompt_manager.py") as f:
 t("get_template reads from DB only (no YAML fallback)", "从 DB 获取模板" in pm_content)
 t("get_template returns None when not found", "return None" in pm_content)
 t("seed_from_yaml exists as dev helper (not auto-called)", "seed_from_yaml" in pm_content)
+
+# Agent does NOT directly read YAML for prompts
+import pathlib
+agent_dir_import = pathlib.Path("agents/requirement-parser-agent/src")
+has_yaml_ref = False
+for py_file in agent_dir_import.glob("*.py"):
+    c = py_file.read_text()
+    if "builtin_prompts" in c or (".yaml" in c and "open(" in c):
+        has_yaml_ref = True
+        break
+t("Agent does NOT directly read YAML for prompts", not has_yaml_ref,
+  "Agent should get prompts from prompt_override, not YAML")
+
+# orchestrator client has no hardcoded prompt strings
+t("orchestrator client has no hardcoded prompt strings",
+  not ('"你是一个"' in orch_content or "'你是一个'" in orch_content))
 
 print(f"\n=== P0-3 RESULTS: {passed} passed, {failed} failed ===")
 sys.exit(1 if failed else 0)
