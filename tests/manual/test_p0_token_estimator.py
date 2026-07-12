@@ -8,6 +8,11 @@ passed = 0
 failed = 0
 
 
+_KEYS = list(estimate_tokens("测试").keys())
+print("Return keys:", _KEYS)
+assert "estimated_tokens" in _KEYS and "level" in _KEYS and "cjk_count" in _KEYS, f"unexpected keys: {_KEYS}"
+
+
 def t(desc, cond, detail=""):
     global passed, failed
     if cond:
@@ -85,9 +90,17 @@ t("Env override: tokens ≈219, >=200 block → level=block", r2["level"] == "bl
 del os.environ["REQUIREMENT_SCOPE_WARN_TOKENS"]
 del os.environ["REQUIREMENT_SCOPE_BLOCK_TOKENS"]
 
-# 补充 P01-B-06: CJK Ext-B 字符 (U+20000)
-r = estimate_tokens("\U00020000")
-t("CJK Ext-B char counted as CJK", r["cjk_count"] == 1, f"got {r['cjk_count']}")
+# 补充: 纯数字/符号文本
+r = estimate_tokens("1234567890!@#$%")
+t("Numbers+symbols: all counted as other (not CJK)", r["cjk_count"] == 0, f"got cjk={r['cjk_count']} chars={r['char_count']}")
+r = estimate_tokens("1234567890")
+t("Pure digits: tokens ≈ chars/4", r["estimated_tokens"] <= 5, f"got {r['estimated_tokens']}")
+
+# 补充 P01-B-06: CJK Ext-B 字符 (U+20000) — 防御窄 Python 构建(len 可能=2)
+ext_b_char = "\U00020000"
+r = estimate_tokens(ext_b_char)
+t("CJK Ext-B char counted as CJK (len-aware)",
+  r["cjk_count"] >= 1, f"got cjk={r['cjk_count']} len={len(ext_b_char)}")
 
 # 补充 P01-B-07: 日文假名不算 CJK
 r = estimate_tokens("あいう")
