@@ -62,10 +62,10 @@ export interface ToastConfig {
   animationMs?: number;
 }
 
-const DEFAULT_maxToasts = 5;
+const DEFAULT_MAX_TOASTS = 5;
 const DEFAULT_DURATION_MS = 3000;
 const DEFAULT_ERROR_DURATION_MS = 5000;
-const DEFAULT_animationMs = 300;
+const DEFAULT_ANIMATION_MS = 300;
 
 // -------------------------------------------------------------------
 // helpers
@@ -104,10 +104,10 @@ export function ToastProvider({
   children: ReactNode;
   config?: ToastConfig;
 }) {
-  const maxToasts = config?.maxToasts ?? DEFAULT_maxToasts;
+  const maxToasts = config?.maxToasts ?? DEFAULT_MAX_TOASTS;
   const defaultDuration = config?.defaultDuration ?? DEFAULT_DURATION_MS;
   const errorDuration = config?.errorDuration ?? DEFAULT_ERROR_DURATION_MS;
-  const animationMs = config?.animationMs ?? DEFAULT_animationMs;
+  const animationMs = config?.animationMs ?? DEFAULT_ANIMATION_MS;
 
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
