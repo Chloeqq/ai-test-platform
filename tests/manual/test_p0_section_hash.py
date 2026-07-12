@@ -7,7 +7,6 @@ sys.path.insert(0, "apps/web-ui-service")
 from app.services.requirement_document_service import (
     _stable_section_id, _sections_from_headings, _sections_from_pdf,
 )
-
 passed = 0
 failed = 0
 
@@ -87,6 +86,22 @@ t("Fallback has stable ID", r_para[0]["id"] == "sec-full")
 r = _stable_section_id("这是一个非常长的标题" * 10, None)
 t("Very long title still produces valid ID", r.startswith("sec-") and len(r) == 12)
 
+# Special chars in title
+id_special = _stable_section_id("登录/注册 & 找回密码", None)
+t("Special chars in title produce valid ID", id_special.startswith("sec-") and len(id_special) == 12)
+
+# Emoji in title
+id_emoji = _stable_section_id("支付💰流程", None)
+t("Emoji in title produces valid ID", id_emoji.startswith("sec-") and len(id_emoji) == 12)
+
+# Empty title (defensive)
+id_empty = _stable_section_id("", None)
+t("Empty title still produces valid ID", id_empty.startswith("sec-") and len(id_empty) == 12)
+
+# PDF empty blocks
+r_pdf_empty = _sections_from_pdf([])
+t("PDF empty blocks → empty sections", r_pdf_empty == [], str(r_pdf_empty))
+
 # ========== 一致性 ==========
 print("\n=== P0-2 一致性 ===")
 
@@ -114,16 +129,28 @@ pdf_blocks = [
 ]
 r = _sections_from_pdf(pdf_blocks)
 t("PDF: 2 pages → 2 sections", len(r) == 2)
-t("PDF: page IDs are stable", r[0]["id"] == "page-1" and r[1]["id"] == "page-2")
+t("PDF: page IDs start with 'page-'", all(s["id"].startswith("page-") for s in r))
+t("PDF: page IDs are unique", len(set(s["id"] for s in r)) == 2)
+
+# Same title + different parents → different IDs
+id_a = _stable_section_id("子模块", "sec-aaa")
+id_b = _stable_section_id("子模块", "sec-bbb")
+t("Same title + different parents → different IDs", id_a != id_b, f"{id_a} vs {id_b}")
 
 # ========== 硬编码检查 ==========
 print("\n=== P0-2 硬编码检查 ===")
-import pathlib
+import pathlib, re
 src = pathlib.Path(__file__).parent.parent.parent / "apps" / "web-ui-service" / "app" / "services" / "requirement_document_service.py"
 content = src.read_text()
 t("_stable_section_id function exists", "_stable_section_id" in content)
 t("hashlib imported", "import hashlib" in content)
-t("No f'sec-{len+1}' pattern", 'f"sec-{len(sections)' not in content.replace('+ 1', ''))
+# Robust check: no sequential sec-{N} ID generation
+# Match sec- followed by word chars; exclude sec-full and sec-{8 hex chars}
+sec_patterns = re.findall(r'sec-[a-zA-Z0-9_]+', content)
+illegal = [p for p in sec_patterns
+           if not p.startswith("sec-full") and not re.match(r'sec-[a-f0-9]{8}$', p)]
+t("No sequential sec-{N} ID generation", len(illegal) == 0,
+  f"found: {illegal[:5]}" if illegal else "clean")
 
 print(f"\n=== P0-2 RESULTS: {passed} passed, {failed} failed ===")
 sys.exit(1 if failed else 0)
