@@ -7,15 +7,20 @@ from shared_backend.type_utils import str_value as _normalized_text, normalized_
 
 
 def _register_aliases(aliases: dict[str, str], code: str, value: Any) -> None:
+    def register(value: Any) -> None:
+        key = _normalized_key(value)
+        if not key:
+            return
+        existing = aliases.get(key)
+        if existing is not None and existing != code:
+            raise ValueError(f"duplicate element alias `{key}` maps to both `{existing}` and `{code}`")
+        aliases[key] = code
+
     if isinstance(value, list):
         for item in value:
-            key = _normalized_key(item)
-            if key and key not in aliases:
-                aliases[key] = code
+            register(item)
         return
-    key = _normalized_key(value)
-    if key and key not in aliases:
-        aliases[key] = code
+    register(value)
 
 
 def _derived_role_aliases(locator_type: str, locator_value: str, role: str) -> list[str]:

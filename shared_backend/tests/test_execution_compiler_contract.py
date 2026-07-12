@@ -543,6 +543,68 @@ class TestEndToEndCompile:
         assert exc.value.code == "target_binding_failed"
         assert "button" in exc.value.reason
 
+    def test_button_role_without_business_type_cannot_be_assert_text_target(self) -> None:
+        page_object = {
+            "elements": {
+                "login_submit_button": {
+                    "selector": "login-submit-btn",
+                    "type": "data-testid",
+                    "role": "button",
+                    "business_type": "",
+                }
+            }
+        }
+        points = [
+            {
+                "intent_id": "intent-04",
+                "steps": [
+                    {
+                        "action": "assert_text",
+                        "target": "login_submit_button",
+                        "value": "请输入账号",
+                    }
+                ],
+                "involved_elements": ["login_submit_button"],
+            }
+        ]
+
+        with pytest.raises(ExecutionCompilerError) as exc:
+            compile_execution_steps(points, page_object)
+
+        assert exc.value.code == "target_binding_failed"
+        assert "role `button`" in exc.value.reason
+
+    def test_non_button_role_without_business_type_can_be_assert_text_target(self) -> None:
+        page_object = {
+            "elements": {
+                "login_username_error": {
+                    "selector": ".el-form-item__error",
+                    "type": "css",
+                    "role": "alert",
+                    "business_type": "",
+                }
+            }
+        }
+        points = [
+            {
+                "intent_id": "intent-04",
+                "steps": [
+                    {
+                        "action": "assert_text",
+                        "target": "login_username_error",
+                        "value": "请输入正确的用户名",
+                    }
+                ],
+                "involved_elements": ["login_username_error"],
+            }
+        ]
+
+        steps = compile_execution_steps(points, page_object)
+
+        assert len(steps) == 1
+        assert steps[0]["action"] == "assert_text"
+        assert steps[0]["target"] == "login_username_error"
+
     def test_text_business_type_can_be_assert_text_target(self) -> None:
         page_object = {
             "elements": {

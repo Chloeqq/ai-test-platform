@@ -36,7 +36,7 @@ def _split_payload(text: str) -> tuple[str, str]:
     payload = _normalized_text(text)
     if not payload:
         return "", ""
-    for separator in ("=", "::", "=>", "|"):
+    for separator in ("=>", "::", "=", "|"):
         if separator in payload:
             left, right = payload.split(separator, 1)
             return _normalized_text(left), _normalized_text(right)

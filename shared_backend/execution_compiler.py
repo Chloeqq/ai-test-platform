@@ -279,9 +279,17 @@ def _resolve_attribute_name(step: dict[str, Any], point: dict[str, Any]) -> str 
     return None
 
 
-def _is_business_type_allowed_for_action(action_type: str, assertion: str, business_type: str) -> tuple[bool, str]:
+def _is_business_type_allowed_for_action(
+    action_type: str,
+    assertion: str,
+    business_type: str,
+    role: str = "",
+) -> tuple[bool, str]:
     normalized_type = _normalized_text(business_type).lower()
+    normalized_role = _normalized_text(role).lower()
     if not normalized_type:
+        if action_type == "assert" and assertion == "text" and normalized_role == "button":
+            return False, "role `button` cannot be used as assert_text target"
         return True, ""
 
     if action_type == "input":
@@ -710,6 +718,7 @@ def bind_targets(ir: dict[str, Any], page_object: dict[str, Any]) -> dict[str, A
             action_type,
             assertion,
             element.get("business_type", ""),
+            element.get("role", ""),
         )
         if not allowed:
             raise ExecutionCompilerError(

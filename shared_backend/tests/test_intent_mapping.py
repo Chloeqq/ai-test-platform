@@ -3,7 +3,14 @@ from __future__ import annotations
 import pytest
 
 from shared_backend.element_binding import build_element_alias_map
-from shared_backend.intent_mapping import resolve_explicit_step
+from shared_backend.intent_mapping import _split_payload, resolve_explicit_step
+
+
+def test_split_payload_prefers_long_separator_before_equals() -> None:
+    assert _split_payload("field=>value") == ("field", "value")
+    assert _split_payload("field=value") == ("field", "value")
+    assert _split_payload("field::value") == ("field", "value")
+    assert _split_payload("field|value") == ("field", "value")
 
 
 def test_resolve_explicit_step_maps_exact_alias_to_code() -> None:
