@@ -424,12 +424,8 @@ class RequirementParseSupport:
 
     # ------------------------------------------------------------------
     # 输入范围 Token 预估（Phase 0 · 前置告警，advisory，不参与质量门决策）
+    # 统一估算逻辑 → shared_backend/token_estimator.py（单一事实源）
     # ------------------------------------------------------------------
-    # 估算启发式：CJK 字符约 1.6 字/token，其余（英文/数字/符号）约 4 字/token。
-    # 阈值经 env 可调，默认 warn=8000 / block=16000 input tokens。
-    _SCOPE_WARN_TOKENS_DEFAULT = 8000
-    _SCOPE_BLOCK_TOKENS_DEFAULT = 16000
-    _CJK_PATTERN = re.compile(r"[㐀-鿿豈-﫿\U00020000-\U0002ffff]")
 
     @classmethod
     def build_scope_text(
@@ -454,47 +450,18 @@ class RequirementParseSupport:
 
     @classmethod
     def estimate_input_scope(cls, text: str) -> dict[str, Any]:
-        """估算输入 token 规模并给出三档 level（ok/warn/block）。返回 scope_estimate 结构。"""
-        content = text or ""
-        char_count = len(content)
-        cjk_count = len(cls._CJK_PATTERN.findall(content))
-        other_count = max(0, char_count - cjk_count)
-        estimated_tokens = int(round(cjk_count / 1.6 + other_count / 4.0))
-
-        warn_tokens = cls._read_int_env(
-            "REQUIREMENT_SCOPE_WARN_TOKENS", default=cls._SCOPE_WARN_TOKENS_DEFAULT, min_value=1
-        )
-        block_tokens = cls._read_int_env(
-            "REQUIREMENT_SCOPE_BLOCK_TOKENS", default=cls._SCOPE_BLOCK_TOKENS_DEFAULT, min_value=1
-        )
-        if block_tokens <= warn_tokens:
-            block_tokens = warn_tokens * 2
-
-        if estimated_tokens >= block_tokens:
-            level = "block"
-            message = (
-                f"预估输入约 {estimated_tokens} tokens（{char_count} 字），已超上限 {block_tokens}，"
-                f"请缩小需求范围或拆分文档后再生成"
-            )
-        elif estimated_tokens >= warn_tokens:
-            level = "warn"
-            message = (
-                f"预估输入约 {estimated_tokens} tokens（{char_count} 字），内容较多，"
-                f"建议缩小范围或降低目标数量，避免生成被截断"
-            )
-        else:
-            level = "ok"
-            message = f"预估输入约 {estimated_tokens} tokens（{char_count} 字），可正常生成"
-
+        """估算输入 token 规模并给出三档 level（ok/warn/block）。委托 shared_backend 统一实现。"""
+        from shared_backend.token_estimator import estimate_tokens
+        est = estimate_tokens(text)
         return {
             "version": "RequirementScopeEstimateV1",
-            "level": level,
-            "estimated_input_tokens": estimated_tokens,
-            "char_count": char_count,
-            "cjk_char_count": cjk_count,
-            "warn_tokens": warn_tokens,
-            "block_tokens": block_tokens,
-            "message": message,
+            "level": est["level"],
+            "estimated_input_tokens": est["estimated_tokens"],
+            "char_count": est["char_count"],
+            "cjk_char_count": est["cjk_count"],
+            "warn_tokens": est["warn_tokens"],
+            "block_tokens": est["block_tokens"],
+            "message": est["message"],
         }
 
     @staticmethod

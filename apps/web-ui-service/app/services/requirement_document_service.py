@@ -388,20 +388,12 @@ def build_scoped_content(db: Session, *, doc_id: int, section_ids: list[str]) ->
             parts.append(str(b.get("text", "")))
 
     scoped_text = "\n\n".join(parts)
-    char_count = len(scoped_text)
-    # token estimate: CJK ~1.6 chars/token, others ~4
-    cjk = sum(1 for c in scoped_text if "一" <= c <= "鿿")
-    other = char_count - cjk
-    estimated_tokens = int(round(cjk / 1.6 + other / 4.0))
-    level = "ok"
-    if estimated_tokens >= 16000:
-        level = "block"
-    elif estimated_tokens >= 8000:
-        level = "warn"
+    from shared_backend.token_estimator import estimate_tokens
+    est = estimate_tokens(scoped_text)
 
     return {
         "scoped_text": scoped_text,
-        "char_count": char_count,
-        "estimated_tokens": estimated_tokens,
-        "level": level,
+        "char_count": est["char_count"],
+        "estimated_tokens": est["estimated_tokens"],
+        "level": est["level"],
     }
