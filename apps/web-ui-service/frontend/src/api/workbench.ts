@@ -289,6 +289,53 @@ export async function getRequirementDocument(
   );
 }
 
+export interface PromptTemplateItem {
+  id: number;
+  code: string;
+  name: string;
+  scene_type: string;
+  description?: string;
+  system_prompt: string;
+  user_prompt_template: string;
+  variables: Record<string, { required?: boolean; default?: string }>;
+  is_default: boolean;
+  is_enabled: boolean;
+  version: number;
+  created_by?: string;
+  updated_by?: string;
+}
+
+export interface PromptTemplateTestResult {
+  system_prompt: string;
+  user_prompt: string;
+}
+
+export async function listPromptTemplates(): Promise<{ items: PromptTemplateItem[] }> {
+  return getJson<{ items: PromptTemplateItem[] }>("/api/workbench/prompt-templates");
+}
+
+export async function getPromptTemplate(templateId: number): Promise<{ item: PromptTemplateItem }> {
+  return getJson<{ item: PromptTemplateItem }>(`/api/workbench/prompt-templates/${templateId}`);
+}
+
+export async function updatePromptTemplate(
+  templateId: number,
+  payload: { system_prompt?: string; user_prompt_template?: string; description?: string; is_enabled?: boolean },
+): Promise<{ item: PromptTemplateItem }> {
+  return putJson<{ item: PromptTemplateItem }>(`/api/workbench/prompt-templates/${templateId}`, payload);
+}
+
+export async function testPromptTemplate(
+  templateId: number,
+  variables: Record<string, string>,
+): Promise<PromptTemplateTestResult> {
+  return postJson<PromptTemplateTestResult>(`/api/workbench/prompt-templates/${templateId}/test`, { variables });
+}
+
+export async function resetPromptTemplate(templateId: number): Promise<{ item: PromptTemplateItem }> {
+  return postJson<{ item: PromptTemplateItem }>(`/api/workbench/prompt-templates/${templateId}/reset`, {});
+}
+
 export interface SectionNode {
   id: string;
   title: string;

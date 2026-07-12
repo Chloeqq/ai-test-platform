@@ -7738,3 +7738,137 @@ pre,
   white-space: pre-wrap;
   margin-top: 4px;
 }
+
+/* ---- prompt management ---- */
+.aiw-prompt-layout {
+  display: flex;
+  gap: 0;
+  min-height: 400px;
+}
+
+.aiw-prompt-list {
+  width: 240px;
+  flex-shrink: 0;
+  border-right: 1px solid #e8eaed;
+  overflow-y: auto;
+}
+
+.aiw-prompt-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f1f3;
+}
+
+.aiw-prompt-item:hover {
+  background: #f5f7fa;
+}
+
+.aiw-prompt-item-active {
+  background: #e8f0fe;
+  border-left: 3px solid #107dec;
+}
+
+.aiw-prompt-item-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.aiw-prompt-editor {
+  flex: 1;
+  padding: 0 20px;
+  overflow-y: auto;
+}
+
+.aiw-prompt-editor-header {
+  margin-bottom: 14px;
+}
+
+.aiw-prompt-editor-header h3 {
+  margin: 0 0 4px 0;
+}
+
+.aiw-prompt-field {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.aiw-prompt-field input,
+.aiw-prompt-field textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+}
+
+.aiw-prompt-vars {
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.aiw-prompt-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.aiw-prompt-test {
+  border-top: 1px solid #e8eaed;
+  padding-top: 12px;
+}
+
+.aiw-prompt-test summary {
+  cursor: pointer;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.aiw-prompt-test-vars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.aiw-prompt-test-var {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.aiw-prompt-test-var input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+}
+
+.aiw-prompt-test-result {
+  margin-top: 12px;
+}
+
+.aiw-prompt-test-block {
+  margin-bottom: 8px;
+}
+
+.aiw-prompt-test-block pre {
+  background: #f8f9fa;
+  border: 1px solid #e2e6ea;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
