@@ -104,7 +104,7 @@ class PromptManager:
             return None
         code = tmpl_before.code
         repo.reset_to_default(template_id)
-        cls._seed_builtins(db)
+        cls._seed_core(db)
         db.commit()
         return to_template_dict(repo.get_by_code(code) or tmpl_before)
 
@@ -126,13 +126,20 @@ class PromptManager:
     # --- seed (dev only, not called at runtime) ---
 
     @classmethod
-    def seed_from_yaml(cls, db: Session) -> int:
-        """从 YAML 文件种子内置模板到 DB（仅开发/运维使用，上线不调用）。返回写入数量。"""
+    def _seed_core(cls, db: Session) -> int:
+        """将 YAML 内置模板写入 DB（不 commit,由调用方控制事务）。返回写入数量。"""
         builtins = _load_builtin_templates()
         if not builtins:
             return 0
         repo = PromptTemplateRepository(db)
         for code, data in builtins.items():
             repo.create_or_update_builtin(code=code, **data)
-        db.commit()
         return len(builtins)
+
+    @classmethod
+    def seed_from_yaml(cls, db: Session) -> int:
+        """从 YAML 文件种子内置模板到 DB（仅开发/运维使用，上线不调用）。返回写入数量。"""
+        count = cls._seed_core(db)
+        if count > 0:
+            db.commit()
+        return count

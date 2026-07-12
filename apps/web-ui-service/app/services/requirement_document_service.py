@@ -188,10 +188,15 @@ def download_document(db: Session, *, doc_id: int) -> tuple[bytes, str, str]:
     doc = repo.get_by_id(doc_id)
     if doc is None:
         raise ValueError(f"文档不存在: id={doc_id}")
+    if not doc.object_key:
+        raise ValueError(f"文档存储对象不存在: id={doc_id}")
     client = get_minio_client()
     if client is None:
         raise RuntimeError("MinIO 未启用")
-    raw = download_bytes(client, doc.object_key)
+    try:
+        raw = download_bytes(client, doc.object_key)
+    except StorageError as exc:
+        raise RuntimeError("文件下载失败") from exc
     ext_map = {".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                ".pdf": "application/pdf", ".md": "text/markdown"}
     content_type = ext_map.get(f".{doc.source_type}", "application/octet-stream")
