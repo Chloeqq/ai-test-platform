@@ -27,6 +27,7 @@ from app.models.quality_eval import (
     QualityEvalRun,
 )
 from app.models.requirement_document import RequirementDocument
+from app.models.prompt_template import PromptTemplate
 from app.models.test_case import (
     TestCase,
     TestCaseDefect,
@@ -90,4 +91,5 @@ __all__ = [
     "QualityEvalResult",
     "QualityEvalRun",
     "RequirementDocument",
+    "PromptTemplate",
 ]
