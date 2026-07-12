@@ -304,6 +304,7 @@ export function AiGenerationPage() {
   const [uploadingDoc, setUploadingDoc] = useState<boolean>(false);
   const [uploadDocError, setUploadDocError] = useState<string>("");
   const [uploadDocNote, setUploadDocNote] = useState<string>("");
+  const [parsedText, setParsedText] = useState<string>("");   // 文档解析结果（只读,由 SectionTree 驱动）
 
   function appendEvent(event: Omit<PipelineEvent, "id" | "at">) {
     setEvents((prev) => [
@@ -347,7 +348,8 @@ export function AiGenerationPage() {
     };
   }, []);
 
-  const canExtract = Boolean(form.project.trim() && form.page.trim() && form.requirement.trim());
+  const requirementText = parsedText || form.requirement.trim();
+  const canExtract = Boolean(form.project.trim() && form.page.trim() && requirementText);
   const selectedCandidates = candidates.filter((item) => selectedKeys.includes(item.key));
   const selectedIntentIds = selectedCandidates.map((item) => item.intentId).filter(Boolean);
 
@@ -528,7 +530,9 @@ export function AiGenerationPage() {
         const response = await saveTestPointAssets({
           project: form.project.trim(),
           page: form.page.trim(),
-          requirement: form.requirement.trim(),
+          requirement: parsedText
+            ? `${parsedText}\n\n--- 用户补充 ---\n${form.requirement.trim()}`
+            : form.requirement.trim(),
           title: form.title.trim(),
           priority: form.priority.trim() || "P1",
           source: form.source.trim() || "manual",
@@ -630,7 +634,9 @@ export function AiGenerationPage() {
       const response = await previewTestPoints({
         project: form.project.trim(),
         page: form.page.trim(),
-        requirement: form.requirement.trim(),
+        requirement: parsedText
+          ? `${parsedText}\n\n--- 用户补充 ---\n${form.requirement.trim()}`
+          : form.requirement.trim(),
         source: form.source.trim() || "manual",
       });
       const normalized = normalizeCandidates(response);
@@ -739,7 +745,9 @@ export function AiGenerationPage() {
       const item = response.item;
       const parsed = toText(item.parsed_text);
       if (parsed) {
-        setForm((prev) => ({ ...prev, requirement: mergeDocumentIntoRequirement(prev.requirement, parsed) }));
+        setParsedText(parsed);
+      } else {
+        setParsedText("");
       }
       if (item.parse_status === "parsed") {
         setUploadDocNote(`已解析并填入需求描述：${toText(item.filename) || "文档"}`);
@@ -847,6 +855,12 @@ export function AiGenerationPage() {
               {uploadDocError ? <p className="error aiw-doc-upload-msg">{uploadDocError}</p> : null}
               {uploadDocNote ? <p className="muted aiw-doc-upload-msg">{uploadDocNote}</p> : null}
             </div>
+            {parsedText ? (
+              <div className="span-3 aiw-parsed-preview">
+                <div className="aiw-parsed-label">文档解析结果（由章节选择控制，不可编辑）</div>
+                <pre className="aiw-parsed-text">{parsedText}</pre>
+              </div>
+            ) : null}
             <label className="span-3">
               需求描述
               <textarea
@@ -858,7 +872,6 @@ export function AiGenerationPage() {
               />
             </label>
           </div>
-          <p className="aiw-inline-hint">输入建议：至少包含业务目标、关键流程和验收点，避免过短句导致测试点不完整。</p>
         </section>
       );
     }
