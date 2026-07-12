@@ -25,10 +25,14 @@ router = APIRouter(tags=["workbench-generation"])
 # Router must not import pipeline / flags / normalizer / repository internals.
 
 
+def _make_preview_usecase(db: Session = Depends(get_db)):
+    return build_preview_usecase(db=db)
+
+
 @router.post("/api/workbench/preview-test-points")
 def preview_test_points(
     payload: GenerateCasePayload,
-    usecase: Any = Depends(build_preview_usecase),
+    usecase: Any = Depends(_make_preview_usecase),
 ) -> dict[str, Any]:
     try:
         return usecase.execute(payload)

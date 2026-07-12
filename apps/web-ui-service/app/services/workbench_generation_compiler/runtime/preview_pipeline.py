@@ -37,6 +37,8 @@ def run_preview_pipeline(
     list_value: ListValue,
     dict_value: DictValue,
     trace_id: str = "",
+    prompt_system: str | None = None,
+    prompt_user: str | None = None,
 ) -> dict[str, Any]:
     log_debug_event(
         logger=_LOGGER,
@@ -62,8 +64,8 @@ def run_preview_pipeline(
         user_story=user_story,
         git_diff=git_diff,
         # prompt override: 上层(generation_service)可注入 DB template 渲染结果
-        prompt_system=None,
-        prompt_user=None,
+        prompt_system=prompt_system,
+        prompt_user=prompt_user,
         git_diff_path=git_diff_path,
         openapi_url=openapi_url,
         defect_ticket=defect_ticket,

@@ -378,6 +378,8 @@ def build_preview_response(
     render_requirement_spec_markdown: RenderRequirementSpecMarkdown,
     extract_quality_gate: ExtractQualityGate,
     project: str = "mall",
+    prompt_system: str | None = None,
+    prompt_user: str | None = None,
 ) -> dict[str, Any]:
     trace_id = build_trace_id(
         stage="service.preview",
@@ -428,6 +430,8 @@ def build_preview_response(
         list_value=_list_value,
         dict_value=_dict_value,
         trace_id=trace_id,
+        prompt_system=prompt_system,
+        prompt_user=prompt_user,
     )
     snapshot = preview_store.save_preview_snapshot(
         project=project,
