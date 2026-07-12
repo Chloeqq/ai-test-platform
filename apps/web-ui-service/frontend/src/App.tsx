@@ -43,6 +43,7 @@ import { SchedulerPage } from "./pages/SchedulerPage";
 import { TestPointAssetDetailPage } from "./pages/TestPointAssetDetailPage";
 import { TestPointAssetEditPage } from "./pages/TestPointAssetEditPage";
 import { TestPointAssetsPage } from "./pages/TestPointAssetsPage";
+import { ToastProvider } from "./components/Toast";
 
 function NotFound() {
   return (
@@ -60,6 +61,7 @@ function NotFound() {
 
 export function App() {
   return (
+    <ToastProvider>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<GlobalNavLayout />}>
@@ -172,5 +174,6 @@ export function App() {
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
+    </ToastProvider>
   );
 }

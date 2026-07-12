@@ -7503,3 +7503,85 @@ pre,
   max-height: 400px;
   overflow-y: auto;
 }
+
+/* ---- Toast 通知 ---- */
+.aiw-toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+  pointer-events: none;
+}
+
+.aiw-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1a1a1a;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: aiw-toast-slide-in 0.28s ease-out;
+  transition: opacity 0.28s ease-out, transform 0.28s ease-out;
+}
+
+.aiw-toast-exiting {
+  opacity: 0;
+  transform: translateX(40px);
+}
+
+.aiw-toast-success {
+  background: #eaf7ea;
+  border: 1px solid #b7e4b7;
+}
+
+.aiw-toast-error {
+  background: #fff0f0;
+  border: 1px solid #f5c2c2;
+}
+
+.aiw-toast-warning {
+  background: #fff8e8;
+  border: 1px solid #f0d89c;
+}
+
+.aiw-toast-info {
+  background: #e8f4fd;
+  border: 1px solid #b8daf5;
+}
+
+.aiw-toast-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.aiw-toast-success .aiw-toast-icon { color: #2e7d32; }
+.aiw-toast-error .aiw-toast-icon   { color: #c62828; }
+.aiw-toast-warning .aiw-toast-icon { color: #e65100; }
+.aiw-toast-info .aiw-toast-icon    { color: #1565c0; }
+
+.aiw-toast-msg {
+  flex: 1;
+  word-break: break-word;
+}
+
+@keyframes aiw-toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

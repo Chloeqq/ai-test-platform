@@ -12,6 +12,7 @@ import {
   type ProjectItem,
   uploadRequirementDocument,
 } from "../api/workbench";
+import { useToast } from "../components/Toast";
 import { DEFAULT_PROJECT_CODE, normalizeProjectCode, projectOptions } from "../config/projects";
 
 interface GenerationForm {
@@ -305,6 +306,7 @@ export function AiGenerationPage() {
   const [uploadDocError, setUploadDocError] = useState<string>("");
   const [uploadDocNote, setUploadDocNote] = useState<string>("");
   const [parsedText, setParsedText] = useState<string>("");   // 文档解析结果（只读,由 SectionTree 驱动）
+  const toast = useToast();
 
   function appendEvent(event: Omit<PipelineEvent, "id" | "at">) {
     setEvents((prev) => [
@@ -746,18 +748,17 @@ export function AiGenerationPage() {
       const parsed = toText(item.parsed_text);
       if (parsed) {
         setParsedText(parsed);
+        toast.success(`已解析并填入需求描述：${toText(item.filename) || "文档"}`);
       } else {
         setParsedText("");
       }
-      if (item.parse_status === "parsed") {
-        setUploadDocNote(`已解析并填入需求描述：${toText(item.filename) || "文档"}`);
-      } else if (item.parse_status === "partial") {
-        setUploadDocNote("部分解析成功，请检查解析结果后再提取测试点。");
-      } else {
-        setUploadDocError("未能从文档提取到有效内容，原始文件已存档，可手动输入需求。");
+      if (item.parse_status === "partial") {
+        toast.warning("部分解析成功，请检查解析结果后再提取测试点。");
+      } else if (!parsed) {
+        toast.error("未能从文档提取到有效内容，原始文件已存档，可手动输入需求。");
       }
     } catch (error) {
-      setUploadDocError(error instanceof Error ? error.message : "需求文档上传失败");
+      toast.error(error instanceof Error ? error.message : "需求文档上传失败");
     } finally {
       setUploadingDoc(false);
     }
