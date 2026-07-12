@@ -263,6 +263,8 @@ def _sections_from_pdf(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _sections_from_headings(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not blocks:
+        return []
     # 给每个 block 分配 id
     indexed: list[dict[str, Any]] = []
     for i, b in enumerate(blocks):
