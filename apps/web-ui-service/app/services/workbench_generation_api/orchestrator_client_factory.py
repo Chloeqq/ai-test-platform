@@ -40,6 +40,11 @@ def build_orchestrator_client() -> OrchestratorClient:
             payload["input_sources"] = kwargs["input_sources"]
         if isinstance(kwargs.get("openapi_spec"), dict) and kwargs.get("openapi_spec"):
             payload["openapi_spec"] = kwargs["openapi_spec"]
+        # Prompt override: 从 DB template 渲染后注入,agent 优先使用
+        for override_key in ("prompt_system", "prompt_user"):
+            val = kwargs.get(override_key)
+            if val:
+                payload[override_key] = val
         for key in (
             "prd_text",
             "prd_url",
