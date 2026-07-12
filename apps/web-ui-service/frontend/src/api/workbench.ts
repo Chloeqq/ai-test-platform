@@ -289,6 +289,40 @@ export async function getRequirementDocument(
   );
 }
 
+export interface SectionNode {
+  id: string;
+  title: string;
+  level: number;
+  char_count: number;
+  block_ids: string[];
+  children: SectionNode[];
+}
+
+export interface ScopedContent {
+  scoped_text: string;
+  char_count: number;
+  estimated_tokens: number;
+  level: string;
+}
+
+export async function getRequirementDocumentSections(
+  docId: number,
+): Promise<{ sections: SectionNode[] }> {
+  return getJson<{ sections: SectionNode[] }>(
+    `/api/workbench/requirement-documents/${docId}/sections`,
+  );
+}
+
+export async function getRequirementDocumentScopedContent(
+  docId: number,
+  sectionIds: string[],
+): Promise<{ item: ScopedContent }> {
+  return postJson<{ item: ScopedContent }>(
+    `/api/workbench/requirement-documents/${docId}/scoped-content`,
+    { section_ids: sectionIds },
+  );
+}
+
 export async function listTestProjects(): Promise<{ items?: Array<ProjectItem & Record<string, unknown>> }> {
   return getJson<{ items?: Array<ProjectItem & Record<string, unknown>> }>("/api/test-projects");
 }

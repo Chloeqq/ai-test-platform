@@ -12,6 +12,7 @@ import {
   type ProjectItem,
   uploadRequirementDocument,
 } from "../api/workbench";
+import { SectionTree } from "../components/SectionTree";
 import { useToast } from "../components/Toast";
 import { DEFAULT_PROJECT_CODE, normalizeProjectCode, projectOptions } from "../config/projects";
 
@@ -306,6 +307,7 @@ export function AiGenerationPage() {
   const [uploadDocError, setUploadDocError] = useState<string>("");
   const [uploadDocNote, setUploadDocNote] = useState<string>("");
   const [parsedText, setParsedText] = useState<string>("");   // 文档解析结果（只读,由 SectionTree 驱动）
+  const [activeDocId, setActiveDocId] = useState<number | null>(null);  // 当前文档 ID,供 SectionTree
   const toast = useToast();
 
   function appendEvent(event: Omit<PipelineEvent, "id" | "at">) {
@@ -748,6 +750,7 @@ export function AiGenerationPage() {
       const parsed = toText(item.parsed_text);
       if (parsed) {
         setParsedText(parsed);
+        setActiveDocId(item.document_id);
         toast.success(`已解析并填入需求描述：${toText(item.filename) || "文档"}`);
       } else {
         setParsedText("");
@@ -856,6 +859,14 @@ export function AiGenerationPage() {
               {uploadDocError ? <p className="error aiw-doc-upload-msg">{uploadDocError}</p> : null}
               {uploadDocNote ? <p className="muted aiw-doc-upload-msg">{uploadDocNote}</p> : null}
             </div>
+            {activeDocId ? (
+              <div className="span-3">
+                <SectionTree
+                  docId={activeDocId}
+                  onChange={(scope) => setParsedText(scope.scoped_text)}
+                />
+              </div>
+            ) : null}
             {parsedText ? (
               <div className="span-3 aiw-parsed-preview">
                 <div className="aiw-parsed-label">文档解析结果（由章节选择控制，不可编辑）</div>

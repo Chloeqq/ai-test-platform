@@ -5099,6 +5099,79 @@ th {
   font-size: 12px;
 }
 
+.aiw-section-tree {
+  margin: 8px 0;
+}
+
+.aiw-section-tree-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.aiw-btn-sm {
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.aiw-btn-sm:hover {
+  background: #f5f6f8;
+}
+
+.aiw-section-node {
+  margin: 2px 0;
+}
+
+.aiw-section-expand {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  width: 18px;
+  padding: 0;
+  color: #666;
+}
+
+.aiw-section-expand-spacer {
+  display: inline-block;
+}
+
+.aiw-section-label {
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.aiw-section-label input[type="checkbox"] {
+  margin: 0;
+}
+
+.aiw-section-title-selected {
+  font-weight: 600;
+  color: #107dec;
+}
+
+.aiw-section-children {
+  margin-left: 0;
+}
+
+.aiw-section-scope {
+  margin-top: 8px;
+  font-size: 12px;
+  padding: 6px 10px;
+  background: #f8f9fb;
+  border-radius: 4px;
+}
+
+.aiw-scope-warn { color: #e65100; }
+.aiw-scope-block { color: #c62828; font-weight: 600; }
+
 .aiw-doc-upload-msg {
   flex-basis: 100%;
   margin: 0;
