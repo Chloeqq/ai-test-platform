@@ -1,5 +1,19 @@
 /** 章节选择树组件。用 useReducer 管理选中/半选/展开状态，性能通过 nodeMap + parentMap 索引保证。 */
 
+const DEBOUNCE_MS = 200;
+const INDENT_PX = 20;
+
+const SCOPE_ICONS: Record<string, string> = {
+  block: "🚫",
+  warn: "⚠️",
+  ok: "⚡",
+};
+const SCOPE_LABELS: Record<string, string> = {
+  block: "已超上限",
+  warn: "内容较多",
+  ok: "可正常生成",
+};
+
 import { useCallback, useEffect, useReducer, useState } from "react";
 import {
   type SectionNode as ApiSectionNode,
@@ -289,7 +303,7 @@ export function SectionTree({ docId, onChange }: SectionTreeProps) {
         })
         .catch(() => {})
         .finally(() => setScopeLoading(false));
-    }, 200);
+    }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [state.checkedIds, docId, onChange]);
 
@@ -336,7 +350,7 @@ export function SectionTree({ docId, onChange }: SectionTreeProps) {
           <span className={`muted aiw-scope-${scope.level}`}>
             {" · "}约 {scope.char_count} 字 · 预估 ~{scope.estimated_tokens} tokens
             {" · "}
-            {scope.level === "block" ? "🚫 已超上限" : scope.level === "warn" ? "⚠️ 内容较多" : "⚡ 可正常生成"}
+            {`${SCOPE_ICONS[scope.level] || ""} ${SCOPE_LABELS[scope.level] || scope.level}`}
           </span>
         ) : checkedCount === 0 ? (
           <span className="muted"> · 未选择章节</span>
@@ -364,7 +378,7 @@ function SectionNodeItem({
   const hasChildren = node.children.length > 0;
 
   return (
-    <div className="aiw-section-node" style={{ paddingLeft: depth * 20 }}>
+    <div className="aiw-section-node" style={{ paddingLeft: depth * INDENT_PX }}>
       {hasChildren ? (
         <button
           type="button"

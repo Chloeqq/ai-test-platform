@@ -70,20 +70,6 @@ function toText(value: unknown): string {
   return String(value || "").trim();
 }
 
-// 文档解析结果与用户手动补充用分隔符区分，便于追溯哪些是文档原文。
-const DOC_RESULT_MARKER = "--- 文档解析结果 ---";
-const USER_SUPPLEMENT_MARKER = "--- 用户补充 ---";
-
-function mergeDocumentIntoRequirement(existing: string, parsedText: string): string {
-  const supplementIndex = existing.indexOf(USER_SUPPLEMENT_MARKER);
-  // 保留用户补充段：若已存在标记，取其后内容；否则把原有整段视作用户补充。
-  const supplement =
-    supplementIndex >= 0
-      ? existing.slice(supplementIndex + USER_SUPPLEMENT_MARKER.length).replace(/^\s+/, "").trimEnd()
-      : existing.trim();
-  return `${DOC_RESULT_MARKER}\n${parsedText.trim()}\n\n${USER_SUPPLEMENT_MARKER}\n${supplement}`;
-}
-
 function normalizeSteps(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];

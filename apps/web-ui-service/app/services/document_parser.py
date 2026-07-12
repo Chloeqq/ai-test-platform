@@ -240,22 +240,29 @@ def _table_block_to_markdown(rows: list[list[str]]) -> str:
     return "\n".join(lines)
 
 
+def _block_to_text(block: dict[str, Any]) -> str:
+    """将单个 block 转为 Markdown 文本片段。供 _blocks_to_markdown 和 build_scoped_content 共用。"""
+    btype = block.get("type")
+    if btype == "heading":
+        level = max(1, min(6, int(block.get("level") or 1)))
+        text = str(block.get("text") or "").strip()
+        return f"{'#' * level} {text}" if text else ""
+    if btype == "table":
+        rows = block.get("rows") or []
+        if not rows:
+            return ""
+        col_count = max(len(row) for row in rows)
+        normalized = [row + [""] * (col_count - len(row)) for row in rows]
+        lines = ["| " + " | ".join(c.replace("|", "\\|") for c in normalized[0]) + " |"]
+        lines.append("| " + " | ".join(["---"] * col_count) + " |")
+        for row in normalized[1:]:
+            lines.append("| " + " | ".join(c.replace("|", "\\|") for c in row) + " |")
+        return "\n".join(lines)
+    # paragraph / default
+    return str(block.get("text") or "").strip()
+
+
 def _blocks_to_markdown(blocks: list[dict[str, Any]]) -> str:
-    """有序 blocks → 规范 Markdown（标题 #、GFM 表格、段落空行分隔）。"""
-    parts: list[str] = []
-    for block in blocks:
-        btype = block.get("type")
-        if btype == "heading":
-            level = max(1, min(6, int(block.get("level") or 1)))
-            text = str(block.get("text") or "").strip()
-            if text:
-                parts.append(f"{'#' * level} {text}")
-        elif btype == "table":
-            rows = block.get("rows") or []
-            if rows:
-                parts.append(_table_block_to_markdown(rows))
-        else:  # paragraph / 其他
-            text = str(block.get("text") or "").strip()
-            if text:
-                parts.append(text)
+    """有序 blocks → 规范 Markdown（委托 _block_to_text）。"""
+    parts = [t for b in blocks if (t := _block_to_text(b))]
     return "\n\n".join(parts).strip()

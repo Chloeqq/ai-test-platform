@@ -35,6 +35,9 @@ _UNSAFE_FILENAME_RE = re.compile(r"[^\w.-]")
 # 解析阶段可预期的失败类型（编排降级，不使用裸 except）。
 _PARSE_ERRORS = (ValueError, RuntimeError, ImportError, OSError)
 
+_PREVIEW_MAX_CHARS = 500
+_FALLBACK_SECTION_TITLE = "全文"
+
 
 def _parse_blocks(content: bytes, filename: str) -> list[dict[str, Any]] | None:
     """按扩展名分发到块级解析器，返回 blocks 列表。解析失败返回 None。"""
@@ -175,7 +178,7 @@ def list_documents(
 
 
 def get_document_detail(db: Session, *, doc_id: int) -> dict[str, Any]:
-    """返回单个文档详情,含解析文本前 500 字符预览。"""
+    f"""返回单个文档详情,含解析文本前 {_PREVIEW_MAX_CHARS} 字符预览。"""
     repo = RequirementDocumentRepository(db)
     doc = repo.get_by_id(doc_id)
     if doc is None:
@@ -187,7 +190,7 @@ def get_document_detail(db: Session, *, doc_id: int) -> dict[str, Any]:
         if client and doc.object_key:
             raw = download_bytes(client, doc.object_key)
             text = raw.decode("utf-8", errors="replace")
-            parsed_preview = text[:500]
+            parsed_preview = text[:_PREVIEW_MAX_CHARS]
     except StorageError:
         parsed_preview = ""
     return {
@@ -282,7 +285,7 @@ def _sections_from_headings(blocks: list[dict[str, Any]]) -> list[dict[str, Any]
         total_chars = sum(len(str(b.get("text", ""))) for b in indexed)
         return [{
             "id": "sec-full",
-            "title": "全文",
+            "title": _FALLBACK_SECTION_TITLE,
             "level": 1,
             "block_ids": [b["_id"] for b in indexed],
             "char_count": total_chars,
@@ -325,7 +328,7 @@ def _sections_from_headings(blocks: list[dict[str, Any]]) -> list[dict[str, Any]
         total_chars = sum(len(str(b.get("text", ""))) for b in indexed)
         return [{
             "id": "sec-full",
-            "title": "全文",
+            "title": _FALLBACK_SECTION_TITLE,
             "level": 1,
             "block_ids": [b["_id"] for b in indexed],
             "char_count": total_chars,
@@ -386,16 +389,9 @@ def build_scoped_content(db: Session, *, doc_id: int, section_ids: list[str]) ->
         bid = b.get("_id", f"b{i}")
         if bid not in all_selected_block_ids:
             continue
-        if b.get("type") == "heading":
-            parts.append(f"{'#' * b.get('level', 1)} {b.get('text', '')}")
-        elif b.get("type") == "table" and b.get("rows"):
-            rows = b["rows"]
-            parts.append("| " + " | ".join(rows[0]) + " |")
-            parts.append("| " + " | ".join(["---"] * len(rows[0])) + " |")
-            for row in rows[1:]:
-                parts.append("| " + " | ".join(row) + " |")
-        else:
-            parts.append(str(b.get("text", "")))
+        text = document_parser._block_to_text(b)
+        if text:
+            parts.append(text)
 
     scoped_text = "\n\n".join(parts)
     from shared_backend.token_estimator import estimate_tokens

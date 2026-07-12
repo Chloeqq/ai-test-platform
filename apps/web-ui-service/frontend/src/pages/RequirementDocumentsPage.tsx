@@ -11,6 +11,7 @@ import {
   type ProjectItem,
 } from "../api/workbench";
 import { DEFAULT_PROJECT_CODE } from "../config/projects";
+import { PARSE_STATUS_LABELS } from "../constants/statusLabels";
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -25,13 +26,6 @@ function formatTime(iso: string | undefined): string {
   if (!iso) return "-";
   return iso.replace("T", " ").slice(0, 19);
 }
-
-const STATUS_LABELS: Record<string, { text: string; cls: string }> = {
-  parsed: { text: "已解析", cls: "aiw-tag-green" },
-  pending: { text: "待处理", cls: "aiw-tag-gray" },
-  partial: { text: "部分成功", cls: "aiw-tag-yellow" },
-  failed: { text: "失败", cls: "aiw-tag-red" },
-};
 
 // ---------------------------------------------------------------------------
 // page
@@ -130,7 +124,7 @@ export function RequirementDocumentsPage() {
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           {statusOptions.map((s) => (
             <option key={s} value={s}>
-              {s === "all" ? "全部状态" : STATUS_LABELS[s]?.text || s}
+              {s === "all" ? "全部状态" : PARSE_STATUS_LABELS[s]?.text || s}
             </option>
           ))}
         </select>
@@ -168,7 +162,7 @@ export function RequirementDocumentsPage() {
           </thead>
           <tbody>
             {filtered.map((doc) => {
-              const st = STATUS_LABELS[doc.parse_status] || {
+              const st = PARSE_STATUS_LABELS[doc.parse_status] || {
                 text: doc.parse_status,
                 cls: "",
               };
@@ -211,8 +205,8 @@ export function RequirementDocumentsPage() {
                 <div><strong>大小:</strong> {formatSize(detail.file_size)}</div>
                 <div>
                   <strong>状态:</strong>{" "}
-                  <span className={`aiw-tag ${STATUS_LABELS[detail.parse_status]?.cls || ""}`}>
-                    {STATUS_LABELS[detail.parse_status]?.text || detail.parse_status}
+                  <span className={`aiw-tag ${PARSE_STATUS_LABELS[detail.parse_status]?.cls || ""}`}>
+                    {PARSE_STATUS_LABELS[detail.parse_status]?.text || detail.parse_status}
                   </span>
                 </div>
                 <div><strong>上传时间:</strong> {formatTime(detail.created_at)}</div>

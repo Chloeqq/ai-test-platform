@@ -55,11 +55,17 @@ interface ToastContextValue {
 // -------------------------------------------------------------------
 // config
 // -------------------------------------------------------------------
-const MAX_TOASTS = 5;
-const DEFAULT_DURATION = 3000;
-const ERROR_DURATION = 5000;
+export interface ToastConfig {
+  maxToasts?: number;
+  defaultDuration?: number;
+  errorDuration?: number;
+  animationMs?: number;
+}
 
-const ANIMATION_MS = 300;
+const DEFAULT_maxToasts = 5;
+const DEFAULT_DURATION_MS = 3000;
+const DEFAULT_ERROR_DURATION_MS = 5000;
+const DEFAULT_animationMs = 300;
 
 // -------------------------------------------------------------------
 // helpers
@@ -91,7 +97,18 @@ export function useToast(): ToastContextValue {
 // -------------------------------------------------------------------
 // provider
 // -------------------------------------------------------------------
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({
+  children,
+  config,
+}: {
+  children: ReactNode;
+  config?: ToastConfig;
+}) {
+  const maxToasts = config?.maxToasts ?? DEFAULT_maxToasts;
+  const defaultDuration = config?.defaultDuration ?? DEFAULT_DURATION_MS;
+  const errorDuration = config?.errorDuration ?? DEFAULT_ERROR_DURATION_MS;
+  const animationMs = config?.animationMs ?? DEFAULT_animationMs;
+
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -102,7 +119,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     );
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, ANIMATION_MS);
+    }, animationMs);
     const timer = timers.current.get(id);
     if (timer) {
       clearTimeout(timer);
@@ -113,10 +130,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const add = useCallback(
     (type: ToastType, message: string) => {
       const id = uid();
-      const duration = type === "error" ? ERROR_DURATION : DEFAULT_DURATION;
+      const duration = type === "error" ? errorDuration : defaultDuration;
 
       setToasts((prev) => {
-        if (prev.length < MAX_TOASTS) {
+        if (prev.length < maxToasts) {
           return [...prev, { id, type, message, exiting: false, duration }];
         }
         // 队列满: 保留所有 error/warning, 从 success/info 中滑出最旧的
