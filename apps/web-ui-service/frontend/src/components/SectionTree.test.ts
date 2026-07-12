@@ -12,7 +12,7 @@ import {
   type SectionNode,
   createInitialState,
   sectionTreeReducer,
-} from './SectionTree';
+} from './SectionTree.reducer';
 
 // ---------------------------------------------------------------------------
 // mini assert helper (no dependencies)
