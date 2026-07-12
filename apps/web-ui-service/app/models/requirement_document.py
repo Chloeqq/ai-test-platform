@@ -6,7 +6,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.constants.requirement_document import ParseStatus
@@ -26,6 +26,7 @@ class RequirementDocument(Base):
         String(20), default=ParseStatus.PENDING, index=True
     )  # pending/parsed/partial/failed
     parse_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parsed_blocks: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)

@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -127,3 +127,31 @@ def download_requirement_document(
         media_type=content_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/{doc_id}/sections")
+def get_requirement_document_sections(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> dict[str, object]:
+    try:
+        sections = requirement_document_service.get_document_sections(db, doc_id=doc_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return {"sections": sections}
+
+
+@router.post("/{doc_id}/scoped-content")
+def get_requirement_document_scoped_content(
+    doc_id: int,
+    payload: dict[str, object] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> dict[str, object]:
+    section_ids = [str(s) for s in (payload.get("section_ids") or []) if s]
+    try:
+        result = requirement_document_service.build_scoped_content(db, doc_id=doc_id, section_ids=section_ids)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return {"item": result}
