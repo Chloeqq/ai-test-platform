@@ -50,6 +50,7 @@ def upgrade() -> None:
             sa.Column("scene_type", sa.String(length=40), nullable=False, server_default=""),
             sa.Column("system_prompt", sa.Text(), nullable=False, server_default=""),
             sa.Column("user_prompt_template", sa.Text(), nullable=False, server_default=""),
+            sa.Column("description", sa.Text(), nullable=True),
             sa.Column("variables", sa.JSON(), nullable=False, server_default="{}"),
             sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.true()),
             sa.Column("is_enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
@@ -61,11 +62,10 @@ def upgrade() -> None:
             sa.UniqueConstraint("code", name="uq_prompt_templates_code"),
         )
     _safe_create_index("ix_prompt_templates_scene_type", "prompt_templates", ["scene_type"])
-    _safe_create_index("ix_prompt_templates_is_enabled", "prompt_templates", ["is_enabled"])
 
 
 def downgrade() -> None:
-    for index_name in ["ix_prompt_templates_scene_type", "ix_prompt_templates_is_enabled"]:
+    for index_name in ["ix_prompt_templates_scene_type"]:
         _drop_index_if_exists(index_name, "prompt_templates")
     conn = op.get_bind()
     if _has_table(conn, "prompt_templates"):

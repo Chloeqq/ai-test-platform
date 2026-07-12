@@ -1,4 +1,4 @@
-"""Prompt 模板管理路由：列表/详情/编辑/测试/恢复默认。"""
+"""Prompt 模板管理路由：列表/详情/编辑/测试/恢复默认（全部通过 PromptManager）。"""
 from __future__ import annotations
 
 from typing import Any
@@ -10,8 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.repositories.prompt_template_repository import PromptTemplateRepository
-from app.services.prompt_manager import _to_template_dict, PromptManager
+from app.services.prompt_manager import PromptManager
 
 router = APIRouter(prefix="/api/workbench/prompt-templates", tags=["prompt-templates"])
 
@@ -19,6 +18,7 @@ router = APIRouter(prefix="/api/workbench/prompt-templates", tags=["prompt-templ
 class PromptTemplateUpdate(BaseModel):
     system_prompt: str | None = Field(default=None)
     user_prompt_template: str | None = Field(default=None)
+    description: str | None = Field(default=None)
     is_enabled: bool | None = Field(default=None)
     updated_by: str | None = Field(default=None)
 
@@ -32,9 +32,7 @@ def list_prompt_templates(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
 ) -> dict[str, object]:
-    PromptManager.ensure_builtins(db)
-    repo = PromptTemplateRepository(db)
-    items = [_to_template_dict(t) for t in repo.list_all()]
+    items = PromptManager.list_all(db)
     return {"items": items}
 
 
@@ -44,11 +42,10 @@ def get_prompt_template(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
 ) -> dict[str, object]:
-    repo = PromptTemplateRepository(db)
-    tmpl = repo.get_by_id(template_id)
-    if tmpl is None:
+    item = PromptManager.get_by_id(db, template_id)
+    if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
-    return {"item": _to_template_dict(tmpl)}
+    return {"item": item}
 
 
 @router.put("/{template_id}")
@@ -58,13 +55,11 @@ def update_prompt_template(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
 ) -> dict[str, object]:
-    repo = PromptTemplateRepository(db)
     kwargs = {k: v for k, v in payload.model_dump().items() if v is not None}
-    tmpl = repo.update(template_id, **kwargs)
-    if tmpl is None:
+    item = PromptManager.update(db, template_id, **kwargs)
+    if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
-    db.commit()
-    return {"item": _to_template_dict(tmpl)}
+    return {"item": item}
 
 
 @router.post("/{template_id}/test")
@@ -74,13 +69,11 @@ def test_prompt_template(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
 ) -> dict[str, object]:
-    repo = PromptTemplateRepository(db)
-    tmpl = repo.get_by_id(template_id)
-    if tmpl is None:
+    template = PromptManager.get_by_id(db, template_id)
+    if template is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在")
-    template_dict = _to_template_dict(tmpl)
     try:
-        system, user = PromptManager.render(template_dict, payload.variables)
+        system, user = PromptManager.render(template, payload.variables)
     except jinja2.UndefinedError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"模板变量缺失: {exc}") from exc
     except Exception as exc:
@@ -94,14 +87,7 @@ def reset_prompt_template(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
 ) -> dict[str, object]:
-    repo = PromptTemplateRepository(db)
-    repo.reset_to_default(template_id)
-    db.commit()
-    # 重新种子该模板
-    tmpl = repo.get_by_id(template_id)
-    code = tmpl.code if tmpl else ""
-    PromptManager.ensure_builtins(db)
-    new_tmpl = repo.get_by_code(code) if code else None
-    if new_tmpl is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="恢复默认失败")
-    return {"item": _to_template_dict(new_tmpl)}
+    item = PromptManager.reset_to_default(db, template_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="模板不存在或已是默认")
+    return {"item": item}

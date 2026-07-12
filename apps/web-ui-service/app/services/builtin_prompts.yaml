@@ -1,0 +1,104 @@
+requirement_parse:
+  name: "需求解析"
+  scene_type: "requirement_parse"
+  description: "从需求文本提取功能点、约束和验收条件"
+  system_prompt: "你是一个资深 QA 工程师。从给定的需求文本中提取测试意图。"
+  user_prompt_template: |
+    根据以下需求文本，提取所有功能点、边界条件、异常场景和安全约束:
+
+    需求文本:
+    {{ requirement }}
+
+    页面: {{ page }}
+
+    请以 JSON 数组格式返回，每项包含 intent_id/title/intent_type/priority/summary/steps/expected 字段。
+  variables:
+    requirement:
+      required: true
+    page:
+      required: false
+      default: ""
+  version: 1
+
+requirement_doc_to_test_points:
+  name: "文档生成测试点"
+  scene_type: "requirement_parse"
+  description: "从结构化 Markdown 文档提取测试点"
+  system_prompt: "你是一个资深 QA 工程师。从给定的结构化需求文档中提取测试点。"
+  user_prompt_template: |
+    根据以下需求文档，提取所有测试点:
+
+    {{ scoped_content }}
+
+    页面: {{ page }}
+
+    请以 JSON 数组格式返回，每项包含 intent_id/title/intent_type/priority/summary/steps/expected 字段。
+  variables:
+    scoped_content:
+      required: true
+    page:
+      required: false
+      default: ""
+  version: 1
+
+case_generation:
+  name: "测试意图编译用例"
+  scene_type: "case_generation"
+  description: "从测试意图编译可执行用例步骤"
+  system_prompt: "你是一个自动化测试工程师。将测试意图编译为可执行的 DSL 步骤。"
+  user_prompt_template: |
+    将以下测试意图编译为可执行的测试用例:
+
+    测试意图:
+    {{ intent }}
+
+    页面对象: {{ page_object }}
+
+    请返回包含 steps/expected/priority 的 JSON 对象。
+  variables:
+    intent:
+      required: true
+    page_object:
+      required: false
+      default: "{}"
+  version: 1
+
+test_point_to_case:
+  name: "测试点转用例"
+  scene_type: "case_generation"
+  description: "从测试点编译完整用例 YAML"
+  system_prompt: "你是一个测试用例编译器。将测试点转换为完整的可执行用例。"
+  user_prompt_template: |
+    将以下测试点转换为完整的可执行用例:
+
+    测试点:
+    {{ test_point }}
+
+    请返回包含 case_id/steps/assertions/precondition 的 JSON 对象。
+  variables:
+    test_point:
+      required: true
+  version: 1
+
+failure_analysis:
+  name: "失败原因分析"
+  scene_type: "failure_analysis"
+  description: "分析测试执行失败原因"
+  system_prompt: "你是一个测试故障分析专家。分析测试失败的可能原因。"
+  user_prompt_template: |
+    分析以下测试失败:
+
+    用例: {{ case_title }}
+    错误: {{ error_message }}
+    日志: {{ logs }}
+
+    请返回包含 root_cause/likely_fix/confidence 的 JSON 对象。
+  variables:
+    case_title:
+      required: true
+    error_message:
+      required: true
+    logs:
+      required: false
+      default: ""
+  version: 1

@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -108,3 +108,22 @@ def get_requirement_document(
         return {"item": requirement_document_service.get_document_detail(db, doc_id=doc_id)}
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get("/{doc_id}/download")
+def download_requirement_document(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    try:
+        data, filename, content_type = requirement_document_service.download_document(db, doc_id=doc_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

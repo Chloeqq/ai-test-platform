@@ -44,7 +44,7 @@ class PromptTemplateRepository(BaseRepository):
         model_cols = {c.name for c in PromptTemplate.__table__.columns}
         clean_kwargs = {k: v for k, v in kwargs.items() if k in model_cols}
         existing = self.get_by_code(code)
-        new_version = int(clean_kwargs.get("version", 1) or 1)
+        new_version = int(clean_kwargs.get("version", PromptTemplate.DEFAULT_VERSION) or PromptTemplate.DEFAULT_VERSION)
         if existing is not None:
             if existing.is_default and existing.version < new_version:
                 for key, value in clean_kwargs.items():
@@ -66,7 +66,8 @@ class PromptTemplateRepository(BaseRepository):
             if hasattr(tmpl, key):
                 setattr(tmpl, key, value)
         if tmpl.is_default:
-            tmpl.is_default = False  # 用户覆盖内置模板
+            tmpl.is_default = False
+            tmpl.version = tmpl.version + 1  # 用户覆盖 → 版本递增标记
         self.db.flush()
         return tmpl
 

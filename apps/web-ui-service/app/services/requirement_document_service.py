@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.constants.requirement_document import ParseStatus
-from app.core.minio_client import StorageError, get_minio_client, upload_bytes
+from app.core.minio_client import StorageError, download_bytes, get_minio_client, upload_bytes
 from app.repositories.requirement_document_repository import RequirementDocumentRepository
 from app.services import document_parser
 
@@ -159,13 +159,12 @@ def get_document_detail(db: Session, *, doc_id: int) -> dict[str, Any]:
     # 从 MinIO 下载源文件获取 parsed_text 预览
     parsed_preview = ""
     try:
-        from app.core.minio_client import download_bytes, get_minio_client
         client = get_minio_client()
         if client and doc.object_key:
             raw = download_bytes(client, doc.object_key)
             text = raw.decode("utf-8", errors="replace")
             parsed_preview = text[:500]
-    except Exception:
+    except StorageError:
         parsed_preview = ""
     return {
         "id": doc.id,
@@ -181,3 +180,19 @@ def get_document_detail(db: Session, *, doc_id: int) -> dict[str, Any]:
         "deleted_at": doc.deleted_at.isoformat() if doc.deleted_at else None,
         "parsed_preview": parsed_preview,
     }
+
+
+def download_document(db: Session, *, doc_id: int) -> tuple[bytes, str, str]:
+    """返回 (file_bytes, filename, content_type)。MinIO 不可用时 raise RuntimeError。"""
+    repo = RequirementDocumentRepository(db)
+    doc = repo.get_by_id(doc_id)
+    if doc is None:
+        raise ValueError(f"文档不存在: id={doc_id}")
+    client = get_minio_client()
+    if client is None:
+        raise RuntimeError("MinIO 未启用")
+    raw = download_bytes(client, doc.object_key)
+    ext_map = {".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+               ".pdf": "application/pdf", ".md": "text/markdown"}
+    content_type = ext_map.get(f".{doc.source_type}", "application/octet-stream")
+    return raw, doc.filename, content_type
