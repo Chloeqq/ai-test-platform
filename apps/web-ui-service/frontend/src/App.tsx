@@ -11,6 +11,7 @@ import { CaseTagsPage } from "./pages/CaseTagsPage";
 import { CaseVersionsPage } from "./pages/CaseVersionsPage";
 import { ApiContractsPage } from "./pages/ApiContractsPage";
 import { DataTemplatesPage } from "./pages/DataTemplatesPage";
+import { RequirementDocumentsPage } from "./pages/RequirementDocumentsPage";
 import { BehaviorRegistryPage } from "./pages/BehaviorRegistryPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { DefectsPage } from "./pages/DefectsPage";
@@ -68,6 +69,7 @@ export function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/ai-generation" element={<AiGenerationPage />} />
+        <Route path="/requirement-documents" element={<RequirementDocumentsPage />} />
         <Route path="/ai-generation/history" element={<AiGenerationHistoryPage />} />
         <Route path="/ai-generation/prompts" element={<PromptManagementPage />} />
         <Route path="/cases" element={<CasesPage />} />

@@ -251,6 +251,44 @@ export async function uploadRequirementDocument(
   );
 }
 
+export interface RequirementDocumentItem {
+  id: number;
+  filename: string;
+  source_type: string;
+  object_key: string;
+  file_size: number;
+  parse_status: string;
+  parse_error?: string;
+  created_by?: string;
+  created_at?: string;
+}
+
+export interface RequirementDocumentDetail extends RequirementDocumentItem {
+  is_deleted: boolean;
+  deleted_at?: string;
+  parsed_preview: string;
+}
+
+export async function listRequirementDocuments(
+  projectCode: string,
+  statusFilter?: string,
+): Promise<{ items: RequirementDocumentItem[] }> {
+  const params = new URLSearchParams();
+  params.set("project_code", projectCode);
+  if (statusFilter) params.set("status", statusFilter);
+  return getJson<{ items: RequirementDocumentItem[] }>(
+    `/api/workbench/requirement-documents?${params.toString()}`,
+  );
+}
+
+export async function getRequirementDocument(
+  docId: number,
+): Promise<{ item: RequirementDocumentDetail }> {
+  return getJson<{ item: RequirementDocumentDetail }>(
+    `/api/workbench/requirement-documents/${docId}`,
+  );
+}
+
 export async function listTestProjects(): Promise<{ items?: Array<ProjectItem & Record<string, unknown>> }> {
   return getJson<{ items?: Array<ProjectItem & Record<string, unknown>> }>("/api/test-projects");
 }

@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -81,3 +81,30 @@ async def upload_requirement_document(
         ) from exc
 
     return {"item": result}
+
+
+@router.get("")
+def list_requirement_documents(
+    project_code: str = Query(...),
+    status: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> dict[str, object]:
+    if not (project_code or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="project_code 不能为空")
+    items = requirement_document_service.list_documents(
+        db, project_code=project_code.strip(), status_filter=status,
+    )
+    return {"items": items}
+
+
+@router.get("/{doc_id}")
+def get_requirement_document(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> dict[str, object]:
+    try:
+        return {"item": requirement_document_service.get_document_detail(db, doc_id=doc_id)}
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

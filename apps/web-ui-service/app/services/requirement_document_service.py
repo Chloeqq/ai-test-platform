@@ -118,3 +118,66 @@ def upload_and_parse(
         "filename": filename,
         "source_type": source_type,
     }
+
+
+def list_documents(
+    db: Session,
+    *,
+    project_code: str,
+    status_filter: str | None = None,
+    keyword: str | None = None,
+) -> list[dict[str, Any]]:
+    """返回指定项目下的文档列表,支持状态筛选和关键字搜索(前端过滤,数据量小)。"""
+    repo = RequirementDocumentRepository(db)
+    rows = repo.list_by_project(project_code)
+    results: list[dict[str, Any]] = []
+    for doc in rows:
+        if status_filter and status_filter != "all" and doc.parse_status != status_filter:
+            continue
+        if keyword and keyword.lower() not in (doc.filename or "").lower():
+            continue
+        results.append({
+            "id": doc.id,
+            "filename": doc.filename,
+            "source_type": doc.source_type,
+            "object_key": doc.object_key,
+            "file_size": doc.file_size,
+            "parse_status": doc.parse_status,
+            "parse_error": doc.parse_error,
+            "created_by": doc.created_by,
+            "created_at": doc.created_at.isoformat() if doc.created_at else None,
+        })
+    return results
+
+
+def get_document_detail(db: Session, *, doc_id: int) -> dict[str, Any]:
+    """返回单个文档详情,含解析文本前 500 字符预览。"""
+    repo = RequirementDocumentRepository(db)
+    doc = repo.get_by_id(doc_id)
+    if doc is None:
+        raise ValueError(f"文档不存在: id={doc_id}")
+    # 从 MinIO 下载源文件获取 parsed_text 预览
+    parsed_preview = ""
+    try:
+        from app.core.minio_client import download_bytes, get_minio_client
+        client = get_minio_client()
+        if client and doc.object_key:
+            raw = download_bytes(client, doc.object_key)
+            text = raw.decode("utf-8", errors="replace")
+            parsed_preview = text[:500]
+    except Exception:
+        parsed_preview = ""
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "source_type": doc.source_type,
+        "object_key": doc.object_key,
+        "file_size": doc.file_size,
+        "parse_status": doc.parse_status,
+        "parse_error": doc.parse_error,
+        "is_deleted": doc.is_deleted,
+        "created_by": doc.created_by,
+        "created_at": doc.created_at.isoformat() if doc.created_at else None,
+        "deleted_at": doc.deleted_at.isoformat() if doc.deleted_at else None,
+        "parsed_preview": parsed_preview,
+    }
