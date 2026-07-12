@@ -68,6 +68,8 @@ class RequirementParserAgent:
         openapi_url: str = "",
         defect_ticket: str = "",
         runtime_logs: str = "",
+        prompt_system: str | None = None,
+        prompt_user: str | None = None,
     ) -> dict[str, Any]:
         parse_started_at = datetime.now(UTC)
 
@@ -159,6 +161,8 @@ class RequirementParserAgent:
             inferred_page=inferred_page,
             source_type=source_type,
             source_inputs=normalized_sources,
+            prompt_system=prompt_system,
+            prompt_user=prompt_user,
         )
         if not bool(llm_meta.get("succeeded", False)):
             reason = str(llm_meta.get("reason", "")).strip() or "llm execution failed"
@@ -400,6 +404,8 @@ class RequirementParserAgent:
         inferred_page: str,
         source_type: str,
         source_inputs: list[RequirementSourceInput],
+        prompt_system: str | None = None,
+        prompt_user: str | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         openai_api_key = str(os.getenv("OPENAI_API_KEY", "")).strip()
         configured_model = (
@@ -519,8 +525,8 @@ class RequirementParserAgent:
                     max_tokens=request_max_tokens,
                     response_format={"type": "json_object"},
                     messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_prompt},
+                        {"role": "system", "content": prompt_system or SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt_user or user_prompt},
                     ],
                 )
                 usage = getattr(completion, "usage", None)

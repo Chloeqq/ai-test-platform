@@ -61,6 +61,9 @@ def run_preview_pipeline(
         prd_url=prd_url,
         user_story=user_story,
         git_diff=git_diff,
+        # prompt override: 上层(generation_service)可注入 DB template 渲染结果
+        prompt_system=None,
+        prompt_user=None,
         git_diff_path=git_diff_path,
         openapi_url=openapi_url,
         defect_ticket=defect_ticket,

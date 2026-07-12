@@ -35,6 +35,8 @@ def main() -> int:
     openapi_url = str(payload.get("openapi_url", "")).strip()
     defect_ticket = str(payload.get("defect_ticket", "")).strip()
     runtime_logs = str(payload.get("runtime_logs", "")).strip()
+    prompt_system = str(payload.get("prompt_system", "")).strip() or None
+    prompt_user = str(payload.get("prompt_user", "")).strip() or None
 
     try:
         result = RequirementParserAgent().parse(
@@ -51,6 +53,8 @@ def main() -> int:
             openapi_url=openapi_url,
             defect_ticket=defect_ticket,
             runtime_logs=runtime_logs,
+            prompt_system=prompt_system,
+            prompt_user=prompt_user,
         )
     except Exception as exc:
         # Keep forced-llm behavior strict, but return a compact structured error
