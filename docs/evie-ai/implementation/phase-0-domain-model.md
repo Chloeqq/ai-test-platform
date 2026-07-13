@@ -138,7 +138,7 @@ apps/web-ui-service/app/repositories/evie_ai/
 职责：
 
 - EvieAi 表的最小 DB 读写。
-- 维护 `current_version_id` 一致性。
+- 维护 `current_version_pk` 一致性。
 - 使用现有 `Session` 和 `BaseRepository`。
 
 不允许承担：
@@ -192,6 +192,37 @@ apps/web-ui-service/tests/unit/evie_ai/
 
 ## 3. 数据模型
 
+### 持久化身份约定
+
+五个领域实体统一使用两层身份：
+
+```text
+Integer 内部自增主键
++ 独立 String 公共业务 ID
+```
+
+内部主键统一命名为 `id`。公共业务 ID 分别命名为：
+
+```text
+requirement_id
+requirement_version_id
+test_asset_id
+test_asset_version_id
+test_asset_source_id
+```
+
+内部外键只引用 Integer 主键，并使用明确的 `*_pk` 命名：
+
+```text
+requirement_pk
+requirement_version_pk
+test_asset_pk
+test_asset_version_pk
+current_version_pk
+```
+
+公共业务 ID 不直接作为数据库主键，内部外键也不得使用含义模糊的 `requirement_id / test_asset_id` 命名。
+
 ### requirements
 
 职责：需求聚合根，只保存稳定身份和聚合状态，不保存正文。
@@ -200,11 +231,13 @@ apps/web-ui-service/tests/unit/evie_ai/
 
 ```text
 id
+requirement_id
 project_code
 requirement_code
 external_requirement_key
-review_status
-current_version_id nullable
+status
+current_version_pk nullable
+row_version
 created_at
 updated_at
 deleted_at
@@ -231,17 +264,18 @@ script_code
 
 ```text
 id
-requirement_id
+requirement_version_id
+requirement_pk
 version_no
 title
 content
 content_checksum
 version_status
 created_at
-updated_at
 created_by
-updated_by
 ```
+
+`RequirementVersion` 是不可变版本表。创建后不得原地修改正文，不包含 `updated_at / updated_by / onupdate`；内容变更必须创建新版本。
 
 ### test_assets
 
@@ -251,11 +285,13 @@ updated_by
 
 ```text
 id
+test_asset_id
 project_code
 asset_code
 review_status
 conversion_status
-current_version_id nullable
+current_version_pk nullable
+row_version
 created_at
 updated_at
 deleted_at
@@ -289,7 +325,8 @@ script_code
 
 ```text
 id
-test_asset_id
+test_asset_version_id
+test_asset_pk
 version_no
 title
 precondition
@@ -299,10 +336,10 @@ priority
 tags
 content_checksum
 created_at
-updated_at
 created_by
-updated_by
 ```
+
+`TestAssetVersion` 是不可变版本表。创建后不得原地修改自然语言内容，不包含 `updated_at / updated_by / onupdate`；内容变更必须创建新版本。
 
 ### test_asset_sources
 
@@ -312,9 +349,10 @@ updated_by
 
 ```text
 id
-test_asset_id
-requirement_id
-requirement_version_id
+test_asset_source_id
+test_asset_pk
+requirement_pk
+requirement_version_pk
 source_identity_hash
 created_at
 created_by
@@ -337,22 +375,24 @@ batch_id
 
 ```text
 UNIQUE(project_code, requirement_code)
+UNIQUE(requirement_id)
 INDEX(project_code)
 INDEX(project_code, external_requirement_key)
-INDEX(review_status)
+INDEX(status)
 INDEX(deleted_at)
 ```
 
 `external_requirement_key` 只建普通组合索引，不建唯一约束。
 
-`current_version_id` Phase 0 允许为空，初始 Migration 不建数据库 FK。
+`current_version_pk` Phase 0 允许为空，初始 Migration 不建数据库 FK。它只能由事务编排层维护，并且必须引用属于当前 Requirement 的 RequirementVersion 内部主键。
 
 ### requirement_versions
 
 ```text
-FK(requirement_id) -> requirements(id)
-UNIQUE(requirement_id, version_no)
-INDEX(requirement_id)
+UNIQUE(requirement_version_id)
+FK(requirement_pk) -> requirements(id)
+UNIQUE(requirement_pk, version_no)
+INDEX(requirement_pk)
 INDEX(content_checksum)
 INDEX(version_status)
 ```
@@ -363,34 +403,37 @@ INDEX(version_status)
 
 ```text
 UNIQUE(project_code, asset_code)
+UNIQUE(test_asset_id)
 INDEX(project_code)
 INDEX(review_status)
 INDEX(conversion_status)
 INDEX(deleted_at)
 ```
 
-`current_version_id` Phase 0 允许为空，初始 Migration 不建数据库 FK。
+`current_version_pk` Phase 0 允许为空，初始 Migration 不建数据库 FK。它只能由事务编排层维护，并且必须引用属于当前 TestAsset 的 TestAssetVersion 内部主键。
 
 ### test_asset_versions
 
 ```text
-FK(test_asset_id) -> test_assets(id)
-UNIQUE(test_asset_id, version_no)
-INDEX(test_asset_id)
+UNIQUE(test_asset_version_id)
+FK(test_asset_pk) -> test_assets(id)
+UNIQUE(test_asset_pk, version_no)
+INDEX(test_asset_pk)
 INDEX(content_checksum)
 ```
 
-`content_checksum` 只建普通索引，不建 `UNIQUE(test_asset_id, content_checksum)`，因为必须允许资产恢复到历史内容。
+`content_checksum` 只建普通索引，不建 `UNIQUE(test_asset_pk, content_checksum)`，因为必须允许资产恢复到历史内容。
 
 ### test_asset_sources
 
 ```text
-FK(test_asset_id) -> test_assets(id)
-FK(requirement_id) -> requirements(id)
-FK(requirement_version_id) -> requirement_versions(id)
-UNIQUE(test_asset_id, source_identity_hash)
-INDEX(requirement_id)
-INDEX(requirement_version_id)
+UNIQUE(test_asset_source_id)
+FK(test_asset_pk) -> test_assets(id)
+FK(requirement_pk) -> requirements(id)
+FK(requirement_version_pk) -> requirement_versions(id)
+UNIQUE(test_asset_pk, source_identity_hash)
+INDEX(requirement_pk)
+INDEX(requirement_version_pk)
 INDEX(source_identity_hash)
 ```
 
@@ -429,15 +472,15 @@ generate_test_asset_source_id()    # tas_<uuid4hex32>
 ```text
 1. 创建 Requirement
 2. 创建 RequirementVersion(version_no=1)
-3. Repository 在同一事务内设置 Requirement.current_version_id
-4. 验证 current_version.requirement_id == requirement.id
+3. 事务编排层在同一事务内设置 Requirement.current_version_pk
+4. 验证 current_version.requirement_pk == requirement.id
 ```
 
 新增版本时：
 
 ```text
 1. 创建 RequirementVersion(version_no + 1)
-2. 更新 Requirement.current_version_id
+2. 更新 Requirement.current_version_pk
 3. 同事务提交
 ```
 
@@ -449,8 +492,8 @@ generate_test_asset_source_id()    # tas_<uuid4hex32>
 1. 创建 TestAsset
 2. 创建 TestAssetVersion(version_no=1)
 3. 创建 TestAssetSource
-4. Repository 在同一事务内设置 TestAsset.current_version_id
-5. 验证 current_version.test_asset_id == test_asset.id
+4. 事务编排层在同一事务内设置 TestAsset.current_version_pk
+5. 验证 current_version.test_asset_pk == test_asset.id
 ```
 
 新增版本时：
@@ -458,7 +501,7 @@ generate_test_asset_source_id()    # tas_<uuid4hex32>
 ```text
 1. 如果 TestAsset.conversion_status = processing，禁止直接编辑，必须先结束或取消当前 ConversionAttempt
 2. 创建 TestAssetVersion(version_no + 1)
-3. 更新 TestAsset.current_version_id
+3. 更新 TestAsset.current_version_pk
 4. 将 TestAsset.review_status 重置为 pending
 5. 按原 conversion_status 计算新 conversion_status：
    - 原状态为 succeeded 或 stale 时，新状态为 stale
@@ -466,7 +509,7 @@ generate_test_asset_source_id()    # tas_<uuid4hex32>
 6. 同事务提交
 ```
 
-Phase 0 不用数据库 FK 强约束 `current_version_id`，避免建表时循环依赖；一致性由 Repository 和测试保证。
+Phase 0 不用数据库 FK 强约束 `current_version_pk`，避免建表时循环依赖；一致性由事务编排层和测试保证。
 
 ## 7. Migration 顺序
 
@@ -558,7 +601,7 @@ runner_steps
 
 ### SQLAlchemy 表字段检查
 
-表字段不允许出现：
+`test_assets` 和所有版本表不允许出现：
 
 ```text
 structured_steps
@@ -569,10 +612,9 @@ locator
 script_code
 duplicate_status
 intent_id
-status
 ```
 
-允许：
+`requirements.status` 是需求聚合状态，允许存在。`test_assets` 不使用含义混杂的通用 `status`，只允许：
 
 ```text
 review_status
@@ -607,7 +649,7 @@ apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_models.py
 
 - 表名正确。
 - 字段集合不包含机器执行字段。
-- `current_version_id` 可为空。
+- `current_version_pk` 可为空。
 - 软删除使用 `deleted_at`。
 - 项目作用域字段使用 `project_code`。
 - `external_requirement_key` 不是唯一约束。
@@ -634,7 +676,7 @@ apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_repositories.py
 
 - 创建 Requirement + RequirementVersion。
 - 创建 TestAsset + TestAssetVersion + TestAssetSource。
-- `current_version_id` 指向属于自身聚合的版本。
+- `current_version_pk` 指向属于自身聚合的版本。
 - 同一资产同一来源重复时触发唯一约束或返回已有记录。
 - 创建 TestAsset 新版本时，`review_status` 重置为 `pending`。
 - 创建 TestAsset 新版本时，`conversion_status` 按人工确认规则迁移。

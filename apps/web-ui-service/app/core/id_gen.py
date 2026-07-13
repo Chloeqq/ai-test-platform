@@ -6,17 +6,39 @@ import uuid
 from datetime import UTC, datetime
 
 __all__ = [
+    "REQUIREMENT_ID_PATTERN",
+    "REQUIREMENT_VERSION_ID_PATTERN",
+    "TEST_ASSET_ID_PATTERN",
+    "TEST_ASSET_VERSION_ID_PATTERN",
+    "TEST_ASSET_SOURCE_ID_PATTERN",
     "generate_case_id",
     "generate_run_id",
     "generate_item_id",
     "generate_result_id",
     "generate_dataset_id",
+    "generate_requirement_id",
+    "generate_requirement_version_id",
+    "generate_test_asset_id",
+    "generate_test_asset_version_id",
+    "generate_test_asset_source_id",
     "hash_text_slug",
 ]
 
 
+REQUIREMENT_ID_PATTERN = r"^req_[0-9a-f]{32}$"
+REQUIREMENT_VERSION_ID_PATTERN = r"^reqv_[0-9a-f]{32}$"
+TEST_ASSET_ID_PATTERN = r"^ta_[0-9a-f]{32}$"
+TEST_ASSET_VERSION_ID_PATTERN = r"^tav_[0-9a-f]{32}$"
+TEST_ASSET_SOURCE_ID_PATTERN = r"^tas_[0-9a-f]{32}$"
+
+
 def _short_hex(length: int = 8) -> str:
     return uuid.uuid4().hex[:length]
+
+
+def _generate_prefixed_uuid(prefix: str) -> str:
+    """生成带领域前缀的完整 UUID4 hex 公共业务 ID。"""
+    return f"{prefix}_{uuid.uuid4().hex}"
 
 
 def generate_case_id() -> str:
@@ -44,6 +66,31 @@ def generate_dataset_id(task_type: str) -> str:
     """生成数据集 ID：de-<task_type>-xxxxxx"""
     safe_type = task_type.replace("_", "-")[:30]
     return f"de-{safe_type}-{_short_hex(6)}"
+
+
+def generate_requirement_id() -> str:
+    """生成需求公共 ID：req_<uuid4hex32>。"""
+    return _generate_prefixed_uuid("req")
+
+
+def generate_requirement_version_id() -> str:
+    """生成需求版本公共 ID：reqv_<uuid4hex32>。"""
+    return _generate_prefixed_uuid("reqv")
+
+
+def generate_test_asset_id() -> str:
+    """生成测试资产公共 ID：ta_<uuid4hex32>。"""
+    return _generate_prefixed_uuid("ta")
+
+
+def generate_test_asset_version_id() -> str:
+    """生成测试资产版本公共 ID：tav_<uuid4hex32>。"""
+    return _generate_prefixed_uuid("tav")
+
+
+def generate_test_asset_source_id() -> str:
+    """生成测试资产来源公共 ID：tas_<uuid4hex32>。"""
+    return _generate_prefixed_uuid("tas")
 
 
 def hash_text_slug(text: str) -> str:
