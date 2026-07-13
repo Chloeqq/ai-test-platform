@@ -10,9 +10,9 @@ from typing import Any
 from sqlalchemy import Connection, inspect
 
 
-FROZEN_REVISION = "20260713_120000"
+FROZEN_REVISION = "20260713_121000"
 SCHEMA_SNAPSHOT_VERSION = 1
-_MANIFEST_PATH = Path(__file__).with_name("schema_manifest_20260713_120000.json")
+_MANIFEST_PATH = Path(__file__).with_name("schema_manifest_20260713_121000.json")
 
 
 class BaselineSchemaMismatch(RuntimeError):
@@ -61,6 +61,14 @@ def normalize_schema(connection: Connection) -> dict[str, Any]:
         columns = inspector.get_columns(table_name)
         primary_key = inspector.get_pk_constraint(table_name).get("constrained_columns") or []
         primary_key_set = set(primary_key)
+        unique_constraints = sorted(
+            sorted(str(column) for column in constraint["column_names"])
+            for constraint in inspector.get_unique_constraints(table_name)
+            if constraint.get("column_names")
+        )
+        unique_constraint_columns = {
+            tuple(constraint) for constraint in unique_constraints
+        }
         tables[table_name] = {
             "columns": [
                 {
@@ -71,8 +79,14 @@ def normalize_schema(connection: Connection) -> dict[str, Any]:
                     ),
                     "nullable": bool(column.get("nullable", True)),
                     "primary_key": str(column["name"]) in primary_key_set,
+                    # PostgreSQL reflects SERIAL/IDENTITY primary keys as a
+                    # server default while SQLite does not.  Both represent
+                    # the same logical integer auto primary key.
                     "server_default": (
-                        "server-default" if column.get("default") is not None else None
+                        "server-default"
+                        if column.get("default") is not None
+                        and str(column["name"]) not in primary_key_set
+                        else None
                     ),
                 }
                 for column in columns
@@ -91,11 +105,7 @@ def normalize_schema(connection: Connection) -> dict[str, Any]:
                 ),
                 key=lambda item: (item["columns"], item["referred_table"]),
             ),
-            "unique_constraints": sorted(
-                sorted(str(column) for column in constraint["column_names"])
-                for constraint in inspector.get_unique_constraints(table_name)
-                if constraint.get("column_names")
-            ),
+            "unique_constraints": unique_constraints,
             "check_constraints": sorted(
                 _normalize_check_expression(str(constraint.get("sqltext") or ""))
                 for constraint in inspector.get_check_constraints(table_name)
@@ -108,6 +118,14 @@ def normalize_schema(connection: Connection) -> dict[str, Any]:
                     }
                     for index in inspector.get_indexes(table_name)
                     if index.get("column_names")
+                    # PostgreSQL exposes an implicit unique index for each
+                    # unique constraint; SQLite does not.  The constraint is
+                    # already represented above, so do not count it twice.
+                    and not (
+                        bool(index.get("unique", False))
+                        and tuple(sorted(str(column) for column in index["column_names"]))
+                        in unique_constraint_columns
+                    )
                 ),
                 key=lambda item: (item["columns"], item["unique"]),
             ),
@@ -141,11 +159,21 @@ def _normalize_logical_type(column_type: Any, *, is_primary_key: bool) -> str:
         return "datetime"
     if type_name in {"boolean", "bool"}:
         return "boolean"
-    if type_name in {"float", "numeric", "decimal"}:
+    if type_name in {"float", "numeric", "decimal", "double_precision"}:
         return "number"
     return type_name
 
 
 def _normalize_check_expression(value: str) -> str:
     without_identifier_quotes = value.replace('"', "")
-    return re.sub(r"\s+", " ", without_identifier_quotes).strip()
+    without_postgresql_casts = re.sub(
+        r"::(?:character varying|text)(?:\[\])?",
+        "",
+        without_identifier_quotes,
+    )
+    normalized_any_array = re.sub(
+        r"\b([A-Za-z_][A-Za-z0-9_]*)\s*=\s*ANY\s*\(ARRAY\[([^\]]*)\]\)",
+        r"\1 IN (\2)",
+        without_postgresql_casts,
+    )
+    return re.sub(r"\s+", " ", normalized_any_array).strip()

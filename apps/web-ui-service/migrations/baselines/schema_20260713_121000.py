@@ -1,6 +1,6 @@
-"""Frozen deterministic installation DDL for revision 20260713_120000.
+"""Frozen deterministic installation DDL for revision 20260713_121000.
 
-Generated once from the approved 20260713_120000 model state.  This file is a
+Generated once from the approved 20260713_121000 schema state.  This file is a
 static snapshot: runtime code must never import ORM metadata to regenerate it.
 """
 from __future__ import annotations
@@ -8,7 +8,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic.operations import Operations
 
-FROZEN_REVISION = "20260713_120000"
+FROZEN_REVISION = "20260713_121000"
 SCHEMA_SNAPSHOT_VERSION = 1
 
 
@@ -580,11 +580,11 @@ def create_frozen_schema(operations: Operations) -> None:
     sa.UniqueConstraint('sample_id', name='uq_workbench_failure_source_calibrations_sample_id')
     )
     operations.create_index(operations.f('ix_workbench_failure_source_calibrations_case_id'), 'workbench_failure_source_calibrations', ['case_id'], unique=False)
-    operations.create_index(operations.f('ix_workbench_failure_source_calibrations_confirmed_failure_source'), 'workbench_failure_source_calibrations', ['confirmed_failure_source'], unique=False)
+    operations.create_index('ix_wb_fsc_confirmed_failure_source', 'workbench_failure_source_calibrations', ['confirmed_failure_source'], unique=False)
     operations.create_index(operations.f('ix_workbench_failure_source_calibrations_created_at'), 'workbench_failure_source_calibrations', ['created_at'], unique=False)
     operations.create_index(operations.f('ix_workbench_failure_source_calibrations_human_decision'), 'workbench_failure_source_calibrations', ['human_decision'], unique=False)
     operations.create_index(operations.f('ix_workbench_failure_source_calibrations_page'), 'workbench_failure_source_calibrations', ['page'], unique=False)
-    operations.create_index(operations.f('ix_workbench_failure_source_calibrations_predicted_failure_source'), 'workbench_failure_source_calibrations', ['predicted_failure_source'], unique=False)
+    operations.create_index('ix_wb_fsc_predicted_failure_source', 'workbench_failure_source_calibrations', ['predicted_failure_source'], unique=False)
     operations.create_index(operations.f('ix_workbench_failure_source_calibrations_run_id'), 'workbench_failure_source_calibrations', ['run_id'], unique=False)
     operations.create_index(operations.f('ix_workbench_failure_source_calibrations_sample_id'), 'workbench_failure_source_calibrations', ['sample_id'], unique=False)
     operations.create_index(operations.f('ix_workbench_failure_source_calibrations_updated_at'), 'workbench_failure_source_calibrations', ['updated_at'], unique=False)
@@ -997,7 +997,7 @@ def create_frozen_schema(operations: Operations) -> None:
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('created_by', sa.String(length=120), nullable=False),
     sa.ForeignKeyConstraint(['requirement_pk'], ['requirements.id'], name='fk_test_asset_sources_requirement_pk_requirements', ondelete='RESTRICT'),
-    sa.ForeignKeyConstraint(['requirement_version_pk'], ['requirement_versions.id'], name='fk_test_asset_sources_requirement_version_pk_requirement_versions', ondelete='RESTRICT'),
+    sa.ForeignKeyConstraint(['requirement_version_pk'], ['requirement_versions.id'], name='fk_test_asset_sources_req_version_pk_requirement_versions', ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['test_asset_pk'], ['test_assets.id'], name='fk_test_asset_sources_test_asset_pk_test_assets', ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id', name='pk_test_asset_sources'),
     sa.UniqueConstraint('test_asset_pk', 'source_identity_hash', name='uq_test_asset_sources_test_asset_pk_source_identity_hash'),

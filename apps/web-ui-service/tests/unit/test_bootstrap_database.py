@@ -59,7 +59,7 @@ def test_empty_database_uses_frozen_baseline_then_stamps_revision(tmp_path: Path
     finally:
         connection.close()
 
-    assert revision == "20260713_120000"
+    assert revision == "20260713_121000"
     engine = create_engine(_database_url(database_path), future=True)
     try:
         with engine.connect() as connection:
@@ -130,7 +130,7 @@ def test_versioned_database_with_baseline_revision_and_missing_schema_fails_clos
             )
             connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(255))"))
             connection.execute(
-                text("INSERT INTO alembic_version (version_num) VALUES ('20260713_120000')")
+                text("INSERT INTO alembic_version (version_num) VALUES ('20260713_121000')")
             )
     finally:
         engine.dispose()

@@ -21,7 +21,7 @@ from migrations.baselines.fingerprint import (  # noqa: E402
     BaselineSchemaMismatch,
     assert_frozen_schema,
 )
-from migrations.baselines.schema_20260713_120000 import create_frozen_schema  # noqa: E402
+from migrations.baselines.schema_20260713_121000 import create_frozen_schema  # noqa: E402
 
 LOGGER = logging.getLogger(__name__)
 _MINIMUM_MANAGED_TABLES = frozenset({"test_projects", "users"})
