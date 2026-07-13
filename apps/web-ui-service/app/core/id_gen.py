@@ -6,6 +6,11 @@ import uuid
 from datetime import UTC, datetime
 
 __all__ = [
+    "REQUIREMENT_ID_PATTERN",
+    "REQUIREMENT_VERSION_ID_PATTERN",
+    "TEST_ASSET_ID_PATTERN",
+    "TEST_ASSET_VERSION_ID_PATTERN",
+    "TEST_ASSET_SOURCE_ID_PATTERN",
     "generate_case_id",
     "generate_run_id",
     "generate_item_id",
@@ -18,6 +23,13 @@ __all__ = [
     "generate_test_asset_source_id",
     "hash_text_slug",
 ]
+
+
+REQUIREMENT_ID_PATTERN = r"^req_[0-9a-f]{32}$"
+REQUIREMENT_VERSION_ID_PATTERN = r"^reqv_[0-9a-f]{32}$"
+TEST_ASSET_ID_PATTERN = r"^ta_[0-9a-f]{32}$"
+TEST_ASSET_VERSION_ID_PATTERN = r"^tav_[0-9a-f]{32}$"
+TEST_ASSET_SOURCE_ID_PATTERN = r"^tas_[0-9a-f]{32}$"
 
 
 def _short_hex(length: int = 8) -> str:

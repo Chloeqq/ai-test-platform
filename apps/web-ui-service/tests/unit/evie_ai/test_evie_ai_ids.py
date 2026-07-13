@@ -8,6 +8,11 @@ import pytest
 
 from app.core import id_gen
 from app.core.id_gen import (
+    REQUIREMENT_ID_PATTERN,
+    REQUIREMENT_VERSION_ID_PATTERN,
+    TEST_ASSET_ID_PATTERN,
+    TEST_ASSET_SOURCE_ID_PATTERN,
+    TEST_ASSET_VERSION_ID_PATTERN,
     generate_requirement_id,
     generate_requirement_version_id,
     generate_test_asset_id,
@@ -16,30 +21,40 @@ from app.core.id_gen import (
 )
 
 
-ID_CASES: tuple[tuple[Callable[[], str], str], ...] = (
-    (generate_requirement_id, "req"),
-    (generate_requirement_version_id, "reqv"),
-    (generate_test_asset_id, "ta"),
-    (generate_test_asset_version_id, "tav"),
-    (generate_test_asset_source_id, "tas"),
+ID_CASES: tuple[tuple[Callable[[], str], str, str], ...] = (
+    (generate_requirement_id, "req", REQUIREMENT_ID_PATTERN),
+    (
+        generate_requirement_version_id,
+        "reqv",
+        REQUIREMENT_VERSION_ID_PATTERN,
+    ),
+    (generate_test_asset_id, "ta", TEST_ASSET_ID_PATTERN),
+    (
+        generate_test_asset_version_id,
+        "tav",
+        TEST_ASSET_VERSION_ID_PATTERN,
+    ),
+    (generate_test_asset_source_id, "tas", TEST_ASSET_SOURCE_ID_PATTERN),
 )
 
 
-@pytest.mark.parametrize(("generator", "prefix"), ID_CASES)
+@pytest.mark.parametrize(("generator", "prefix", "pattern"), ID_CASES)
 def test_evie_ai_public_ids_have_expected_format(
     generator: Callable[[], str],
     prefix: str,
+    pattern: str,
 ) -> None:
     value = generator()
 
-    assert re.fullmatch(rf"{prefix}_[0-9a-f]{{32}}", value)
+    assert re.fullmatch(pattern, value)
     assert len(value) == len(prefix) + 1 + 32
 
 
-@pytest.mark.parametrize(("generator", "_prefix"), ID_CASES)
+@pytest.mark.parametrize(("generator", "_prefix", "_pattern"), ID_CASES)
 def test_evie_ai_public_ids_are_unique(
     generator: Callable[[], str],
     _prefix: str,
+    _pattern: str,
 ) -> None:
     values = {generator() for _ in range(1_000)}
 
