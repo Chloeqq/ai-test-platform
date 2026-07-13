@@ -12,7 +12,7 @@ EvieAi Phase 0 是完整目标架构的最小领域模型切片。
 
 - `docs/evie-ai/architecture/target-capability-map.md`
 - EvieAi 架构图：`docs/evie-ai/reference/2026-07-12_evie-ai-architecture-flow.mmd`
-- Excel 完整设计参考：`docs/evie-ai/reference/ATP_V2_架构分层功能清单_完整实施版.xlsx`
+- Excel 完整设计参考：`docs/evie-ai/reference/EvieAi_架构分层功能清单_完整实施版.xlsx`
 
 上述资料用于保证长期方向一致，但不自动扩大 Phase 0 范围。
 
@@ -68,7 +68,7 @@ docs/evie-ai/
 │   └── docs-cleanup-plan.md
 └── reference/
     ├── README.md
-    ├── ATP_V2_架构分层功能清单_完整实施版.xlsx
+    ├── EvieAi_架构分层功能清单_完整实施版.xlsx
     └── 2026-07-12_evie-ai-architecture-flow.mmd
 ```
 

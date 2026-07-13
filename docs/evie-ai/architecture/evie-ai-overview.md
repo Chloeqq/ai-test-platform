@@ -12,7 +12,7 @@
 - `docs/evie-ai/architecture/target-capability-map.md`
 - `docs/evie-ai/implementation/phase-traceability.md`
 - EvieAi 架构 Mermaid 图：`docs/evie-ai/reference/2026-07-12_evie-ai-architecture-flow.mmd`
-- Excel 完整设计参考：`docs/evie-ai/reference/ATP_V2_架构分层功能清单_完整实施版.xlsx`
+- Excel 完整设计参考：`docs/evie-ai/reference/EvieAi_架构分层功能清单_完整实施版.xlsx`
 
 本文描述 EvieAi 的完整目标架构，不代表所有能力在当前阶段同时实施。
 

@@ -9,7 +9,7 @@
 - `docs/evie-ai/architecture/evie-ai-overview.md`
 - `docs/evie-ai/architecture/natural-language-test-assets.md`
 - EvieAi 架构图：`docs/evie-ai/reference/2026-07-12_evie-ai-architecture-flow.mmd`
-- Excel 完整设计参考：`docs/evie-ai/reference/ATP_V2_架构分层功能清单_完整实施版.xlsx`
+- Excel 完整设计参考：`docs/evie-ai/reference/EvieAi_架构分层功能清单_完整实施版.xlsx`
 
 本文只描述长期目标能力，不自动扩大当前阶段实施范围。
 

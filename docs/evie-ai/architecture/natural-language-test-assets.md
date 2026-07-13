@@ -32,7 +32,7 @@
 - `docs/evie-ai/architecture/target-capability-map.md`
 - `docs/evie-ai/implementation/当前阶段文档`
 - `docs/evie-ai/reference/2026-07-12_evie-ai-architecture-flow.mmd`
-- `docs/evie-ai/reference/ATP_V2_架构分层功能清单_完整实施版.xlsx`
+- `docs/evie-ai/reference/EvieAi_架构分层功能清单_完整实施版.xlsx`
 
 发生冲突时，优先级如下：
 
