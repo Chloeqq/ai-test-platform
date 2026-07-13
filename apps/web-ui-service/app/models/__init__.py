@@ -3,6 +3,13 @@ from app.models.behavior_registry import (
     AssertionTemplate,
     BehaviorRegistry,
 )
+from app.models.evie_ai import (
+    Requirement,
+    RequirementVersion,
+    TestAsset,
+    TestAssetSource,
+    TestAssetVersion,
+)
 from app.models.orchestration_task import OrchestrationTask
 from app.models.page_object import (
     PageElement,
@@ -92,4 +99,9 @@ __all__ = [
     "QualityEvalRun",
     "RequirementDocument",
     "PromptTemplate",
+    "Requirement",
+    "RequirementVersion",
+    "TestAsset",
+    "TestAssetVersion",
+    "TestAssetSource",
 ]
