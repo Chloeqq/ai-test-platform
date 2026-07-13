@@ -173,7 +173,7 @@ AI 响应可以在服务内部短暂使用 DTO，但必须立即进入统一资�
 唯一合法链路：
 
 ```text
-TestTestAssetVersion
+TestAssetVersion
 → ConversionAttempt
 → 场景识别
 → Execution Requirement Manifest
@@ -291,7 +291,7 @@ tas_<uuid4hex32>
 - `Requirement`
 - `RequirementVersion`
 - `TestAsset`
-- `TestTestAssetVersion`
+- `TestAssetVersion`
 - `TestAssetSource`
 
 Git scope 使用：
@@ -448,7 +448,7 @@ refactor(evie-ai)
 EvieAi 当前事实源包括：
 
 - Requirement 正文：`RequirementVersion`
-- 自然语言测试资产正文：`TestTestAssetVersion`
+- 自然语言测试资产正文：`TestAssetVersion`
 - 当前需求版本：`Requirement.current_version`
 - 当前资产版本：`TestAsset.current_version`
 - 可执行脚本：`TestCaseVersion.script_code`
@@ -461,7 +461,7 @@ EvieAi 当前事实源包括：
 不得：
 
 - 同时在 Requirement 和 RequirementVersion 保存需求正文
-- 同时在 TestAsset 和 TestTestAssetVersion 保存自然语言内容
+- 同时在 TestAsset 和 TestAssetVersion 保存自然语言内容
 - 从多个字段推测同一个状态
 - 把缓存、快照或派生字段当作主事实源
 - 通过修改历史版本纠正当前内容
@@ -517,7 +517,7 @@ Phase 0 `current_version` 允许暂不建立数据库外键，但必须由 Repos
 以下对象一旦创建，不得原地覆盖业务内容：
 
 - RequirementVersion
-- TestTestAssetVersion
+- TestAssetVersion
 - TestCaseVersion
 - 版本化资源快照
 - 执行证据
@@ -779,7 +779,7 @@ EvieAi 资产模块不得依赖：
 
 ### Schema 字段检查
 
-TestAsset / TestTestAssetVersion 不得包含：
+TestAsset / TestAssetVersion 不得包含：
 
 - structured_steps
 - steps_hint
@@ -971,7 +971,7 @@ EvieAi Phase 0 只允许实施：
 - Requirement
 - RequirementVersion
 - TestAsset
-- TestTestAssetVersion
+- TestAssetVersion
 - TestAssetSource
 - ID 扩展
 - ORM
