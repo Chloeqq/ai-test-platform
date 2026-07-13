@@ -101,6 +101,15 @@ SELECT version_num FROM alembic_version;
 
 并记录：环境名、数据库类型、revision、用户表数量、备份位置和变更窗口。没有这份清单时，不允许改写历史 revision，也不允许对“无版本旧库”自动 stamp。
 
+2026-07-13 的可访问 Docker PostgreSQL 只读盘点结果如下；该实例不是生产环境的替代证明：
+
+| 盘点时点 | 环境 | 数据库 | PostgreSQL 版本 | Alembic revision | 结论 |
+| --- | --- | --- | --- | --- | --- |
+| Docker 重启后 | 本地 Docker `postgres` | `ai_test_platform` | PostgreSQL 16.14 | `20260713_110000_add_parsed_blocks_to_requirement_documents` | 尚未执行 `20260713_120000` |
+| 后续只读复核 | 本地 Docker `postgres` | `ai_test_platform` | PostgreSQL 16.14 | `20260713_120000` | `test_asset_sources` 已存在，RequirementVersion 外键实际名为安全的 `fk_test_asset_sources_req_version_pk_requirement_versions`，目标为 `requirement_versions(id)`，删除行为为 `RESTRICT` |
+
+因此，在首次盘点时可以受控修正尚未由该 PostgreSQL 实例执行的 `20260713_120000` 中的超长外键名；对于已执行旧名称的 SQLite 数据库，由 `20260713_121000` 条件规范化。已处于安全名称的 PostgreSQL `20260713_120000` 数据库由 `20260713_121000` 验证后无操作；未知数据库不自动接管。
+
 ## 4. 方案比较
 
 | 方案 | 做法 | 优点 | 核心风险 | 结论 |
@@ -113,22 +122,25 @@ SELECT version_num FROM alembic_version;
 
 ### 5.1 冻结点
 
-第一份确定性 baseline 的 schema 冻结点为当前已验证的 Alembic head：
+第一份确定性 baseline 的 schema 冻结点为已修正 PostgreSQL 标识符兼容性的 Alembic head：
 
 ```text
-20260713_120000
+20260713_121000
 ```
 
-它包含 EvieAi Phase 0 的五张表。该版本选择的前提是：在 baseline 实施完成前，不创建 Phase 1 schema migration。若有新的 schema migration 先合入，必须重新选择并重新审计冻结点，不能让 baseline 静默使用“最新 metadata”。
+它包含 EvieAi Phase 0 的五张表。`20260713_120000` 中一个 65 字节的
+`test_asset_sources → requirement_versions` 外键名已修正为 57 字节的
+`fk_test_asset_sources_req_version_pk_requirement_versions`；
+`20260713_121000` 只兼容此前已在 SQLite 执行的旧名称。该版本选择的前提是：在 baseline 实施完成前，不创建 Phase 1 schema migration。若有新的 schema migration 先合入，必须重新选择并重新审计冻结点，不能让 baseline 静默使用“最新 metadata”。
 
 ### 5.2 目标行为
 
 ```text
 空数据库
 → 确认没有用户表
-→ 执行冻结在 20260713_120000 的静态 DDL
+→ 执行冻结在 20260713_121000 的静态 DDL
 → 对表、列、PK、FK、唯一约束、检查约束和索引做 schema fingerprint 校验
-→ alembic stamp 20260713_120000
+→ alembic stamp 20260713_121000
 → 如有更新 revision，再执行正常 alembic upgrade head
 
 已有且版本受管的数据库
@@ -141,7 +153,7 @@ SELECT version_num FROM alembic_version;
 → 不调用 create_all，不自动 stamp
 ```
 
-静态 DDL 必须来自冻结的 schema 定义文件，使用确定性的 `op.create_table`、`op.create_index` 和显式约束名称；不得导入 `app.models`、`Base` 或运行时 metadata。它必须同时覆盖项目支持的 SQLite 和 PostgreSQL。
+静态 DDL 必须来自冻结的 schema 定义文件，使用确定性的 `op.create_table`、`op.create_index` 和显式约束名称；不得导入 `app.models`、`Base` 或运行时 metadata。所有新建表、列、主键、外键、唯一约束、检查约束和索引名必须满足 PostgreSQL 的 `len(identifier.encode("utf-8")) <= 63`。它必须同时覆盖项目支持的 SQLite 和 PostgreSQL。
 
 ### 5.3 模块边界（实施阶段）
 
@@ -183,7 +195,7 @@ SELECT version_num FROM alembic_version;
 以下项目已经确认，可以开始代码实施：
 
 1. 选择方案 B；
-2. 冻结 revision 为 `20260713_120000`；
+2. 冻结 revision 为 `20260713_121000`；
 3. 空库、无版本旧库、缺失 revision 的状态机已经签字；
 4. 可使用隔离 PostgreSQL 环境验证；
 5. 本任务独立于 EvieAi Phase 1，必须先完成、验收和合并。
@@ -218,15 +230,16 @@ SELECT version_num FROM alembic_version;
 
 ## 9. 必须通过的验证
 
-1. 空 SQLite：baseline → schema fingerprint → stamp `20260713_120000` → upgrade head；
+1. 空 SQLite：baseline → schema fingerprint → stamp `20260713_121000` → upgrade head；
 2. 空 PostgreSQL：同样流程，验证 PK、FK、索引、JSON、默认值和约束名；
 3. 已受管的旧 revision 数据库：记录原有表名、行数和版本后升级；确认只应用后续 revision，旧表与记录不变；
-4. 已受管的 `20260713_120000` 数据库：bootstrap 不创建/删除任何表，仅确认版本；
+4. 已受管的 `20260713_120000` SQLite 数据库：`20260713_121000` 仅在发现历史超长外键名时重建 `test_asset_sources` 以规范化该名称；其余数据库不创建或删除表；
 5. 有用户表但无 `alembic_version`：明确失败，且不写任何表、列、版本记录；
 6. `alembic_version` 含仓库不存在的 revision：明确失败，且不自动同步 metadata；
 7. 可重复性：两次空库 baseline 的 schema fingerprint 完全一致；
 8. 架构守卫：baseline 和 bootstrap 的空库路径 AST 不得导入 `app.models`、`Base`，不得引用 `metadata.create_all`；
-9. 回滚：只验证增量 migration 的 downgrade。baseline 只用于全新空库，安装失败时不 stamp，直接销毁该新库或恢复空库，不在含数据数据库执行 baseline downgrade。
+9. 标识符守卫：`20260713_120000`、`20260713_121000`、静态 baseline 和 manifest 中声明的物理标识符均不得超过 PostgreSQL 63 字节；历史 SQLite 兼容名称只能作为 migration 的读取输入，不能作为新建标识符；
+10. 回滚：只验证增量 migration 的 downgrade。baseline 只用于全新空库，安装失败时不 stamp，直接销毁该新库或恢复空库，不在含数据数据库执行 baseline downgrade。
 
 ### 9.1 规范化 fingerprint 合同
 
@@ -276,6 +289,6 @@ PostgreSQL normalized fingerprint = frozen manifest
 
 ## 11. 当前签字结论
 
-建议批准：**方案 B，冻结 `20260713_120000`，以静态安装 baseline 替代空库的动态 metadata 建表；已有受管数据库继续使用既有 Alembic 增量链。**
+建议批准：**方案 B，冻结 `20260713_121000`，以静态安装 baseline 替代空库的动态 metadata 建表；已有受管数据库继续使用既有 Alembic 增量链。**
 
 本设计签字前，本分支不得修改旧 migration、`bootstrap_database.py`、Docker 启动逻辑或任何 Phase 1 业务表。
