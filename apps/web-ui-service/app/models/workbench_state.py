@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, String, Text, UniqueConstraint, func
+from sqlalchemy import Index, JSON, DateTime, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -104,7 +104,20 @@ class WorkbenchDefectLink(Base):
 
 class WorkbenchFailureSourceCalibration(Base):
     __tablename__ = "workbench_failure_source_calibrations"
-    __table_args__ = (UniqueConstraint("sample_id", name="uq_workbench_failure_source_calibrations_sample_id"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "sample_id",
+            name="uq_workbench_failure_source_calibrations_sample_id",
+        ),
+        Index(
+            "ix_wb_fsc_predicted_failure_source",
+            "predicted_failure_source",
+        ),
+        Index(
+            "ix_wb_fsc_confirmed_failure_source",
+            "confirmed_failure_source",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     sample_id: Mapped[str] = mapped_column(String(120), default="", index=True)
@@ -112,8 +125,8 @@ class WorkbenchFailureSourceCalibration(Base):
     case_id: Mapped[str] = mapped_column(String(120), default="", index=True)
     page: Mapped[str] = mapped_column(String(120), default="", index=True)
     human_decision: Mapped[str] = mapped_column(String(80), default="", index=True)
-    predicted_failure_source: Mapped[str] = mapped_column(String(120), default="", index=True)
-    confirmed_failure_source: Mapped[str] = mapped_column(String(120), default="", index=True)
+    predicted_failure_source: Mapped[str] = mapped_column(String(120), default="")
+    confirmed_failure_source: Mapped[str] = mapped_column(String(120), default="")
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(

@@ -126,7 +126,7 @@ _EXPECTED_FOREIGN_KEYS = {
     "test_asset_sources": {
         "fk_test_asset_sources_test_asset_pk_test_assets",
         "fk_test_asset_sources_requirement_pk_requirements",
-        "fk_test_asset_sources_requirement_version_pk_requirement_versions",
+        "fk_test_asset_sources_req_version_pk_requirement_versions",
     },
 }
 
@@ -530,7 +530,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["requirement_version_pk"],
             ["requirement_versions.id"],
-            name="fk_test_asset_sources_requirement_version_pk_requirement_versions",
+            name="fk_test_asset_sources_req_version_pk_requirement_versions",
             ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(

@@ -162,7 +162,7 @@ class TestAssetSource(Base):
         ForeignKeyConstraint(
             ["requirement_version_pk"],
             ["requirement_versions.id"],
-            name="fk_test_asset_sources_requirement_version_pk_requirement_versions",
+            name="fk_test_asset_sources_req_version_pk_requirement_versions",
             ondelete="RESTRICT",
         ),
         Index("ix_test_asset_sources_requirement_pk", "requirement_pk"),

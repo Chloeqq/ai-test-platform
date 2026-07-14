@@ -68,14 +68,14 @@ make frontend-build
 
 ## 数据库迁移
 
-项目已补齐 Alembic 最小骨架，Web UI 服务可通过下面命令执行迁移：
+已受管数据库可通过下面命令执行增量迁移：
 
 ```bash
 cd /Users/bettyhuang/PycharmProjects/ai-test-platform
 make db-upgrade
 ```
 
-如果数据库里已经存在历史 `create_all` 或旧版表结构，没有 `alembic_version`，先执行：
+新建空数据库必须通过确定性 bootstrap 初始化：
 
 ```bash
 cd /Users/bettyhuang/PycharmProjects/ai-test-platform
@@ -84,9 +84,24 @@ make db-bootstrap
 
 这个命令会：
 
-1. 空库时直接执行 `upgrade head`
-2. 已有 Alembic 版本表时执行 `upgrade head`
-3. 遇到旧库但没有版本号时，先补齐当前托管表，再 `stamp head`
+1. 空库时创建冻结在 `20260713_121000` 的静态 schema；
+2. 结构 fingerprint 校验成功后才 `stamp 20260713_121000`，再执行后续增量迁移；
+3. 已有合法 Alembic 版本的数据库执行 `upgrade head`；
+4. 有用户表但没有版本、版本不存在于仓库、或版本与关键 schema 不一致时明确失败，等待人工接管。
+
+不要用裸命令初始化空库：
+
+```bash
+alembic upgrade head
+```
+
+该命令默认会被拒绝，以避免触发历史动态 metadata migration。仅在明确的 legacy 维护操作中，才允许临时设置默认关闭的：
+
+```bash
+ALLOW_LEGACY_EMPTY_DB_ALEMBIC_UPGRADE=1
+```
+
+Docker 和共享环境不得默认设置该变量。
 
 新增迁移版本：
 

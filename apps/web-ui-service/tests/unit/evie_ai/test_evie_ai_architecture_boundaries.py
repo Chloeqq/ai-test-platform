@@ -162,7 +162,7 @@ def test_required_phase0_foreign_keys_are_explicit_and_named() -> None:
         AssetSourceModel.__table__: {
             "fk_test_asset_sources_test_asset_pk_test_assets",
             "fk_test_asset_sources_requirement_pk_requirements",
-            "fk_test_asset_sources_requirement_version_pk_requirement_versions",
+            "fk_test_asset_sources_req_version_pk_requirement_versions",
         },
     }
     for table, expected_names in expected.items():

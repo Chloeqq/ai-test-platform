@@ -9,7 +9,8 @@ from pathlib import Path
 
 SERVICE_ROOT = Path(__file__).resolve().parents[3]
 PARENT_REVISION = "20260713_110000_add_parsed_blocks_to_requirement_documents"
-PHASE0_REVISION = "20260713_120000"
+PRE_CONSTRAINT_FIX_REVISION = "20260713_120000"
+PHASE0_REVISION = "20260713_121000"
 EVIE_AI_TABLES = {
     "requirements",
     "requirement_versions",
@@ -82,7 +83,7 @@ EXPECTED_NAMED_CONSTRAINTS = {
         "uq_test_asset_sources_test_asset_pk_source_identity_hash",
         "fk_test_asset_sources_test_asset_pk_test_assets",
         "fk_test_asset_sources_requirement_pk_requirements",
-        "fk_test_asset_sources_requirement_version_pk_requirement_versions",
+        "fk_test_asset_sources_req_version_pk_requirement_versions",
     },
 }
 
@@ -92,6 +93,20 @@ def _run_alembic(database_path: Path, *arguments: str) -> None:
     environment["DATABASE_URL"] = f"sqlite:///{database_path}"
     subprocess.run(
         [sys.executable, "-m", "alembic", *arguments],
+        cwd=SERVICE_ROOT,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+def _run_bootstrap(database_path: Path) -> None:
+    environment = os.environ.copy()
+    environment["DATABASE_URL"] = f"sqlite:///{database_path}"
+    subprocess.run(
+        [sys.executable, "scripts/bootstrap_database.py"],
         cwd=SERVICE_ROOT,
         env=environment,
         check=True,
@@ -153,7 +168,7 @@ def _assert_phase0_schema(database_path: Path) -> None:
 def test_phase0_migration_upgrade_downgrade_upgrade(tmp_path: Path) -> None:
     database_path = tmp_path / "evie-ai-phase0.db"
 
-    _run_alembic(database_path, "upgrade", "head")
+    _run_bootstrap(database_path)
     revision, tables, integrity = _database_state(database_path)
     assert revision == PHASE0_REVISION
     assert EVIE_AI_TABLES.issubset(tables)
@@ -175,3 +190,67 @@ def test_phase0_migration_upgrade_downgrade_upgrade(tmp_path: Path) -> None:
     assert EVIE_AI_TABLES.issubset(tables)
     assert integrity == "ok"
     _assert_phase0_schema(database_path)
+
+
+def test_constraint_name_migration_normalizes_existing_sqlite_schema(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "legacy-constraint-name.db"
+    connection = sqlite3.connect(database_path)
+    try:
+        connection.executescript(
+            """
+            PRAGMA foreign_keys = ON;
+            CREATE TABLE requirements (id INTEGER PRIMARY KEY);
+            CREATE TABLE requirement_versions (id INTEGER PRIMARY KEY);
+            CREATE TABLE test_assets (id INTEGER PRIMARY KEY);
+            CREATE TABLE test_asset_sources (
+                id INTEGER PRIMARY KEY,
+                test_asset_source_id VARCHAR(64) NOT NULL,
+                test_asset_pk INTEGER NOT NULL,
+                requirement_pk INTEGER NOT NULL,
+                requirement_version_pk INTEGER NOT NULL,
+                source_identity_hash VARCHAR(64) NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_by VARCHAR(120) NOT NULL,
+                CONSTRAINT fk_test_asset_sources_test_asset_pk_test_assets FOREIGN KEY(test_asset_pk) REFERENCES test_assets(id) ON DELETE RESTRICT,
+                CONSTRAINT fk_test_asset_sources_requirement_pk_requirements FOREIGN KEY(requirement_pk) REFERENCES requirements(id) ON DELETE RESTRICT,
+                CONSTRAINT fk_test_asset_sources_requirement_version_pk_requirement_versions FOREIGN KEY(requirement_version_pk) REFERENCES requirement_versions(id) ON DELETE RESTRICT
+            );
+            INSERT INTO requirements (id) VALUES (1);
+            INSERT INTO requirement_versions (id) VALUES (1);
+            INSERT INTO test_assets (id) VALUES (1);
+            INSERT INTO test_asset_sources (
+                id,
+                test_asset_source_id,
+                test_asset_pk,
+                requirement_pk,
+                requirement_version_pk,
+                source_identity_hash,
+                created_by
+            ) VALUES (1, 'tas_fixture', 1, 1, 1, 'fixture', 'tester');
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    _run_alembic(database_path, "stamp", PRE_CONSTRAINT_FIX_REVISION)
+    _run_alembic(database_path, "upgrade", PHASE0_REVISION)
+
+    connection = sqlite3.connect(database_path)
+    try:
+        table_sql = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='test_asset_sources'"
+        ).fetchone()[0]
+        row_count = connection.execute(
+            "SELECT COUNT(*) FROM test_asset_sources"
+        ).fetchone()[0]
+        integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
+    finally:
+        connection.close()
+
+    assert "fk_test_asset_sources_req_version_pk_requirement_versions" in table_sql
+    assert "fk_test_asset_sources_requirement_version_pk_requirement_versions" not in table_sql
+    assert row_count == 1
+    assert integrity == "ok"

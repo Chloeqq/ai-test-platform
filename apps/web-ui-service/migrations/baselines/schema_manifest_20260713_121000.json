@@ -1,0 +1,6323 @@
+{
+  "frozen_revision": "20260713_121000",
+  "schema_snapshot_version": 1,
+  "tables": {
+    "assertion_execution_logs": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "test_case_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "intent_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "scenario",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "behavior_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "behavior_version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "compiled_assertions",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "execution_result",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "executed_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "executed_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "test_case_id"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "assertion_templates": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "behavior_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "capability",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "execution_layer",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "action",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "target",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "operator",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "variable_schema",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "description",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "behavior_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "behavior_registry"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "behavior_id"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "behavior_registry": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "behavior_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "intent_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "scenario",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "scope",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "page_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "domain",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "context_filter",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "priority",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "label",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "capabilities",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "behavior_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "intent_type"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "orchestration_tasks": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "task_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "input_source_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "input_source_payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "agent_config",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "asset_binding",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "execution_config",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "preview_snapshot",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "note",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_by"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "input_source_type"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "task_name"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "page_element_health_checks": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "page_element_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "check_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "detail",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "checked_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "checked_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "page_element_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "page_elements"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "check_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "checked_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_element_id"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "page_element_locators": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "page_element_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "locator_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(30)"
+        },
+        {
+          "name": "locator_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(512)"
+        },
+        {
+          "name": "role",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "locator_source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "priority",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "is_primary",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "health_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "verification_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "last_verified_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "page_element_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "page_elements"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "health_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "last_verified_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_element_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "verification_status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "locator_type",
+          "locator_value",
+          "page_element_id",
+          "role"
+        ]
+      ]
+    },
+    "page_element_versions": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "page_element_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "version_no",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "locator_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(30)"
+        },
+        {
+          "name": "locator_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "role",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "is_primary",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "changed_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "change_summary",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "page_element_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "page_elements"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_element_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "version_no"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "page_element_id",
+          "version_no"
+        ]
+      ]
+    },
+    "page_elements": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "page_object_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "element_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "element_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "locator_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(30)"
+        },
+        {
+          "name": "locator_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "backup_locator",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(512)"
+        },
+        {
+          "name": "business_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "business_domain",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "aliases_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "semantic_tags_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "locator_source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "match_strategy",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "stability_level",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "review_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "origin_candidate_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "route_scope",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(256)"
+        },
+        {
+          "name": "anchor_required",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "is_key_element",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "testid_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "qa_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "governance_note",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "health_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "role",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "is_primary",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "owner",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "page_object_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "page_objects"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "element_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "health_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_object_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_object_id",
+            "business_type"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_object_id",
+            "locator_source"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_object_id",
+            "review_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_object_id",
+            "stability_level"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_object_id",
+            "testid_value"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "version"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "element_code",
+          "page_object_id"
+        ]
+      ]
+    },
+    "page_object_candidate_elements": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "client",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(10)"
+        },
+        {
+          "name": "page_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "candidate_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "group_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(160)"
+        },
+        {
+          "name": "raw_locator_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(30)"
+        },
+        {
+          "name": "raw_locator_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "raw_role",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "raw_text",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "dom_signature",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(160)"
+        },
+        {
+          "name": "route",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(256)"
+        },
+        {
+          "name": "step_hit_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "quality_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "quality_tier",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "risk_tags_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "recommended_action",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "candidate_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "ingest_block_reason",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "proposed_element_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "proposed_element_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "business_type_guess",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "probe_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "probe_match_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "probe_visible",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "probe_interactable",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "merged_to_element_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "promoted_element_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "reviewed_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "reviewed_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        },
+        {
+          "name": "review_note",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "candidate_key"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "client"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "group_key"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code",
+            "client",
+            "page_code",
+            "candidate_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "quality_score"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "recommended_action"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "reviewed_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "session_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "candidate_key",
+          "session_id"
+        ]
+      ]
+    },
+    "page_object_candidate_groups": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "client",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(10)"
+        },
+        {
+          "name": "page_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "group_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(160)"
+        },
+        {
+          "name": "proposed_element_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "proposed_element_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "business_type_guess",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "business_domain_guess",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "quality_tier",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "max_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "avg_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "session_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "candidate_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "recommended_action",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "promotion_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "route_scope",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(256)"
+        },
+        {
+          "name": "top_locator_source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "top_locator_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(30)"
+        },
+        {
+          "name": "top_locator_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "top_role",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "risk_tags_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "sample_texts_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "matched_existing_element_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "reviewed_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "reviewed_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        },
+        {
+          "name": "review_note",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "latest_session_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "client"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "group_key"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "latest_session_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "matched_existing_element_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "matched_existing_element_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code",
+            "client",
+            "page_code",
+            "promotion_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code",
+            "client",
+            "page_code",
+            "quality_tier"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "promotion_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "quality_tier"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "reviewed_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "client",
+          "group_key",
+          "page_code",
+          "project_code"
+        ]
+      ]
+    },
+    "page_object_governance_logs": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "client",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(10)"
+        },
+        {
+          "name": "page_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "entity_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "entity_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(160)"
+        },
+        {
+          "name": "action",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "operator",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "before_payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "after_payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "action"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "client"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "entity_type",
+            "entity_key"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "operator"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code",
+            "client",
+            "page_code"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "page_object_recorder_sessions": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "session_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "client",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(10)"
+        },
+        {
+          "name": "page_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "page_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "url",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(512)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "process_pid",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "script_path",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(1024)"
+        },
+        {
+          "name": "started_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "error_message",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "started_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "heartbeat_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        },
+        {
+          "name": "stopped_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "client"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "heartbeat_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "process_pid"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "session_id"
+          ],
+          "unique": true
+        },
+        {
+          "columns": [
+            "started_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "stopped_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "page_object_refs": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "page_element_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "reference_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(30)"
+        },
+        {
+          "name": "reference_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "page_element_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "page_elements"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_element_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "reference_key"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "reference_type"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "page_element_id",
+          "reference_key",
+          "reference_type"
+        ]
+      ]
+    },
+    "page_objects": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "client",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(10)"
+        },
+        {
+          "name": "page_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "page_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "page_url",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(256)"
+        },
+        {
+          "name": "precondition_state",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "route_pattern",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(256)"
+        },
+        {
+          "name": "anchor_config_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "governance_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "testability_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "key_element_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "approved_element_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "candidate_pending_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "module_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "element_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "health_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "description",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "client"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "governance_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "health_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "module_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "client",
+          "page_code",
+          "project_code"
+        ]
+      ]
+    },
+    "prompt_templates": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "scene_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "description",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "system_prompt",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "user_prompt_template",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "variables",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "is_default",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "is_enabled",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "created_by",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "updated_by",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "code"
+          ],
+          "unique": true
+        },
+        {
+          "columns": [
+            "scene_type"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "quality_eval_datasets": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "dataset_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "description",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "task_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(50)"
+        },
+        {
+          "name": "eval_dimensions",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "item_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "dataset_id"
+          ],
+          "unique": true
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "quality_eval_items": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "item_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "dataset_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "requirement_text",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "context_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "expected_coverage",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "expected_assertions",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "expected_page_codes",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "perturbed_requirement",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "known_issues",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "category",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(50)"
+        },
+        {
+          "name": "meta_data",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "dataset_id"
+          ],
+          "referred_columns": [
+            "dataset_id"
+          ],
+          "referred_table": "quality_eval_datasets"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "dataset_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "item_id"
+          ],
+          "unique": true
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "quality_eval_results": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "result_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "item_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "generated_case_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "generated_script",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "coverage_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "coverage_detail",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "assertion_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "assertion_detail",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "executability_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "executability_detail",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "consistency_runs",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "consistency_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "perturbed_output",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "robustness_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "hallucination_flags",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "hallucination_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "weighted_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "latency_ms",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "token_count",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "error_message",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "item_id"
+          ],
+          "referred_columns": [
+            "item_id"
+          ],
+          "referred_table": "quality_eval_items"
+        },
+        {
+          "columns": [
+            "run_id"
+          ],
+          "referred_columns": [
+            "run_id"
+          ],
+          "referred_table": "quality_eval_runs"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "item_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "result_id"
+          ],
+          "unique": true
+        },
+        {
+          "columns": [
+            "run_id"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "quality_eval_runs": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "dataset_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "agent_version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(50)"
+        },
+        {
+          "name": "llm_model",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(100)"
+        },
+        {
+          "name": "prompt_version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(50)"
+        },
+        {
+          "name": "gate_rule_version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(50)"
+        },
+        {
+          "name": "task_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(50)"
+        },
+        {
+          "name": "eval_dimensions",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "total_items",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "completed_items",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "overall_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "coverage_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "assertion_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "executability_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "consistency_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "robustness_score",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "hallucination_risk",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "number"
+        },
+        {
+          "name": "summary_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "finished_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "dataset_id"
+          ],
+          "referred_columns": [
+            "dataset_id"
+          ],
+          "referred_table": "quality_eval_datasets"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "dataset_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "run_id"
+          ],
+          "unique": true
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "requirement_documents": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "filename",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(512)"
+        },
+        {
+          "name": "source_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "object_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(1024)"
+        },
+        {
+          "name": "file_size",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "parse_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "parse_error",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "parsed_blocks",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "is_deleted",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        },
+        {
+          "name": "created_by",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "parse_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "requirement_versions": {
+      "check_constraints": [
+        "version_no >= 1",
+        "version_status IN ('draft', 'effective', 'superseded', 'removed')"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "requirement_version_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "requirement_pk",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "version_no",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "title",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "content",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "content_checksum",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "version_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "requirement_pk"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "requirements"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "content_checksum"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "requirement_pk"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "version_status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "requirement_pk",
+          "version_no"
+        ],
+        [
+          "requirement_version_id"
+        ]
+      ]
+    },
+    "requirements": {
+      "check_constraints": [
+        "row_version >= 1",
+        "status IN ('draft', 'active', 'closed', 'archived')"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "requirement_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "requirement_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "external_requirement_key",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "current_version_pk",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "row_version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "integer"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "updated_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "deleted_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code",
+            "external_requirement_key"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "project_code",
+          "requirement_code"
+        ],
+        [
+          "requirement_id"
+        ]
+      ]
+    },
+    "test_asset_sources": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "test_asset_source_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "test_asset_pk",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "requirement_pk",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "requirement_version_pk",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "source_identity_hash",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "requirement_pk"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "requirements"
+        },
+        {
+          "columns": [
+            "requirement_version_pk"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "requirement_versions"
+        },
+        {
+          "columns": [
+            "test_asset_pk"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "test_assets"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "requirement_pk"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "requirement_version_pk"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "source_identity_hash"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "source_identity_hash",
+          "test_asset_pk"
+        ],
+        [
+          "test_asset_source_id"
+        ]
+      ]
+    },
+    "test_asset_versions": {
+      "check_constraints": [
+        "version_no >= 1"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "test_asset_version_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "test_asset_pk",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "version_no",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "title",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "precondition",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "natural_steps",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "expected_result",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "priority",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "tags",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "content_checksum",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "test_asset_pk"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "test_assets"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "content_checksum"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "test_asset_pk"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "test_asset_pk",
+          "version_no"
+        ],
+        [
+          "test_asset_version_id"
+        ]
+      ]
+    },
+    "test_assets": {
+      "check_constraints": [
+        "conversion_status IN ('not_started', 'processing', 'blocked', 'succeeded', 'stale')",
+        "review_status IN ('pending', 'approved', 'rejected')",
+        "row_version >= 1"
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "test_asset_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "asset_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "review_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "conversion_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "current_version_pk",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "row_version",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "integer"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "deleted_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "updated_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "conversion_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "deleted_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "review_status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "asset_code",
+          "project_code"
+        ],
+        [
+          "test_asset_id"
+        ]
+      ]
+    },
+    "test_case_defects": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "case_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "defect_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "defect_url",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "case_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "test_cases"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "case_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "defect_key"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "test_case_executions": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "case_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "duration_ms",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "report_url",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "executed_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "case_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "test_cases"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "case_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "executed_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "test_case_steps": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "case_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "case_business_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "page_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "step_index",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "action",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "target",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "locator_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "locator_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "step_data",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "expected_result",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "raw_payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "case_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "test_cases"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "case_business_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "case_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "step_index"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "case_id",
+          "step_index"
+        ]
+      ]
+    },
+    "test_case_tree_nodes": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "product_line",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "module",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "module"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "product_line"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "module",
+          "product_line",
+          "project_code"
+        ]
+      ]
+    },
+    "test_case_versions": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "case_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "version_no",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "script_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "changed_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "change_summary",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "case_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "test_cases"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "case_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "version_no"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "test_cases": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "case_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "client",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(10)"
+        },
+        {
+          "name": "page_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "page_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(100)"
+        },
+        {
+          "name": "module_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "module_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(100)"
+        },
+        {
+          "name": "case_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(10)"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(10)"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "product_line",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "module",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "chain_stage",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "sut_service",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "related_services",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "priority",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "test_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(50)"
+        },
+        {
+          "name": "scenario_types",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "trigger_entry",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "fault_injection_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "fault_injection_target",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "fault_injection_params",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "setup_sql",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "precondition_state",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "test_steps",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "test_steps_text",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "concurrency_model",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "retry_policy",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "expected_result",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "assert_sql",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "event_assertion",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "metric_assertion",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "cleanup_script",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "artifact_links",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "notes",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "tags",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "markers",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "creator",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "assignee",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "pytest_path",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(500)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "automation_status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "created_source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "source_ref",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "script_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "data_config",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "last_execution_result",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "last_report_url",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "last_synced_at",
+          "nullable": true,
+          "primary_key": false,
+          "server_default": null,
+          "type": "datetime"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "assignee"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "automation_status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "case_id"
+          ],
+          "unique": true
+        },
+        {
+          "columns": [
+            "case_type"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "chain_stage"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "client"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_source"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "creator"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "last_execution_result"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "module"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "module_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "name"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "priority"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "product_line"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "pytest_path"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "source"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "sut_service"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "test_type"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "test_data_pool_audit_logs": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "pool_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "item_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(160)"
+        },
+        {
+          "name": "operation",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "changed_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "note",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "before_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "after_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "item_key"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "operation"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "pool_name"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "test_data_pool_items": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "pool_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "integer"
+        },
+        {
+          "name": "item_key",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(160)"
+        },
+        {
+          "name": "item_value",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "updated_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "tags",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "columns": [
+            "pool_id"
+          ],
+          "referred_columns": [
+            "id"
+          ],
+          "referred_table": "test_data_pools"
+        }
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "item_key"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "pool_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "item_key",
+          "pool_id"
+        ]
+      ]
+    },
+    "test_data_pools": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "pool_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "description",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "updated_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "pool_name"
+          ],
+          "unique": true
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "test_points": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "page_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "point_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "point_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "scene_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "priority",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "test_data_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "involved_elements",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "expect_result",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "raw_payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "point_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "priority"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "scene_type"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "source"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "page_code",
+          "point_id",
+          "project_code"
+        ]
+      ]
+    },
+    "test_projects": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project_code",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "project_name",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(100)"
+        },
+        {
+          "name": "description",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "source_roots_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "source_terms_json",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(20)"
+        },
+        {
+          "name": "created_by",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "project_code"
+          ],
+          "unique": true
+        },
+        {
+          "columns": [
+            "project_name"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "users": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "username",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "hashed_password",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(255)"
+        },
+        {
+          "name": "role",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(40)"
+        },
+        {
+          "name": "is_active",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "boolean"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "username"
+          ],
+          "unique": true
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "workbench_defect_links": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "case_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "defect_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "linked_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(64)"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "case_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "defect_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "linked_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "case_id",
+          "defect_id"
+        ]
+      ]
+    },
+    "workbench_execution_gate_decisions": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "page",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "decision",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "decision"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "run_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "page",
+          "project",
+          "run_id"
+        ]
+      ]
+    },
+    "workbench_failure_source_calibrations": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "sample_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "case_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "page",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "human_decision",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(80)"
+        },
+        {
+          "name": "predicted_failure_source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "confirmed_failure_source",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "case_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "confirmed_failure_source"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "human_decision"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "predicted_failure_source"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "run_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "sample_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "sample_id"
+        ]
+      ]
+    },
+    "workbench_history_events": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "action",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "page",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "actor_display",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "detail_summary",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "action"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "actor_display"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "run_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": []
+    },
+    "workbench_review_decisions": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "project",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "page",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "review_type",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "review_type"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "run_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "page",
+          "project",
+          "review_type",
+          "run_id"
+        ]
+      ]
+    },
+    "workbench_runtime_runs": {
+      "check_constraints": [],
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primary_key": true,
+          "server_default": null,
+          "type": "integer-auto-pk"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "project",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "page",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(120)"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "string(60)"
+        },
+        {
+          "name": "payload",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": null,
+          "type": "json"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primary_key": false,
+          "server_default": "server-default",
+          "type": "datetime"
+        }
+      ],
+      "foreign_keys": [],
+      "indexes": [
+        {
+          "columns": [
+            "created_at"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "page"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "project"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "run_id"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "status"
+          ],
+          "unique": false
+        },
+        {
+          "columns": [
+            "updated_at"
+          ],
+          "unique": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "unique_constraints": [
+        [
+          "run_id"
+        ]
+      ]
+    }
+  }
+}
