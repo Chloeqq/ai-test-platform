@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine, text
-
+from alembic.script import ScriptDirectory
 from migrations.baselines.fingerprint import assert_frozen_schema
-
+from sqlalchemy import create_engine, text
 
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = SERVICE_ROOT / "scripts" / "bootstrap_database.py"
@@ -145,6 +144,146 @@ def test_versioned_database_with_baseline_revision_and_missing_schema_fails_clos
         )
 
     assert _table_names(database_path) == {"alembic_version", "test_projects", "users"}
+
+
+def test_managed_database_after_baseline_allows_additive_schema_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "future-managed.db"
+    config = _alembic_config(database_path)
+    database_url = _database_url(database_path)
+    bootstrap_database._bootstrap_database(config, database_url)
+
+    engine = create_engine(database_url, future=True)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE test_assets ADD COLUMN future_note TEXT")
+            )
+            connection.execute(
+                text(
+                    "CREATE INDEX ix_test_assets_future_note "
+                    "ON test_assets (future_note)"
+                )
+            )
+            connection.execute(
+                text("CREATE TABLE future_asset_metadata (id INTEGER PRIMARY KEY)")
+            )
+    finally:
+        engine.dispose()
+
+    monkeypatch.setattr(
+        bootstrap_database,
+        "_read_alembic_revisions",
+        lambda _database_url: ["future_revision"],
+    )
+    monkeypatch.setattr(
+        bootstrap_database,
+        "_revision_relationship_to_baseline",
+        lambda _config, _revision: (
+            bootstrap_database.BaselineRevisionRelationship.DESCENDANT
+        ),
+    )
+
+    bootstrap_database._assert_managed_database_health(config, database_url)
+
+
+def test_revision_relationship_uses_alembic_graph(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frozen_revision = bootstrap_database.FROZEN_REVISION
+    ancestor_revision = "ancestor_revision"
+    descendant_revision = "descendant_revision"
+    unrelated_revision = "unrelated_revision"
+
+    class RevisionNode:
+        def __init__(self, revision: str) -> None:
+            self.revision = revision
+
+    class FakeScriptDirectory:
+        lineages = {
+            frozen_revision: [frozen_revision, ancestor_revision],
+            ancestor_revision: [ancestor_revision],
+            descendant_revision: [descendant_revision, frozen_revision, ancestor_revision],
+            unrelated_revision: [unrelated_revision],
+        }
+
+        def iterate_revisions(self, revision: str, _lower: str):
+            return [RevisionNode(item) for item in self.lineages[revision]]
+
+    monkeypatch.setattr(
+        ScriptDirectory,
+        "from_config",
+        lambda _config: FakeScriptDirectory(),
+    )
+
+    relationship = bootstrap_database.BaselineRevisionRelationship
+    assert bootstrap_database._revision_relationship_to_baseline(
+        object(), frozen_revision
+    ) is relationship.EXACT
+    assert bootstrap_database._revision_relationship_to_baseline(
+        object(), descendant_revision
+    ) is relationship.DESCENDANT
+    assert bootstrap_database._revision_relationship_to_baseline(
+        object(), ancestor_revision
+    ) is relationship.ANCESTOR
+    assert bootstrap_database._revision_relationship_to_baseline(
+        object(), unrelated_revision
+    ) is relationship.UNRELATED
+
+
+def test_unrelated_managed_revision_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_path = tmp_path / "unrelated-managed.db"
+    config = _alembic_config(database_path)
+    database_url = _database_url(database_path)
+    bootstrap_database._bootstrap_database(config, database_url)
+
+    monkeypatch.setattr(
+        bootstrap_database,
+        "_read_alembic_revisions",
+        lambda _database_url: ["unrelated_revision"],
+    )
+    monkeypatch.setattr(
+        bootstrap_database,
+        "_revision_relationship_to_baseline",
+        lambda _config, _revision: (
+            bootstrap_database.BaselineRevisionRelationship.UNRELATED
+        ),
+    )
+
+    with pytest.raises(
+        bootstrap_database.BootstrapDatabaseError,
+        match="is unrelated to frozen baseline",
+    ):
+        bootstrap_database._assert_managed_database_health(config, database_url)
+
+
+def test_database_at_frozen_revision_still_requires_exact_schema(
+    tmp_path: Path,
+) -> None:
+    database_path = tmp_path / "frozen-with-extra-table.db"
+    config = _alembic_config(database_path)
+    database_url = _database_url(database_path)
+    bootstrap_database._bootstrap_database(config, database_url)
+
+    engine = create_engine(database_url, future=True)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("CREATE TABLE unexpected_at_frozen_revision (id INTEGER PRIMARY KEY)")
+            )
+    finally:
+        engine.dispose()
+
+    with pytest.raises(
+        bootstrap_database.BootstrapDatabaseError,
+        match=r"\[versioned_empty_or_inconsistent\]",
+    ):
+        bootstrap_database._assert_managed_database_health(config, database_url)
 
 
 def test_bootstrap_has_no_runtime_metadata_repair_path() -> None:

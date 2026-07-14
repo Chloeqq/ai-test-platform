@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import Connection, inspect
-
 
 FROZEN_REVISION = "20260713_121000"
 SCHEMA_SNAPSHOT_VERSION = 1
@@ -48,6 +47,18 @@ def assert_frozen_schema(connection: Connection) -> None:
         raise BaselineSchemaMismatch(
             "database schema does not match frozen baseline "
             f"{FROZEN_REVISION}: expected={expected}, actual={actual}"
+        )
+
+
+def assert_frozen_schema_compatible(connection: Connection) -> None:
+    """Require every frozen schema object while allowing later schema additions."""
+    expected = load_frozen_manifest()
+    actual = normalize_schema(connection)
+    issues = _frozen_schema_compatibility_issues(expected, actual)
+    if issues:
+        raise BaselineSchemaMismatch(
+            "database schema does not contain the required frozen baseline "
+            f"{FROZEN_REVISION}: {'; '.join(issues)}"
         )
 
 
@@ -135,6 +146,56 @@ def normalize_schema(connection: Connection) -> dict[str, Any]:
         "schema_snapshot_version": SCHEMA_SNAPSHOT_VERSION,
         "tables": tables,
     }
+
+
+def _frozen_schema_compatibility_issues(
+    expected: dict[str, Any],
+    actual: dict[str, Any],
+) -> list[str]:
+    """Return frozen objects missing or changed in a later normalized schema."""
+    issues: list[str] = []
+    expected_tables = expected.get("tables", {})
+    actual_tables = actual.get("tables", {})
+
+    for table_name, expected_table in expected_tables.items():
+        actual_table = actual_tables.get(table_name)
+        if actual_table is None:
+            issues.append(f"missing table {table_name}")
+            continue
+
+        expected_columns = {
+            column["name"]: column for column in expected_table.get("columns", [])
+        }
+        actual_columns = {
+            column["name"]: column for column in actual_table.get("columns", [])
+        }
+        for column_name, expected_column in expected_columns.items():
+            actual_column = actual_columns.get(column_name)
+            if actual_column is None:
+                issues.append(f"missing column {table_name}.{column_name}")
+            elif actual_column != expected_column:
+                issues.append(f"changed column {table_name}.{column_name}")
+
+        if actual_table.get("primary_key", []) != expected_table.get(
+            "primary_key", []
+        ):
+            issues.append(f"changed primary key {table_name}")
+
+        for object_type in (
+            "foreign_keys",
+            "unique_constraints",
+            "check_constraints",
+            "indexes",
+        ):
+            expected_objects = expected_table.get(object_type, [])
+            actual_objects = actual_table.get(object_type, [])
+            for expected_object in expected_objects:
+                if expected_object not in actual_objects:
+                    issues.append(
+                        f"missing {object_type} on {table_name}: {expected_object}"
+                    )
+
+    return issues
 
 
 def _fingerprint(value: dict[str, Any]) -> str:

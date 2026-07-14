@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from enum import Enum
 import logging
-from pathlib import Path
 import sys
+from enum import Enum
+from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
@@ -20,8 +20,11 @@ from migrations.baselines.fingerprint import (  # noqa: E402
     FROZEN_REVISION,
     BaselineSchemaMismatch,
     assert_frozen_schema,
+    assert_frozen_schema_compatible,
 )
-from migrations.baselines.schema_20260713_121000 import create_frozen_schema  # noqa: E402
+from migrations.baselines.schema_20260713_121000 import (
+    create_frozen_schema,  # noqa: E402
+)
 
 LOGGER = logging.getLogger(__name__)
 _MINIMUM_MANAGED_TABLES = frozenset({"test_projects", "users"})
@@ -33,6 +36,13 @@ class BootstrapDatabaseState(str, Enum):
     UNVERSIONED = "unversioned"
     UNKNOWN_REVISION = "unknown_revision"
     VERSIONED_EMPTY_OR_INCONSISTENT = "versioned_empty_or_inconsistent"
+
+
+class BaselineRevisionRelationship(str, Enum):
+    EXACT = "exact"
+    DESCENDANT = "descendant"
+    ANCESTOR = "ancestor"
+    UNRELATED = "unrelated"
 
 
 class BootstrapDatabaseError(RuntimeError):
@@ -104,19 +114,31 @@ def _classify_database(config: Config, database_url: str) -> BootstrapDatabaseSt
     return BootstrapDatabaseState.MANAGED
 
 
-def _revision_is_at_or_after_baseline(config: Config, revision: str) -> bool:
+def _revision_relationship_to_baseline(
+    config: Config,
+    revision: str,
+) -> BaselineRevisionRelationship:
     if revision == FROZEN_REVISION:
-        return True
+        return BaselineRevisionRelationship.EXACT
     script_directory = ScriptDirectory.from_config(config)
     try:
-        ancestors = {
+        revision_lineage = {
             item.revision
             for item in script_directory.iterate_revisions(revision, "base")
             if item.revision
         }
+        baseline_lineage = {
+            item.revision
+            for item in script_directory.iterate_revisions(FROZEN_REVISION, "base")
+            if item.revision
+        }
     except Exception:
-        return False
-    return FROZEN_REVISION in ancestors
+        return BaselineRevisionRelationship.UNRELATED
+    if FROZEN_REVISION in revision_lineage:
+        return BaselineRevisionRelationship.DESCENDANT
+    if revision in baseline_lineage:
+        return BaselineRevisionRelationship.ANCESTOR
+    return BaselineRevisionRelationship.UNRELATED
 
 
 def _assert_managed_database_health(config: Config, database_url: str) -> None:
@@ -137,13 +159,23 @@ def _assert_managed_database_health(config: Config, database_url: str) -> None:
         )
 
     revision = revisions[0]
-    if not _revision_is_at_or_after_baseline(config, revision):
+    relationship = _revision_relationship_to_baseline(config, revision)
+    if relationship is BaselineRevisionRelationship.ANCESTOR:
         return
+    if relationship is BaselineRevisionRelationship.UNRELATED:
+        raise BootstrapDatabaseError(
+            BootstrapDatabaseState.VERSIONED_EMPTY_OR_INCONSISTENT,
+            f"managed revision {revision} is unrelated to frozen baseline "
+            f"{FROZEN_REVISION}",
+        )
 
     engine = create_engine(database_url, future=True)
     try:
         with engine.connect() as connection:
-            assert_frozen_schema(connection)
+            if relationship is BaselineRevisionRelationship.EXACT:
+                assert_frozen_schema(connection)
+            else:
+                assert_frozen_schema_compatible(connection)
     except BaselineSchemaMismatch as exc:
         raise BootstrapDatabaseError(
             BootstrapDatabaseState.VERSIONED_EMPTY_OR_INCONSISTENT,
