@@ -16,7 +16,7 @@
 
 实现不得用当前旧代码惯例替代本合同，也不得从本文推导后续阶段对象。
 
-2026-07-15 两轮合同评审识别的 A-01～A-10 已获得用户明确签字，并纳入本合同。合同门禁
+2026-07-15 合同评审识别的 A-01～A-11 已获得用户明确签字，并纳入本合同。合同门禁
 已经解除，但必须先完成文档提交、审查和合并，再从最新 `dev` 创建 Slice 1 功能分支；
 不得在当前文档分支直接实施代码。
 
@@ -179,8 +179,9 @@ deleted_at = null
 5. 不创建默认项目；
 6. 不 commit 或修改项目数据。
 
-`actor_or_client_id` 只能由认证 principal 规范化。首版用户使用
-`user:<stable-user-id>`；不得使用 display name、临时 token 或请求正文中的 actor。
+`actor_or_client_id` 只能由认证 principal 规范化，固定为
+`user:<user_public_id>`；不得使用 username、email、display name、内部 Integer PK、
+临时 token 或请求正文中的 actor。
 
 channel 由受信任的服务器 Adapter 固定设置为 `api`，不得从业务请求正文读取。
 
@@ -195,6 +196,28 @@ admin 访问已经存在且状态为 active 的 project。
 非 admin 访问列表、详情、版本历史、审核历史或写接口时，统一返回
 `403 EVIE_PROJECT_SCOPE_FORBIDDEN`。在项目成员和项目级权限事实源建立前，不得
 自行开放普通用户只读访问。
+
+### 3.5.2 A-11：用户稳定公共身份合同
+
+- `User.user_public_id` 是全局唯一、服务端生成且不可修改的公共身份，格式为
+  `usr_<uuid4hex32>`。
+- 数据库唯一约束显式命名为 `uq_users_user_public_id`；完成存量回填和校验后字段必须
+  `NOT NULL`。
+- `User.id` 继续作为内部 Integer PK，不得作为 EvieAi actor 身份，也不得通过 EvieAi API
+  或历史记录对外暴露。
+- JWT `sub` 在 Phase 1 继续保存内部 `User.id` 以兼容既有 token；认证解析完成后，
+  principal 必须从已加载的 User 提供 `user_public_id`。
+- `RequestActorContext` 只允许输出 `user:<user_public_id>`。
+- principal 缺少或携带格式非法的 `user_public_id` 时 fail-closed；不得退化使用 username、
+  email、display name、内部 PK、token、session/request ID 或请求正文 actor。
+- Review、Audit、Source 和幂等作用域保存 `user:<user_public_id>` 公共 actor 快照；
+  用户改名、停用或其他状态变化不得重写历史事实。
+- 客户端不得提交 `user_public_id`、`actor_or_client_id` 或其他 actor 覆盖字段。
+- 所有受支持的服务端用户创建入口必须在持久化前通过统一 ID 模块分配
+  `user_public_id`；不得由 Router、客户端或 ORM Model 复制生成逻辑。
+- 普通业务更新、用户改名、停用、删除恢复或角色变化均不得修改 `user_public_id`。
+- 对外 User/principal Schema 使用 `user_public_id`，不得暴露内部 `User.id`。JWT `sub`
+  的内部兼容值不属于 API 响应字段。
 
 ## 4. 多来源合同（D-02）
 
@@ -262,6 +285,9 @@ idempotency_key
 request_fingerprint
 ```
 
+其中 `actor_or_client_id` 必须是 A-11 定义的 `user:<user_public_id>` 公共身份快照，
+不得保存内部 `User.id`。
+
 不得把自然语言内容 checksum 作为 Manual 来源身份。相同幂等请求重放不重复新增来源；
 不同幂等请求提交相同内容可以形成新的 Manual 来源事实；channel 不参与 source type 判定。
 
@@ -299,6 +325,9 @@ Idempotency-Key: <client-generated-key>
 ```text
 project_code + operation_type + actor_or_client_id + idempotency_key
 ```
+
+其中 `actor_or_client_id` 固定使用 A-11 的公共 actor 身份快照。幂等记录不得保存内部
+`User.id` 作为作用域身份。
 
 覆盖操作：create asset、create version、restore historical version、review、delete、
 restore asset。
@@ -446,6 +475,9 @@ fingerprint 仍按空修改处理。
 每条记录同时绑定资产与被审核的当前版本，并至少保存：from/to status、reviewer、
 reviewed_at、comment、reason、request/correlation ID 和幂等关联。
 
+`reviewer` 必须保存 A-11 的 `user:<user_public_id>` 公共 actor 身份快照，不建立依赖可变
+用户名或内部 `User.id` 的历史语义。
+
 状态：pending、approved、rejected。
 
 允许转换：
@@ -523,6 +555,9 @@ version_restored、review_changed、asset_deleted、asset_restored。
 
 保存 asset、event type、actor、channel、request/correlation、幂等关联、相关版本/来源/
 审核公共 ID、reason、before/after 状态摘要和 created_at。
+
+`actor` 必须保存 A-11 的 `user:<user_public_id>` 公共身份快照；API 和审计响应不得暴露
+内部 `User.id`。
 
 不得保存完整 title、precondition、natural_steps、expected_result 或需求正文；只允许公共
 ID、checksum、状态、版本号、变化字段名和必要脱敏摘要。审计不能替代 Version 或 Review。
@@ -652,6 +687,13 @@ TestPointAsset 或 Workbench 状态作为新事实源。所有前端写操作必
 - upgrade/downgrade/upgrade、真实 PostgreSQL、外键开启 SQLite 和 bootstrap 回归必须通过。
 - identifier 守卫必须自动扫描所有 Alembic revision、SQLAlchemy metadata 以及显式表、列、
   约束和索引，不得继续手工只列已知 Migration。
+- 同一线性 Migration 必须为存量 `users` 回填唯一 `usr_<uuid4hex32>`，完成格式、非空和
+  唯一性校验后，再收紧 `user_public_id` 为 `NOT NULL` 并建立显式命名的
+  `UNIQUE uq_users_user_public_id`。
+- Migration 中使用 revision-local UUID4 生成逻辑，不导入当前应用 ORM、Service、Policy
+  或可演进 ID helper。
+- SQLite 与 PostgreSQL 都必须验证存量回填、新用户公共 ID 约束、既有 JWT 兼容以及
+  downgrade 数据保护。
 
 ### 14.1 A-05：Downgrade 数据保护合同
 
@@ -712,6 +754,15 @@ Migration 不得导入当前应用层 ORM、Service、Policy、Settings 或其�
 
 后续如修改内容规范化算法，必须通过新的版本化 Migration 和新的业务决策处理，
 不得修改已经发布的历史 Migration。
+
+### 14.3 A-11：用户公共身份 downgrade 保护
+
+`user_public_id` 是创建后不可修改的公共业务身份。普通 downgrade 不得静默删除已经分配
+给存量用户的公共身份，也不得破坏 Review、Audit、Source 或幂等作用域中的 actor 快照。
+
+当数据库存在任何 User 行或任何 Phase 1 公共 actor 历史事实时，降级到无法表达
+`user_public_id` 的 revision 必须 fail-closed，并保持数据库结构和数据不变。确需回退时，
+必须先完成独立、显式批准的数据导出和治理流程；Migration 不提供 force 绕过参数。
 
 ## 15. Requirement 生命周期（D-14）
 

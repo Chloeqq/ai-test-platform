@@ -16,8 +16,12 @@ TestCase 或完整前端资产中心。
 2026-07-15 可实施性评审的 5 项表达缺口已从已批准规格同步到各实施切片和测试矩阵；
 本计划不因此重新选择或扩大架构方案。
 
-2026-07-15 最终审查的 P-01～P-06 实施级约束以及 API project scope 传输规则已纳入本计划。
-它们不新增 ADR 或合同签字项，只固定分支交付、幂等并发、事务重试和审计生成的可执行语义。
+2026-07-15 最终审查的 P-01～P-08 实施级约束以及 API project scope 传输规则已纳入本计划。
+它们不新增 ADR 或合同签字项，只固定分支交付、指纹、幂等并发、事务重试和审计生成的可执行语义。
+
+P-09 只读门禁发现的身份缺口已由用户批准的 A-11 关闭：新增稳定公共
+`User.user_public_id`，actor 固定为 `user:<user_public_id>`，JWT `sub` 保持既有内部
+`User.id` 以兼容现有 token。
 
 ## 2. 实施前置条件
 
@@ -41,8 +45,9 @@ TestCase 或完整前端资产中心。
 | A-08 | 审核 row_version 与重复转换语义 | 已批准 | — |
 | A-09 | API 状态码、deleted 错误与 keyword 语义 | 已批准 | — |
 | A-10 | TestAssetVersion 版本化字段集合 | 已批准 | — |
+| A-11 | 用户稳定公共身份合同 | 已批准 | — |
 
-A-01～A-10 合同门禁已经解除。必须先完成本组权威文档的提交、审查和合并，再从最新
+A-01～A-11 合同门禁已经解除。必须先完成本组权威文档的提交、审查和合并，再从最新
 `dev` 创建 Slice 1 功能分支；不得在当前文档分支直接实施代码。
 
 ## 2.2 实施级约束状态
@@ -55,9 +60,12 @@ A-01～A-10 合同门禁已经解除。必须先完成本组权威文档的提�
 | P-04 | Intake 单次竞态回退协调器 | 已纳入 |
 | P-05 | Phase 0 持久化不变量 | 已纳入 |
 | P-06 | 审计事件生成矩阵 | 已纳入 |
+| P-07 | `request_fingerprint` 冻结算法 | 已纳入 |
+| P-08 | 幂等关联不可变快照 | 已纳入 |
+| P-09 | 认证主体稳定身份字段绑定 | 已闭合：A-11 已批准 |
 
-架构待签字项和合同待签字项均为 0。本计划获得 Approved 不代表当前文档分支
-可开始业务代码；Slice 1 仍必须等待文档 PR 合并。
+架构待签字项、合同待签字项和实施级待补充项均为 0。本计划已获得 Approved，
+但当前文档分支不可开始业务代码；Slice 1 仍必须等待文档 PR 合并。
 
 ## 3. 目标目录
 
@@ -89,6 +97,14 @@ apps/web-ui-service/tests/
 文件：仅 `docs/evie-ai/**`。
 Migration：无。
 验收：链接、命名、阶段边界和决策一致。
+
+阶段一致性验收必须明确：
+
+- 当前实施阶段为 `EvieAi Phase 1 Asset Lifecycle Core`；
+- 不修改 Phase 0 已冻结的架构规则；
+- Phase 0 实施文档必须标注为冻结历史基线，并链接当前阶段矩阵；
+- 不得存在两份同时自称“当前阶段”且定义相互冲突的权威文档。
+
 Commit：`docs(evie-ai): approve phase1 asset lifecycle contract`
 
 ### Slice 1：常量、ID、错误和纯 Policy
@@ -111,11 +127,14 @@ restore_asset
 修改/新增：
 
 - `app/constants/evie_ai.py`
-- `app/core/id_gen.py`（增加 `tar_`、`tae_`，复用现有 UUID helper）
+- `app/core/id_gen.py`（增加 `usr_`、`tar_`、`tae_`，复用现有 UUID helper）
 - `app/core/config.py`（解析和校验幂等保留期）
 - `app/errors/evie_ai.py`
 - `app/policies/evie_ai/source_policy.py`
 - `app/policies/evie_ai/content_fingerprint.py`
+- `app/policies/evie_ai/request_fingerprint.py`
+- `app/policies/evie_ai/user_identity_policy.py`
+- `app/policies/evie_ai/actor_identity_policy.py`
 - `app/policies/evie_ai/review_policy.py`
 - `app/policies/evie_ai/asset_code_policy.py`（执行 `asset_code=test_asset_id`，不重写存量）
 - `tests/unit/evie_ai/test_evie_ai_config.py`
@@ -123,8 +142,32 @@ restore_asset
 Policy 不直接读取环境变量。Settings 解析并校验配置，Service 通过依赖或配置对象取得
 retention_days。Policy 不读数据库或调用旧链。
 
-测试：ID 格式/碰撞、Unicode/NFC/换行/tags 规范化、canonical JSON 稳定字节流与
-SHA-256、合法/非法审核转换、`conversion_status` 合法集不包含 `failed`、稳定错误码。
+测试：ID 格式/碰撞（包含 `usr_`）、用户公共 ID 格式、actor 标准化与非法身份拒绝、
+Unicode/NFC/换行/tags 规范化、canonical JSON 稳定字节流与 SHA-256、合法/非法审核转换、
+`conversion_status` 合法集不包含 `failed`、稳定错误码。
+
+#### P-07：请求指纹冻结算法
+
+`request_fingerprint` 由服务端按 `operation_type` 对请求的业务语义字段进行规范化，
+组装为 canonical JSON，以 UTF-8 编码并计算 SHA-256。canonical JSON 必须包含
+`fingerprint_version="v1"`，使用固定键名、键排序且无非必要空白。
+
+各操作至少包含：
+
+- `create_asset`：`source_type`、Requirement 公共 ID（适用时）以及六个规范化版本字段；
+- `create_version`：`test_asset_id`、`expected_row_version`、六个规范化版本字段和 `reason`；
+- `restore_historical_version`：`test_asset_id`、源 `test_asset_version_id`、
+  `expected_row_version` 和 `reason`；
+- `review_asset`：`test_asset_id`、目标 `test_asset_version_id`、`expected_row_version`、
+  `decision`、`comment` 和 `reason`；
+- `delete_asset`：`test_asset_id`、`expected_row_version` 和 `reason`；
+- `restore_asset`：`test_asset_id`、`expected_row_version` 和 `reason`。
+
+`Idempotency-Key`、`actor_or_client_id`、`project_code`、`channel`、
+`request_id/correlation_id` 和时间字段不进入请求指纹；它们已有独立作用域或追踪职责。
+客户端不得提交 `request_fingerprint`。
+
+必须提供固定测试向量，并验证输入字典顺序、进程重启以及 SQLite/PostgreSQL 不改变结果。
 
 Commit：`feat(evie-ai): add phase1 lifecycle policies and identifiers`
 
@@ -134,12 +177,21 @@ Commit：`feat(evie-ai): add phase1 lifecycle policies and identifiers`
 
 模型：
 
+- 现有 `User` 增加 `user_public_id`；
 - 通用 `TestAssetSource`
 - `TestAssetRequirementSource`
 - `TestAssetIdempotencyRecord`
 - `TestAssetContentClaim`
 - `TestAssetReviewRecord`
 - `TestAssetAuditEvent`
+
+`TestAssetReviewRecord` 和 `TestAssetAuditEvent` 必须保存 P-08 定义的幂等关联快照，
+不得使用指向可过期、可重用幂等记录行的强 FK 作为永久归属事实。
+
+`User.user_public_id` 是不可修改的公共业务身份：字符串格式 `usr_<uuid4hex32>`，全局
+唯一且最终非空，唯一约束固定命名为 `uq_users_user_public_id`。EvieAi Schema 和 API
+不得暴露内部 `User.id`，不得接受客户端提供或修改 `user_public_id`；普通用户资料或状态
+更新同样不得修改它。
 
 `TestAssetIdempotencyRecord` 至少持久化：完整幂等 scope、`request_fingerprint`、
 `expires_at`、单调 `generation`、`result_http_status`、`result_type`、`test_asset_id`、
@@ -182,6 +234,7 @@ Migration、SQLite/PostgreSQL upgrade 测试和 121000 到新 head 的受管升�
 - `TestAssetVersion`、`TestAssetReviewRecord` 和 `TestAssetAuditEvent` 保持不可变；
 - 不修改 Phase 0 已发布公共 ID 前缀和现有数据；
 - 不使用 `Base.metadata.create_all()` 补偿 Migration。
+- A-11 的 User ORM 与回填 Migration 必须和 Slice 2/3 同一原子数据库 PR 交付。
 
 负向模型测试必须明确断言 `current_version_pk` 不存在数据库 ForeignKey。
 
@@ -207,31 +260,40 @@ Slice 3 与 Slice 2 必须按 P-01 在同一功能分支和同一 PR 中原子�
 
 Upgrade 顺序：
 
-1. 在任何业务结构变更前预检存量有效资产的 fingerprint、current version 归属和重复组；
+1. 为 `users` 增加暂时 nullable 的 `user_public_id`；使用 migration-local UUID4 逻辑为
+   每个存量用户生成唯一 `usr_<uuid4hex32>`，验证格式、非空和唯一后建立显式命名的
+   `NOT NULL / UNIQUE uq_users_user_public_id` 约束；不得导入当前应用 ID helper。
+2. 在其他业务结构变更前预检存量有效资产的 fingerprint、current version 归属和重复组；
    存在冲突时 fail-closed，且不得泄露自然语言正文。
-2. 创建新表、显式约束和索引。
-3. 创建 Requirement 来源子表。
-4. 从现有 `test_asset_sources` 回填 Requirement 关联。
-5. 校验总行数、唯一性、父子归属和 FK。
-6. SQLite batch rebuild / PostgreSQL 显式 alter，移除主表专用字段。
-7. 建立数据库可表达的 FK/Unique 约束，并通过迁移验证、Service 不变量和一致性测试
+3. 创建新表、显式约束和索引。
+4. 创建 Requirement 来源子表。
+5. 从现有 `test_asset_sources` 回填 Requirement 关联。
+6. 校验总行数、唯一性、父子归属和 FK。
+7. SQLite batch rebuild / PostgreSQL 显式 alter，移除主表专用字段。
+8. 建立数据库可表达的 FK/Unique 约束，并通过迁移验证、Service 不变量和一致性测试
    保证来源跨表完整性；不使用普通 CHECK 冒充跨表约束，不引入 trigger。
    Phase 1 不在 Requirement 子表复制 `source_type`，因此不使用
    `(test_asset_source_pk, source_type) -> test_asset_sources(id, source_type)` 组合 FK。
    `requirement` 主表记录缺少子记录或 `manual` 主表记录存在子记录时，Repository
    必须 fail-closed；Service 必须在同一事务维护主/子记录；Migration 必须显式校验。
-8. Content Claim 回填使用该 revision 内的冻结指纹实现或不可变
+9. Content Claim 回填使用该 revision 内的冻结指纹实现或不可变
    migration-local helper；禁止导入当前 ORM、Service、Policy、Settings 或可演进业务模块。
    固定测试向量必须证明冻结实现与发布时应用 Policy 产生相同结果。
-9. 自动扫描所有 Alembic revisions、SQLAlchemy metadata 和显式 schema identifiers，按
+10. 自动扫描所有 Alembic revisions、SQLAlchemy metadata 和显式 schema identifiers，按
    `len(identifier.encode("utf-8")) <= 63` 校验。
-10. 运行 bootstrap 回归。
+11. 运行 bootstrap 回归。
 
 Downgrade 必须执行完整业务数据保护：非 Requirement 来源、Review、Audit、未知来源或
 来源不一致任一存在时 fail-closed。Idempotency/ContentClaim 仅在业务检查通过后作为
 可重建技术状态删除。
 
-测试：存量重复/缺失 current version/父子归属错误预检 fail-closed 且结构不变、
+`user_public_id` 是稳定公共业务身份；存在任意 User 行或任何公共 actor 历史事实时，
+downgrade 不得删除该字段，必须 fail-closed 且保持结构和数据不变。只有完成独立、显式批准
+的数据导出/治理且数据库满足无损条件后才允许继续；不得提供 force 参数。
+
+测试：存量用户全部获得唯一合法 `usr_` ID、新用户约束、SQLite/PostgreSQL User 回填、
+用户公共身份 downgrade 保护（仅无 User 且无 actor 历史事实时允许结构降级）、
+存量重复/缺失 current version/父子归属错误预检 fail-closed 且结构不变、
 来源主/子异常状态直接构造后 Repository 和 Migration fail-closed、冻结指纹实现无应用模块导入、
 固定测试向量与发布时 Policy 一致、空库
 baseline→新 head、121000→新 head、空业务数据 downgrade 成功、不可逆业务数据 downgrade
@@ -279,11 +341,28 @@ SQLite 必须通过唯一约束和条件更新提供与 PostgreSQL 行锁等价�
   `changed`、`test_asset_version_id` 或完成时 `row_version`；
 - 幂等表不保存 title、precondition、natural_steps、expected_result 或完整响应正文。
 
+#### P-08：幂等关联不可变快照
+
+`TestAssetIdempotencyRecord` 是可过期、可按 `generation` 重新占用的技术协调记录；
+其操作结果只在当前 generation 内不可变，不是永久业务历史事实源。
+
+`TestAssetReviewRecord` 和 `TestAssetAuditEvent` 不得使用指向可重用幂等记录行的强 FK。
+不可变历史记录必须在同一事务保存以下服务端生成快照：
+
+- `operation_type`；
+- `idempotency_scope_hash`；
+- `idempotency_key_hash`；
+- `idempotency_generation`。
+
+不得保存原始 `Idempotency-Key`。幂等记录后续过期、删除或进入新 generation，
+不得改变既有 ReviewRecord 或 AuditEvent 的归属语义。
+
 Commit：`feat(evie-ai): add phase1 lifecycle repositories`
 
 ### Slice 5：API 安全前置修复
 
-目标：在自然语言写 API 上线前解决预检 C-02、C-03、C-05。
+目标：在自然语言写 API 上线前解决预检 C-02、C-03、C-05，并落实已由 A-11 关闭的
+P-09 身份合同。
 
 - 显式 project scope 验证，禁止自动创建固定默认项目；
 - 自然语言请求 body 日志关闭或脱敏；
@@ -294,7 +373,9 @@ Commit：`feat(evie-ai): add phase1 lifecycle repositories`
 
 - `ProjectScopeService`：只读校验项目存在、状态和访问权限；
 - `ProjectAccessAuthorizer`：项目授权事实源 Adapter；
-- `RequestActorContext`：从认证 principal 生成 user/client 稳定身份；
+- `UserPublicIdentityService`：在所有受支持的 User 创建路径持久化前调用统一
+  `generate_user_public_id()`；不得由 Router 或 ORM Model 生成；
+- `RequestActorContext`：从认证 principal 的 `user_public_id` 生成稳定身份；
 - `RequestChannelContext`：首版由受信任 API Adapter 固定设置为 `api`，不读取请求正文中的 channel。
 
 首版按 A-02 使用认证上下文中的全局 `User.role=admin`，并要求现有项目状态为 active；
@@ -302,9 +383,37 @@ Commit：`feat(evie-ai): add phase1 lifecycle repositories`
 不存在或项目非 active 均拒绝。禁止自动创建默认项目。后续如引入项目级
 membership/permission，必须独立设计和迁移，不得静默改变首版权限语义。
 
+授权检查顺序固定为：先认证并校验全局 admin，再查询项目是否存在且 active。
+非 admin 必须始终返回 `403 EVIE_PROJECT_SCOPE_FORBIDDEN`，不得通过项目错误码探测
+项目是否存在。
+
+#### P-09 / A-11：认证主体身份绑定
+
+只读核验结果：
+
+- `apps/web-ui-service/app/models/user.py` 的 `User.id` 是内部自增 Integer PK；
+- `apps/web-ui-service/app/core/security.py` 将 JWT `sub` 解析为该内部整数；
+- `apps/web-ui-service/app/routers/auth.py` 使用 `subject=str(user.id)` 签发 token；
+- `username` 虽然唯一，但当前模型和合同未保证不可变；
+- 当前不存在已批准的稳定公共用户身份字段。
+
+A-11 已批准新增 `User.user_public_id`，格式为 `usr_<uuid4hex32>`。现有 JWT `sub` 继续
+保存内部 `User.id` 以兼容既有 token；`get_current_user` 完成认证和 User 加载后，principal
+必须暴露 `user_public_id`。`RequestActorContext` 固定输出 `user:<user_public_id>`。
+
+现有注册和其他受支持 User 创建入口必须经最小用户身份 Service 分配公共 ID；不得把生成
+职责继续放在 Router。对外 `UserRead`/principal Schema 返回 `user_public_id` 而不返回内部
+`User.id`。这不改变 JWT `sub` 的 Phase 1 兼容语义。
+
+缺失或格式非法时 fail-closed。禁止退化使用 display name、email、可变 username、临时
+token/session/request ID、请求正文 actor 或内部 Integer PK。Request body 不得覆盖 actor。
+Review、Audit、Source 和幂等作用域保存公共 actor 身份快照，用户改名或状态变化不得重写历史。
+
 不得在此切片实现旧 Workbench 修复或全平台大重构。
 
-测试：跨项目拒绝、缺少项目失败、日志不含正文、错误码/HTTP status、敏感信息不泄露；
+测试：现有 JWT 仍可认证、principal 暴露 `user_public_id`、RequestActorContext 规范输出、
+缺失/非法公共 ID fail-closed、username 修改不改变 actor、请求正文不能伪造 actor、API 不暴露
+内部 `User.id`、跨项目拒绝、缺少项目失败、日志不含正文、错误码/HTTP status、敏感信息不泄露；
 同时回归既有 API 错误响应、非 EvieAi 路由日志、请求 body 下游可重复读取，以及流式、
 multipart、非 JSON 请求不被破坏。不得借此一次性改造所有旧 API 错误格式。
 
@@ -360,7 +469,8 @@ fail-closed，不得无限循环。失败 Session 必须 rollback、close 并废
 | 新幂等键重复非法状态转换 | 返回 409，不新增审计事件 |
 
 同一事务产生两个事件时，必须共享 `request_id`、`correlation_id`、actor、channel 和
-幂等记录引用，但拥有各自独立的 `test_asset_audit_event_id`。
+`operation_type`、`idempotency_scope_hash`、`idempotency_key_hash`、
+`idempotency_generation` 快照，但拥有各自独立的 `test_asset_audit_event_id`。
 
 测试：中途失败全回滚、相同 key 重放、payload 冲突、并发 claim 冲突后使用干净事务完整
 重进 Intake、同幂等请求不重复来源/审计、重复资产复用并新增来源、
@@ -445,18 +555,18 @@ Candidate/TestPoint 页面状态或事实源。
 
 | 测试域 | 必须覆盖 |
 |---|---|
-| ID/Policy | tar/tae ID、指纹、固定 operation_type、review 状态机、错误码 |
+| ID/Policy | usr/tar/tae ID、用户公共身份与 actor 规范化、content/request 指纹与固定向量、固定 operation_type、review 状态机、错误码 |
 | Model/Schema | FK/Unique/Check/Index、不可变、source union、禁止机器字段 |
 | Repository | add/flush/query、无 commit/rollback、软删除、分页 |
 | Transaction | 任一步骤失败全部回滚，Session 不继续使用，并发 Claim 回退从完整 Intake 重启 |
-| Idempotency | 固定 scope、同 key 同请求/不同请求、generation CAS、失败重试、SQLite/PostgreSQL 并发、过期后重用、不可变结果 Envelope |
+| Idempotency | 固定 scope、request fingerprint、同 key 同请求/不同请求、generation CAS、失败重试、SQLite/PostgreSQL 并发、过期后重用、不可变结果 Envelope、Review/Audit 快照不依赖可重用行 |
 | Exact duplicate | 创建复用、编辑冲突、删除释放、恢复冲突、并发 claim |
 | Claim replacement | 原子更新冲突保留旧 claim、后续失败全回滚、`UNIQUE(test_asset_pk)`、一个有效资产仅一个当前 claim |
 | Version | 空修改、历史恢复创建新版本、版本 scope、新版本状态、不包含 failed、version_no/row_version 冲突 |
 | Review | 当前版本、row_version、合法/非法转换、reopen、重复状态转换、不可变记录 |
-| Audit | P-06 事件矩阵、双事件共享请求上下文但使用独立 ID、脱敏、与 Version/Review 事实源分离 |
-| API | 全局 admin 读写、project_code 固定传输位置、project + public ID 作用域查询、状态码、稳定错误码、Idempotency-Key、历史版本恢复、分页和权限 |
-| Migration | SQLite/PostgreSQL、冻结指纹测试向量、无应用模块导入、来源异常状态 fail-closed、数据回填、downgrade 保护、identifier limit |
+| Audit | P-06 事件矩阵、双事件共享请求上下文和 P-08 幂等快照但使用独立 ID、脱敏、与 Version/Review 事实源分离 |
+| API | 全局 admin 读写、P-09 稳定主体身份与防枚举顺序、project_code 固定传输位置、project + public ID 作用域查询、状态码、稳定错误码、Idempotency-Key、历史版本恢复、分页和权限 |
+| Migration | SQLite/PostgreSQL、User 公共 ID 无损回填与 downgrade 保护、冻结指纹测试向量、无应用模块导入、来源异常状态 fail-closed、数据回填、identifier limit |
 | Bootstrap | frozen exact、合法后代兼容、未知/非谱系 fail-closed |
 | Architecture | 禁止 Candidate/structurer/compiler/runner/TestPointAsset 导入 |
 | Legacy | 旧失败节点不得增加，不能用 snapshot 批量更新掩盖变化 |
@@ -480,12 +590,12 @@ Requirement 生命周期 Slice 10 完成后，才可以宣告完整 Phase 1 完�
 
 | 切片 | 状态 |
 |---|---|
-| Slice 0 文档 | 待提交、审查和合并 |
+| Slice 0 文档 | A-11 已同步，待审查和合并 |
 | Slice 1 Policy/ID | 文档合并后允许启动 |
 | Slice 2 ORM/Schema | 依赖 Slice 1；必须与 Slice 3 作为同一原子数据库 PR 交付 |
 | Slice 3 Migration | 与 Slice 2 同分支、同 PR；不允许单独合并 Slice 2 |
 | Slice 4 Repository | 依赖最终模型，合同已确认 |
-| Slice 5 API 安全 | admin + active project 临时策略已确认 |
+| Slice 5 API 安全 | P-09 已由 A-11 闭合；按计划实现 user_public_id principal 绑定 |
 | Slice 6 Intake | 依赖 Slice 1～5，合同已确认 |
 | Slice 7 Lifecycle/Review | 依赖 Repository/Service 基础，合同已确认 |
 | Slice 8 Router | 依赖 Slice 5～7，合同已确认 |

@@ -90,7 +90,8 @@
 
 当前阶段：EvieAi Phase 1 Asset Lifecycle Core
 
-状态：D-01～D-14 与 A-01～A-10 已批准，权威文档待提交合并，分切片实施尚未开始。
+状态：D-01～D-14 与 A-01～A-11 已批准；P-01～P-09 已闭合，权威文档待合并，
+分切片实施尚未开始。
 
 权威实施范围以：
 
@@ -101,7 +102,8 @@
 为准。
 
 Phase 0 已完成持久化基线。数据库前向兼容 C-01 已通过 PR #4 合并并复验。
-A-01～A-10 合同门禁已解除；必须先完成本组权威文档提交、审查和合并，再从最新 `dev`
+A-01～A-11 合同门禁已解除；A-11 固定 `User.user_public_id` 和
+`user:<user_public_id>` actor 合同。本组权威文档提交审查并合并后，才允许从最新 `dev`
 创建 Slice 1 功能分支。
 Requirement 生命周期仍属于 Phase 1，但作为 Asset Lifecycle Core 之后的独立切片；
 该切片完成前不得宣告完整 Phase 1 完成。

@@ -35,7 +35,8 @@ D-01～D-14 的核心架构决策保持 Accepted。
 - A-07：来源身份算法；
 - A-08：审核并发与重复审核语义；
 - A-09：API 和查询细节；
-- A-10：版本字段边界。
+- A-10：版本字段边界；
+- A-11：用户稳定公共身份合同。
 
 上述补充合同必须同步进入 Specification 和 Implementation Plan。只有文档提交、审查和合并
 完成后，才允许从最新 `dev` 创建 Slice 1 功能分支；本 ADR 本身不直接授权跳过切片审查。
@@ -192,7 +193,7 @@ claim。
 - Requirement 生命周期切片完成前，只能宣告 Phase 1 Asset Lifecycle Core 完成，
   不能宣告完整 Phase 1 完成。
 
-## 补充合同（A-01～A-10）
+## 补充合同（A-01～A-11）
 
 ### A-01：Asset code
 
@@ -254,6 +255,21 @@ claim。
 
 版本内容仅包括：`title`、`precondition`、`natural_steps`、`expected_result`、`priority`、
 `tags`。审核、转换、删除、并发、来源、审计和幂等事实不得写入版本正文。
+
+### A-11：用户稳定公共身份
+
+- `User` 新增全局唯一、服务端生成且不可修改的 `user_public_id`，格式为
+  `usr_<uuid4hex32>`。
+- 现有 `User.id` 继续作为内部 Integer PK，不作为 EvieAi actor 身份。
+- Phase 1 `actor_or_client_id` 固定为 `user:<user_public_id>`。
+- username、email、display name、内部 PK、token 和请求正文不得作为 actor 身份。
+- 为兼容既有 token，JWT `sub` 在 Phase 1 继续保存内部 `User.id`；认证解析完成后，
+  principal 必须提供 `user_public_id`。
+- 存量用户由新的线性 Migration 无损回填 `user_public_id`，验证后建立 `NOT NULL` 和
+  `UNIQUE`。
+- Review、Audit、Source 和幂等作用域保存公共 actor 身份快照；用户改名、停用或其他
+  状态变化不得重写历史。
+- principal 缺少合法 `user_public_id` 时必须 fail-closed，不得退化使用其他字段。
 
 ## 被否决或未采用的方案
 

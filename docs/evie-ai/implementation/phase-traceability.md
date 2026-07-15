@@ -445,7 +445,8 @@ Phase 0 不允许包含：
 - 确定性数据库 baseline 已合并；
 - C-01 前向兼容阻塞已通过 PR #4 修复并复验；
 - D-01～D-14 已写入核心 Approved 合同；
-- A-01～A-10 已完成用户明确签字并写入 Approved 规格合同；
+- A-01～A-11 已完成用户明确签字并写入 Approved 规格合同；
+- P-01～P-09 已闭合，A-11 已明确 `user_public_id` 与 actor 身份合同；
 - 必须先完成权威文档提交、审查和合并，再从最新 `dev` 创建 Slice 1 功能分支。
 
 ### 6.3.1 Phase 1 Asset Lifecycle Core 退出条件
