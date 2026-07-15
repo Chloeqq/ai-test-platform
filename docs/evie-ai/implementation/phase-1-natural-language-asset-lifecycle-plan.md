@@ -1,7 +1,7 @@
 # EvieAi Phase 1 自然语言测试资产生命周期实施计划
 
 日期：2026-07-15
-状态：Approved
+状态：Final Review（允许最终定版审查，尚未合并）
 规格合同：`phase-1-natural-language-asset-lifecycle-specification.md`
 决策记录：`../decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md`
 
@@ -144,15 +144,24 @@ Upgrade 顺序：
 6. SQLite batch rebuild / PostgreSQL 显式 alter，移除主表专用字段。
 7. 建立数据库可表达的 FK/Unique 约束，并通过迁移验证、Service 不变量和一致性测试
    保证来源跨表完整性；不使用普通 CHECK 冒充跨表约束，不引入 trigger。
-8. 自动扫描所有 Alembic revisions、SQLAlchemy metadata 和显式 schema identifiers，按
+   Phase 1 不在 Requirement 子表复制 `source_type`，因此不使用
+   `(test_asset_source_pk, source_type) -> test_asset_sources(id, source_type)` 组合 FK。
+   `requirement` 主表记录缺少子记录或 `manual` 主表记录存在子记录时，Repository
+   必须 fail-closed；Service 必须在同一事务维护主/子记录；Migration 必须显式校验。
+8. Content Claim 回填使用该 revision 内的冻结指纹实现或不可变
+   migration-local helper；禁止导入当前 ORM、Service、Policy、Settings 或可演进业务模块。
+   固定测试向量必须证明冻结实现与发布时应用 Policy 产生相同结果。
+9. 自动扫描所有 Alembic revisions、SQLAlchemy metadata 和显式 schema identifiers，按
    `len(identifier.encode("utf-8")) <= 63` 校验。
-9. 运行 bootstrap 回归。
+10. 运行 bootstrap 回归。
 
 Downgrade 必须执行完整业务数据保护：非 Requirement 来源、Review、Audit、未知来源或
 来源不一致任一存在时 fail-closed。Idempotency/ContentClaim 仅在业务检查通过后作为
 可重建技术状态删除。
 
-测试：存量重复/缺失 current version/父子归属错误预检 fail-closed 且结构不变、空库
+测试：存量重复/缺失 current version/父子归属错误预检 fail-closed 且结构不变、
+来源主/子异常状态直接构造后 Repository 和 Migration fail-closed、冻结指纹实现无应用模块导入、
+固定测试向量与发布时 Policy 一致、空库
 baseline→新 head、121000→新 head、空业务数据 downgrade 成功、不可逆业务数据 downgrade
 被拒绝且数据库不变、upgrade/downgrade/upgrade、SQLite FK ON、真实 PostgreSQL、记录数
 不变、所有 schema identifier ≤63 字节。
@@ -215,13 +224,16 @@ Commit：`fix(evie-ai): enforce lifecycle API safety boundaries`
 
 未查询到 claim 时，新建路径先创建 Asset 并 flush 内部 PK，再创建首 Version/Source，
 插入指向新 Asset 的 claim，设置 current pointer，写 Audit/幂等结果后提交。若 claim 插入触发
-并发唯一冲突，当前新建事务整体回滚；应用层必须在新的干净事务中重新读取 claim 并
-进入复用路径，不得继续使用失败 Session。
+并发唯一冲突，当前新建事务整体回滚，不保留任何聚合、claim、审计或幂等结果。
+应用层必须在新的干净事务中，从 project scope、请求规范化、request fingerprint 和
+幂等检查开始重新执行完整 Intake。已存在同 scope/key 的完成结果时直接重放；否则重读
+Content Claim 后进入复用路径。不得继续使用失败 Session，也不得绕过幂等 claim。
 
 Requirement 来源必须验证公共 ID、project scope 和版本归属。
 
-测试：中途失败全回滚、相同 key 重放、payload 冲突、并发 claim、重复资产复用并新增来源、
-不重复审计、低质量自然语言仍可入库。
+测试：中途失败全回滚、相同 key 重放、payload 冲突、并发 claim 冲突后使用干净事务完整
+重进 Intake、同幂等请求不重复来源/审计、重复资产复用并新增来源、
+低质量自然语言仍可入库。
 
 Commit：`feat(evie-ai): implement test asset intake service`
 
@@ -255,7 +267,8 @@ Commit：`feat(evie-ai): implement asset lifecycle and review services`
 Router 仅认证、scope、Schema、Service 调用和响应。所有写接口校验 Idempotency-Key；
 版本/审核/删除恢复 Schema 接收 expected_row_version。
 历史版本恢复注册
-`POST /api/evie-ai/test-assets/{test_asset_id}/versions/{version_id}/restore`，成功返回
+`POST /api/evie-ai/test-assets/{test_asset_id}/versions/{test_asset_version_id}/restore`，其中
+`test_asset_version_id` 必须为 `tav_<uuid4hex32>` 公共 ID；成功返回
 201 和新创建的版本。所有读写接口均校验全局 admin 与 active project。
 
 测试：201/200/401/403/404/409/422、分页、过滤、deleted 权限、source union、缺少
@@ -292,7 +305,7 @@ Candidate/TestPoint 页面状态或事实源。
 | ID/Policy | tar/tae ID、指纹、review 状态机、错误码 |
 | Model/Schema | FK/Unique/Check/Index、不可变、source union、禁止机器字段 |
 | Repository | add/flush/query、无 commit/rollback、软删除、分页 |
-| Transaction | 任一步骤失败全部回滚，Session 不继续使用 |
+| Transaction | 任一步骤失败全部回滚，Session 不继续使用，并发 Claim 回退从完整 Intake 重启 |
 | Idempotency | 同 key 同请求/不同请求、失败重试、并发、过期后重用、并发清理/重新占用 |
 | Exact duplicate | 创建复用、编辑冲突、删除释放、恢复冲突、并发 claim |
 | Claim replacement | 原子更新冲突保留旧 claim、后续失败全回滚、`UNIQUE(test_asset_pk)`、一个有效资产仅一个当前 claim |
@@ -300,7 +313,7 @@ Candidate/TestPoint 页面状态或事实源。
 | Review | 当前版本、row_version、合法/非法转换、reopen、重复状态转换、不可变记录 |
 | Audit | 每种事件一次、脱敏、与 Version/Review 事实源分离 |
 | API | 全局 admin 读写 project scope、状态码、稳定错误码、Idempotency-Key、历史版本恢复、分页和权限 |
-| Migration | SQLite/PostgreSQL、数据回填、downgrade 保护、identifier limit |
+| Migration | SQLite/PostgreSQL、冻结指纹测试向量、无应用模块导入、来源异常状态 fail-closed、数据回填、downgrade 保护、identifier limit |
 | Bootstrap | frozen exact、合法后代兼容、未知/非谱系 fail-closed |
 | Architecture | 禁止 Candidate/structurer/compiler/runner/TestPointAsset 导入 |
 | Legacy | 旧失败节点不得增加，不能用 snapshot 批量更新掩盖变化 |

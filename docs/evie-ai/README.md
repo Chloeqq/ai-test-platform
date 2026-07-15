@@ -37,7 +37,8 @@ EvieAi 的核心口径：
 
 - [2026-07-14 Phase 1 自然语言资产生命周期预检](./implementation/2026-07-14_phase-1-natural-language-asset-lifecycle-preflight.md)
 
-预检报告用于保留分析证据；正式实施口径以上述 `Approved` 规格合同和实施计划为准。
+预检报告用于保留分析证据；正式实施口径以 `Approved` 规格合同和完成最终
+定版审查的实施计划为准。在文档 PR 合并前，实施计划保持 `Final Review`，不授权启动 Slice 1。
 
 ## 本地参考资料
 

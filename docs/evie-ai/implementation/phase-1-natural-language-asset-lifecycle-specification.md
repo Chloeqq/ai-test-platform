@@ -146,9 +146,15 @@ deleted_at = null
 `UNIQUE(project_code, content_fingerprint)` 冲突：
 
 - 当前新建事务必须整体回滚；
-- 不保留新 TestAsset、Version、Source、Audit 或幂等结果；
-- 应用层必须使用新的干净事务重新读取已存在的 claim，再进入精确重复复用路径；
-- 不得在失败 Session 上继续查询或写入。
+- 不保留 TestAsset、Version、Source、Content Claim、AuditEvent 或幂等结果；
+- 不得在失败 Session 或失败事务中继续查询或写入；
+- 应用层必须开启新的干净事务，重新校验 project scope、请求规范化和
+  request fingerprint，并从幂等检查开始重新执行完整 Intake 流程；
+- 新事务必须重新校验相同 scope/key 的幂等状态；
+- 若另一个同幂等请求已经完成，直接返回其原结果；
+- 否则重新读取已存在的 Content Claim，并进入精确重复复用路径。
+
+并发回退不得绕过 project scope、幂等 claim 或 request fingerprint 校验。
 
 ### 3.4 A-01：Asset code 合同
 
@@ -529,7 +535,7 @@ GET    /api/evie-ai/test-assets
 GET    /api/evie-ai/test-assets/{test_asset_id}
 POST   /api/evie-ai/test-assets/{test_asset_id}/versions
 GET    /api/evie-ai/test-assets/{test_asset_id}/versions
-POST   /api/evie-ai/test-assets/{test_asset_id}/versions/{version_id}/restore
+POST   /api/evie-ai/test-assets/{test_asset_id}/versions/{test_asset_version_id}/restore
 POST   /api/evie-ai/test-assets/{test_asset_id}/reviews
 GET    /api/evie-ai/test-assets/{test_asset_id}/reviews
 DELETE /api/evie-ai/test-assets/{test_asset_id}
@@ -543,7 +549,7 @@ POST   /api/evie-ai/test-assets/{test_asset_id}/restore
 历史版本恢复使用独立端点：
 
 ```http
-POST /api/evie-ai/test-assets/{test_asset_id}/versions/{version_id}/restore
+POST /api/evie-ai/test-assets/{test_asset_id}/versions/{test_asset_version_id}/restore
 Idempotency-Key: <client-generated-key>
 ```
 
@@ -557,6 +563,8 @@ Idempotency-Key: <client-generated-key>
 ```
 
 成功返回 `201 Created` 和新创建的版本，不得直接返回或重指向历史版本。
+`test_asset_version_id` 必须是后端分配的 `tav_<uuid4hex32>` 公共 ID，不得接收或暴露
+内部 Integer PK。
 
 来源是 `manual`/`requirement` discriminated union。Requirement 来源请求使用公共
 `requirement_id` 和 `requirement_version_id`，后端验证项目作用域和父子归属。
@@ -687,6 +695,23 @@ Migration 不得自动选择 canonical asset，不得合并、删除、软删除
 UNIQUE(project_code, content_fingerprint)
 UNIQUE(test_asset_pk)
 ```
+
+#### 14.2.1 Migration 指纹算法确定性
+
+Content Claim 回填所使用的内容规范化、canonical JSON 序列化和 SHA-256 算法，
+必须作为该 Alembic revision 的冻结实现存在。
+
+Migration 不得导入当前应用层 ORM、Service、Policy、Settings 或其他可继续演进的
+业务模块来计算历史数据指纹。允许的实现方式仅为：
+
+- 将冻结算法直接实现于该 Migration；
+- 或使用仅服务于该 revision、内容不可变的 migration-local helper。
+
+冻结实现必须通过固定测试向量验证，并在 Phase 1 发布时与当前应用 Policy
+产生相同指纹。失败诊断只能输出公共 ID、项目标识和计数，不得输出自然语言正文。
+
+后续如修改内容规范化算法，必须通过新的版本化 Migration 和新的业务决策处理，
+不得修改已经发布的历史 Migration。
 
 ## 15. Requirement 生命周期（D-14）
 
