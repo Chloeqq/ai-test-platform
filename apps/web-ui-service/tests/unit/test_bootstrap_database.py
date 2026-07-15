@@ -6,14 +6,16 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from migrations.baselines import authorized_retirements
 from migrations.baselines.authorized_retirements import (
+    AUTHORIZED_SCHEMA_RETIREMENTS,
     AuthorizedSchemaRetirement,
     require_table,
 )
-from migrations.baselines.fingerprint import assert_frozen_schema
+from migrations.baselines.fingerprint import assert_frozen_schema_compatible
 from sqlalchemy import create_engine, text
 
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
@@ -63,11 +65,14 @@ def test_empty_database_uses_frozen_baseline_then_stamps_revision(tmp_path: Path
     finally:
         connection.close()
 
-    assert revision == "20260713_121000"
+    assert revision == "20260715_100000"
     engine = create_engine(_database_url(database_path), future=True)
     try:
         with engine.connect() as connection:
-            assert_frozen_schema(connection)
+            assert_frozen_schema_compatible(
+                connection,
+                authorized_retirements=AUTHORIZED_SCHEMA_RETIREMENTS,
+            )
     finally:
         engine.dispose()
 
@@ -244,6 +249,11 @@ def test_managed_database_after_baseline_allows_additive_schema_changes(
         lambda _config, _revision: (
             bootstrap_database.BaselineRevisionRelationship.DESCENDANT
         ),
+    )
+    monkeypatch.setattr(
+        bootstrap_database,
+        "_authorized_retirements_for_revision",
+        lambda _config, _revision: AUTHORIZED_SCHEMA_RETIREMENTS,
     )
 
     bootstrap_database._assert_managed_database_health(config, database_url)
@@ -425,6 +435,7 @@ def test_database_at_frozen_revision_still_requires_exact_schema(
     config = _alembic_config(database_path)
     database_url = _database_url(database_path)
     bootstrap_database._bootstrap_database(config, database_url)
+    command.downgrade(config, bootstrap_database.FROZEN_REVISION)
 
     engine = create_engine(database_url, future=True)
     try:

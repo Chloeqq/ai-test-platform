@@ -6,11 +6,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 SERVICE_ROOT = Path(__file__).resolve().parents[3]
 PARENT_REVISION = "20260713_110000_add_parsed_blocks_to_requirement_documents"
 PRE_CONSTRAINT_FIX_REVISION = "20260713_120000"
 PHASE0_REVISION = "20260713_121000"
+PHASE1_REVISION = "20260715_100000"
 EVIE_AI_TABLES = {
     "requirements",
     "requirement_versions",
@@ -170,9 +170,15 @@ def test_phase0_migration_upgrade_downgrade_upgrade(tmp_path: Path) -> None:
 
     _run_bootstrap(database_path)
     revision, tables, integrity = _database_state(database_path)
-    assert revision == PHASE0_REVISION
+    assert revision == PHASE1_REVISION
     assert EVIE_AI_TABLES.issubset(tables)
     assert "requirement_documents" in tables
+    assert integrity == "ok"
+
+    _run_alembic(database_path, "downgrade", PHASE0_REVISION)
+    revision, tables, integrity = _database_state(database_path)
+    assert revision == PHASE0_REVISION
+    assert EVIE_AI_TABLES.issubset(tables)
     assert integrity == "ok"
     _assert_phase0_schema(database_path)
 
@@ -186,10 +192,9 @@ def test_phase0_migration_upgrade_downgrade_upgrade(tmp_path: Path) -> None:
 
     _run_alembic(database_path, "upgrade", "head")
     revision, tables, integrity = _database_state(database_path)
-    assert revision == PHASE0_REVISION
+    assert revision == PHASE1_REVISION
     assert EVIE_AI_TABLES.issubset(tables)
     assert integrity == "ok"
-    _assert_phase0_schema(database_path)
 
 
 def test_constraint_name_migration_normalizes_existing_sqlite_schema(
