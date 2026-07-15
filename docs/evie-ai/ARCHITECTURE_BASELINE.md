@@ -23,7 +23,10 @@
 - `docs/evie-ai/architecture/target-capability-map.md`
 - `docs/evie-ai/engineering/coding-standards.md`
 - `docs/evie-ai/implementation/phase-0-domain-model.md`
+- `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-specification.md`
+- `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-plan.md`
 - `docs/evie-ai/implementation/phase-traceability.md`
+- `docs/evie-ai/decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md`
 - `docs/evie-ai/migration/legacy-chain-freeze-list.md`
 - `docs/evie-ai/migration/docs-cleanup-plan.md`
 - `docs/evie-ai/reference/README.md`
@@ -85,12 +88,22 @@
 
 ## 6. 当前实施阶段
 
-当前阶段：EvieAi Phase 0
+当前阶段：EvieAi Phase 1 Asset Lifecycle Core
 
-实际实施范围以：
+状态：D-01～D-14 与 A-01～A-10 已批准，权威文档待提交合并，分切片实施尚未开始。
 
-`docs/evie-ai/implementation/phase-0-domain-model.md`
+权威实施范围以：
+
+- `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-specification.md`
+- `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-plan.md`
+- `docs/evie-ai/decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md`
 
 为准。
 
-完整能力地图和Excel只用于长期方向校验。
+Phase 0 已完成持久化基线。数据库前向兼容 C-01 已通过 PR #4 合并并复验。
+A-01～A-10 合同门禁已解除；必须先完成本组权威文档提交、审查和合并，再从最新 `dev`
+创建 Slice 1 功能分支。
+Requirement 生命周期仍属于 Phase 1，但作为 Asset Lifecycle Core 之后的独立切片；
+该切片完成前不得宣告完整 Phase 1 完成。
+
+完整能力地图和 Excel 只用于长期方向校验，不自动扩大 Phase 1 实施范围。

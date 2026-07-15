@@ -1,6 +1,7 @@
 # EvieAi 阶段追踪矩阵
 
-日期：2026-07-12
+创建日期：2026-07-12
+最后更新：2026-07-15
 状态：Authoritative
 适用范围：EvieAi 完整目标能力、阶段实施边界、交付物追踪、验收证据和架构偏差检查
 
@@ -23,6 +24,9 @@
 - `docs/evie-ai/architecture/natural-language-test-assets.md`
 - `docs/evie-ai/architecture/target-capability-map.md`
 - `docs/evie-ai/engineering/coding-standards.md`
+- `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-specification.md`
+- `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-plan.md`
+- `docs/evie-ai/decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md`
 - `docs/evie-ai/reference/2026-07-12_evie-ai-architecture-flow.mmd`
 - `docs/evie-ai/reference/EvieAi_架构分层功能清单_完整实施版.xlsx`
 
@@ -263,14 +267,14 @@ Phase 文档定义本次实际实施边界
 |---|---|---|---|---|---|---|---|
 | 项目作用域 | 07 平台控制面、20 通用字段规范 | 实施：复用 `TestProject.project_code` | 实施：查询和写入隔离 | 实施：生成和来源隔离 | 实施：转换和资源隔离 | 实施：计划与执行隔离 | 租户与多项目治理 |
 | Tenant | 07 平台控制面 | 延后 | 延后 | 延后 | 可选基线 | 可选 | 实施 |
-| Requirement | 10 ID、11 实体关系、14 数据明细、15 覆盖模型 | 实施：最小聚合根 | 实施：API和生命周期 | 实施：作为输入来源 | 实施：覆盖追踪输入 | 实施：执行追溯 | 影响分析深化 |
-| RequirementVersion | 10 ID、15 覆盖模型 | 实施：正文版本 | 实施：版本生命周期 | 实施：文档/生成绑定 | 实施：资产追溯 | 实施：执行追溯 | 影响分析深化 |
+| Requirement | 10 ID、11 实体关系、14 数据明细、15 覆盖模型 | 实施：最小聚合根 | 实施：独立后续切片 | 实施：作为输入来源 | 实施：覆盖追踪输入 | 实施：执行追溯 | 影响分析深化 |
+| RequirementVersion | 10 ID、15 覆盖模型 | 实施：正文版本 | 实施：独立后续切片 | 实施：文档/生成绑定 | 实施：资产追溯 | 实施：执行追溯 | 影响分析深化 |
 | RequirementItem | 15 覆盖模型 | 延后 | 可选 | 实施或后续确认 | 实施：覆盖关系 | 实施：执行追溯 | 深化 |
 | AcceptanceCriterion | 15 覆盖模型 | 延后 | 可选 | 实施或后续确认 | 实施：覆盖关系 | 实施：覆盖报告 | 深化 |
 | BusinessRule | 15 覆盖模型 | 延后 | 可选 | 实施或后续确认 | 实施：场景输入 | 实施：覆盖报告 | 深化 |
 | TestAsset | 03 自然语言资产、10 ID、14 数据明细 | 实施：聚合根 | 实施：完整生命周期 | 实施：AI统一写入 | 实施：转换输入 | 实施：执行追溯 | 治理深化 |
 | TestAssetVersion | 03 自然语言资产、11 实体关系 | 实施：自然语言正文 | 实施：编辑和历史 | 实施：AI生成版本 | 实施：转换锁定 | 实施：执行追溯 | 影响分析 |
-| TestAssetSource | 03 自然语言资产、13 字段传递链 | 实施：仅 Requirement 来源 | 实施：来源查询 | 实施：文档、章节、批次等来源 | 实施：追溯 | 实施：报告追溯 | 治理深化 |
+| TestAssetSource | 03 自然语言资产、13 字段传递链 | 实施：仅 Requirement 来源 | 实施：通用主表、Requirement 子表、Manual 来源 | 实施：文档、章节、批次等来源 | 实施：追溯 | 实施：报告追溯 | 治理深化 |
 | TestAssetIntakeService | 03 自然语言资产 | 延后 | 实施 | 复用并扩展生产者 | 复用 | 复用 | 复用 |
 | 幂等检查 | 03 自然语言资产、13 字段传递链 | 延后 | 实施 | 扩展任务和消息幂等 | 实施：转换幂等 | 实施：执行任务幂等 | 深化 |
 | 精确重复检测 | 03 自然语言资产 | 延后 | 实施 | 扩展来源和批次范围 | 复用 | 复用 | 合并治理 |
@@ -434,6 +438,28 @@ Phase 0 不允许包含：
 - Intake幂等规则已确认
 - 精确重复策略已确认
 - 审核和状态转换已确认
+
+当前状态（2026-07-15）：
+
+- Phase 0 模型和 Repository 基线已合并；
+- 确定性数据库 baseline 已合并；
+- C-01 前向兼容阻塞已通过 PR #4 修复并复验；
+- D-01～D-14 已写入核心 Approved 合同；
+- A-01～A-10 已完成用户明确签字并写入 Approved 规格合同；
+- 必须先完成权威文档提交、审查和合并，再从最新 `dev` 创建 Slice 1 功能分支。
+
+### 6.3.1 Phase 1 Asset Lifecycle Core 退出条件
+
+- Manual 和已存在 Requirement 来源均进入统一 Intake；
+- 幂等、精确重复、来源、版本、审核、删除恢复、审计和查询合同全部实现；
+- SQLite 与 PostgreSQL Migration、并发和失败回滚测试通过；
+- API 项目作用域、日志脱敏和结构化错误门禁通过；
+- Candidate、structurer、Compiler 和 Runner 未进入新资产链；
+- 相比冻结旧链基线没有新增失败；
+- 合并后复验和实施证据已更新到任务档案。
+
+完成以上条件可以宣告 `Phase 1 Asset Lifecycle Core` 完成。
+Requirement 生命周期独立切片交付前，不得宣告完整 Phase 1 完成。
 
 ### 6.4 Phase 2 入口条件
 

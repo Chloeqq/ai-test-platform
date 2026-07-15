@@ -16,9 +16,28 @@ EvieAi 的核心口径：
 2. [EvieAi 架构总览](./architecture/evie-ai-overview.md)
 3. [EvieAi 目标能力地图](./architecture/target-capability-map.md)
 4. [EvieAi Phase 0 领域模型实施计划](./implementation/phase-0-domain-model.md)
-5. [EvieAi 阶段追踪矩阵](./implementation/phase-traceability.md)
-6. [EvieAi 文档清理计划](./migration/docs-cleanup-plan.md)
-7. [旧链冻结清单](./migration/legacy-chain-freeze-list.md)
+5. [EvieAi Phase 1 自然语言资产生命周期规格合同](./implementation/phase-1-natural-language-asset-lifecycle-specification.md)
+6. [EvieAi Phase 1 自然语言资产生命周期实施计划](./implementation/phase-1-natural-language-asset-lifecycle-plan.md)
+7. [ADR-0001：Phase 1 自然语言资产生命周期](./decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md)
+8. [EvieAi 阶段追踪矩阵](./implementation/phase-traceability.md)
+9. [EvieAi 文档清理计划](./migration/docs-cleanup-plan.md)
+10. [旧链冻结清单](./migration/legacy-chain-freeze-list.md)
+
+## 当前阶段
+
+当前处于 EvieAi Phase 1 核心与补充合同均已批准、权威文档待提交合并、分切片实施尚未开始的状态。
+
+- C-01 数据库前向兼容阻塞已通过 PR #4 合并并复验。
+- D-01～D-14 已于 2026-07-15 获得用户明确批准。
+- A-01～A-10 已于 2026-07-15 获得用户明确批准并写入 ADR、规格合同和实施计划。
+- ORM、Migration、Service 和 API 必须按实施计划逐切片审查，不得一次性越过门禁。
+- Requirement 生命周期属于 Phase 1，但作为 Asset Lifecycle Core 之后的独立切片。
+
+历史预检报告位于：
+
+- [2026-07-14 Phase 1 自然语言资产生命周期预检](./implementation/2026-07-14_phase-1-natural-language-asset-lifecycle-preflight.md)
+
+预检报告用于保留分析证据；正式实施口径以上述 `Approved` 规格合同和实施计划为准。
 
 ## 本地参考资料
 
