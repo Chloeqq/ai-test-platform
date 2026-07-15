@@ -204,6 +204,11 @@ P-10 最小兼容范围同时纳入 Slice 2/3 原子 PR：
 - 不使用 ORM/default 或数据库随机 default；
 - 不修改 JWT `sub`，不实现 `RequestActorContext`、项目权限或完整认证重构。
 
+兼容收口时，`UserCreate` 必须显式保持 `extra="ignore"`，并在 Pydantic 丢弃未知字段前
+只拒绝合同已批准的 `user_public_id` 和 `actor_or_client_id` 身份覆盖字段；不得将该要求
+扩大为注册 API 的全量 `extra="forbid"`。对外 `UserRead` 及前端 `AuthUser` 使用
+`user_public_id`，不得继续声明或返回内部 `User.id`。
+
 `TestAssetReviewRecord` 和 `TestAssetAuditEvent` 必须保存 P-08 定义的幂等关联快照，
 不得使用指向可过期、可重用幂等记录行的强 FK 作为永久归属事实。
 
