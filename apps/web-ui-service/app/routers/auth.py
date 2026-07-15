@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.id_gen import generate_user_public_id
 from app.core.security import (
     create_access_token,
     get_current_user,
@@ -41,6 +42,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserRead:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="username already exists")
 
     user = User(
+        user_public_id=generate_user_public_id(),
         username=payload.username.strip(),
         hashed_password=hash_password(payload.password),
         role=payload.role.strip().lower() or "viewer",

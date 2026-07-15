@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -8,8 +8,12 @@ from app.core.database import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("user_public_id", name="uq_users_user_public_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_public_id: Mapped[str] = mapped_column(String(64), nullable=False)
     username: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(40), default="viewer")

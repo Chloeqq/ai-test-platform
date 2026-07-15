@@ -7,6 +7,11 @@ from app.models.evie_ai import (
     Requirement,
     RequirementVersion,
     TestAsset,
+    TestAssetAuditEvent,
+    TestAssetContentClaim,
+    TestAssetIdempotencyRecord,
+    TestAssetRequirementSource,
+    TestAssetReviewRecord,
     TestAssetSource,
     TestAssetVersion,
 )
@@ -14,19 +19,18 @@ from app.models.orchestration_task import OrchestrationTask
 from app.models.page_object import (
     PageElement,
     PageElementHealthCheck,
+    PageElementLocator,
     PageElementVersion,
     PageObject,
-    PageObjectRef,
-)
-from app.models.page_object import (
-    PageElementLocator,
     PageObjectGovernanceLog,
+    PageObjectRef,
 )
 from app.models.page_object_recorder_models import (
     PageObjectCandidateElement,
     PageObjectCandidateGroup,
     PageObjectRecorderSession,
 )
+from app.models.prompt_template import PromptTemplate
 from app.models.quality_eval import (
     QualityEvalDataset,
     QualityEvalItem,
@@ -34,7 +38,6 @@ from app.models.quality_eval import (
     QualityEvalRun,
 )
 from app.models.requirement_document import RequirementDocument
-from app.models.prompt_template import PromptTemplate
 from app.models.test_case import (
     TestCase,
     TestCaseDefect,
@@ -104,4 +107,9 @@ __all__ = [
     "TestAsset",
     "TestAssetVersion",
     "TestAssetSource",
+    "TestAssetRequirementSource",
+    "TestAssetIdempotencyRecord",
+    "TestAssetContentClaim",
+    "TestAssetReviewRecord",
+    "TestAssetAuditEvent",
 ]

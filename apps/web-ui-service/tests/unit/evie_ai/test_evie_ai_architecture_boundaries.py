@@ -11,22 +11,25 @@ from app.models.evie_ai import (
     TestAsset as AssetModel,
 )
 from app.models.evie_ai import (
+    TestAssetRequirementSource as AssetRequirementSourceModel,
+)
+from app.models.evie_ai import (
     TestAssetSource as AssetSourceModel,
 )
 from app.models.evie_ai import (
     TestAssetVersion as AssetVersionModel,
 )
 from app.schemas.evie_ai import (
+    ManualTestAssetSourceCreate,
+    ManualTestAssetSourceRead,
+    RequirementTestAssetSourceCreate,
+    RequirementTestAssetSourceRead,
+)
+from app.schemas.evie_ai import (
     TestAssetCreate as AssetCreate,
 )
 from app.schemas.evie_ai import (
     TestAssetRead as AssetRead,
-)
-from app.schemas.evie_ai import (
-    TestAssetSourceCreate as AssetSourceCreate,
-)
-from app.schemas.evie_ai import (
-    TestAssetSourceRead as AssetSourceRead,
 )
 from app.schemas.evie_ai import (
     TestAssetVersionCreate as AssetVersionCreate,
@@ -132,10 +135,12 @@ def test_test_asset_schemas_have_only_natural_language_domain_fields() -> None:
     schemas = (
         AssetCreate,
         AssetVersionCreate,
-        AssetSourceCreate,
+        ManualTestAssetSourceCreate,
+        RequirementTestAssetSourceCreate,
         AssetRead,
         AssetVersionRead,
-        AssetSourceRead,
+        ManualTestAssetSourceRead,
+        RequirementTestAssetSourceRead,
     )
     for schema in schemas:
         assert FORBIDDEN_ASSET_FIELDS.isdisjoint(schema.model_fields)
@@ -163,16 +168,21 @@ def test_version_tables_are_immutable_and_current_versions_have_no_database_fk()
     assert AssetModel.__table__.c.current_version_pk.foreign_keys == set()
 
 
-def test_phase0_source_schema_supports_only_requirement_provenance() -> None:
+def test_phase1_source_schema_separates_common_and_requirement_facts() -> None:
     assert set(AssetSourceModel.__table__.c.keys()) == {
         "id",
         "test_asset_source_id",
         "test_asset_pk",
-        "requirement_pk",
-        "requirement_version_pk",
+        "source_type",
         "source_identity_hash",
         "created_at",
         "created_by",
+    }
+    assert set(AssetRequirementSourceModel.__table__.c.keys()) == {
+        "id",
+        "test_asset_source_pk",
+        "requirement_pk",
+        "requirement_version_pk",
     }
 
 
@@ -190,7 +200,7 @@ def test_content_checksums_are_indexed_but_not_unique() -> None:
         assert ("content_checksum",) in indexed_columns
 
 
-def test_required_phase0_foreign_keys_are_explicit_and_named() -> None:
+def test_required_foreign_keys_are_explicit_and_named() -> None:
     expected = {
         RequirementVersion.__table__: {
             "fk_requirement_versions_requirement_pk_requirements"
@@ -200,8 +210,11 @@ def test_required_phase0_foreign_keys_are_explicit_and_named() -> None:
         },
         AssetSourceModel.__table__: {
             "fk_test_asset_sources_test_asset_pk_test_assets",
-            "fk_test_asset_sources_requirement_pk_requirements",
-            "fk_test_asset_sources_req_version_pk_requirement_versions",
+        },
+        AssetRequirementSourceModel.__table__: {
+            "fk_test_asset_req_sources_source_pk_sources",
+            "fk_test_asset_req_sources_requirement_pk_requirements",
+            "fk_test_asset_req_sources_req_version_pk_req_versions",
         },
     }
     for table, expected_names in expected.items():
