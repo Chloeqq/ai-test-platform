@@ -70,6 +70,7 @@ A-01～A-12 合同门禁已经解除。A-01～A-11 权威文档已通过 PR #5 �
 | P-08 | 幂等关联不可变快照 | 已纳入 |
 | P-09 | 认证主体稳定身份字段绑定 | 已闭合：A-11 已批准 |
 | P-10 | 新用户公共身份分配兼容交付 | 已纳入 Slice 2/3 原子 PR |
+| P-11 | Requirement 来源 Repository 结构兼容适配 | 已纳入 Slice 2/3 原子 PR |
 
 架构待签字项、合同待签字项和实施级待补充项均为 0。本计划已获得 Approved，
 Slice 0 已合并，允许启动 Slice 1。
@@ -256,6 +257,18 @@ Migration、SQLite/PostgreSQL upgrade 测试和 121000 到新 head 的受管升�
 - P-10 的最小生产用户创建兼容改动必须与上述 ORM/Migration 一起交付，不能延迟到后续 PR。
 
 负向模型测试必须明确断言 `current_version_pk` 不存在数据库 ForeignKey。
+
+#### P-11：Requirement 来源 Repository 结构兼容适配
+
+Slice 2/3 退役 `test_asset_sources` 中的 `requirement_pk` 和
+`requirement_version_pk` 后，现有 Phase 0 Repository 不得继续访问已退役 ORM 属性。
+为保证 ORM 与 Migration 原子交付后的中间版本可运行，本 Slice 允许同步适配既有
+Requirement 来源写入：先创建通用 `TestAssetSource` 并 `flush` 获得内部主键，再创建
+对应 `TestAssetRequirementSource`。主表和子表由上层同一事务提交或回滚，Repository
+不得 `commit`、`rollback`、创建独立 Session 或控制完整事务边界。
+
+本兼容适配仅覆盖既有 Requirement 来源主表/子表读写及直接测试，不提前实现 Slice 4 的
+Idempotency、ContentClaim、Review、Audit、通用 Intake、分页或查询 Repository。
 
 Commit：`feat(evie-ai): add phase1 asset lifecycle models and schemas`
 
