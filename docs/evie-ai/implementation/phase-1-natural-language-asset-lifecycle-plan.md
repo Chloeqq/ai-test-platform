@@ -1,7 +1,7 @@
 # EvieAi Phase 1 自然语言测试资产生命周期实施计划
 
 日期：2026-07-15
-状态：Final Review（允许最终定版审查，尚未合并）
+状态：Approved（文档 PR 合并前不授权启动 Slice 1）
 规格合同：`phase-1-natural-language-asset-lifecycle-specification.md`
 决策记录：`../decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md`
 
@@ -15,6 +15,9 @@ TestCase 或完整前端资产中心。
 
 2026-07-15 可实施性评审的 5 项表达缺口已从已批准规格同步到各实施切片和测试矩阵；
 本计划不因此重新选择或扩大架构方案。
+
+2026-07-15 最终审查的 P-01～P-06 实施级约束以及 API project scope 传输规则已纳入本计划。
+它们不新增 ADR 或合同签字项，只固定分支交付、幂等并发、事务重试和审计生成的可执行语义。
 
 ## 2. 实施前置条件
 
@@ -41,6 +44,20 @@ TestCase 或完整前端资产中心。
 
 A-01～A-10 合同门禁已经解除。必须先完成本组权威文档的提交、审查和合并，再从最新
 `dev` 创建 Slice 1 功能分支；不得在当前文档分支直接实施代码。
+
+## 2.2 实施级约束状态
+
+| 编号 | 实施级约束 | 状态 |
+|---|---|---|
+| P-01 | Slice 2 与 Slice 3 原子数据库交付 | 已纳入 |
+| P-02 | 幂等 operation、唯一作用域与 CAS 并发算法 | 已纳入 |
+| P-03 | 不可变幂等操作结果摘要 | 已纳入 |
+| P-04 | Intake 单次竞态回退协调器 | 已纳入 |
+| P-05 | Phase 0 持久化不变量 | 已纳入 |
+| P-06 | 审计事件生成矩阵 | 已纳入 |
+
+架构待签字项和合同待签字项均为 0。本计划获得 Approved 不代表当前文档分支
+可开始业务代码；Slice 1 仍必须等待文档 PR 合并。
 
 ## 3. 目标目录
 
@@ -78,6 +95,19 @@ Commit：`docs(evie-ai): approve phase1 asset lifecycle contract`
 
 目标：建立来源、operation、review transition、audit event、错误码、内容规范化和指纹规则。
 
+幂等 `operation_type` 必须使用集中 Enum/常量，固定为：
+
+```text
+create_asset
+create_version
+restore_historical_version
+review_asset
+delete_asset
+restore_asset
+```
+
+不得使用 Router 路径、函数名或自由文本作为 `operation_type`。
+
 修改/新增：
 
 - `app/constants/evie_ai.py`
@@ -111,11 +141,49 @@ Commit：`feat(evie-ai): add phase1 lifecycle policies and identifiers`
 - `TestAssetReviewRecord`
 - `TestAssetAuditEvent`
 
+`TestAssetIdempotencyRecord` 至少持久化：完整幂等 scope、`request_fingerprint`、
+`expires_at`、单调 `generation`、`result_http_status`、`result_type`、`test_asset_id`、
+`test_asset_version_id`、`test_asset_review_record_id`、`created`、`reused_existing`、`changed`、
+`row_version`、`deleted` 和 `completed_at`。不保存自然语言正文或完整响应。
+
+幂等唯一约束固定为：
+
+```text
+UNIQUE(project_code, operation_type, actor_or_client_id, idempotency_key)
+```
+
+显式约束名为 `uq_test_asset_idempotency_scope_key`。Content Claim 的
+`UNIQUE(project_code, content_fingerprint)` 显式约束名为
+`uq_test_asset_content_claims_project_fingerprint`。两个名称都必须纳入 63 字节守卫。
+
 Schema：Manual/Requirement source union、Intake、Version、Historical Version Restore、Review、
 Delete/Restore、列表/详情/历史响应和结构化错误。
 
 测试：字段、PK/FK/Unique/Check/Index、不可变时间字段、机器字段拒绝、内部 PK 不暴露、
 `UNIQUE(test_asset_pk, source_identity_hash)`、严格非版本领域事实字段集、AST 边界。
+
+#### P-01：Slice 2/3 交付边界
+
+Slice 2 和 Slice 3 可以保留为两个独立 Commit，但必须位于同一功能分支和同一 PR，
+并作为一个原子数据库交付单元合并。不得将已依赖 Phase 1 表结构的 ORM 映射
+单独合并到尚未包含对应 Migration 的 `dev`。
+
+Slice 2 Commit 后只允许执行纯模型、Schema、metadata 和静态边界测试；完整数据库测试
+必须在 Slice 3 Commit 完成后执行。该 PR 合并时必须同时具备最终 ORM、对应线性
+Migration、SQLite/PostgreSQL upgrade 测试和 121000 到新 head 的受管升级证据。
+
+#### P-05：Phase 0 持久化不变量
+
+- `TestAsset.current_version_pk` 继续 nullable；
+- Phase 1 不为 `current_version_pk` 新增数据库 ForeignKey；
+- current version 必须属于对应 TestAsset，由 Repository/Service 在事务中校验；
+- 内部数据库 FK 使用 `*_pk` 命名并指向 Integer PK；
+- 公共 ID 使用独立字符串列，不作为内部关系 FK；
+- `TestAssetVersion`、`TestAssetReviewRecord` 和 `TestAssetAuditEvent` 保持不可变；
+- 不修改 Phase 0 已发布公共 ID 前缀和现有数据；
+- 不使用 `Base.metadata.create_all()` 补偿 Migration。
+
+负向模型测试必须明确断言 `current_version_pk` 不存在数据库 ForeignKey。
 
 Commit：`feat(evie-ai): add phase1 asset lifecycle models and schemas`
 
@@ -132,6 +200,10 @@ alembic current
 ```
 
 当前预期：`down_revision = "20260713_121000"`；不得只按文档假设。
+
+Slice 3 与 Slice 2 必须按 P-01 在同一功能分支和同一 PR 中原子交付。Migration 必须
+同时守住 P-05 的 Phase 0 持久化不变量，不得为 `current_version_pk` 增加 FK，也不得用
+`Base.metadata.create_all()` 补齐结构。
 
 Upgrade 顺序：
 
@@ -183,6 +255,30 @@ Commit：`feat(evie-ai): add phase1 asset lifecycle database schema`
 
 测试：Repository 无 commit/rollback、唯一冲突、FK、软删除过滤、分页稳定性、N+1 防护。
 
+#### P-02：幂等并发状态算法
+
+1. 按 `project_code + operation_type + actor_or_client_id + idempotency_key` 查询记录。
+2. 记录存在且未过期：请求指纹相同时返回已保存操作结果；不同时返回
+   `EVIE_IDEMPOTENCY_CONFLICT`。
+3. 记录存在但已过期：通过行锁或带旧 `generation`/过期条件的 CAS 更新原记录，
+   清除旧结果字段，写入新 request fingerprint、`expires_at` 并递增 `generation`。CAS 失败
+   必须重新读取，不得无条件覆盖。
+4. 记录不存在：插入新记录；命中 `uq_test_asset_idempotency_scope_key` 时当前事务
+   回滚，并在干净事务中重新执行幂等检查。
+5. 业务失败时，整条幂等记录随业务事务回滚。
+6. 业务成功时，结果摘要与领域数据在同一事务提交。
+
+SQLite 必须通过唯一约束和条件更新提供与 PostgreSQL 行锁等价的 CAS 语义，不得使用
+进程内锁作为数据库一致性保护。
+
+#### P-03：幂等重放结果摘要
+
+- 幂等重放返回已保存的不可变操作结果语义，不使用资产当前状态覆盖原操作结果；
+- 写接口响应使用操作结果 Envelope；需要最新完整资产时调用详情接口；
+- 资源后续被编辑或删除，不改变历史幂等结果中的 `created`、`reused_existing`、
+  `changed`、`test_asset_version_id` 或完成时 `row_version`；
+- 幂等表不保存 title、precondition、natural_steps、expected_result 或完整响应正文。
+
 Commit：`feat(evie-ai): add phase1 lifecycle repositories`
 
 ### Slice 5：API 安全前置修复
@@ -231,6 +327,41 @@ Content Claim 后进入复用路径。不得继续使用失败 Session，也不�
 
 Requirement 来源必须验证公共 ID、project scope 和版本归属。
 
+#### P-04：Intake 竞态协调器
+
+`TestAssetIntakeService` 仍是唯一公开资产创建入口。它持有一个事务外层的轻量
+`IntakeTransactionRunner`（或等价私有协调方法），由该 runner 为每次尝试创建新 Session 和事务。
+这不是第二个业务保存服务，Adapter 仍只调用 `TestAssetIntakeService`。
+
+单次事务内编排不得在失败事务内自行再次调用 `session.begin()`。只有命中以下显式命名约束时
+才允许进入竞态回退：
+
+- `uq_test_asset_content_claims_project_fingerprint`；
+- `uq_test_asset_idempotency_scope_key`。
+
+不得将任意 `IntegrityError` 解释为精确重复或幂等竞态。Content Claim 唯一冲突后最多执行
+一次完整的干净事务重入；重入后仍无法读取获胜 claim 或再次发生非预期冲突时必须
+fail-closed，不得无限循环。失败 Session 必须 rollback、close 并废弃；新尝试使用新 Session。
+
+#### P-06：审计事件生成矩阵
+
+| 操作 | 审计事件 |
+|---|---|
+| 新建资产及首来源 | `asset_created` |
+| 重复复用且没有新来源 | `exact_duplicate_reused` |
+| 重复复用并新增真实来源 | `source_added` + `exact_duplicate_reused` |
+| 创建新版本 | `version_created` |
+| 空修改 | 不新增审计事件 |
+| 历史版本恢复 | `version_restored` |
+| 审核或 reopen | `review_changed` |
+| 删除 | `asset_deleted` |
+| 恢复 | `asset_restored` |
+| 相同幂等键重放 | 不新增审计事件 |
+| 新幂等键重复非法状态转换 | 返回 409，不新增审计事件 |
+
+同一事务产生两个事件时，必须共享 `request_id`、`correlation_id`、actor、channel 和
+幂等记录引用，但拥有各自独立的 `test_asset_audit_event_id`。
+
 测试：中途失败全回滚、相同 key 重放、payload 冲突、并发 claim 冲突后使用干净事务完整
 重进 Intake、同幂等请求不重复来源/审计、重复资产复用并新增来源、
 低质量自然语言仍可入库。
@@ -271,6 +402,18 @@ Router 仅认证、scope、Schema、Service 调用和响应。所有写接口校
 `test_asset_version_id` 必须为 `tav_<uuid4hex32>` 公共 ID；成功返回
 201 和新创建的版本。所有读写接口均校验全局 admin 与 active project。
 
+`project_code` 传输位置固定为：
+
+| API 类型 | `project_code` 位置 |
+|---|---|
+| `POST /api/evie-ai/test-assets` | 请求体 |
+| `GET /api/evie-ai/test-assets` | 必填 Query 参数 |
+| 详情、版本、审核、删除、恢复 | 必填 Query 参数 |
+
+实体接口必须使用 `project_code + public resource ID` 查询，不得先按公共 ID 读取其他项目资源
+再在响应阶段隐藏。Requirement 来源必须同时校验：请求 project = TestAsset project =
+Requirement project = RequirementVersion project；不匹配返回 `EVIE_SOURCE_SCOPE_MISMATCH`。
+
 测试：201/200/401/403/404/409/422、分页、过滤、deleted 权限、source union、缺少
 Idempotency-Key、历史版本恢复、版本不存在/归属错误、项目不存在/非 active、审核版本非当前、
 稳定错误结构、OpenAPI。
@@ -302,17 +445,17 @@ Candidate/TestPoint 页面状态或事实源。
 
 | 测试域 | 必须覆盖 |
 |---|---|
-| ID/Policy | tar/tae ID、指纹、review 状态机、错误码 |
+| ID/Policy | tar/tae ID、指纹、固定 operation_type、review 状态机、错误码 |
 | Model/Schema | FK/Unique/Check/Index、不可变、source union、禁止机器字段 |
 | Repository | add/flush/query、无 commit/rollback、软删除、分页 |
 | Transaction | 任一步骤失败全部回滚，Session 不继续使用，并发 Claim 回退从完整 Intake 重启 |
-| Idempotency | 同 key 同请求/不同请求、失败重试、并发、过期后重用、并发清理/重新占用 |
+| Idempotency | 固定 scope、同 key 同请求/不同请求、generation CAS、失败重试、SQLite/PostgreSQL 并发、过期后重用、不可变结果 Envelope |
 | Exact duplicate | 创建复用、编辑冲突、删除释放、恢复冲突、并发 claim |
 | Claim replacement | 原子更新冲突保留旧 claim、后续失败全回滚、`UNIQUE(test_asset_pk)`、一个有效资产仅一个当前 claim |
 | Version | 空修改、历史恢复创建新版本、版本 scope、新版本状态、不包含 failed、version_no/row_version 冲突 |
 | Review | 当前版本、row_version、合法/非法转换、reopen、重复状态转换、不可变记录 |
-| Audit | 每种事件一次、脱敏、与 Version/Review 事实源分离 |
-| API | 全局 admin 读写 project scope、状态码、稳定错误码、Idempotency-Key、历史版本恢复、分页和权限 |
+| Audit | P-06 事件矩阵、双事件共享请求上下文但使用独立 ID、脱敏、与 Version/Review 事实源分离 |
+| API | 全局 admin 读写、project_code 固定传输位置、project + public ID 作用域查询、状态码、稳定错误码、Idempotency-Key、历史版本恢复、分页和权限 |
 | Migration | SQLite/PostgreSQL、冻结指纹测试向量、无应用模块导入、来源异常状态 fail-closed、数据回填、downgrade 保护、identifier limit |
 | Bootstrap | frozen exact、合法后代兼容、未知/非谱系 fail-closed |
 | Architecture | 禁止 Candidate/structurer/compiler/runner/TestPointAsset 导入 |
@@ -337,10 +480,10 @@ Requirement 生命周期 Slice 10 完成后，才可以宣告完整 Phase 1 完�
 
 | 切片 | 状态 |
 |---|---|
-| Slice 0 文档 | A-01～A-10 已签字；待提交、审查和合并 |
-| Slice 1 Policy/ID | 文档合并后可执行 |
-| Slice 2 ORM/Schema | 依赖 Slice 1，合同已确认 |
-| Slice 3 Migration | 依赖 Slice 2，合同已确认 |
+| Slice 0 文档 | 待提交、审查和合并 |
+| Slice 1 Policy/ID | 文档合并后允许启动 |
+| Slice 2 ORM/Schema | 依赖 Slice 1；必须与 Slice 3 作为同一原子数据库 PR 交付 |
+| Slice 3 Migration | 与 Slice 2 同分支、同 PR；不允许单独合并 Slice 2 |
 | Slice 4 Repository | 依赖最终模型，合同已确认 |
 | Slice 5 API 安全 | admin + active project 临时策略已确认 |
 | Slice 6 Intake | 依赖 Slice 1～5，合同已确认 |
