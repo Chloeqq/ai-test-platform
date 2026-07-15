@@ -263,6 +263,17 @@ tav_<uuid4hex32>
 tas_<uuid4hex32>
 ```
 
+Phase 1 已确认的用户稳定公共 ID：
+
+```text
+usr_<uuid4hex32>
+```
+
+`User.id` 继续作为内部 Integer PK；EvieAi actor 身份固定为
+`user:<user_public_id>`。JWT `sub` 可以为兼容既有 token 继续保存内部 `User.id`，
+但认证完成后的 principal 必须提供合法 `user_public_id`。缺失或非法时必须 fail-closed，
+不得退化使用 username、email、display name、内部 PK、token 或请求正文字段。
+
 ---
 
 ## 9. 命名规则

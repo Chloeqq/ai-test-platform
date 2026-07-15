@@ -874,7 +874,18 @@ tav_<uuid4hex32>
 tas_<uuid4hex32>
 ```
 
-### 14.3 测试
+### 14.3 Phase 1 用户稳定公共 ID
+
+Phase 1 用户稳定公共 ID：
+
+```text
+usr_<uuid4hex32>
+```
+
+该 ID 只能由统一 ID 模块生成。`User.id` 是内部 Integer PK，不得作为 EvieAi actor 身份；
+actor 规范形式固定为 `user:<user_public_id>`。
+
+### 14.4 测试
 
 至少覆盖：
 

@@ -2,6 +2,16 @@
 
 日期：2026-07-12
 
+状态：Frozen historical baseline（已完成的 Phase 0 历史实施基线，不是当前实施阶段）
+
+当前实施阶段为 `EvieAi Phase 1 Asset Lifecycle Core`。当前阶段范围和门禁见：
+
+- `docs/evie-ai/implementation/phase-traceability.md`
+- `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-specification.md`
+- `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-plan.md`
+
+本标记不修改 Phase 0 已冻结的架构、模型或持久化规则。
+
 本文记录 EvieAi Phase 0 的最终实施计划。本文已合并 2026-07-12 人工确认结论，作为后续代码落地的权威计划。
 
 ## 0. 与完整目标架构的关系
