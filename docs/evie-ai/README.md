@@ -25,7 +25,8 @@ EvieAi 的核心口径：
 
 ## 当前阶段
 
-当前处于 EvieAi Phase 1 核心与补充合同均已批准、权威文档待合并、分切片实施尚未开始的状态。
+当前处于 EvieAi Phase 1 核心与补充合同均已批准、Slice 0 权威文档已合并、
+Slice 1 允许从最新 `dev` 启动的状态。
 
 - C-01 数据库前向兼容阻塞已通过 PR #4 合并并复验。
 - D-01～D-14 已于 2026-07-15 获得用户明确批准。
@@ -39,7 +40,8 @@ EvieAi 的核心口径：
 - [2026-07-14 Phase 1 自然语言资产生命周期预检](./implementation/2026-07-14_phase-1-natural-language-asset-lifecycle-preflight.md)
 
 预检报告用于保留分析证据；正式实施口径以 `Approved` 规格合同和 `Approved`
-实施计划为准。A-01～A-11 与 P-01～P-09 均已闭合；在文档 PR 合并前仍不授权启动 Slice 1。
+实施计划为准。A-01～A-11 与 P-01～P-09 均已闭合；PR #5 已合并到
+`dev@adb2b2b`，Slice 1 可以按计划独立启动。
 
 ## 本地参考资料
 
