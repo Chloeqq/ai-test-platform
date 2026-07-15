@@ -177,10 +177,120 @@ def require_index(
     return RequiredSchemaObject(index_ref(table_name, columns, unique=unique))
 
 
-# Slice 3 will append the first entry using its real Alembic revision.  Keeping
-# this empty here prevents the infrastructure change from inventing a future
-# revision or authorizing a retirement before the replacing migration exists.
-AUTHORIZED_SCHEMA_RETIREMENTS: tuple[AuthorizedSchemaRetirement, ...] = ()
+AUTHORIZED_SCHEMA_RETIREMENTS: tuple[AuthorizedSchemaRetirement, ...] = (
+    AuthorizedSchemaRetirement(
+        revision="20260715_100000",
+        retired_objects=frozenset(
+            {
+                column_ref("test_asset_sources", "requirement_pk"),
+                column_ref("test_asset_sources", "requirement_version_pk"),
+                foreign_key_ref(
+                    "test_asset_sources",
+                    ("requirement_pk",),
+                    "requirements",
+                    ("id",),
+                ),
+                foreign_key_ref(
+                    "test_asset_sources",
+                    ("requirement_version_pk",),
+                    "requirement_versions",
+                    ("id",),
+                ),
+                index_ref(
+                    "test_asset_sources",
+                    ("requirement_pk",),
+                    unique=False,
+                ),
+                index_ref(
+                    "test_asset_sources",
+                    ("requirement_version_pk",),
+                    unique=False,
+                ),
+            }
+        ),
+        replacement_objects=frozenset(
+            {
+                require_column(
+                    "test_asset_sources",
+                    "source_type",
+                    logical_type="string(20)",
+                    nullable=False,
+                ),
+                require_check_constraint(
+                    "test_asset_sources",
+                    "source_type IN ('requirement', 'manual')",
+                ),
+                require_index(
+                    "test_asset_sources",
+                    ("source_type",),
+                    unique=False,
+                ),
+                require_table("test_asset_requirement_sources"),
+                require_column(
+                    "test_asset_requirement_sources",
+                    "id",
+                    logical_type="integer-auto-pk",
+                    nullable=False,
+                    primary_key=True,
+                ),
+                require_column(
+                    "test_asset_requirement_sources",
+                    "test_asset_source_pk",
+                    logical_type="integer",
+                    nullable=False,
+                ),
+                require_column(
+                    "test_asset_requirement_sources",
+                    "requirement_pk",
+                    logical_type="integer",
+                    nullable=False,
+                ),
+                require_column(
+                    "test_asset_requirement_sources",
+                    "requirement_version_pk",
+                    logical_type="integer",
+                    nullable=False,
+                ),
+                require_primary_key(
+                    "test_asset_requirement_sources",
+                    ("id",),
+                ),
+                require_foreign_key(
+                    "test_asset_requirement_sources",
+                    ("test_asset_source_pk",),
+                    "test_asset_sources",
+                    ("id",),
+                ),
+                require_foreign_key(
+                    "test_asset_requirement_sources",
+                    ("requirement_pk",),
+                    "requirements",
+                    ("id",),
+                ),
+                require_foreign_key(
+                    "test_asset_requirement_sources",
+                    ("requirement_version_pk",),
+                    "requirement_versions",
+                    ("id",),
+                ),
+                require_unique_constraint(
+                    "test_asset_requirement_sources",
+                    ("test_asset_source_pk",),
+                ),
+                require_index(
+                    "test_asset_requirement_sources",
+                    ("requirement_pk",),
+                    unique=False,
+                ),
+                require_index(
+                    "test_asset_requirement_sources",
+                    ("requirement_version_pk",),
+                    unique=False,
+                ),
+            }
+        ),
+    ),
+)
 
 
 def authorized_retirements_for_lineage(

@@ -6,12 +6,13 @@ import importlib.util
 import json
 from pathlib import Path
 
-
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
 IDENTIFIER_LIMIT_BYTES = 63
 MIGRATION_FILES = (
     SERVICE_ROOT / "migrations/versions/20260713_120000_evie_ai_phase0_assets.py",
     SERVICE_ROOT / "migrations/versions/20260713_121000_fix_evie_ai_constraint_names.py",
+    SERVICE_ROOT
+    / "migrations/versions/20260715_100000_evie_ai_phase1_asset_lifecycle.py",
 )
 BASELINE_FILE = SERVICE_ROOT / "migrations/baselines/schema_20260713_121000.py"
 MANIFEST_FILE = SERVICE_ROOT / "migrations/baselines/schema_manifest_20260713_121000.json"

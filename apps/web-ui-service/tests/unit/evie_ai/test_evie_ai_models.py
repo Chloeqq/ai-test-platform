@@ -1,5 +1,63 @@
 from __future__ import annotations
 
+import pytest
+from app.constants.evie_ai import (
+    RequirementStatus,
+    RequirementVersionStatus,
+)
+from app.constants.evie_ai import (
+    TestAssetAuditEventType as AssetAuditEventType,
+)
+from app.constants.evie_ai import (
+    TestAssetConversionStatus as AssetConversionStatus,
+)
+from app.constants.evie_ai import (
+    TestAssetOperationType as AssetOperationType,
+)
+from app.constants.evie_ai import (
+    TestAssetReviewAction as AssetReviewAction,
+)
+from app.constants.evie_ai import (
+    TestAssetReviewStatus as AssetReviewStatus,
+)
+from app.constants.evie_ai import (
+    TestAssetSourceType as AssetSourceType,
+)
+from app.core.id_gen import (
+    generate_requirement_id,
+    generate_requirement_version_id,
+    generate_test_asset_id,
+    generate_test_asset_version_id,
+)
+from app.models.evie_ai import (
+    Requirement,
+    RequirementVersion,
+)
+from app.models.evie_ai import (
+    TestAsset as AssetModel,
+)
+from app.models.evie_ai import (
+    TestAssetAuditEvent as AssetAuditEventModel,
+)
+from app.models.evie_ai import (
+    TestAssetContentClaim as AssetContentClaimModel,
+)
+from app.models.evie_ai import (
+    TestAssetIdempotencyRecord as AssetIdempotencyRecordModel,
+)
+from app.models.evie_ai import (
+    TestAssetRequirementSource as AssetRequirementSourceModel,
+)
+from app.models.evie_ai import (
+    TestAssetReviewRecord as AssetReviewRecordModel,
+)
+from app.models.evie_ai import (
+    TestAssetSource as AssetSourceModel,
+)
+from app.models.evie_ai import (
+    TestAssetVersion as AssetVersionModel,
+)
+from app.models.user import User
 from sqlalchemy import (
     CheckConstraint,
     Engine,
@@ -13,34 +71,17 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.constants.evie_ai import (
-    RequirementStatus,
-    RequirementVersionStatus,
-    TestAssetConversionStatus as AssetConversionStatus,
-    TestAssetReviewStatus as AssetReviewStatus,
-)
-from app.core.id_gen import (
-    generate_requirement_id,
-    generate_requirement_version_id,
-    generate_test_asset_id,
-    generate_test_asset_source_id,
-    generate_test_asset_version_id,
-)
-from app.models.evie_ai import (
-    Requirement,
-    RequirementVersion,
-    TestAsset as AssetModel,
-    TestAssetSource as AssetSourceModel,
-    TestAssetVersion as AssetVersionModel,
-)
-
-
 EVIE_AI_TABLE_NAMES = {
     "requirements",
     "requirement_versions",
     "test_assets",
     "test_asset_versions",
     "test_asset_sources",
+    "test_asset_requirement_sources",
+    "test_asset_idempotency_records",
+    "test_asset_content_claims",
+    "test_asset_review_records",
+    "test_asset_audit_events",
 }
 FORBIDDEN_ASSET_FIELDS = {
     "action",
@@ -185,6 +226,11 @@ def test_all_evie_ai_constraints_and_indexes_are_explicitly_named() -> None:
         AssetModel.__table__,
         AssetVersionModel.__table__,
         AssetSourceModel.__table__,
+        AssetRequirementSourceModel.__table__,
+        AssetIdempotencyRecordModel.__table__,
+        AssetContentClaimModel.__table__,
+        AssetReviewRecordModel.__table__,
+        AssetAuditEventModel.__table__,
     )
     named_constraint_types = (
         PrimaryKeyConstraint,
@@ -210,7 +256,12 @@ def test_current_version_pk_is_nullable_without_database_foreign_key() -> None:
 
 
 def test_version_tables_are_immutable_by_shape() -> None:
-    for model in (RequirementVersion, AssetVersionModel):
+    for model in (
+        RequirementVersion,
+        AssetVersionModel,
+        AssetReviewRecordModel,
+        AssetAuditEventModel,
+    ):
         columns = set(model.__table__.c.keys())
         assert "updated_at" not in columns
         assert "updated_by" not in columns
@@ -252,3 +303,166 @@ def test_parent_delete_is_restricted_when_versions_exist(evie_ai_session: Sessio
         evie_ai_session.rollback()
     else:
         raise AssertionError("requirement with versions must not be physically deleted")
+
+
+def test_phase1_source_models_separate_common_and_requirement_fields() -> None:
+    assert set(AssetSourceModel.__table__.c.keys()) == {
+        "id",
+        "test_asset_source_id",
+        "test_asset_pk",
+        "source_type",
+        "source_identity_hash",
+        "created_at",
+        "created_by",
+    }
+    assert set(AssetRequirementSourceModel.__table__.c.keys()) == {
+        "id",
+        "test_asset_source_pk",
+        "requirement_pk",
+        "requirement_version_pk",
+    }
+
+
+def test_phase1_uniqueness_contracts_are_present() -> None:
+    def unique_column_sets(model: type[object]) -> set[tuple[str, ...]]:
+        return {
+            tuple(constraint.columns.keys())
+            for constraint in model.__table__.constraints
+            if isinstance(constraint, UniqueConstraint)
+        }
+
+    assert ("test_asset_pk", "source_identity_hash") in unique_column_sets(
+        AssetSourceModel
+    )
+    assert ("test_asset_source_pk",) in unique_column_sets(
+        AssetRequirementSourceModel
+    )
+    assert (
+        "project_code",
+        "operation_type",
+        "actor_or_client_id",
+        "idempotency_key",
+    ) in unique_column_sets(AssetIdempotencyRecordModel)
+    assert ("project_code", "content_fingerprint") in unique_column_sets(
+        AssetContentClaimModel
+    )
+    assert ("test_asset_pk",) in unique_column_sets(AssetContentClaimModel)
+
+
+def test_review_and_audit_store_idempotency_snapshots_without_strong_fk() -> None:
+    snapshot_fields = {
+        "operation_type",
+        "idempotency_scope_hash",
+        "idempotency_key_hash",
+        "idempotency_generation",
+    }
+    for model in (AssetReviewRecordModel, AssetAuditEventModel):
+        assert snapshot_fields.issubset(model.__table__.c.keys())
+        assert "idempotency_record_pk" not in model.__table__.c
+        assert "idempotency_key" not in model.__table__.c
+
+
+def test_user_public_id_is_required_and_uniquely_constrained() -> None:
+    column = User.__table__.c.user_public_id
+    assert column.nullable is False
+    unique_names = {
+        constraint.name
+        for constraint in User.__table__.constraints
+        if isinstance(constraint, UniqueConstraint)
+        and tuple(constraint.columns.keys()) == ("user_public_id",)
+    }
+    assert unique_names == {"uq_users_user_public_id"}
+
+
+def test_phase1_state_checks_use_central_contract_values() -> None:
+    assert AssetSourceType.values() == ("requirement", "manual")
+    assert AssetOperationType.REVIEW_ASSET.value == "review_asset"
+    assert AssetReviewAction.REOPEN.value == "reopen"
+    assert AssetAuditEventType.ASSET_CREATED.value == "asset_created"
+
+
+def test_user_public_id_has_no_implicit_generator_default() -> None:
+    column = User.__table__.c.user_public_id
+    assert column.default is None
+    assert column.server_default is None
+
+
+def test_test_asset_version_has_only_approved_content_fields() -> None:
+    approved_content_fields = {
+        "title",
+        "precondition",
+        "natural_steps",
+        "expected_result",
+        "priority",
+        "tags",
+    }
+    technical_fields = {
+        "id",
+        "test_asset_version_id",
+        "test_asset_pk",
+        "version_no",
+        "content_checksum",
+        "created_at",
+        "created_by",
+    }
+    assert set(AssetVersionModel.__table__.c.keys()) == (
+        approved_content_fields | technical_fields
+    )
+
+
+def test_governance_records_do_not_duplicate_natural_language_content() -> None:
+    natural_language_fields = {
+        "title",
+        "precondition",
+        "natural_steps",
+        "expected_result",
+        "priority",
+        "tags",
+    }
+    for model in (AssetReviewRecordModel, AssetAuditEventModel):
+        assert natural_language_fields.isdisjoint(model.__table__.c.keys())
+
+
+def test_all_evie_ai_schema_identifiers_fit_postgresql_limit() -> None:
+    for table in (
+        Requirement.__table__,
+        RequirementVersion.__table__,
+        AssetModel.__table__,
+        AssetVersionModel.__table__,
+        AssetSourceModel.__table__,
+        AssetRequirementSourceModel.__table__,
+        AssetIdempotencyRecordModel.__table__,
+        AssetContentClaimModel.__table__,
+        AssetReviewRecordModel.__table__,
+        AssetAuditEventModel.__table__,
+    ):
+        for schema_object in (*table.constraints, *table.indexes):
+            assert schema_object.name is not None
+            assert len(schema_object.name.encode("utf-8")) <= 63
+
+
+def test_content_claim_database_uniqueness_is_enforced(
+    evie_ai_session: Session,
+) -> None:
+    first_asset = _test_asset()
+    second_asset = _test_asset()
+    second_asset.asset_code = "ASSET-002"
+    evie_ai_session.add_all([first_asset, second_asset])
+    evie_ai_session.flush()
+    evie_ai_session.add(
+        AssetContentClaimModel(
+            test_asset_pk=first_asset.id,
+            project_code="project-a",
+            content_fingerprint="a" * 64,
+        )
+    )
+    evie_ai_session.flush()
+    evie_ai_session.add(
+        AssetContentClaimModel(
+            test_asset_pk=second_asset.id,
+            project_code="project-a",
+            content_fingerprint="a" * 64,
+        )
+    )
+    with pytest.raises(IntegrityError):
+        evie_ai_session.flush()

@@ -4,18 +4,22 @@ import sqlite3
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import Engine, create_engine, event, text
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.core.database import Base
 from app.models.evie_ai import (
     Requirement,
     RequirementVersion,
     TestAsset,
+    TestAssetAuditEvent,
+    TestAssetContentClaim,
+    TestAssetIdempotencyRecord,
+    TestAssetRequirementSource,
+    TestAssetReviewRecord,
     TestAssetSource,
     TestAssetVersion,
 )
+from sqlalchemy import Engine, create_engine, event, text
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture()
@@ -42,6 +46,11 @@ def evie_ai_engine() -> Iterator[Engine]:
         TestAsset.__table__,
         TestAssetVersion.__table__,
         TestAssetSource.__table__,
+        TestAssetRequirementSource.__table__,
+        TestAssetIdempotencyRecord.__table__,
+        TestAssetContentClaim.__table__,
+        TestAssetReviewRecord.__table__,
+        TestAssetAuditEvent.__table__,
     ]
     Base.metadata.create_all(bind=engine, tables=tables)
 

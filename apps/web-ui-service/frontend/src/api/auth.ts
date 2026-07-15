@@ -1,11 +1,11 @@
 import { getJson, postJson } from "../lib/http";
 
 export interface AuthUser {
-  id: number;
+  user_public_id: string;
   username: string;
   role: string;
   is_active: boolean;
-  created_at?: string;
+  created_at?: string | null;
 }
 
 export interface LoginPayload {

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from sqlalchemy import select, update
 
+from app.constants.evie_ai import TestAssetSourceType
 from app.models.evie_ai import (
     RequirementVersion,
     TestAsset,
+    TestAssetRequirementSource,
     TestAssetSource,
     TestAssetVersion,
 )
@@ -35,19 +37,32 @@ class TestAssetRepository(BaseRepository):
         self,
         source: TestAssetSource,
         *,
+        requirement_pk: int,
+        requirement_version_pk: int,
         trace_id: str | None = None,
     ) -> TestAssetSource:
-        requirement_pk = self.db.execute(
+        actual_requirement_pk = self.db.execute(
             select(RequirementVersion.requirement_pk).where(
-                RequirementVersion.id == source.requirement_version_pk
+                RequirementVersion.id == requirement_version_pk
             )
         ).scalar_one_or_none()
-        if requirement_pk != source.requirement_pk:
+        if (
+            source.source_type != TestAssetSourceType.REQUIREMENT.value
+            or actual_requirement_pk != requirement_pk
+        ):
             raise SourceOwnershipError(
                 source_id=source.test_asset_source_id,
                 trace_id=trace_id,
             )
         self.db.add(source)
+        self.db.flush()
+        self.db.add(
+            TestAssetRequirementSource(
+                test_asset_source_pk=source.id,
+                requirement_pk=requirement_pk,
+                requirement_version_pk=requirement_version_pk,
+            )
+        )
         self.db.flush()
         return source
 

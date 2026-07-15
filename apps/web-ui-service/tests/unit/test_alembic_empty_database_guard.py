@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sqlite3
 import subprocess
 import sys
-
+from pathlib import Path
 
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
 
@@ -55,7 +54,7 @@ def test_alembic_current_remains_read_only_for_an_empty_database(tmp_path: Path)
         assert _sqlite_table_names(database_path) == set()
 
 
-def test_explicit_legacy_override_is_required_to_upgrade_an_empty_database(
+def test_legacy_override_does_not_replace_deterministic_bootstrap(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "legacy-override.db"
@@ -67,15 +66,11 @@ def test_explicit_legacy_override_is_required_to_upgrade_an_empty_database(
         allow_legacy=True,
     )
 
-    assert result.returncode == 0
-    connection = sqlite3.connect(database_path)
-    try:
-        revision = connection.execute(
-            "SELECT version_num FROM alembic_version"
-        ).fetchone()[0]
-    finally:
-        connection.close()
-    assert revision == "20260713_121000"
+    assert result.returncode != 0
+    assert "empty database migrations are blocked" not in result.stderr
+    assert "existing test_asset_sources columns do not match EvieAi Phase 0" in (
+        result.stderr
+    )
 
 
 def _sqlite_table_names(database_path: Path) -> set[str]:
