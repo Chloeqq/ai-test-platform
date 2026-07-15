@@ -1,7 +1,7 @@
 # EvieAi Phase 1 自然语言测试资产生命周期实施计划
 
 日期：2026-07-15
-状态：Approved（文档 PR 合并前不授权启动 Slice 1）
+状态：Approved（Slice 0 已通过 PR #5 合并；允许启动 Slice 1）
 规格合同：`phase-1-natural-language-asset-lifecycle-specification.md`
 决策记录：`../decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md`
 
@@ -47,8 +47,8 @@ P-09 只读门禁发现的身份缺口已由用户批准的 A-11 关闭：新增
 | A-10 | TestAssetVersion 版本化字段集合 | 已批准 | — |
 | A-11 | 用户稳定公共身份合同 | 已批准 | — |
 
-A-01～A-11 合同门禁已经解除。必须先完成本组权威文档的提交、审查和合并，再从最新
-`dev` 创建 Slice 1 功能分支；不得在当前文档分支直接实施代码。
+A-01～A-11 合同门禁已经解除。权威文档已通过 PR #5 合并到 `dev@adb2b2b`；
+允许从最新 `dev` 创建 Slice 1 功能分支，不得在 Slice 1 混入后续切片代码。
 
 ## 2.2 实施级约束状态
 
@@ -65,7 +65,7 @@ A-01～A-11 合同门禁已经解除。必须先完成本组权威文档的提�
 | P-09 | 认证主体稳定身份字段绑定 | 已闭合：A-11 已批准 |
 
 架构待签字项、合同待签字项和实施级待补充项均为 0。本计划已获得 Approved，
-但当前文档分支不可开始业务代码；Slice 1 仍必须等待文档 PR 合并。
+Slice 0 已合并，允许启动 Slice 1。
 
 ## 3. 目标目录
 
@@ -590,8 +590,8 @@ Requirement 生命周期 Slice 10 完成后，才可以宣告完整 Phase 1 完�
 
 | 切片 | 状态 |
 |---|---|
-| Slice 0 文档 | A-11 已同步，待审查和合并 |
-| Slice 1 Policy/ID | 文档合并后允许启动 |
+| Slice 0 文档 | 已通过 PR #5 合并到 `dev@adb2b2b` |
+| Slice 1 Policy/ID | 允许从最新 `dev` 创建独立功能分支 |
 | Slice 2 ORM/Schema | 依赖 Slice 1；必须与 Slice 3 作为同一原子数据库 PR 交付 |
 | Slice 3 Migration | 与 Slice 2 同分支、同 PR；不允许单独合并 Slice 2 |
 | Slice 4 Repository | 依赖最终模型，合同已确认 |
