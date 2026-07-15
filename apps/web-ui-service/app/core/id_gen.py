@@ -11,6 +11,9 @@ __all__ = [
     "TEST_ASSET_ID_PATTERN",
     "TEST_ASSET_VERSION_ID_PATTERN",
     "TEST_ASSET_SOURCE_ID_PATTERN",
+    "USER_PUBLIC_ID_PATTERN",
+    "TEST_ASSET_REVIEW_ID_PATTERN",
+    "TEST_ASSET_AUDIT_EVENT_ID_PATTERN",
     "generate_case_id",
     "generate_run_id",
     "generate_item_id",
@@ -21,6 +24,9 @@ __all__ = [
     "generate_test_asset_id",
     "generate_test_asset_version_id",
     "generate_test_asset_source_id",
+    "generate_user_public_id",
+    "generate_test_asset_review_id",
+    "generate_test_asset_audit_event_id",
     "hash_text_slug",
 ]
 
@@ -30,6 +36,9 @@ REQUIREMENT_VERSION_ID_PATTERN = r"^reqv_[0-9a-f]{32}$"
 TEST_ASSET_ID_PATTERN = r"^ta_[0-9a-f]{32}$"
 TEST_ASSET_VERSION_ID_PATTERN = r"^tav_[0-9a-f]{32}$"
 TEST_ASSET_SOURCE_ID_PATTERN = r"^tas_[0-9a-f]{32}$"
+USER_PUBLIC_ID_PATTERN = r"^usr_[0-9a-f]{32}$"
+TEST_ASSET_REVIEW_ID_PATTERN = r"^tar_[0-9a-f]{32}$"
+TEST_ASSET_AUDIT_EVENT_ID_PATTERN = r"^tae_[0-9a-f]{32}$"
 
 
 def _short_hex(length: int = 8) -> str:
@@ -91,6 +100,21 @@ def generate_test_asset_version_id() -> str:
 def generate_test_asset_source_id() -> str:
     """生成测试资产来源公共 ID：tas_<uuid4hex32>。"""
     return _generate_prefixed_uuid("tas")
+
+
+def generate_user_public_id() -> str:
+    """生成用户稳定公共 ID：usr_<uuid4hex32>。"""
+    return _generate_prefixed_uuid("usr")
+
+
+def generate_test_asset_review_id() -> str:
+    """生成测试资产审核记录公共 ID：tar_<uuid4hex32>。"""
+    return _generate_prefixed_uuid("tar")
+
+
+def generate_test_asset_audit_event_id() -> str:
+    """生成测试资产审计事件公共 ID：tae_<uuid4hex32>。"""
+    return _generate_prefixed_uuid("tae")
 
 
 def hash_text_slug(text: str) -> str:

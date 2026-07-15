@@ -123,6 +123,14 @@ def _default_orchestrator_api_key() -> str:
     return str(os.getenv("ORCHESTRATOR_API_KEY", "")).strip()
 
 
+def _default_evie_ai_idempotency_retention_days() -> int:
+    raw_value = os.getenv("EVIE_AI_IDEMPOTENCY_RETENTION_DAYS", "7")
+    retention_days = int(raw_value)
+    if retention_days <= 0:
+        raise ValueError("EVIE_AI_IDEMPOTENCY_RETENTION_DAYS must be positive")
+    return retention_days
+
+
 class Settings(BaseModel):
     app_name: str = "AI Quality Assurance Platform FastAPI"
     app_env: str = Field(default_factory=lambda: os.getenv("APP_ENV", "dev"))
@@ -165,6 +173,10 @@ class Settings(BaseModel):
     default_admin_username: str = Field(default_factory=_default_admin_username)
     default_admin_password: str = Field(default_factory=_default_admin_password)
     default_admin_role: str = Field(default_factory=_default_admin_role)
+    evie_ai_idempotency_retention_days: int = Field(
+        default_factory=_default_evie_ai_idempotency_retention_days,
+        gt=0,
+    )
     evidence_manifest_policy: str = Field(default_factory=_resolve_evidence_manifest_policy)
     evidence_manifest_compat_scan_enabled: bool = Field(
         default_factory=lambda: _env_bool(
