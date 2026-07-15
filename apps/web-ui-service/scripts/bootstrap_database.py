@@ -16,6 +16,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from migrations.baselines.authorized_retirements import (  # noqa: E402
+    AuthorizedSchemaRetirement,
+    authorized_retirements_for_lineage,
+)
 from migrations.baselines.fingerprint import (  # noqa: E402
     FROZEN_REVISION,
     BaselineSchemaMismatch,
@@ -120,25 +124,37 @@ def _revision_relationship_to_baseline(
 ) -> BaselineRevisionRelationship:
     if revision == FROZEN_REVISION:
         return BaselineRevisionRelationship.EXACT
-    script_directory = ScriptDirectory.from_config(config)
-    try:
-        revision_lineage = {
-            item.revision
-            for item in script_directory.iterate_revisions(revision, "base")
-            if item.revision
-        }
-        baseline_lineage = {
-            item.revision
-            for item in script_directory.iterate_revisions(FROZEN_REVISION, "base")
-            if item.revision
-        }
-    except Exception:
+    revision_lineage = _revision_lineage(config, revision)
+    baseline_lineage = _revision_lineage(config, FROZEN_REVISION)
+    if revision_lineage is None or baseline_lineage is None:
         return BaselineRevisionRelationship.UNRELATED
     if FROZEN_REVISION in revision_lineage:
         return BaselineRevisionRelationship.DESCENDANT
     if revision in baseline_lineage:
         return BaselineRevisionRelationship.ANCESTOR
     return BaselineRevisionRelationship.UNRELATED
+
+
+def _revision_lineage(config: Config, revision: str) -> frozenset[str] | None:
+    script_directory = ScriptDirectory.from_config(config)
+    try:
+        return frozenset(
+            item.revision
+            for item in script_directory.iterate_revisions(revision, "base")
+            if item.revision
+        )
+    except Exception:
+        return None
+
+
+def _authorized_retirements_for_revision(
+    config: Config,
+    revision: str,
+) -> tuple[AuthorizedSchemaRetirement, ...]:
+    revision_lineage = _revision_lineage(config, revision)
+    if revision_lineage is None:
+        return ()
+    return authorized_retirements_for_lineage(revision_lineage)
 
 
 def _assert_managed_database_health(config: Config, database_url: str) -> None:
@@ -175,7 +191,13 @@ def _assert_managed_database_health(config: Config, database_url: str) -> None:
             if relationship is BaselineRevisionRelationship.EXACT:
                 assert_frozen_schema(connection)
             else:
-                assert_frozen_schema_compatible(connection)
+                assert_frozen_schema_compatible(
+                    connection,
+                    authorized_retirements=_authorized_retirements_for_revision(
+                        config,
+                        revision,
+                    ),
+                )
     except BaselineSchemaMismatch as exc:
         raise BootstrapDatabaseError(
             BootstrapDatabaseState.VERSIONED_EMPTY_OR_INCONSISTENT,
@@ -208,12 +230,14 @@ def _bootstrap_database(config: Config, database_url: str) -> None:
     if state is BootstrapDatabaseState.EMPTY:
         _install_frozen_baseline(config, database_url)
         command.upgrade(config, "head")
+        _assert_managed_database_health(config, database_url)
         LOGGER.info("database bootstrap completed from frozen revision %s", FROZEN_REVISION)
         return
 
     if state is BootstrapDatabaseState.MANAGED:
         _assert_managed_database_health(config, database_url)
         command.upgrade(config, "head")
+        _assert_managed_database_health(config, database_url)
         LOGGER.info("managed database upgraded through Alembic")
         return
 
