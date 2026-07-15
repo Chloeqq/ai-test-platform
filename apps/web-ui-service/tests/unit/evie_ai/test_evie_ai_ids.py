@@ -5,21 +5,25 @@ import uuid
 from collections.abc import Callable
 
 import pytest
-
 from app.core import id_gen
 from app.core.id_gen import (
     REQUIREMENT_ID_PATTERN,
     REQUIREMENT_VERSION_ID_PATTERN,
+    TEST_ASSET_AUDIT_EVENT_ID_PATTERN,
     TEST_ASSET_ID_PATTERN,
+    TEST_ASSET_REVIEW_ID_PATTERN,
     TEST_ASSET_SOURCE_ID_PATTERN,
     TEST_ASSET_VERSION_ID_PATTERN,
+    USER_PUBLIC_ID_PATTERN,
     generate_requirement_id,
     generate_requirement_version_id,
+    generate_test_asset_audit_event_id,
     generate_test_asset_id,
+    generate_test_asset_review_id,
     generate_test_asset_source_id,
     generate_test_asset_version_id,
+    generate_user_public_id,
 )
-
 
 ID_CASES: tuple[tuple[Callable[[], str], str, str], ...] = (
     (generate_requirement_id, "req", REQUIREMENT_ID_PATTERN),
@@ -35,6 +39,13 @@ ID_CASES: tuple[tuple[Callable[[], str], str, str], ...] = (
         TEST_ASSET_VERSION_ID_PATTERN,
     ),
     (generate_test_asset_source_id, "tas", TEST_ASSET_SOURCE_ID_PATTERN),
+    (generate_user_public_id, "usr", USER_PUBLIC_ID_PATTERN),
+    (generate_test_asset_review_id, "tar", TEST_ASSET_REVIEW_ID_PATTERN),
+    (
+        generate_test_asset_audit_event_id,
+        "tae",
+        TEST_ASSET_AUDIT_EVENT_ID_PATTERN,
+    ),
 )
 
 

@@ -3,30 +3,46 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from sqlalchemy import ForeignKeyConstraint, UniqueConstraint
-
 from app.models.evie_ai import (
     Requirement,
     RequirementVersion,
+)
+from app.models.evie_ai import (
     TestAsset as AssetModel,
+)
+from app.models.evie_ai import (
     TestAssetSource as AssetSourceModel,
+)
+from app.models.evie_ai import (
     TestAssetVersion as AssetVersionModel,
 )
 from app.schemas.evie_ai import (
     TestAssetCreate as AssetCreate,
+)
+from app.schemas.evie_ai import (
     TestAssetRead as AssetRead,
+)
+from app.schemas.evie_ai import (
     TestAssetSourceCreate as AssetSourceCreate,
+)
+from app.schemas.evie_ai import (
     TestAssetSourceRead as AssetSourceRead,
+)
+from app.schemas.evie_ai import (
     TestAssetVersionCreate as AssetVersionCreate,
+)
+from app.schemas.evie_ai import (
     TestAssetVersionRead as AssetVersionRead,
 )
-
+from sqlalchemy import ForeignKeyConstraint, UniqueConstraint
 
 SERVICE_ROOT = Path(__file__).resolve().parents[3]
 EVIE_AI_MODULE_ROOTS = (
+    SERVICE_ROOT / "app" / "errors" / "evie_ai.py",
     SERVICE_ROOT / "app" / "models" / "evie_ai",
     SERVICE_ROOT / "app" / "schemas" / "evie_ai",
     SERVICE_ROOT / "app" / "repositories" / "evie_ai",
+    SERVICE_ROOT / "app" / "policies" / "evie_ai",
 )
 FORBIDDEN_IMPORT_TOKENS = {
     "behavior_registry",
@@ -80,11 +96,34 @@ def test_evie_ai_modules_do_not_import_frozen_generation_or_execution_chain() ->
     violations: list[tuple[str, str]] = []
 
     for root in EVIE_AI_MODULE_ROOTS:
-        for path in root.rglob("*.py"):
+        paths = (root,) if root.is_file() else root.rglob("*.py")
+        for path in paths:
             for reference in _import_references(path):
                 for token in FORBIDDEN_IMPORT_TOKENS:
                     if token in reference:
                         violations.append((str(path.relative_to(SERVICE_ROOT)), reference))
+
+    assert violations == []
+
+
+def test_evie_ai_policies_do_not_depend_on_stateful_application_layers() -> None:
+    policy_root = SERVICE_ROOT / "app" / "policies" / "evie_ai"
+    forbidden_layers = {
+        "app.models",
+        "app.repositories",
+        "app.routers",
+        "app.services",
+        "sqlalchemy",
+    }
+    violations: list[tuple[str, str]] = []
+
+    for path in policy_root.rglob("*.py"):
+        for reference in _import_references(path):
+            if any(
+                reference == layer or reference.startswith(f"{layer}.")
+                for layer in forbidden_layers
+            ):
+                violations.append((str(path.relative_to(SERVICE_ROOT)), reference))
 
     assert violations == []
 
