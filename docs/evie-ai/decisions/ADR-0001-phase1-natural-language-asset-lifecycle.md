@@ -37,6 +37,7 @@ D-01～D-14 的核心架构决策保持 Accepted。
 - A-09：API 和查询细节；
 - A-10：版本字段边界；
 - A-11：用户稳定公共身份合同。
+- A-12：冻结结构已授权退役合同。
 
 上述补充合同必须同步进入 Specification 和 Implementation Plan。只有文档提交、审查和合并
 完成后，才允许从最新 `dev` 创建 Slice 1 功能分支；本 ADR 本身不直接授权跳过切片审查。
@@ -271,6 +272,36 @@ claim。
   状态变化不得重写历史。
 - principal 缺少合法 `user_public_id` 时必须 fail-closed，不得退化使用其他字段。
 
+### A-12：冻结结构已授权退役
+
+- 冻结 baseline、`20260713_120000`、`20260713_121000` 和既有 fingerprint manifest
+  保持不变。
+- revision 正好为 `20260713_121000` 时，继续执行冻结结构严格相等校验。
+- 对 `20260713_121000` 的合法后代，只允许按照静态、revision-aware 授权清单退役指定
+  冻结对象；授权关系必须通过 Alembic revision graph 判断，不得比较 revision 字符串、日期
+  或提交时间。
+- 未被授权退役的冻结表、列、主键、外键、唯一约束、检查约束和索引仍必须存在且结构不变。
+- 每项结构退役必须同时定义并校验替代结构不变量；旧对象已缺失但替代结构不完整时必须
+  fail-closed。
+- Phase 1 允许退役 `test_asset_sources.requirement_pk`、
+  `test_asset_sources.requirement_version_pk` 及只依赖这两列的外键、索引和必要约束，前提是
+  `test_asset_requirement_sources` 及其批准的列、外键和唯一约束已经完整建立。
+- 未知 revision、非 `20260713_121000` 谱系 revision、未授权冻结对象缺失和替代结构异常
+  继续 fail-closed。
+
+### P-10：用户公共身份分配兼容交付
+
+P-10 是 A-11 的实施排期修正，不改变身份架构：
+
+- `User.user_public_id` ORM、NOT NULL/UNIQUE Migration 和最小新用户身份分配兼容改动
+  必须在 Slice 2/3 同一原子 PR 交付。
+- 当前注册入口和只读搜索发现的其他生产用户创建入口必须在构造 `User` 时显式调用统一
+  ID 模块生成 `usr_<uuid4hex32>`。
+- 不得使用 ORM column default、数据库随机 default 或客户端输入生成公共身份。
+- 本兼容改动不得修改 JWT `sub`、实现 `RequestActorContext`、引入项目权限或扩大为认证
+  系统重构；完整 principal 绑定仍由 Slice 5 负责。
+- 部署必须避免旧应用实例在 `user_public_id NOT NULL` Migration 完成后继续处理注册写入。
+
 ## 被否决或未采用的方案
 
 - 不采用来源单表大量 nullable 字段。
@@ -293,3 +324,5 @@ claim。
   脱敏和结构化异常映射。
 - 本 ADR 不授权实现 AI 生成、Candidate、Asset-to-Case、Compiler、Runner、
   TestCase 或前端完整资产中心。
+- A-12 的基础校验机制必须通过独立数据库基础设施 PR 合并后，才允许继续 Slice 2/3。
+- P-10 只授权保证新 schema 上线后现有生产用户创建入口继续工作所需的最小兼容改动。
