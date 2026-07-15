@@ -16,9 +16,9 @@
 
 实现不得用当前旧代码惯例替代本合同，也不得从本文推导后续阶段对象。
 
-2026-07-15 合同评审识别的 A-01～A-11 已获得用户明确签字，并纳入本合同。合同门禁
-已经解除，本文已通过 PR #5 合并到 `dev@adb2b2b`。允许从最新 `dev` 创建 Slice 1
-功能分支；不得越过实施计划的切片边界。
+2026-07-15 合同评审识别的 A-01～A-12 已获得用户明确签字，并纳入本合同。合同门禁
+已经解除。A-01～A-11 已通过 PR #5 合并到 `dev@adb2b2b`；A-12/P-10 通过本轮
+文档变更闭合。实施必须继续遵守实施计划的切片边界。
 
 2026-07-15 可实施性评审进一步明确了读取权限、新建 Content Claim 顺序、
 `conversion_status` 合法集、非版本领域事实和历史版本恢复 API。这些修订只完整表达
@@ -215,6 +215,9 @@ admin 访问已经存在且状态为 active 的 project。
 - 客户端不得提交 `user_public_id`、`actor_or_client_id` 或其他 actor 覆盖字段。
 - 所有受支持的服务端用户创建入口必须在持久化前通过统一 ID 模块分配
   `user_public_id`；不得由 Router、客户端或 ORM Model 复制生成逻辑。
+- `User.user_public_id` ORM、NOT NULL/UNIQUE Migration 与保证现有生产用户创建入口继续
+  工作的最小显式分配改动必须在 Slice 2/3 同一原子数据库 PR 交付。现有注册入口必须在
+  构造 `User` 时显式调用统一 ID 模块；不得依赖 ORM column default 或数据库随机 default。
 - 普通业务更新、用户改名、停用、删除恢复或角色变化均不得修改 `user_public_id`。
 - 对外 User/principal Schema 使用 `user_public_id`，不得暴露内部 `User.id`。JWT `sub`
   的内部兼容值不属于 API 响应字段。
@@ -695,7 +698,38 @@ TestPointAsset 或 Workbench 状态作为新事实源。所有前端写操作必
 - SQLite 与 PostgreSQL 都必须验证存量回填、新用户公共 ID 约束、既有 JWT 兼容以及
   downgrade 数据保护。
 
-### 14.1 A-05：Downgrade 数据保护合同
+### 14.1 A-12：已授权冻结结构退役合同
+
+冻结 baseline、`20260713_120000`、`20260713_121000` 和既有 fingerprint manifest
+不得修改。
+
+数据库 revision 正好为 `20260713_121000` 时，bootstrap 继续对冻结结构执行严格相等
+校验。数据库 revision 是 `20260713_121000` 的合法后代时，bootstrap 必须：
+
+1. 通过 Alembic revision graph 判断当前 revision 是否命中某项静态退役授权；
+2. 校验所有未授权退役的冻结对象仍存在且结构不变；
+3. 只忽略当前 revision 谱系明确授权退役的冻结对象；
+4. 校验该退役授权声明的替代结构不变量。
+
+不得通过 revision 字符串、日期或提交时间判断，不得允许后代任意删除列、约束或索引。
+授权清单不得导入当前 ORM、metadata 或可变业务配置；已发布 revision 的授权内容必须保持
+静态，未来结构退役只能追加新的显式授权记录。
+
+Phase 1 Migration 可以授权退役：
+
+- `test_asset_sources.requirement_pk`；
+- `test_asset_sources.requirement_version_pk`；
+- 只依赖上述列并随之退役的外键、索引和必要约束。
+
+替代结构校验至少必须确认：`test_asset_requirement_sources` 存在；
+`test_asset_source_pk` 存在且唯一；Requirement 和 RequirementVersion 关联列、必要外键和
+唯一约束存在；通用 `test_asset_sources` 主表仍存在。旧对象已删除但替代结构缺失时必须
+fail-closed。
+
+未知 revision、非 `20260713_121000` 谱系 revision、未授权冻结对象缺失或改变继续
+fail-closed。downgrade 回 `20260713_121000` 后必须重新满足严格冻结结构校验。
+
+### 14.2 A-05：Downgrade 数据保护合同
 
 从 Phase 1 降级到 121000 前，以下任一条件成立必须 fail-closed：
 
@@ -718,7 +752,7 @@ source 表、删除可重建技术表、删除已确认为空的 Phase 1 业务�
 Migration 测试必须区分：空 Phase 1 业务数据时 downgrade 成功；存在不可逆业务数据时
 downgrade 被明确拒绝且数据库保持不变。
 
-### 14.2 A-06：存量 Content Claim 回填冲突合同
+### 14.3 A-06：存量 Content Claim 回填冲突合同
 
 Phase 1 Migration 在回填 Content Claim 前必须执行只读数据预检。以下任一情况存在时，
 Migration 必须在创建或修改业务结构前 fail-closed：
@@ -738,7 +772,7 @@ UNIQUE(project_code, content_fingerprint)
 UNIQUE(test_asset_pk)
 ```
 
-#### 14.2.1 Migration 指纹算法确定性
+#### 14.3.1 Migration 指纹算法确定性
 
 Content Claim 回填所使用的内容规范化、canonical JSON 序列化和 SHA-256 算法，
 必须作为该 Alembic revision 的冻结实现存在。
@@ -755,7 +789,7 @@ Migration 不得导入当前应用层 ORM、Service、Policy、Settings 或其�
 后续如修改内容规范化算法，必须通过新的版本化 Migration 和新的业务决策处理，
 不得修改已经发布的历史 Migration。
 
-### 14.3 A-11：用户公共身份 downgrade 保护
+### 14.4 A-11：用户公共身份 downgrade 与部署保护
 
 `user_public_id` 是创建后不可修改的公共业务身份。普通 downgrade 不得静默删除已经分配
 给存量用户的公共身份，也不得破坏 Review、Audit、Source 或幂等作用域中的 actor 快照。
@@ -763,6 +797,11 @@ Migration 不得导入当前应用层 ORM、Service、Policy、Settings 或其�
 当数据库存在任何 User 行或任何 Phase 1 公共 actor 历史事实时，降级到无法表达
 `user_public_id` 的 revision 必须 fail-closed，并保持数据库结构和数据不变。确需回退时，
 必须先完成独立、显式批准的数据导出和治理流程；Migration 不提供 force 绕过参数。
+
+由于旧应用版本不会写入 `user_public_id`，部署必须采用受控切换：停止旧版本注册写入，
+执行 Migration，部署包含显式公共 ID 分配的新应用，再恢复注册写入；或使用能够保证应用与
+Migration 原子切换的等价部署窗口。不得在数据库已收紧为 NOT NULL 后让旧应用实例继续
+处理 `POST /api/auth/register`。无法提供该门禁时必须停止并设计独立 expand/contract 发布。
 
 ## 15. Requirement 生命周期（D-14）
 

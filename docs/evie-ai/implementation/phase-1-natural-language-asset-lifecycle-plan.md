@@ -23,6 +23,10 @@ P-09 只读门禁发现的身份缺口已由用户批准的 A-11 关闭：新增
 `User.user_public_id`，actor 固定为 `user:<user_public_id>`，JWT `sub` 保持既有内部
 `User.id` 以兼容现有 token。
 
+A-12 已批准使用静态、revision-aware 授权清单处理冻结结构退役。该基础校验机制必须先以
+独立数据库基础设施 PR 合并，不得混入 Slice 2/3。P-10 已批准把最小新用户公共身份分配兼容
+改动提前到 Slice 2/3 原子 PR，避免 NOT NULL Migration 破坏现有注册入口。
+
 ## 2. 实施前置条件
 
 - `dev` 必须包含 PR #4，C-01 已合并并复验。
@@ -46,9 +50,11 @@ P-09 只读门禁发现的身份缺口已由用户批准的 A-11 关闭：新增
 | A-09 | API 状态码、deleted 错误与 keyword 语义 | 已批准 | — |
 | A-10 | TestAssetVersion 版本化字段集合 | 已批准 | — |
 | A-11 | 用户稳定公共身份合同 | 已批准 | — |
+| A-12 | 冻结结构已授权退役合同 | 已批准 | Slice 2/3 前置基础设施 PR |
 
-A-01～A-11 合同门禁已经解除。权威文档已通过 PR #5 合并到 `dev@adb2b2b`；
-允许从最新 `dev` 创建 Slice 1 功能分支，不得在 Slice 1 混入后续切片代码。
+A-01～A-12 合同门禁已经解除。A-01～A-11 权威文档已通过 PR #5 合并到
+`dev@adb2b2b`；A-12/P-10 必须通过本轮文档 PR 闭合后才能进入对应实施。随后只允许按
+当前计划切片推进，不得越过原子交付边界。
 
 ## 2.2 实施级约束状态
 
@@ -63,9 +69,13 @@ A-01～A-11 合同门禁已经解除。权威文档已通过 PR #5 合并到 `de
 | P-07 | `request_fingerprint` 冻结算法 | 已纳入 |
 | P-08 | 幂等关联不可变快照 | 已纳入 |
 | P-09 | 认证主体稳定身份字段绑定 | 已闭合：A-11 已批准 |
+| P-10 | 新用户公共身份分配兼容交付 | 已纳入 Slice 2/3 原子 PR |
 
 架构待签字项、合同待签字项和实施级待补充项均为 0。本计划已获得 Approved，
 Slice 0 已合并，允许启动 Slice 1。
+
+Slice 2/3 启动前必须额外满足：A-12 authorized schema retirements 基础设施 PR 已合并到
+最新 `dev`，并通过 SQLite、真实 PostgreSQL 和 bootstrap 回归。
 
 ## 3. 目标目录
 
@@ -185,6 +195,14 @@ Commit：`feat(evie-ai): add phase1 lifecycle policies and identifiers`
 - `TestAssetReviewRecord`
 - `TestAssetAuditEvent`
 
+P-10 最小兼容范围同时纳入 Slice 2/3 原子 PR：
+
+- User 创建 Schema 明确拒绝客户端提交 `user_public_id`；
+- 当前注册入口和只读搜索确认的其他生产用户创建入口在构造 `User` 时显式调用统一 ID 模块；
+- 用户 fixture/factory 显式生成公共 ID；
+- 不使用 ORM/default 或数据库随机 default；
+- 不修改 JWT `sub`，不实现 `RequestActorContext`、项目权限或完整认证重构。
+
 `TestAssetReviewRecord` 和 `TestAssetAuditEvent` 必须保存 P-08 定义的幂等关联快照，
 不得使用指向可过期、可重用幂等记录行的强 FK 作为永久归属事实。
 
@@ -235,6 +253,7 @@ Migration、SQLite/PostgreSQL upgrade 测试和 121000 到新 head 的受管升�
 - 不修改 Phase 0 已发布公共 ID 前缀和现有数据；
 - 不使用 `Base.metadata.create_all()` 补偿 Migration。
 - A-11 的 User ORM 与回填 Migration 必须和 Slice 2/3 同一原子数据库 PR 交付。
+- P-10 的最小生产用户创建兼容改动必须与上述 ORM/Migration 一起交付，不能延迟到后续 PR。
 
 负向模型测试必须明确断言 `current_version_pk` 不存在数据库 ForeignKey。
 
@@ -281,7 +300,9 @@ Upgrade 顺序：
    固定测试向量必须证明冻结实现与发布时应用 Policy 产生相同结果。
 10. 自动扫描所有 Alembic revisions、SQLAlchemy metadata 和显式 schema identifiers，按
    `len(identifier.encode("utf-8")) <= 63` 校验。
-11. 运行 bootstrap 回归。
+11. 为 Phase 1 revision 增加静态 A-12 退役授权，校验 Requirement 来源子表替代结构；
+    不修改冻结 baseline、120000、121000 或既有 fingerprint manifest。
+12. 运行 bootstrap 回归。
 
 Downgrade 必须执行完整业务数据保护：非 Requirement 来源、Review、Audit、未知来源或
 来源不一致任一存在时 fail-closed。Idempotency/ContentClaim 仅在业务检查通过后作为
@@ -299,6 +320,11 @@ downgrade 不得删除该字段，必须 fail-closed 且保持结构和数据不
 baseline→新 head、121000→新 head、空业务数据 downgrade 成功、不可逆业务数据 downgrade
 被拒绝且数据库不变、upgrade/downgrade/upgrade、SQLite FK ON、真实 PostgreSQL、记录数
 不变、所有 schema identifier ≤63 字节。
+
+同时必须回归：现有注册 API 在新 head 成功创建合法唯一 `usr_` ID；客户端不能提交或覆盖
+公共 ID；新用户不依赖 ORM/default；用户名修改不改变公共 ID；现有 JWT `sub=User.id`
+仍可认证；所有生产用户创建入口在 NOT NULL 结构可用。部署说明必须记录停止旧注册写入、
+Migration、部署新应用、恢复写入的顺序；无法保证原子切换时不得部署。
 
 Commit：`feat(evie-ai): add phase1 asset lifecycle database schema`
 
