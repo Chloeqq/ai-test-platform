@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select, update
+from typing import Any, cast
 
-from app.constants.evie_ai import TestAssetSourceType
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
+
 from app.models.evie_ai import (
-    RequirementVersion,
     TestAsset,
-    TestAssetRequirementSource,
     TestAssetSource,
     TestAssetVersion,
 )
@@ -16,8 +16,8 @@ from app.repositories.base import BaseRepository
 from app.repositories.evie_ai.errors import (
     CurrentVersionOwnershipError,
     OptimisticConcurrencyError,
-    SourceOwnershipError,
 )
+from app.repositories.evie_ai.source_repository import TestAssetSourceRepository
 
 
 class TestAssetRepository(BaseRepository):
@@ -41,44 +41,54 @@ class TestAssetRepository(BaseRepository):
         requirement_version_pk: int,
         trace_id: str | None = None,
     ) -> TestAssetSource:
-        actual_requirement_pk = self.db.execute(
-            select(RequirementVersion.requirement_pk).where(
-                RequirementVersion.id == requirement_version_pk
-            )
-        ).scalar_one_or_none()
-        if (
-            source.source_type != TestAssetSourceType.REQUIREMENT.value
-            or actual_requirement_pk != requirement_pk
-        ):
-            raise SourceOwnershipError(
-                source_id=source.test_asset_source_id,
-                trace_id=trace_id,
-            )
-        self.db.add(source)
-        self.db.flush()
-        self.db.add(
-            TestAssetRequirementSource(
-                test_asset_source_pk=source.id,
-                requirement_pk=requirement_pk,
-                requirement_version_pk=requirement_version_pk,
-            )
+        return TestAssetSourceRepository(self.db).add_requirement_source(
+            source,
+            requirement_pk=requirement_pk,
+            requirement_version_pk=requirement_version_pk,
+            trace_id=trace_id,
         )
-        self.db.flush()
-        return source
 
-    def get_by_pk(self, test_asset_pk: int) -> TestAsset | None:
-        return self.db.execute(
-            select(TestAsset).where(
-                TestAsset.id == test_asset_pk,
-                TestAsset.deleted_at.is_(None),
-            )
-        ).scalar_one_or_none()
+    def get_by_pk(
+        self,
+        test_asset_pk: int,
+        *,
+        include_deleted: bool = False,
+        for_update: bool = False,
+    ) -> TestAsset | None:
+        statement = select(TestAsset).where(TestAsset.id == test_asset_pk)
+        if not include_deleted:
+            statement = statement.where(TestAsset.deleted_at.is_(None))
+        if for_update:
+            statement = statement.with_for_update()
+        return self.db.execute(statement).scalar_one_or_none()
 
-    def get_by_test_asset_id(self, test_asset_id: str) -> TestAsset | None:
+    def get_by_test_asset_id(
+        self,
+        test_asset_id: str,
+        *,
+        project_code: str | None = None,
+        include_deleted: bool = False,
+        for_update: bool = False,
+    ) -> TestAsset | None:
+        statement = select(TestAsset).where(TestAsset.test_asset_id == test_asset_id)
+        if project_code is not None:
+            statement = statement.where(TestAsset.project_code == project_code)
+        if not include_deleted:
+            statement = statement.where(TestAsset.deleted_at.is_(None))
+        if for_update:
+            statement = statement.with_for_update()
+        return self.db.execute(statement).scalar_one_or_none()
+
+    def get_version_by_test_asset_version_id(
+        self,
+        *,
+        test_asset_pk: int,
+        test_asset_version_id: str,
+    ) -> TestAssetVersion | None:
         return self.db.execute(
-            select(TestAsset).where(
-                TestAsset.test_asset_id == test_asset_id,
-                TestAsset.deleted_at.is_(None),
+            select(TestAssetVersion).where(
+                TestAssetVersion.test_asset_pk == test_asset_pk,
+                TestAssetVersion.test_asset_version_id == test_asset_version_id,
             )
         ).scalar_one_or_none()
 
@@ -115,19 +125,8 @@ class TestAssetRepository(BaseRepository):
         )
 
     def list_sources(self, test_asset_pk: int) -> list[TestAssetSource]:
-        return list(
-            self.db.execute(
-                select(TestAssetSource)
-                .join(TestAsset, TestAsset.id == TestAssetSource.test_asset_pk)
-                .where(
-                    TestAssetSource.test_asset_pk == test_asset_pk,
-                    TestAsset.deleted_at.is_(None),
-                )
-                .order_by(TestAssetSource.id.asc())
-            )
-            .scalars()
-            .all()
-        )
+        records = TestAssetSourceRepository(self.db).list_by_asset(test_asset_pk)
+        return [record.source for record in records]
 
     def set_current_version(
         self,
@@ -149,19 +148,22 @@ class TestAssetRepository(BaseRepository):
                 trace_id=trace_id,
             )
 
-        result = self.db.execute(
-            update(TestAsset)
-            .where(
-                TestAsset.id == test_asset.id,
-                TestAsset.row_version == expected_row_version,
-                TestAsset.deleted_at.is_(None),
-            )
-            .values(
-                current_version_pk=version.id,
-                row_version=TestAsset.row_version + 1,
-                updated_by=updated_by,
-            )
-            .execution_options(synchronize_session="fetch")
+        result = cast(
+            CursorResult[Any],
+            self.db.execute(
+                update(TestAsset)
+                .where(
+                    TestAsset.id == test_asset.id,
+                    TestAsset.row_version == expected_row_version,
+                    TestAsset.deleted_at.is_(None),
+                )
+                .values(
+                    current_version_pk=version.id,
+                    row_version=TestAsset.row_version + 1,
+                    updated_by=updated_by,
+                )
+                .execution_options(synchronize_session="fetch")
+            ),
         )
         if result.rowcount != 1:
             raise OptimisticConcurrencyError(

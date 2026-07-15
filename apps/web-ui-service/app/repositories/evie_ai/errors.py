@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.errors.evie_ai import EvieAiErrorCode
+
 
 class EvieAiPersistenceError(RuntimeError):
     """带稳定错误元数据的持久化领域错误。"""
@@ -76,5 +78,23 @@ class OptimisticConcurrencyError(EvieAiPersistenceError):
             error_code="EVIE_AI_ROW_VERSION_CONFLICT",
             message=f"{aggregate_type} row version conflict",
             entity_id=aggregate_id,
+            trace_id=trace_id,
+        )
+
+
+class RepositoryDataIntegrityError(EvieAiPersistenceError):
+    """持久化结构违反已批准的 EvieAi 聚合不变量。"""
+
+    def __init__(
+        self,
+        *,
+        message: str,
+        entity_id: str | None = None,
+        trace_id: str | None = None,
+    ) -> None:
+        super().__init__(
+            error_code=EvieAiErrorCode.DATA_INTEGRITY_ERROR.value,
+            message=message,
+            entity_id=entity_id,
             trace_id=trace_id,
         )

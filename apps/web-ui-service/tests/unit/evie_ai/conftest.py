@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from collections.abc import Iterator
 
@@ -24,21 +25,25 @@ from sqlalchemy.pool import StaticPool
 
 @pytest.fixture()
 def evie_ai_engine() -> Iterator[Engine]:
-    engine = create_engine(
-        "sqlite://",
-        future=True,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    database_url = os.environ.get("EVIE_AI_REPOSITORY_TEST_DATABASE_URL")
+    if database_url:
+        engine = create_engine(database_url, future=True)
+    else:
+        engine = create_engine(
+            "sqlite://",
+            future=True,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
 
-    @event.listens_for(engine, "connect")
-    def _enable_foreign_keys(
-        dbapi_connection: sqlite3.Connection,
-        _connection_record: object,
-    ) -> None:
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+        @event.listens_for(engine, "connect")
+        def _enable_foreign_keys(
+            dbapi_connection: sqlite3.Connection,
+            _connection_record: object,
+        ) -> None:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
     tables = [
         Requirement.__table__,
@@ -54,8 +59,9 @@ def evie_ai_engine() -> Iterator[Engine]:
     ]
     Base.metadata.create_all(bind=engine, tables=tables)
 
-    with engine.connect() as connection:
-        assert connection.execute(text("PRAGMA foreign_keys")).scalar_one() == 1
+    if engine.dialect.name == "sqlite":
+        with engine.connect() as connection:
+            assert connection.execute(text("PRAGMA foreign_keys")).scalar_one() == 1
 
     try:
         yield engine
