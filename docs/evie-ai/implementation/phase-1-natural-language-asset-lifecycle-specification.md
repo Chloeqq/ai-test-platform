@@ -20,6 +20,10 @@
 已经解除，但必须先完成文档提交、审查和合并，再从最新 `dev` 创建 Slice 1 功能分支；
 不得在当前文档分支直接实施代码。
 
+2026-07-15 可实施性评审进一步明确了读取权限、新建 Content Claim 顺序、
+`conversion_status` 合法集、非版本领域事实和历史版本恢复 API。这些修订只完整表达
+已签字规则，不新增架构决策。
+
 Phase 1 Asset Lifecycle Core 负责：
 
 - Manual/API 自然语言资产入口；
@@ -83,7 +87,7 @@ Repository 只 add、flush、query；不得 commit 或 rollback。Router 不直�
 → 计算 request fingerprint
 → 获取幂等 claim
 → 计算 content fingerprint
-→ 查询或申请 content claim
+→ 查询 content claim
 → 根据结果进入新建路径或复用路径
 ```
 
@@ -124,6 +128,28 @@ deleted_at = null
 
 创建时不生成虚假审核记录。
 
+### 3.3.1 新建路径的 Content Claim 顺序
+
+创建请求先按 content fingerprint 查询已有 claim。已有 claim 时进入精确重复
+复用路径。
+
+未查询到 claim 时，新建路径必须在一个业务事务中按以下顺序执行：
+
+1. 创建 `TestAsset` 并 flush，取得内部 PK；
+2. 创建首个 `TestAssetVersion` 和 `TestAssetSource`；
+3. 插入指向新 `TestAsset` 的 `TestAssetContentClaim`；
+4. 设置 `current_version_pk`；
+5. 写入审计和幂等结果；
+6. commit。
+
+若插入 Content Claim 时因并发请求触发
+`UNIQUE(project_code, content_fingerprint)` 冲突：
+
+- 当前新建事务必须整体回滚；
+- 不保留新 TestAsset、Version、Source、Audit 或幂等结果；
+- 应用层必须使用新的干净事务重新读取已存在的 claim，再进入精确重复复用路径；
+- 不得在失败 Session 上继续查询或写入。
+
 ### 3.4 A-01：Asset code 合同
 
 已确认边界：
@@ -155,6 +181,15 @@ channel 由受信任的服务器 Adapter 固定设置为 `api`，不得从业务
 项目存在/状态事实源为现有 `TestProject`，角色事实源为认证上下文中的 `User.role`。
 非 admin、项目不存在或项目非 active 均 fail-closed。禁止自动创建默认项目。
 
+### 3.5.1 读取权限
+
+Phase 1 Asset Lifecycle Core 的全部公开 API，包括查询和写入，暂时只允许全局
+admin 访问已经存在且状态为 active 的 project。
+
+非 admin 访问列表、详情、版本历史、审核历史或写接口时，统一返回
+`403 EVIE_PROJECT_SCOPE_FORBIDDEN`。在项目成员和项目级权限事实源建立前，不得
+自行开放普通用户只读访问。
+
 ## 4. 多来源合同（D-02）
 
 ### 4.1 主表
@@ -168,7 +203,14 @@ channel 由受信任的服务器 Adapter 固定设置为 `api`，不得从业务
 - `source_identity_hash`：来源稳定身份；
 - `created_at`、`created_by`。
 
-唯一约束继续表达：同一资产不能重复绑定同一来源身份。
+唯一约束固定为：
+
+```text
+UNIQUE(test_asset_pk, source_identity_hash)
+```
+
+`source_identity_hash` 的 canonical 输入已包含 `source_type`，因此唯一键不重复加入
+`source_type`。
 
 ### 4.2 Requirement 子表
 
@@ -252,7 +294,8 @@ Idempotency-Key: <client-generated-key>
 project_code + operation_type + actor_or_client_id + idempotency_key
 ```
 
-覆盖操作：create asset、create version、review、delete、restore。
+覆盖操作：create asset、create version、restore historical version、review、delete、
+restore asset。
 
 规则：
 
@@ -262,6 +305,8 @@ project_code + operation_type + actor_or_client_id + idempotency_key
 - 保存请求指纹、operation type、结果资源公共 ID/类型、原结果语义、创建和过期时间。
 - 不保存完整自然语言请求/响应正文或机器执行内容。
 - 默认保留期 7 天，必须由单一 Settings/Policy 配置定义。
+- 幂等记录过期后，同一 key 可作为新请求重新使用。过期清理和重新占用必须使用
+  数据库唯一性与事务保护，不得产生并发窗口。
 
 配置合同：
 
@@ -306,7 +351,11 @@ claim。
 不参与：来源、created_by、channel、审核/转换状态、公共 ID 和时间字段。
 
 规范化：Unicode NFC；CRLF/CR 转 LF；去字段首尾空白；去每行末尾空白；保留正文
-内部有意义的空格和换行；tags 去空、去重、稳定排序；最终 SHA-256。不得语义改写。
+内部有意义的空格和换行；tags 去空、去重、稳定排序。
+
+规范化后的六个字段必须由服务端组装为 canonical JSON：使用固定键名、键排序、UTF-8
+编码且无非必要空白，再对最终字节流计算 SHA-256。不得使用未定义分隔符的字符串
+拼接，也不得进行语义改写。
 
 ### 6.2 创建命中
 
@@ -346,6 +395,8 @@ fingerprint 仍按空修改处理。
 
 状态规则沿用已批准 Phase 0 合同：
 
+- 合法 `conversion_status` 仅包含 `not_started`、`processing`、`blocked`、
+  `succeeded`、`stale`，不包含 `failed`；
 - 新版本后 `review_status=pending`；
 - succeeded/stale → stale；not_started/blocked → not_started；
 - processing 禁止编辑；
@@ -366,15 +417,21 @@ fingerprint 仍按空修改处理。
 
 以下字段不属于内容版本：
 
+- `test_asset_id`；
+- `asset_code`；
+- `current_version_pk`；
 - `review_status`；
 - `conversion_status`；
 - `deleted_at`；
 - `row_version`；
-- source；
-- audit；
-- idempotency。
+- `TestAssetSource`；
+- `TestAssetReviewRecord`；
+- `TestAssetAuditEvent`；
+- `TestAssetIdempotencyRecord`；
+- `TestAssetContentClaim`。
 
-这些字段变化不得通过修改历史 `TestAssetVersion` 表达。
+这些字段或领域事实发生变化时，不得修改历史 `TestAssetVersion`，也不得通过
+创建内容版本代替对应的来源、审核、审计、幂等或 claim 领域操作。
 
 ## 8. 审核合同（D-07）
 
@@ -472,6 +529,7 @@ GET    /api/evie-ai/test-assets
 GET    /api/evie-ai/test-assets/{test_asset_id}
 POST   /api/evie-ai/test-assets/{test_asset_id}/versions
 GET    /api/evie-ai/test-assets/{test_asset_id}/versions
+POST   /api/evie-ai/test-assets/{test_asset_id}/versions/{version_id}/restore
 POST   /api/evie-ai/test-assets/{test_asset_id}/reviews
 GET    /api/evie-ai/test-assets/{test_asset_id}/reviews
 DELETE /api/evie-ai/test-assets/{test_asset_id}
@@ -481,6 +539,24 @@ POST   /api/evie-ai/test-assets/{test_asset_id}/restore
 不提供 `PATCH /review-status`。首次创建 TestAsset 不需要 `expected_row_version`；创建新版本、
 审核、删除和恢复必须在请求 Schema 中提供 `expected_row_version`。Phase 1 不以 `If-Match`
 作为唯一并发协议。
+
+历史版本恢复使用独立端点：
+
+```http
+POST /api/evie-ai/test-assets/{test_asset_id}/versions/{version_id}/restore
+Idempotency-Key: <client-generated-key>
+```
+
+请求体：
+
+```json
+{
+  "expected_row_version": 3,
+  "reason": "Restore previously approved content"
+}
+```
+
+成功返回 `201 Created` 和新创建的版本，不得直接返回或重指向历史版本。
 
 来源是 `manual`/`requirement` discriminated union。Requirement 来源请求使用公共
 `requirement_id` 和 `requirement_version_id`，后端验证项目作用域和父子归属。
@@ -504,13 +580,21 @@ POST   /api/evie-ai/test-assets/{test_asset_id}/restore
 
 - `EVIE_ASSET_NOT_FOUND`
 - `EVIE_ASSET_DELETED`
+- `EVIE_ASSET_STATE_CONFLICT`
 - `EVIE_IDEMPOTENCY_CONFLICT`
+- `EVIE_IDEMPOTENCY_KEY_REQUIRED`
 - `EVIE_ROW_VERSION_CONFLICT`
 - `EVIE_EXACT_DUPLICATE_CONFLICT`
 - `EVIE_RESTORE_DUPLICATE_CONFLICT`
 - `EVIE_INVALID_REVIEW_TRANSITION`
+- `EVIE_REVIEW_VERSION_NOT_CURRENT`
+- `EVIE_VERSION_NOT_FOUND`
+- `EVIE_VERSION_SCOPE_MISMATCH`
 - `EVIE_SOURCE_SCOPE_MISMATCH`
+- `EVIE_PROJECT_NOT_FOUND`
+- `EVIE_PROJECT_INACTIVE`
 - `EVIE_PROJECT_SCOPE_FORBIDDEN`
+- `EVIE_DATA_INTEGRITY_ERROR`
 
 API 上线前必须完成显式 project scope、禁止自动创建默认项目、自然语言请求体日志脱敏/
 关闭，以及结构化领域异常映射。
@@ -526,6 +610,7 @@ API 上线前必须完成显式 project scope、禁止自动创建默认项目�
 | 精确重复复用 | 200 |
 | 创建新版本 | 201 |
 | 空修改 | 200 |
+| 历史版本恢复并创建新版本 | 201 |
 | 创建审核记录 | 201 |
 | 删除 | 200 |
 | 恢复 | 200 |

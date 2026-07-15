@@ -13,6 +13,9 @@
 本计划不包含 AI 生成、Candidate 迁移、语义重复、Asset-to-Case、Compiler、Runner、
 TestCase 或完整前端资产中心。
 
+2026-07-15 可实施性评审的 5 项表达缺口已从已批准规格同步到各实施切片和测试矩阵；
+本计划不因此重新选择或扩大架构方案。
+
 ## 2. 实施前置条件
 
 - `dev` 必须包含 PR #4，C-01 已合并并复验。
@@ -90,7 +93,8 @@ Commit：`docs(evie-ai): approve phase1 asset lifecycle contract`
 Policy 不直接读取环境变量。Settings 解析并校验配置，Service 通过依赖或配置对象取得
 retention_days。Policy 不读数据库或调用旧链。
 
-测试：ID 格式/碰撞、Unicode/NFC/换行/tags 指纹、合法/非法审核转换、稳定错误码。
+测试：ID 格式/碰撞、Unicode/NFC/换行/tags 规范化、canonical JSON 稳定字节流与
+SHA-256、合法/非法审核转换、`conversion_status` 合法集不包含 `failed`、稳定错误码。
 
 Commit：`feat(evie-ai): add phase1 lifecycle policies and identifiers`
 
@@ -107,11 +111,11 @@ Commit：`feat(evie-ai): add phase1 lifecycle policies and identifiers`
 - `TestAssetReviewRecord`
 - `TestAssetAuditEvent`
 
-Schema：Manual/Requirement source union、Intake、Version、Review、Delete/Restore、列表/详情/
-历史响应和结构化错误。
+Schema：Manual/Requirement source union、Intake、Version、Historical Version Restore、Review、
+Delete/Restore、列表/详情/历史响应和结构化错误。
 
 测试：字段、PK/FK/Unique/Check/Index、不可变时间字段、机器字段拒绝、内部 PK 不暴露、
-AST 边界。
+`UNIQUE(test_asset_pk, source_identity_hash)`、严格非版本领域事实字段集、AST 边界。
 
 Commit：`feat(evie-ai): add phase1 asset lifecycle models and schemas`
 
@@ -162,8 +166,8 @@ Commit：`feat(evie-ai): add phase1 asset lifecycle database schema`
 内容：
 
 - Source 主/子表持久化与重复来源查询；
-- Idempotency scope claim 和结果读取；
-- ContentClaim 申请/释放；
+- Idempotency scope claim、结果读取、过期清理和并发安全重新占用；
+- ContentClaim 按 fingerprint 查询、新建插入、原子更新和删除；
 - Review/Audit append-only；
 - 列表过滤、详情、版本和审核历史分页；
 - 显式 include_deleted 查询。
@@ -186,10 +190,11 @@ Commit：`feat(evie-ai): add phase1 lifecycle repositories`
 - `ProjectScopeService`：只读校验项目存在、状态和访问权限；
 - `ProjectAccessAuthorizer`：项目授权事实源 Adapter；
 - `RequestActorContext`：从认证 principal 生成 user/client 稳定身份；
-- `RequestChannelContext`：由受信任 Adapter 设置 api/web_ui/internal。
+- `RequestChannelContext`：首版由受信任 API Adapter 固定设置为 `api`，不读取请求正文中的 channel。
 
 首版按 A-02 使用认证上下文中的全局 `User.role=admin`，并要求现有项目状态为 active；
-非 admin、项目不存在或项目非 active 均拒绝。禁止自动创建默认项目。后续如引入项目级
+列表、详情、版本历史、审核历史和所有写接口均执行这一权限规则。非 admin、项目
+不存在或项目非 active 均拒绝。禁止自动创建默认项目。后续如引入项目级
 membership/permission，必须独立设计和迁移，不得静默改变首版权限语义。
 
 不得在此切片实现旧 Workbench 修复或全平台大重构。
@@ -205,9 +210,13 @@ Commit：`fix(evie-ai): enforce lifecycle API safety boundaries`
 目标：实现 Manual/Requirement 创建、幂等和精确重复复用的单事务主链。
 
 事务公共前置顺序固定为请求规范化、request fingerprint、幂等 claim、content fingerprint、
-查询或申请 content claim。之后必须显式分流：新建路径创建 Asset/Version/Source/current
-pointer/Audit；精确重复复用路径只读取已有资产、按需新增真实来源并写复用审计，不创建新的
-Asset 或 Version。两条路径都在同一事务中保存幂等结果。
+查询 content claim。已有 claim 时进入精确重复复用路径，只读取已有资产、按需新增真实来源
+并写复用审计，不创建新的 Asset 或 Version。
+
+未查询到 claim 时，新建路径先创建 Asset 并 flush 内部 PK，再创建首 Version/Source，
+插入指向新 Asset 的 claim，设置 current pointer，写 Audit/幂等结果后提交。若 claim 插入触发
+并发唯一冲突，当前新建事务整体回滚；应用层必须在新的干净事务中重新读取 claim 并
+进入复用路径，不得继续使用失败 Session。
 
 Requirement 来源必须验证公共 ID、project scope 和版本归属。
 
@@ -220,15 +229,21 @@ Commit：`feat(evie-ai): implement test asset intake service`
 
 目标：实现新版本、历史恢复、审核、删除和恢复。
 
-版本内容 fingerprint 改变时，必须同事务完成新 claim 申请、Version 创建、current pointer/
-row_version/状态更新、旧 claim 释放和审计。新 claim 或后续步骤失败时旧 claim 保持有效。
+版本内容 fingerprint 改变时，必须同事务锁定资产及其唯一现有 claim，校验目标指纹未被
+其他有效资产占用，再原子更新该 claim，并完成 Version、current pointer、row_version、状态、
+审计和幂等结果。任一步失败时整体回滚，原 claim 保持有效；不得临时创建第二条 claim。
+
+合法 `conversion_status` 只包含 `not_started`、`processing`、`blocked`、`succeeded`
+和 `stale`，不包含 `failed`。历史版本恢复必须读取指定历史版本内容并创建新版本，
+并返回新 `version_id`，不重指 `current_version_pk`。
 
 审核请求必须按最终合同使用 expected_row_version，原子写 ReviewRecord、聚合状态、row_version、
 AuditEvent 和幂等结果；重复状态转换不得静默生成新历史。
 
-测试：空修改、version_no 并发、row_version CAS、processing/rejected/deleted 状态、历史恢复、
+测试：空修改、version_no 并发、row_version CAS、processing/rejected/deleted 状态、不存在 `failed`
+转换状态、历史恢复创建新版本、版本不存在/跨资产 scope 冲突、
 审核只针对当前版本、reopen、删除释放 claim、恢复 claim 冲突、幂等重放、不可变审计、
-新 claim 冲突保留旧 claim、Version/current pointer 失败整体回滚、并发编辑相同新内容只有
+目标指纹冲突保留旧 claim、Version/current pointer 失败整体回滚、并发编辑相同新内容只有
 一个成功。
 
 Commit：`feat(evie-ai): implement asset lifecycle and review services`
@@ -239,9 +254,13 @@ Commit：`feat(evie-ai): implement asset lifecycle and review services`
 
 Router 仅认证、scope、Schema、Service 调用和响应。所有写接口校验 Idempotency-Key；
 版本/审核/删除恢复 Schema 接收 expected_row_version。
+历史版本恢复注册
+`POST /api/evie-ai/test-assets/{test_asset_id}/versions/{version_id}/restore`，成功返回
+201 和新创建的版本。所有读写接口均校验全局 admin 与 active project。
 
 测试：201/200/401/403/404/409/422、分页、过滤、deleted 权限、source union、缺少
-Idempotency-Key、稳定错误结构、OpenAPI。
+Idempotency-Key、历史版本恢复、版本不存在/归属错误、项目不存在/非 active、审核版本非当前、
+稳定错误结构、OpenAPI。
 
 Commit：`feat(evie-ai): expose natural language asset lifecycle APIs`
 
@@ -274,13 +293,13 @@ Candidate/TestPoint 页面状态或事实源。
 | Model/Schema | FK/Unique/Check/Index、不可变、source union、禁止机器字段 |
 | Repository | add/flush/query、无 commit/rollback、软删除、分页 |
 | Transaction | 任一步骤失败全部回滚，Session 不继续使用 |
-| Idempotency | 同 key 同请求/不同请求、失败重试、并发、过期 |
+| Idempotency | 同 key 同请求/不同请求、失败重试、并发、过期后重用、并发清理/重新占用 |
 | Exact duplicate | 创建复用、编辑冲突、删除释放、恢复冲突、并发 claim |
-| Claim replacement | 新 claim 冲突保留旧 claim、后续失败全回滚、`UNIQUE(test_asset_pk)`、一个有效资产仅一个当前 claim |
-| Version | 空修改、历史恢复、新版本状态、version_no/row_version 冲突 |
+| Claim replacement | 原子更新冲突保留旧 claim、后续失败全回滚、`UNIQUE(test_asset_pk)`、一个有效资产仅一个当前 claim |
+| Version | 空修改、历史恢复创建新版本、版本 scope、新版本状态、不包含 failed、version_no/row_version 冲突 |
 | Review | 当前版本、row_version、合法/非法转换、reopen、重复状态转换、不可变记录 |
 | Audit | 每种事件一次、脱敏、与 Version/Review 事实源分离 |
-| API | project scope、状态码、错误结构、Idempotency-Key、分页和权限 |
+| API | 全局 admin 读写 project scope、状态码、稳定错误码、Idempotency-Key、历史版本恢复、分页和权限 |
 | Migration | SQLite/PostgreSQL、数据回填、downgrade 保护、identifier limit |
 | Bootstrap | frozen exact、合法后代兼容、未知/非谱系 fail-closed |
 | Architecture | 禁止 Candidate/structurer/compiler/runner/TestPointAsset 导入 |
