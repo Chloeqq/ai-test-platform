@@ -1,7 +1,7 @@
 # EvieAi 阶段追踪矩阵
 
 创建日期：2026-07-12
-最后更新：2026-07-15
+最后更新：2026-07-18
 状态：Authoritative
 适用范围：EvieAi 完整目标能力、阶段实施边界、交付物追踪、验收证据和架构偏差检查
 
@@ -20,6 +20,8 @@
 完整参考：
 
 - `AGENTS.md`
+- `docs/evie-ai/decisions/ADR-0002-target-architecture-v2.md`
+- `docs/evie-ai/ARCHITECTURE_BASELINE.md`
 - `docs/evie-ai/architecture/evie-ai-overview.md`
 - `docs/evie-ai/architecture/natural-language-test-assets.md`
 - `docs/evie-ai/architecture/target-capability-map.md`
@@ -27,7 +29,9 @@
 - `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-specification.md`
 - `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-plan.md`
 - `docs/evie-ai/decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md`
-- `docs/evie-ai/reference/2026-07-12_evie-ai-architecture-flow.mmd`
+- `docs/evie-ai/reference/2026-07-18_evie-ai-target-architecture-v2.mmd`
+- `docs/evie-ai/reference/2026-07-18_evie-ai-target-architecture-v2.png`
+- `docs/evie-ai/reference/2026-07-12_evie-ai-architecture-flow.mmd` (`Superseded for target architecture`; 仅用于历史追溯，不再定义当前长期目标架构)
 - `docs/evie-ai/reference/EvieAi_架构分层功能清单_完整实施版.xlsx`
 
 > 如果 Excel 尚未完成文件名迁移，可以暂时引用旧文件名，但权威路径最终必须统一为 EvieAi 命名，不得长期并存两份内容相同的文件。
@@ -39,39 +43,67 @@
 ### 1.1 核心规则
 
 ```text
-Excel 定义完整目标空间
-架构图定义领域关系和主链路
-架构专题定义领域边界
-阶段追踪矩阵定义能力所属阶段
-Phase 文档定义本次实际实施边界
+ADR-0002 决定长期目标架构边界
+ARCHITECTURE_BASELINE 统一收编和解释
+evie-ai-overview 解释总体架构
+target-capability-map 登记完整目标能力
+phase-traceability 映射能力所属阶段和实施状态
+Mermaid / PNG 提供可视化表达
+Excel 提供完整设计参考
+当前 Phase 合同决定当期实际实施范围
 ```
+
+必须明确：
+
+- Excel 不是架构决策来源。
+- Mermaid / PNG 不能单独批准技术选型。
+- phase-traceability 不能单独授权实施。
+- 当前 Phase 合同不能违反 Accepted ADR 和 Baseline。
 
 阶段追踪矩阵不能替代当前 Phase 实施文档。
 
-某项能力只有同时满足以下条件，才可以进入当前任务：
+### 1.2.1 Target Architecture 语义解释顺序
 
-1. 当前 Phase 实施文档明确纳入
-2. 用户当前任务明确要求
-3. 不违反 `AGENTS.md`
-4. 前置能力已满足
-5. 有明确验收方式
-6. 不会把后续阶段对象提前落库或提前接入主链
+用于解释长期目标架构时，按以下顺序：
 
-### 1.2 冲突优先级
+```text
+ADR-0002
+→ ARCHITECTURE_BASELINE
+→ evie-ai-overview
+→ target-capability-map
+→ phase-traceability
+→ Mermaid source
+→ PNG rendering
+→ Excel design reference
+```
 
-发生冲突时，按以下优先级处理：
+同时明确：
 
-1. 用户当前任务中的明确确认
-2. `AGENTS.md`
-3. 当前阶段实施文档
-4. EvieAi 架构专题文档
-5. 本文
-6. EvieAi 架构图
-7. Excel 完整设计参考
-8. 旧文档
-9. 旧代码现状
+- `AGENTS.md` 始终是仓库硬约束。
+- `phase-traceability` 不得扩展 `ADR-0002`。
+- 若文档之间发生真实冲突，必须停止实施并先修正文档。
 
 旧代码只能证明当前系统如何运行，不能证明 EvieAi 应该如何设计。
+
+### 1.2.2 Current Implementation Authorization
+
+某项能力允许进入当前实现，必须同时满足：
+
+1. 用户当前任务明确授权
+2. `AGENTS.md`
+3. 当前有效 Phase ADR
+4. 当前有效 Phase Specification
+5. 当前有效 Phase Implementation Plan
+6. 必要的专题 ADR
+7. 前置能力与验收方式明确
+8. 不违反 Accepted Target Architecture
+
+必须明确：
+
+- Recommended Phase 不是实施授权。
+- `target-capability-map` 或 `phase-traceability` 中存在某能力，不代表当前可以实现。
+- 当前 Phase 合同未纳入的能力不得实施。
+- Target Architecture 也不能被当前 Phase 文档反向违反。
 
 ### 1.3 禁止自动扩阶段
 
@@ -341,6 +373,41 @@ Phase 文档定义本次实际实施边界
 
 ---
 
+## 4A. Target Architecture v2 Planning Assignments
+
+本节只登记目标阶段建议，不构成实施授权。
+
+| 能力 | 目标架构区域 | 状态 | Recommended Phase | ADR / 前置条件 | Phase 1 关系 |
+|---|---|---|---|---|---|
+| Upload Security | 边缘与接入层；平台控制面；数据与知识存储层；基础设施与运维治理层 | Accepted target / Planned / Deferred technology selection / 不代表已实现 | Phase 2 | Access and Upload Security design | Out of Phase 1 scope，不构成 Slice 5 内容 |
+| Async Status and Streaming Delivery | 边缘与接入层；执行域；平台控制面 | Accepted target / Planned / Cross-phase / 不代表已实现 | AI generation：Phase 2；Asset-to-Case conversion：Phase 3；execution delivery：Phase 4；overall：Cross-phase | 需要后续流式交付与异步状态治理专题设计 | Out of Phase 1 scope，不构成 Slice 5～11 内容 |
+| TestPointEvidencePack | 多元输入与需求智能域；AI 能力层；平台控制面；数据与知识存储层 | Accepted target / Planned / Requires ADR / Deferred technology selection / 不代表已实现 | Phase 2 | Requires RAG and Knowledge Governance ADR | Out of Phase 1 scope，不构成 Slice 5～11 内容 |
+| Oracle / Binder Result Governance | Asset-to-Case 转换域；公共资源与能力域 | Accepted target / Planned / Requires ADR / 不代表已实现 | Phase 3 | Requires Asset-to-Case Compiler Architecture ADR | Out of Phase 1 scope，不构成 Slice 5～11 内容 |
+| Execution Governance | Asset-to-Case 转换域；测试用例、执行、证据与反馈域；公共资源与能力域 | Accepted target / Planned / Requires ADR / 不代表已实现 | Binding Stale：Phase 3 / Phase 4；其他：Phase 4 | Requires Multi-platform Execution and Evidence Governance ADR | Out of Phase 1 scope，不构成 Slice 5～11 内容 |
+| Embedding Service and AI Quality Metrics | AI 能力层；平台控制面；数据与知识存储层 | Accepted target / Planned / Requires ADR / Deferred technology selection / 不代表已实现 | Embedding Service：Phase 2；转换质量指标：Phase 3；跨产品质量治理：Phase 5 or Cross-phase | Requires AI Platform ADR；Requires Evaluation and Quality Governance design | Out of Phase 1 scope，不构成 Slice 5～11 内容 |
+| Notification, Subscription and Report Push | 边缘与接入层；测试用例、执行、证据与反馈域；平台控制面 | Accepted target / Planned / Requires ADR / Deferred technology selection / 不代表已实现 | Phase 4；企业级订阅治理：Phase 5 | Requires Access and Delivery Architecture design | Out of Phase 1 scope，不构成 Slice 5～11 内容 |
+| Data and Knowledge Architecture Governance | 平台控制面；数据与知识存储层；基础设施与运维治理层 | Accepted target / Planned / Requires ADR / Deferred technology selection / 不代表已实现 | Cross-phase / ADR prerequisite | Requires Data and Knowledge Architecture ADR | Out of Phase 1 scope，不构成 Slice 5～11 内容 |
+
+规划说明：
+
+- `Upload Security` 已进入 Accepted Target Architecture，但当前只做 `Phase 2` 规划登记；需要 `Access and Upload Security design`；不构成 `Phase 1` 或 `Slice 5` 内容。
+- `Async Status and Streaming Delivery` 推荐跨阶段规划；`SSE / WebSocket` 只是候选；流式消息不是业务事实源；当前不属于 `Phase 1`。
+- `TestPointEvidencePack` 需要 `Requirement Knowledge RAG` 及知识治理前置 ADR；它不替代 `RequirementVersion`，也不等于执行域 `Evidence`；当前不属于 `Phase 1`。
+- `Oracle / Binder Result Governance` 以 `BOUND`、`AMBIGUOUS`、`UNRESOLVED` 表达目标结果语义；这不是当前数据库枚举；`AMBIGUOUS` / `UNRESOLVED` 必须 fail closed；当前不属于 `Phase 1`。
+- `Execution Governance` 覆盖 `Binding Stale`、`Resource Lease`、`Replay`、`Manual Override`、`Failure Classification`、`Evidence Normalization`；这些不是同一个状态字段；当前不属于 `Phase 1`。
+- `Embedding Service and AI Quality Metrics` 覆盖 `Embedding Service`、绑定准确率、`False Executable Rate`、结构化输出有效率、转换成功率、资源未解析率、AI 成本和延迟；当前不设置指标值，也不批准 Embedding 模型或向量数据库；当前不属于 `Phase 1`。
+- `Notification, Subscription and Report Push` 覆盖 `Email`、`IM`、`Webhook`、`Report Push`、`Subscription`、`Delivery Retry`、`Delivery Idempotency`、`Delivery Audit`；通知不是执行事实源，也不批准具体通知产品；当前不属于 `Phase 1`。
+- `Data and Knowledge Architecture Governance` 规划关注关系型业务事实、`JSONB` 快照、向量索引、搜索索引、对象存储、缓存、队列、分析存储、Secret 管理、可重建锁和任务协调；`PostgreSQL`、`JSONB`、`pgvector`、`Redis`、`S3-compatible object storage`、`Vault / KMS`、`OpenSearch`、`ClickHouse` 目前都只是候选，不代表已批准选型，也不得据此安装依赖；当前不属于 `Phase 1`。
+
+边界说明：
+
+- 上述能力已经进入 Accepted Target Architecture，但当前均不表示已实现。
+- 它们不属于当前 `Phase 1` 缺口，也不扩大 `Slice 5～11`。
+- Recommended Phase 需要后续专题 ADR 和对应 Phase 合同正式批准。
+- 在 `Phase 1 Closeout` 前，不得据此开始 `Phase 2` 实施。
+
+---
+
 ## 5. Phase 0 详细追踪
 
 ### 5.1 允许实施的能力
@@ -439,7 +506,7 @@ Phase 0 不允许包含：
 - 精确重复策略已确认
 - 审核和状态转换已确认
 
-当前状态（2026-07-15）：
+历史快照（2026-07-15）：
 
 - Phase 0 模型和 Repository 基线已合并；
 - 确定性数据库 baseline 已合并；
@@ -449,7 +516,115 @@ Phase 0 不允许包含：
 - P-01～P-09 已闭合，A-11 已明确 `user_public_id` 与 actor 身份合同；
 - 权威文档已通过 PR #5 合并到 `dev@adb2b2b`；允许从最新 `dev` 创建 Slice 1 功能分支。
 
-### 6.3.1 Phase 1 Asset Lifecycle Core 退出条件
+以上内容记录的是 2026-07-15 文档批准时点的历史实施快照，不代表 2026-07-18 的当前实时实施状态。
+
+### 6.3.1 当前状态（2026-07-18）
+
+Phase 1 contract status: Accepted / Active
+Phase 1 overall status: In Progress
+Phase 1 closeout status: Not completed
+
+当前已确认：
+
+- Phase 1 合同已经批准并持续有效；
+- Slice 1～4 已完成对应底层层级验证；
+- Slice 5～11 尚未实施；
+- Slice 1～4 通过不等于 Service 主链完成；
+- Slice 1～4 通过不等于 Router/API 完成；
+- 当前没有满足 Asset Lifecycle Core 后端 Closeout；
+- 当前没有满足完整 Phase 1 Closeout；
+- 当前不得宣布进入 Phase 2 实施。
+
+### 6.3.2 Slice 0～11 当前状态矩阵
+
+| Slice | Contract status | Current status | Verification layer | Closeout status | 说明 |
+|---|---|---|---|---|---|
+| Slice 0 | Accepted / Active | Verified implemented | 文档合同 | Not completed | Phase 1 合同文档已建立并继续有效 |
+| Slice 1 | Accepted / Active | Verified implemented at unit layer | 37/37 passed | Not completed | Policy、ID、基础规则 |
+| Slice 2 | Accepted / Active | Verified implemented at unit layer | 52/52 passed | Not completed | ORM、Schema、架构守卫 |
+| Slice 3 | Accepted / Active | Verified implemented at migration test layer | 10/10 passed | Not completed | 仅现有 migration pytest 层；不是生产数据库升级证明 |
+| Slice 4 | Accepted / Active | Verified implemented at repository layer | 39/39 passed | Not completed | Repository 和 Query 层；尚无 Service 或 Router/API 证明 |
+| Slice 5 | Accepted / Active | Not started | 无 | Not completed | API 安全前置尚未实施；Slice 2/3 的 `user_public_id` 兼容基础不构成 Slice 5 已实施 |
+| Slice 6 | Accepted / Active | Not started | 无 | Not completed | Intake Service 尚未实施 |
+| Slice 7 | Accepted / Active | Not started | 无 | Not completed | Lifecycle / Review Service 尚未实施 |
+| Slice 8 | Accepted / Active | Not started | 无 | Not completed | Router / API 尚未实施 |
+| Slice 9 | Accepted / Active | Not started | 无 | Not completed | Core 集成验收尚未实施 |
+| Slice 10 | Accepted / Active | Not started | 无 | Not completed | Requirement 生命周期尚未实施 |
+| Slice 11 | Accepted / Active | Not started | 无 | Not completed | 前端资产中心尚未实施 |
+
+### 6.3.3 2026-07-18 动态验证快照
+
+Verification branch:
+`codex/evie-ai-phase1-slice4-repositories`
+
+Verification HEAD:
+`0912696c0d68f56fac756956f2cfceaa6ffc4fa3`
+
+| Group | Slice | Result |
+|---|---|---|
+| Group A | Slice 1 | 37 passed |
+| Group B | Slice 2 | 52 passed |
+| Group C | Slice 4 | 39 passed |
+| Group D | Slice 3 | 10 passed |
+| Total | Slice 1～4 | 138 passed |
+
+以上验证证据仅对应当前 branch 和 HEAD：
+
+- 这是当前分支和当前 HEAD 的验证证据；
+- 不自动证明这些提交已经合并到 `dev`；
+- 不证明 Service / API / 集成层完成；
+- 不证明生产数据库迁移完成；
+- 不构成 Phase 1 Closeout。
+
+### 6.3.4 Asset Lifecycle Core 后端 Closeout 边界
+
+Asset Lifecycle Core 后端 Closeout 至少依赖：
+
+- Slice 1；
+- Slice 2；
+- Slice 3；
+- Slice 4；
+- Slice 5；
+- Slice 6；
+- Slice 7；
+- Slice 8；
+- Slice 9。
+
+当前状态：
+
+`Not completed`
+
+当前主要阻塞：
+
+- Slice 5 API 安全前置；
+- Slice 6 Intake Service；
+- Slice 7 Lifecycle / Review Service；
+- Slice 8 Router / API；
+- Slice 9 Core 集成验收。
+
+### 6.3.5 完整 Phase 1 Closeout 边界
+
+除 Asset Lifecycle Core 后端 Closeout 外，完整 Phase 1 Closeout 还必须处理：
+
+- Slice 10 Requirement 生命周期；
+- Slice 11 的合同定位和最终收口要求；
+- 文档证据；
+- 全量测试；
+- Migration 验收；
+- 用户明确批准 Closeout。
+
+当前状态：
+
+`Not completed`
+
+边界说明：
+
+- Slice 11 不阻塞 Asset Lifecycle Core 后端验收；
+- Slice 11 未实施，不能被写成完成；
+- Slice 10 是完整 Phase 1 的明确阻塞项；
+- 是否将 Slice 11 纳入完整 Phase 1 最终 Closeout，以 ADR-0001、Specification、Plan 和用户最终批准为准。
+
+### 6.3.6 Phase 1 Asset Lifecycle Core 退出条件
 
 - Manual 和已存在 Requirement 来源均进入统一 Intake；
 - 幂等、精确重复、来源、版本、审核、删除恢复、审计和查询合同全部实现；
@@ -459,7 +634,7 @@ Phase 0 不允许包含：
 - 相比冻结旧链基线没有新增失败；
 - 合并后复验和实施证据已更新到任务档案。
 
-完成以上条件可以宣告 `Phase 1 Asset Lifecycle Core` 完成。
+完成以上条件后，才可以宣告 `Phase 1 Asset Lifecycle Core` 完成。
 Requirement 生命周期独立切片交付前，不得宣告完整 Phase 1 完成。
 
 ### 6.4 Phase 2 入口条件
@@ -551,35 +726,71 @@ TestAssetVersion
 
 ---
 
-## 9. 追踪状态
+## 9. 实施追踪状态模型
 
-建议在后续执行版矩阵中使用以下状态：
+### 9.1 Contract status
+
+Contract status 表示某个 Slice 或能力已经进入已批准的 Phase 1 合同。
+
+本文件当前使用：
 
 ```text
-not_started
-planned
-in_progress
-blocked
-implemented
-verified
-deprecated
-removed
+Accepted / Active
+```
+
+它表示合同已经批准并持续有效，不等于实现完成或 Closeout 完成。
+
+### 9.2 Implementation status
+
+软件实施追踪只使用以下实现状态：
+
+```text
+Verified implemented at unit layer
+Verified implemented at migration test layer
+Verified implemented at repository layer
+Partially implemented
+Implemented but unverified
+Not started
+Blocked
+Out of Phase 1 scope
 ```
 
 定义：
 
 | 状态 | 含义 |
 |---|---|
-| not_started | 尚未规划实施 |
-| planned | 已进入已确认Phase计划 |
-| in_progress | 正在实施 |
-| blocked | 存在明确阻塞 |
-| implemented | 代码或配置已实现，但未完成全部验证 |
-| verified | 实现和验收证据均完成 |
-| deprecated | 已停止扩展，等待迁移 |
-| removed | 已完成删除且无有效调用 |
+| Verified implemented at unit layer | 生产代码存在，相关 unit 测试已收集并全部通过，但仅证明该层级 |
+| Verified implemented at migration test layer | Migration 与相关 pytest 已通过，但不等于生产数据库升级或部署验收 |
+| Verified implemented at repository layer | Repository / Query 层代码和测试已通过，但不等于 Service、API 或集成层完成 |
+| Partially implemented | 已存在部分实现或部分证据，但尚未形成完整合同能力 |
+| Implemented but unverified | 代码或配置已实现，但未获得足够动态验证证据 |
+| Not started | 用户已明确确认当前切片尚未实施 |
+| Blocked | 存在明确阻塞，当前无法宣告对应层级完成 |
+| Out of Phase 1 scope | 不属于当前 Phase 1 实施范围 |
 
-“完成”应使用 `verified`，不能仅凭文件存在或代码已提交判断。
+Slice 0 是文档合同切片，不使用软件实现层级术语，而单独记录为文档合同已建立的历史与当前事实。
+
+### 9.3 Closeout status
+
+Closeout status 表示某个目标是否满足整体收口条件。
+
+本文件当前使用：
+
+```text
+Not completed
+```
+
+它表示当前仍未满足正式 Closeout 条件。
+
+不得使用以下表述替代当前真实状态：
+
+- Done
+- Complete
+- Finished
+- Mostly done
+- Probably complete
+
+除非已经具备完整动态证据并获得正式批准。
 
 ---
 

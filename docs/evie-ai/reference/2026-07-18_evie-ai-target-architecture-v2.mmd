@@ -1,0 +1,508 @@
+%% ============================================================================
+%% EvieAi 质量保障平台目标架构 V2
+%% 状态：Draft / Proposed Target Architecture
+%% 日期：2026-07-18
+%% 说明：
+%% 1. 本图描述长期目标架构，不自动扩大已批准 Phase 0 / Phase 1 实施范围。
+%% 2. 逻辑领域不等于独立微服务；当前优先采用模块化单体 + AI Worker + Runner Worker。
+%% 3. TestAsset 表达“测什么”，TestCase 表达“如何执行”。
+%% 4. 自然语言到机器执行表示只能发生在 Asset-to-Case 转换域。
+%% ============================================================================
+
+flowchart TB
+
+    %% ========================================================================
+    %% 1. 用户与调用方
+    %% ========================================================================
+    subgraph USERS["1. 用户与调用方"]
+        direction LR
+        U_PRODUCT["产品经理 / 业务人员"]
+        U_QA["测试工程师 / 质量负责人"]
+        U_DEV["开发工程师"]
+        U_ADMIN["平台管理员"]
+        U_CICD["CI/CD 系统<br/>Jenkins / GitLab / GitHub Actions"]
+        U_THIRD["第三方测试与项目平台<br/>Jira / 禅道 / Zephyr / Polarion"]
+        U_CLI["CLI / OpenAPI / SDK 调用"]
+        U_NOTIFY["通知接收方<br/>邮件 / IM / Webhook"]
+    end
+
+    %% ========================================================================
+    %% 2. 边缘与接入层
+    %% ========================================================================
+    subgraph ACCESS["2. 边缘与接入层"]
+        direction LR
+        A_EDGE["CDN / WAF / DDoS 防护"]
+        A_INGRESS["Ingress / Reverse Proxy<br/>TLS / 路由 / 超时"]
+        A_GATEWAY["API Gateway / BFF<br/>API 版本 / 聚合 / 协议适配"]
+        A_AUTH["认证与授权入口<br/>SSO / OAuth2 / JWT / RBAC"]
+        A_SCOPE["项目作用域与多租户隔离"]
+        A_GOV["限流 / 熔断 / 并发控制<br/>Request ID / Trace ID"]
+        A_UPLOAD["文件上传服务<br/>类型 / 大小 / 安全扫描"]
+        A_STREAM["SSE / WebSocket<br/>异步进度与实时状态"]
+    end
+
+    USERS --> A_EDGE --> A_INGRESS --> A_GATEWAY
+    A_GATEWAY --> A_AUTH --> A_SCOPE --> A_GOV
+    A_GATEWAY --> A_UPLOAD
+    A_GATEWAY --> A_STREAM
+
+    %% ========================================================================
+    %% 3–7. 五个核心业务域
+    %% ========================================================================
+    subgraph CORE["3–7. EvieAi 五个核心业务域"]
+        direction LR
+
+        %% --------------------------------------------------------------------
+        %% 3. 多元输入与需求智能域
+        %% --------------------------------------------------------------------
+        subgraph INPUT["3. 多元输入与需求智能域"]
+            direction TB
+
+            I_CHANNELS["多元输入<br/>需求文档 / OpenAPI / 缺陷 / 日志<br/>历史测试资料 / 手工录入 / 批量导入 / API"]
+
+            I_PARSE["需求解析与标准化<br/>文件解析 / 章节识别 / 业务对象提取<br/>需求结构化 / 版本识别 / 关联分析"]
+
+            I_REQUIREMENT[("Requirement / RequirementVersion<br/>需求正文与版本事实源")]
+
+            I_RAG["Requirement Knowledge RAG<br/>历史需求 / 历史缺陷 / 测试规范<br/>业务规则 / 数据字典 / 相似资产"]
+
+            I_EVIDENCE[("Evidence Pack<br/>来源 + 片段 + 权重 + 版本 + 权限")]
+
+            I_PRODUCER["AI Test Point Producer<br/>测试点生成 / 场景拆解 / 风险识别<br/>边界分析 / 断言建议"]
+
+            I_OUTPUT["只输出自然语言测试点<br/>不得生成 action / target / locator / DSL"]
+
+            I_CHANNELS --> I_PARSE --> I_REQUIREMENT
+            I_REQUIREMENT --> I_RAG --> I_EVIDENCE --> I_PRODUCER --> I_OUTPUT
+        end
+
+        %% --------------------------------------------------------------------
+        %% 4. 自然语言测试资产域
+        %% --------------------------------------------------------------------
+        subgraph ASSET["4. 自然语言测试资产域"]
+            direction TB
+
+            S_INTAKE["统一 Intake<br/>AI 生成 / 手工创建 / 批量导入 / API 创建"]
+
+            S_GUARD["统一去重与声明<br/>幂等 / 精确 Content Claim<br/>疑似语义重复提示 / 项目作用域"]
+
+            S_ASSET[("TestAsset / TestAssetVersion<br/>自然语言测试资产唯一正文事实源")]
+
+            S_SOURCE["Source / Provenance<br/>Requirement / Manual / Import / AI"]
+
+            S_REVIEW["Review / Audit<br/>审核 / 驳回 / 重开 / 操作审计"]
+
+            S_LIFECYCLE["生命周期管理<br/>查看 / 编辑 / 新版本 / 删除 / 恢复<br/>review_status / conversion_status"]
+
+            S_QUERY["资产查询与工作台<br/>列表 / 详情 / 版本 / 来源 / 审核历史"]
+
+            I_OUTPUT --> S_INTAKE
+            S_INTAKE --> S_GUARD --> S_ASSET
+            S_ASSET --> S_SOURCE
+            S_ASSET --> S_REVIEW
+            S_ASSET --> S_LIFECYCLE --> S_QUERY
+        end
+
+        %% --------------------------------------------------------------------
+        %% 5. Asset-to-Case 转换与质量拦截域
+        %% --------------------------------------------------------------------
+        subgraph CONVERSION["5. Asset-to-Case 转换与质量拦截域"]
+            direction TB
+
+            C_REQUEST["Conversion Request / ConversionAttempt<br/>锁定明确 TestAssetVersion"]
+
+            C_PLATFORM["场景与执行平台识别<br/>Web / API / Android / iOS / Hybrid"]
+
+            C_MANIFEST["Execution Requirement Manifest<br/>执行目标 / 范围 / 环境 / 数据 / 权限 / 能力需求"]
+
+            C_CONTEXT["Execution Context Pack<br/>精确资源事实 + 语义检索证据 + 版本快照"]
+
+            C_IR["Intent IR<br/>目标 / 前置条件 / 语义动作 / 语义断言<br/>不包含具体 Locator 和 Runner 代码"]
+
+            C_ORACLE["Test Oracle Resolver<br/>需求 / 业务规则 / OpenAPI / 状态机 / 人工事实"]
+
+            C_BINDER["Binder<br/>候选召回 / 结构过滤 / 唯一绑定 / 冲突检测<br/>BOUND / AMBIGUOUS / UNRESOLVED"]
+
+            C_BOUND["Bound Execution Plan<br/>平台资源绑定 / 数据引用 / 环境引用 / 证据"]
+
+            C_VARIANT["用例矩阵与参数化展开<br/>角色 / 数据 / 环境 / 设备 / 场景组合"]
+
+            C_COMPILER["Platform Compiler Router<br/>Web DSL / API DSL / Android DSL / iOS DSL"]
+
+            C_VALIDATE["确定性校验<br/>Schema / 语法 / 语义 / 权限 / 依赖 / 版本兼容"]
+
+            C_GATE["Quality Gate<br/>完整性 / 可解释性 / 可执行性 / 风险 / 人工审核门禁"]
+
+            C_REPAIR["有限修复循环<br/>结构化错误 / 局部修复 / 最大次数 / 超限 blocked"]
+
+            C_PREFLIGHT["Preflight<br/>环境 / 设备 / 数据 / Secret / Runner / 风险可用性"]
+
+            C_CASE[("TestCase / TestCaseVersion<br/>平台 DSL / script_code / 资源绑定快照")]
+
+            C_TRACE[("Conversion Trace<br/>输入 / 检索 / IR / 绑定 / 校验 / 修复 / 版本")]
+
+            S_ASSET --> C_REQUEST --> C_PLATFORM --> C_MANIFEST --> C_CONTEXT --> C_IR
+            C_IR --> C_ORACLE --> C_BINDER --> C_BOUND --> C_VARIANT --> C_COMPILER
+            C_COMPILER --> C_VALIDATE --> C_GATE
+            C_GATE -->|"通过"| C_PREFLIGHT --> C_CASE
+            C_GATE -->|"可修复"| C_REPAIR --> C_VALIDATE
+            C_GATE -->|"不可修复"| C_TRACE
+            C_REQUEST -.-> C_TRACE
+            C_CONTEXT -.-> C_TRACE
+            C_BOUND -.-> C_TRACE
+            C_CASE -.-> C_TRACE
+        end
+
+        %% --------------------------------------------------------------------
+        %% 6. 公共资源与能力域
+        %% --------------------------------------------------------------------
+        subgraph RESOURCE["6. 公共资源与能力域"]
+            direction TB
+
+            subgraph R_WEB["Web 页面资源中心"]
+                direction TB
+                R_WEB_PAGE["Page / Version"]
+                R_WEB_ELEMENT["Element / Locator / Alias"]
+                R_WEB_OBJECT["Page Object / Frame / Dialog / Tab"]
+                R_WEB_ACTION["Supported Action / Assertion"]
+            end
+
+            subgraph R_API["API 资源中心"]
+                direction TB
+                R_API_SPEC["OpenAPI / Contract Version"]
+                R_API_ENDPOINT["Endpoint / Method"]
+                R_API_SCHEMA["Request / Response Schema"]
+                R_API_AUTH["Auth / Status / Dependency"]
+            end
+
+            subgraph R_MOBILE["移动端资源中心"]
+                direction LR
+                R_ANDROID["Android<br/>App / Version / Activity / Screen<br/>Element / Resource ID / Gesture"]
+                R_IOS["iOS<br/>App / Version / Bundle / View<br/>Element / Accessibility / Predicate / Gesture"]
+            end
+
+            R_DATA["测试数据工厂<br/>Dataset / Generator / Template<br/>Setup / Cleanup / Version"]
+
+            R_ENV["环境与设备中心<br/>Environment / Browser Profile<br/>Android Device / iOS Device / Runner Profile"]
+
+            R_SECRET["Secret 与凭证中心<br/>账号 / Token / API Key / 证书引用"]
+
+            R_MOCK["Mock 与虚拟化中心<br/>Stub / Response Profile / 延迟 / 错误模拟"]
+
+            R_FAULT["故障注入能力中心<br/>断网 / 弱网 / 延迟 / 丢包 / 依赖故障 / 恢复"]
+
+            R_SECURITY["安全测试能力中心<br/>Payload / 权限模型 / Token 场景 / 审批规则"]
+
+            R_PERF["性能测试能力中心<br/>负载模型 / 并发 / Ramp-up / 阈值 / k6 / JMeter"]
+
+            R_CAPABILITY["Capability Registry<br/>能力代码 / 平台 / 输入输出 Schema<br/>风险等级 / Runner 版本 / 前置条件"]
+
+            R_POLICY["规则与治理策略中心<br/>环境限制 / 审批 / 风险 / 资源可见性 / 质量规则"]
+
+            R_GATEWAY["Resource Capability Gateway<br/>项目隔离 / 权限 / 精确查询 / 语义召回<br/>版本化绑定 / 能力匹配 / fail-closed"]
+
+            R_WEB --> R_GATEWAY
+            R_API --> R_GATEWAY
+            R_MOBILE --> R_GATEWAY
+            R_DATA --> R_GATEWAY
+            R_ENV --> R_GATEWAY
+            R_SECRET --> R_GATEWAY
+            R_MOCK --> R_GATEWAY
+            R_FAULT --> R_GATEWAY
+            R_SECURITY --> R_GATEWAY
+            R_PERF --> R_GATEWAY
+            R_CAPABILITY --> R_GATEWAY
+            R_POLICY --> R_GATEWAY
+
+            R_GATEWAY --> C_CONTEXT
+            R_POLICY --> C_GATE
+            R_CAPABILITY --> C_COMPILER
+            R_ENV --> C_PREFLIGHT
+            R_SECRET --> C_PREFLIGHT
+        end
+
+        %% --------------------------------------------------------------------
+        %% 7. 测试用例、执行、证据与反馈域
+        %% --------------------------------------------------------------------
+        subgraph EXECUTION["7. 测试用例、执行、证据与反馈域"]
+            direction TB
+
+            E_CASE["用例版本与失效管理<br/>ready / stale / disabled / manual_override<br/>版本 Diff / 依赖变化"]
+
+            E_SCHEDULER["Scheduler<br/>队列 / 优先级 / 并发 / 计划 / 取消"]
+
+            E_ORCH["Runner Orchestrator<br/>平台路由 / Resource Lease / Capability Preflight"]
+
+            E_POLICY["执行治理<br/>Retry / Timeout / Cancel<br/>Artifact Policy / Risk Policy / Approval"]
+
+            subgraph E_ADAPTERS["平台执行适配器"]
+                direction LR
+                E_WEB["WebRunnerAdapter<br/>Playwright<br/>Chromium / Firefox / WebKit"]
+                E_API["ApiRunnerAdapter<br/>HTTPX + pytest<br/>Postman CLI / Newman"]
+                E_ANDROID["AndroidRunnerAdapter<br/>Appium + UiAutomator2"]
+                E_IOS["IosRunnerAdapter<br/>Appium + XCUITest"]
+            end
+
+            E_EXTERNAL["MCP / Skill Adapter<br/>Playwright MCP / Chrome DevTools MCP<br/>Appium MCP / Postman MCP / External Skill<br/>仅用于受控探索、调试、生成辅助和资源发现"]
+
+            subgraph E_POOLS["执行资源池"]
+                direction LR
+                E_BROWSER_POOL["Browser Worker Pool"]
+                E_API_POOL["API Worker Pool"]
+                E_ANDROID_POOL["Android Emulator / Real Device Pool"]
+                E_IOS_POOL["iOS Simulator / Real Device / macOS Pool"]
+                E_CLOUD["External Browser / Device Cloud"]
+            end
+
+            E_RECORD[("Execution / StepResult / AssertionResult<br/>执行状态、时序与重试事实")]
+
+            E_EVIDENCE["Evidence Normalizer<br/>Screenshot / Video / Trace / Console / Network<br/>Request / Response / Logcat / Syslog / Page Source"]
+
+            E_REPORT["报告与质量视图<br/>Allure / HTML / JSON / Dashboard / 趋势"]
+
+            E_FAILURE["失败归因与稳定性治理<br/>Product Defect / Case Defect / Binding Stale<br/>Environment / Data / Runner / Flaky / Unknown"]
+
+            E_FEEDBACK["反馈闭环<br/>缺陷创建 / 资产建议 / 资源修复<br/>Stale / Replay / Quarantine / 质量复盘"]
+
+            C_CASE --> E_CASE --> E_SCHEDULER --> E_ORCH --> E_POLICY --> E_ADAPTERS
+            E_ADAPTERS --> E_POOLS
+            E_EXTERNAL -.-> E_ORCH
+            R_GATEWAY --> E_ORCH
+            E_POOLS --> E_RECORD
+            E_ADAPTERS --> E_RECORD
+            E_RECORD --> E_EVIDENCE --> E_REPORT --> E_FAILURE --> E_FEEDBACK
+            E_FEEDBACK -.-> S_LIFECYCLE
+            E_FEEDBACK -.-> R_GATEWAY
+            E_FEEDBACK -.-> E_CASE
+        end
+    end
+
+    A_GOV --> I_CHANNELS
+    A_UPLOAD --> I_CHANNELS
+    A_STREAM -.-> S_QUERY
+    A_STREAM -.-> E_REPORT
+
+    %% ========================================================================
+    %% 8. 大模型与 AI 能力层
+    %% ========================================================================
+    subgraph AI_PLATFORM["8. 大模型与 AI 能力层"]
+        direction LR
+
+        AI_GATEWAY["Model Gateway<br/>统一调用入口 / 超时 / 重试 / 限流 / 降级"]
+        AI_PROVIDER["Provider Adapter<br/>OpenAI / Qwen / Claude / 自建模型 / 其他"]
+        AI_ROUTER["Model Router<br/>场景路由 / 成本策略 / 灰度 / 回退"]
+        AI_MODEL_REG["Model Registry<br/>模型版本 / 能力 / 上下文 / 兼容性"]
+        AI_PROMPT["Prompt Registry<br/>模板 / 版本 / 变量 / 输出 Schema"]
+        AI_EMBED["Embedding Service<br/>文本规范化 / 向量生成 / 批处理"]
+        AI_REQ_RAG["Requirement Knowledge RAG<br/>解决“应该测试什么”"]
+        AI_EXEC_RETRIEVAL["Execution Context Retrieval<br/>解决“如何转成可执行指令”"]
+        AI_STRUCTURED["Structured Output<br/>Schema 约束 / 类型化解析 / 错误反馈"]
+        AI_GUARD["Guardrail<br/>输入输出安全 / Prompt Injection / 隐私脱敏"]
+        AI_EVAL["Evaluation & Trace<br/>Golden Dataset / 自动评测 / 人工评审 / Langfuse"]
+        AI_COST["Token / Cost / Quota<br/>预算 / 告警 / 项目额度 / 模型配额"]
+
+        AI_GATEWAY --> AI_ROUTER --> AI_PROVIDER
+        AI_ROUTER --> AI_MODEL_REG
+        AI_GATEWAY --> AI_PROMPT
+        AI_GATEWAY --> AI_STRUCTURED
+        AI_EMBED --> AI_REQ_RAG
+        AI_EMBED --> AI_EXEC_RETRIEVAL
+        AI_GUARD --> AI_GATEWAY
+        AI_GATEWAY --> AI_EVAL
+        AI_GATEWAY --> AI_COST
+    end
+
+    I_RAG <--> AI_REQ_RAG
+    I_PRODUCER <--> AI_GATEWAY
+    C_CONTEXT <--> AI_EXEC_RETRIEVAL
+    C_IR <--> AI_GATEWAY
+    C_REPAIR <--> AI_GATEWAY
+    E_FAILURE -.-> AI_GATEWAY
+
+    %% ========================================================================
+    %% 9. 平台控制面
+    %% ========================================================================
+    subgraph CONTROL["9. 平台控制面"]
+        direction LR
+
+        P_IDENTITY["用户 / 项目 / 多租户<br/>角色 / 权限 / 项目隔离"]
+        P_IDTRACE["统一 ID / Request / Trace / Batch"]
+        P_VERSION["版本治理<br/>资产 / 资源 / Prompt / Model / DSL / Runner"]
+        P_AUDIT["审计与合规<br/>操作审计 / 访问审计 / 合规报表"]
+        P_TASK["任务与事件中心<br/>异步任务 / 事件总线 / 任务重试"]
+        P_FEATURE["Feature Flag<br/>灰度 / Canary / 能力开关"]
+        P_QUOTA["配额与成本<br/>AI 调用 / 执行时长 / 设备 / 存储"]
+        P_APPROVAL["审批流<br/>高风险执行 / 数据访问 / 资源申请"]
+        P_QUALITY["质量度量与看板<br/>覆盖率 / 绑定准确率 / False Executable Rate<br/>成功率 / Flaky / 成本效率"]
+
+        P_IDENTITY --- P_IDTRACE --- P_VERSION --- P_AUDIT
+        P_TASK --- P_FEATURE --- P_QUOTA --- P_APPROVAL --- P_QUALITY
+    end
+
+    P_IDENTITY -.-> A_AUTH
+    P_IDENTITY -.-> A_SCOPE
+    P_IDTRACE -.-> I_REQUIREMENT
+    P_IDTRACE -.-> S_ASSET
+    P_IDTRACE -.-> C_REQUEST
+    P_IDTRACE -.-> E_RECORD
+    P_VERSION -.-> S_LIFECYCLE
+    P_VERSION -.-> R_GATEWAY
+    P_VERSION -.-> C_COMPILER
+    P_VERSION -.-> E_CASE
+    P_AUDIT -.-> S_REVIEW
+    P_AUDIT -.-> C_TRACE
+    P_AUDIT -.-> E_RECORD
+    P_TASK -.-> I_PRODUCER
+    P_TASK -.-> C_REQUEST
+    P_TASK -.-> E_SCHEDULER
+    P_FEATURE -.-> AI_ROUTER
+    P_FEATURE -.-> C_COMPILER
+    P_QUOTA -.-> AI_COST
+    P_QUOTA -.-> E_ORCH
+    P_APPROVAL -.-> R_POLICY
+    P_APPROVAL -.-> E_POLICY
+    P_QUALITY -.-> AI_EVAL
+    P_QUALITY -.-> E_REPORT
+
+    %% ========================================================================
+    %% 10. 数据与知识存储层
+    %% ========================================================================
+    subgraph DATA["10. 数据与知识存储层"]
+        direction LR
+
+        D_PG[("PostgreSQL 业务事实库<br/>用户 / 项目 / Requirement / TestAsset / TestCase<br/>Conversion / Resource Metadata / Execution / Review / Audit")]
+
+        D_JSON[("PostgreSQL JSONB<br/>Evidence Pack / Intent IR / Bound Plan / DSL<br/>Binding Snapshot / Structured Error / Trace Summary")]
+
+        D_VECTOR[("pgvector<br/>需求 / 缺陷 / 测试规范 / TestAsset<br/>页面元素 / API 描述语义向量")]
+
+        D_REDIS[("Redis<br/>缓存 / 短期任务状态 / 队列 / 限流 / 可重建锁")]
+
+        D_OBJECT[("MinIO / S3<br/>需求文件 / OpenAPI / App 包 / 截图 / 视频<br/>Trace / 日志 / 报告 / 扫描结果")]
+
+        D_VAULT[("Vault / KMS<br/>Password / Token / API Key / Certificate<br/>数据库凭证 / 模型供应商密钥")]
+
+        D_SEARCH[("OpenSearch（可选）<br/>全文检索 / 日志检索 / 知识检索")]
+
+        D_ANALYTICS[("ClickHouse（可选）<br/>执行明细 / 大规模指标 / 长期分析")]
+
+        D_OBSERVE[("Prometheus / OpenTelemetry / Langfuse<br/>系统指标 / 业务指标 / Trace / 模型调用观测")]
+    end
+
+    I_REQUIREMENT --> D_PG
+    I_EVIDENCE --> D_JSON
+    S_ASSET --> D_PG
+    S_SOURCE --> D_PG
+    S_REVIEW --> D_PG
+    C_CASE --> D_PG
+    C_TRACE --> D_JSON
+    R_GATEWAY --> D_PG
+    E_RECORD --> D_PG
+    E_EVIDENCE --> D_OBJECT
+    AI_REQ_RAG <--> D_VECTOR
+    AI_EXEC_RETRIEVAL <--> D_VECTOR
+    AI_GATEWAY --> D_OBSERVE
+    E_ORCH --> D_REDIS
+    P_TASK --> D_REDIS
+    R_SECRET --> D_VAULT
+    I_CHANNELS --> D_OBJECT
+    R_API_SPEC --> D_OBJECT
+    R_ANDROID --> D_OBJECT
+    R_IOS --> D_OBJECT
+    E_REPORT -.-> D_ANALYTICS
+    E_FAILURE -.-> D_SEARCH
+
+    %% ========================================================================
+    %% 11. 基础设施与运维治理层
+    %% ========================================================================
+    subgraph INFRA["11. 基础设施与运维治理层"]
+        direction LR
+
+        O_DEPLOY["部署单元<br/>Frontend<br/>evie-api<br/>evie-ai-worker<br/>evie-runner-worker"]
+
+        O_CONTAINER["容器与编排<br/>Docker / Kubernetes"]
+        O_CICD["CI/CD<br/>GitLab CI / GitHub Actions / 自动化部署"]
+        O_CONFIG["配置与 Secret 管理<br/>Settings / ConfigMap / Secret / Vault"]
+        O_QUEUE["任务队列与 Worker<br/>Redis Queue / Celery / ARQ / RabbitMQ（按阶段）"]
+        O_SERVICE["服务治理<br/>Service DNS / Timeout / Retry / Circuit Breaker / Rate Limit"]
+        O_OBSERVE["可观测性<br/>OpenTelemetry / Prometheus / Grafana<br/>Loki / ELK / Jaeger / Tempo"]
+        O_LOG["日志与审计基础设施<br/>集中日志 / 脱敏 / 保留策略"]
+        O_BACKUP["备份与容灾<br/>数据库备份 / 对象存储备份 / 多可用区 / 恢复演练"]
+        O_SECURITY["安全运维<br/>漏洞扫描 / 镜像安全 / 依赖安全 / 合规检查"]
+    end
+
+    O_CICD --> O_CONTAINER --> O_DEPLOY
+    O_CONFIG -.-> O_DEPLOY
+    O_QUEUE -.-> O_DEPLOY
+    O_SERVICE -.-> O_DEPLOY
+    O_OBSERVE -.-> O_DEPLOY
+    O_LOG -.-> O_DEPLOY
+    O_BACKUP -.-> DATA
+    O_SECURITY -.-> O_CONTAINER
+
+    O_DEPLOY -.-> A_GATEWAY
+    O_DEPLOY -.-> I_PRODUCER
+    O_DEPLOY -.-> C_REQUEST
+    O_DEPLOY -.-> E_ORCH
+
+    %% ========================================================================
+    %% 架构说明与实施边界
+    %% ========================================================================
+    ARCH_NOTE["架构原则<br/>• TestAsset 表达‘测什么’，TestCase 表达‘如何执行’<br/>• AI 负责理解与建议，确定性组件负责绑定、编译、校验与执行<br/>• 公共资源域提供可用资源，执行域负责调度并执行<br/>• MCP / Skill 是受控辅助适配器，不是生产执行唯一底座<br/>• 逻辑领域不等于独立微服务<br/>• 本图为长期目标架构，不反向修改 Phase 0 / Phase 1 历史合同"]
+
+    ARCH_NOTE -.-> CORE
+
+    %% ========================================================================
+    %% 样式
+    %% ========================================================================
+    classDef userNode fill:#EEF4FF,stroke:#2F64B3,stroke-width:1.5px,color:#17365D
+    classDef accessNode fill:#EAF3FF,stroke:#2F64B3,stroke-width:1.5px,color:#17365D
+    classDef inputNode fill:#EAF8EE,stroke:#4C9B5F,stroke-width:1.5px,color:#245B2E
+    classDef assetNode fill:#EDF6FF,stroke:#4285C5,stroke-width:1.5px,color:#204A73
+    classDef conversionNode fill:#F1ECFF,stroke:#7658B5,stroke-width:1.5px,color:#4A3377
+    classDef resourceNode fill:#FFF7E8,stroke:#D99B36,stroke-width:1.5px,color:#7A4B00
+    classDef executionNode fill:#FFF0E8,stroke:#D57A33,stroke-width:1.5px,color:#7B3A08
+    classDef aiNode fill:#EAF4FF,stroke:#4277B8,stroke-width:1.5px,color:#244A74
+    classDef controlNode fill:#EEFAF0,stroke:#51A163,stroke-width:1.5px,color:#235B31
+    classDef dataNode fill:#F6F0FF,stroke:#8560B7,stroke-width:1.5px,color:#4B3370
+    classDef infraNode fill:#F0F4F8,stroke:#65798A,stroke-width:1.5px,color:#304554
+    classDef dbNode fill:#FFFFFF,stroke:#667684,stroke-width:2px,color:#253746
+    classDef keyNode fill:#FFF4CC,stroke:#C89200,stroke-width:2.5px,color:#604600,font-weight:bold
+    classDef noteNode fill:#FFFDF3,stroke:#9B8A42,stroke-width:1.5px,color:#514617
+
+    style USERS fill:#F7FAFF,stroke:#2F64B3,stroke-width:2px,color:#17365D
+    style ACCESS fill:#F2F7FF,stroke:#2F64B3,stroke-width:2px,color:#17365D
+    style CORE fill:#FFFFFF,stroke:#56687A,stroke-width:2.5px,color:#263746
+    style INPUT fill:#F2FBF4,stroke:#4C9B5F,stroke-width:2px,color:#245B2E
+    style ASSET fill:#F1F8FF,stroke:#4285C5,stroke-width:2px,color:#204A73
+    style CONVERSION fill:#F7F3FF,stroke:#7658B5,stroke-width:2px,color:#4A3377
+    style RESOURCE fill:#FFF9EE,stroke:#D99B36,stroke-width:2px,color:#7A4B00
+    style EXECUTION fill:#FFF5EF,stroke:#D57A33,stroke-width:2px,color:#7B3A08
+    style AI_PLATFORM fill:#F1F7FF,stroke:#4277B8,stroke-width:2px,color:#244A74
+    style CONTROL fill:#F2FBF4,stroke:#51A163,stroke-width:2px,color:#235B31
+    style DATA fill:#F8F4FF,stroke:#8560B7,stroke-width:2px,color:#4B3370
+    style INFRA fill:#F4F7F9,stroke:#65798A,stroke-width:2px,color:#304554
+    style R_WEB fill:#FFFDF7,stroke:#D6A449,stroke-width:1px
+    style R_API fill:#FFFDF7,stroke:#D6A449,stroke-width:1px
+    style R_MOBILE fill:#FFFDF7,stroke:#D6A449,stroke-width:1px
+    style E_ADAPTERS fill:#FFF9F5,stroke:#D57A33,stroke-width:1px
+    style E_POOLS fill:#FFF9F5,stroke:#D57A33,stroke-width:1px
+
+    class U_PRODUCT,U_QA,U_DEV,U_ADMIN,U_CICD,U_THIRD,U_CLI,U_NOTIFY userNode
+    class A_EDGE,A_INGRESS,A_GATEWAY,A_AUTH,A_SCOPE,A_GOV,A_UPLOAD,A_STREAM accessNode
+    class I_CHANNELS,I_PARSE,I_RAG,I_PRODUCER,I_OUTPUT inputNode
+    class I_REQUIREMENT,I_EVIDENCE dbNode
+    class S_INTAKE,S_GUARD,S_SOURCE,S_REVIEW,S_LIFECYCLE,S_QUERY assetNode
+    class S_ASSET dbNode
+    class C_REQUEST,C_PLATFORM,C_MANIFEST,C_CONTEXT,C_IR,C_ORACLE,C_BINDER,C_BOUND,C_VARIANT,C_COMPILER,C_VALIDATE,C_REPAIR,C_PREFLIGHT conversionNode
+    class C_GATE keyNode
+    class C_CASE,C_TRACE dbNode
+    class R_WEB_PAGE,R_WEB_ELEMENT,R_WEB_OBJECT,R_WEB_ACTION,R_API_SPEC,R_API_ENDPOINT,R_API_SCHEMA,R_API_AUTH,R_ANDROID,R_IOS,R_DATA,R_ENV,R_SECRET,R_MOCK,R_FAULT,R_SECURITY,R_PERF,R_POLICY resourceNode
+    class R_CAPABILITY,R_GATEWAY keyNode
+    class E_CASE,E_SCHEDULER,E_ORCH,E_POLICY,E_WEB,E_API,E_ANDROID,E_IOS,E_EXTERNAL,E_BROWSER_POOL,E_API_POOL,E_ANDROID_POOL,E_IOS_POOL,E_CLOUD,E_EVIDENCE,E_REPORT,E_FAILURE,E_FEEDBACK executionNode
+    class E_RECORD dbNode
+    class AI_GATEWAY,AI_PROVIDER,AI_ROUTER,AI_MODEL_REG,AI_PROMPT,AI_EMBED,AI_REQ_RAG,AI_EXEC_RETRIEVAL,AI_STRUCTURED,AI_GUARD,AI_EVAL,AI_COST aiNode
+    class P_IDENTITY,P_IDTRACE,P_VERSION,P_AUDIT,P_TASK,P_FEATURE,P_QUOTA,P_APPROVAL,P_QUALITY controlNode
+    class D_PG,D_JSON,D_VECTOR,D_REDIS,D_OBJECT,D_VAULT,D_SEARCH,D_ANALYTICS,D_OBSERVE dataNode
+    class O_DEPLOY,O_CONTAINER,O_CICD,O_CONFIG,O_QUEUE,O_SERVICE,O_OBSERVE,O_LOG,O_BACKUP,O_SECURITY infraNode
+    class ARCH_NOTE noteNode
