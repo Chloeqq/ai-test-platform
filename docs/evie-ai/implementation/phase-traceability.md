@@ -1,7 +1,7 @@
 # EvieAi 阶段追踪矩阵
 
 创建日期：2026-07-12
-最后更新：2026-07-18
+最后更新：2026-07-27
 状态：Authoritative
 适用范围：EvieAi 完整目标能力、阶段实施边界、交付物追踪、验收证据和架构偏差检查
 
@@ -518,7 +518,7 @@ Phase 0 不允许包含：
 
 以上内容记录的是 2026-07-15 文档批准时点的历史实施快照，不代表 2026-07-18 的当前实时实施状态。
 
-### 6.3.1 当前状态（2026-07-18）
+### 6.3.1 当前状态（2026-07-27）
 
 Phase 1 contract status: Accepted / Active
 Phase 1 overall status: In Progress
@@ -528,7 +528,8 @@ Phase 1 closeout status: Not completed
 
 - Phase 1 合同已经批准并持续有效；
 - Slice 1～4 已完成对应底层层级验证；
-- Slice 5～11 尚未实施；
+- Slice 5 implementation：Completed；targeted validation：Passed（56 passed）；regression attribution：0 new regressions；已通过 PR #14 合并到 `dev`；
+- Slice 6～11 尚未实施；
 - Slice 1～4 通过不等于 Service 主链完成；
 - Slice 1～4 通过不等于 Router/API 完成；
 - 当前没有满足 Asset Lifecycle Core 后端 Closeout；
@@ -544,7 +545,7 @@ Phase 1 closeout status: Not completed
 | Slice 2 | Accepted / Active | Verified implemented at unit layer | 52/52 passed | Not completed | ORM、Schema、架构守卫 |
 | Slice 3 | Accepted / Active | Verified implemented at migration test layer | 10/10 passed | Not completed | 仅现有 migration pytest 层；不是生产数据库升级证明 |
 | Slice 4 | Accepted / Active | Verified implemented at repository layer | 39/39 passed | Not completed | Repository 和 Query 层；尚无 Service 或 Router/API 证明 |
-| Slice 5 | Accepted / Active | Not started | 无 | Not completed | API 安全前置尚未实施；Slice 2/3 的 `user_public_id` 兼容基础不构成 Slice 5 已实施 |
+| Slice 5 | Accepted / Active | Completed | Targeted 56 passed；EvieAi unit + integration 215 passed；0 new regressions | Not completed | API 安全前置已实现并经 PR #14 合并到 `dev`；implementation commit `5186687b641e3fb2d8c93b3b54e2584d58ced789`；merge commit `bd08b802cdb28c9ffc688cc39823af2c65fa6c3a`；不代表 Phase 1 Closeout |
 | Slice 6 | Accepted / Active | Not started | 无 | Not completed | Intake Service 尚未实施 |
 | Slice 7 | Accepted / Active | Not started | 无 | Not completed | Lifecycle / Review Service 尚未实施 |
 | Slice 8 | Accepted / Active | Not started | 无 | Not completed | Router / API 尚未实施 |
@@ -596,7 +597,6 @@ Asset Lifecycle Core 后端 Closeout 至少依赖：
 
 当前主要阻塞：
 
-- Slice 5 API 安全前置；
 - Slice 6 Intake Service；
 - Slice 7 Lifecycle / Review Service；
 - Slice 8 Router / API；
@@ -748,6 +748,7 @@ Accepted / Active
 Verified implemented at unit layer
 Verified implemented at migration test layer
 Verified implemented at repository layer
+Completed
 Partially implemented
 Implemented but unverified
 Not started
@@ -762,6 +763,7 @@ Out of Phase 1 scope
 | Verified implemented at unit layer | 生产代码存在，相关 unit 测试已收集并全部通过，但仅证明该层级 |
 | Verified implemented at migration test layer | Migration 与相关 pytest 已通过，但不等于生产数据库升级或部署验收 |
 | Verified implemented at repository layer | Repository / Query 层代码和测试已通过，但不等于 Service、API 或集成层完成 |
+| Completed | 已批准 Slice 的实现、针对性验证、回归归因和合并证据均已记录；不等于 Phase 1 Closeout 完成 |
 | Partially implemented | 已存在部分实现或部分证据，但尚未形成完整合同能力 |
 | Implemented but unverified | 代码或配置已实现，但未获得足够动态验证证据 |
 | Not started | 用户已明确确认当前切片尚未实施 |

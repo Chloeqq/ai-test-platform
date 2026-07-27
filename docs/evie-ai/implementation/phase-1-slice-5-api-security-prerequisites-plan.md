@@ -14,14 +14,16 @@ EvieAi Phase 1 Slice 5 — API Security Prerequisites
 - 本文件从 `ADR-0001`、Phase 1 Specification 和 Phase 1 Overall Plan 派生。
 - 本文件不能扩大已批准合同。
 - 本文件已获得用户批准，当前状态为 `Accepted / Active`。
-- 本文件不代表 Slice 5 已启动。
-- 本次批准不授权直接开始 Slice 5 编码。
+- 本文件中的实施前门禁和 `Not started` 表述记录计划批准时点；当前实施与合并证据见第 21 节。
 - 当前 Phase 1 仍为 In Progress。
 - 当前 Closeout 仍为 Not completed。
 - 当前未进入 Phase 2。
 
 Slice 5 implementation plan status: Accepted / Active
-Slice 5 implementation status: Not started
+Slice 5 implementation status: Completed
+Slice 5 targeted validation: Passed (56 passed)
+Slice 5 regression attribution: 0 new regressions
+Slice 5 merge status: Merged into `dev`
 Phase 1 overall status: In Progress
 Phase 1 closeout status: Not completed
 
@@ -45,18 +47,18 @@ AGENTS.md
 - 本文件只把 Slice 5 拆成可审查、可批准、可实施、可验收的独立计划，不修改上级合同。
 - `phase-traceability.md` 只记录当前状态和验证证据，不授予实施授权。
 - `ADR-0002`、`ARCHITECTURE_BASELINE.md`、`evie-ai-overview.md` 和 `target-capability-map.md` 只限定长期目标边界、状态口径和阶段关系，不改变 Phase 1 的已批准实施合同。
-- 在本计划 PR 合入 `dev` 之前，不得创建 Slice 5 实施分支，不得开始编码。
+- 本计划 PR 合入 `dev` 前不得创建 Slice 5 实施分支或开始编码；该实施前门禁现已满足，保留为历史流程记录。
 
-## 2. 当前基线
+## 2. 计划制定时的历史基线
 
-- 当前 `dev` HEAD：`71535b5a3dac3501b2a6b31a4293cf30d29d5896`
-- 当前 `origin/dev`：`71535b5a3dac3501b2a6b31a4293cf30d29d5896`
-- 当前计划分支：`codex/evie-ai-phase1-slice5-plan`
-- 当前 `dev` 已包含：
+- 计划制定时的 `dev` HEAD：`71535b5a3dac3501b2a6b31a4293cf30d29d5896`
+- 计划制定时的 `origin/dev`：`71535b5a3dac3501b2a6b31a4293cf30d29d5896`
+- 计划制定时的计划分支：`codex/evie-ai-phase1-slice5-plan`
+- 计划制定时的 `dev` 已包含：
   - Slice 4 Repository / Query 实现；
   - Target Architecture v2 文档基线；
   - PR #12 合并提交 `71535b5a3dac3501b2a6b31a4293cf30d29d5896`
-- Slice 1～4 的既有层级验证证据绑定于 `0912696c0d68f56fac756956f2cfceaa6ffc4fa3`，当前 `dev` 仅在其上叠加纯文档合并，因此仍可作为 Slice 1～4 的历史动态验证证据。
+- Slice 1～4 的既有层级验证证据绑定于 `0912696c0d68f56fac756956f2cfceaa6ffc4fa3`；以上内容为 Slice 5 实施前的历史动态验证证据。
 
 ### 2.1 Slice 1～4 既有验证快照
 
@@ -73,16 +75,16 @@ AGENTS.md
 - `138 passed` 不等于 Phase 1 完成。
 - `138 passed` 不等于 Slice 5 已开始。
 
-### 2.2 当前阶段状态
+### 2.2 计划制定时的阶段状态
 
 - Phase 1 contract status: Accepted / Active
 - Phase 1 overall status: In Progress
 - Phase 1 closeout status: Not completed
-- Slice 5～11 当前仍为 `Not started`
+- Slice 5～11 当时均为 `Not started`
 - Service、Router/API 和集成主链尚未完成
 - Target Architecture v2 已合入 `dev`
 - Slice 5 只读预审已经完成
-- Slice 5 尚未开始
+- Slice 5 当时尚未开始
 
 ## 3. CI 基线与冻结失败
 
@@ -1221,7 +1223,36 @@ Slice 5 规划的守卫重点如下：
 - `phase-traceability` 更新
 - 用户明确批准 Closeout
 
-当前批准后状态为：
+## 21. 实施与合并记录（2026-07-27）
 
-Slice 5 implementation plan status: Accepted / Active
-Slice 5 implementation status: Not started
+本节是 Slice 5 的当前实施证据记录，并取代本文中计划制定时的 `Not started` 状态表述。
+它只确认已批准 Slice 5 的实现与合并结果，不宣布 Phase 1 完成、Closeout 完成或开始 Slice 6。
+
+| 项目 | 当前记录 |
+|---|---|
+| Slice 5 implementation | Completed |
+| Slice 5 targeted validation | Passed (`56 passed`) |
+| Regression attribution | `0 new regressions` |
+| Merge status | Merged into `dev` |
+| Pull Request | [PR #14](https://github.com/Chloeqq/ai-test-platform/pull/14) |
+| Slice 5 implementation commit | `5186687b641e3fb2d8c93b3b54e2584d58ced789` |
+| Merge commit on `dev` | `bd08b802cdb28c9ffc688cc39823af2c65fa6c3a` |
+| Phase 1 overall status | In Progress |
+| Phase 1 closeout status | Not completed |
+
+验证与回归归因记录：
+
+- Slice 5 targeted validation：`56 passed`。
+- EvieAi unit + integration：`215 passed`。
+- 完整 web-ui unit：当前 Slice 5 工作区为 `703 collected, 671 passed, 32 failed`；干净基线
+  `8f28f181` 为 `650 collected, 618 passed, 32 failed`。
+- 两侧的 32 个失败均复现为相同失败签名；本次归因确认 `0 new regressions`。
+- `CI-B01` 仍是已知基线失败：8 个 Workbench facade 测试因缺少
+  `app.api.workbench.facade.test_case_service` 失败。
+- `CI-B02` 仍是已知基线失败：`apps/ai-orchestrator/src/app.py` 缺失导致 collection failure。
+- `git diff --check` 已在实施分支与本次文档收口分支分别执行；本节不把已知基线失败写作通过。
+
+范围确认：
+
+- 本次记录未修改 Slice 5 合同边界，也未修改 Phase 0/1 范围。
+- Slice 6 及后续 Slice 仍未开始；本记录不构成其实施授权。
