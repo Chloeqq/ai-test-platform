@@ -24,6 +24,7 @@ Slice 5 implementation status: Completed
 Slice 5 targeted validation: Passed (56 passed)
 Slice 5 regression attribution: 0 new regressions
 Slice 5 merge status: Merged into `dev`
+Slice 5 closeout status: Completed
 Phase 1 overall status: In Progress
 Phase 1 closeout status: Not completed
 
@@ -1225,8 +1226,9 @@ Slice 5 规划的守卫重点如下：
 
 ## 21. 实施与合并记录（2026-07-27）
 
-本节是 Slice 5 的当前实施证据记录，并取代本文中计划制定时的 `Not started` 状态表述。
-它只确认已批准 Slice 5 的实现与合并结果，不宣布 Phase 1 完成、Closeout 完成或开始 Slice 6。
+本节是 Slice 5 的当前实施、合并和 Closeout 证据记录，并取代本文中计划制定时的
+`Not started` 状态表述。用户已明确批准 Slice 5 Closeout；这不宣布 Phase 1 Closeout
+完成，也不开始 Slice 6。
 
 | 项目 | 当前记录 |
 |---|---|
@@ -1234,6 +1236,7 @@ Slice 5 规划的守卫重点如下：
 | Slice 5 targeted validation | Passed (`56 passed`) |
 | Regression attribution | `0 new regressions` |
 | Merge status | Merged into `dev` |
+| Slice 5 closeout | Completed (explicit user approval) |
 | Pull Request | [PR #14](https://github.com/Chloeqq/ai-test-platform/pull/14) |
 | Slice 5 implementation commit | `5186687b641e3fb2d8c93b3b54e2584d58ced789` |
 | Merge commit on `dev` | `bd08b802cdb28c9ffc688cc39823af2c65fa6c3a` |
