@@ -116,6 +116,7 @@ class EvieAiErrorBody(EvieAiReadSchema):
     retryable: bool
     trace_id: str | None = None
     details: dict[str, object] = Field(default_factory=dict)
+    request_id: str
 
 
 class EvieAiErrorResponse(EvieAiReadSchema):

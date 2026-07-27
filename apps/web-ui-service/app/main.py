@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import get_settings
 from app.core.database import Base, engine
 from app.core.security import get_current_user
+from app.errors.evie_ai import EvieAiDomainError
 from app.routers.auth import router as auth_router
 from app.routers.dashboard import router as dashboard_router
 from app.routers.health import router as health_router
@@ -41,6 +42,15 @@ from app.routers.behavior_registry_api import router as behavior_registry_api_ro
 from app.routers.workbench_tasks import router as workbench_tasks_router
 from app.routers.requirement_documents import router as requirement_documents_router
 from app.routers.prompt_templates import router as prompt_templates_router
+from app.services.evie_ai import is_evie_ai_api_path
+from app.services.evie_ai.http_error_adapter import (
+    response_for_domain_error,
+    response_for_http_exception,
+    response_for_request_validation_error,
+    response_for_unexpected_exception,
+)
+from app.services.evie_ai.logging_guard import NaturalLanguageLoggingGuard
+from app.services.evie_ai.request_trace_context import RequestTraceContext
 from app.services.workbench_reporting_service import inject_allure_branding
 from shared_backend.observability import (
     configure_logging,
@@ -54,6 +64,7 @@ configure_logging(service_name="web-ui-service")
 access_logger = logging.getLogger("web.access")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEVLIKE_APP_ENVS = {"dev", "development", "local", "test", "testing"}
+_evie_ai_logging_guard = NaturalLanguageLoggingGuard()
 
 
 class BrandedAllureStaticFiles(StaticFiles):
@@ -78,6 +89,13 @@ def _preview_request_payload(body: bytes, content_type: str) -> str:
         except Exception:
             return text[:2000]
     return text[:2000]
+
+
+def _request_id_from(request: Request) -> str:
+    trace_context = getattr(request.state, "evie_ai_trace_context", None)
+    if isinstance(trace_context, RequestTraceContext):
+        return trace_context.request_id
+    return str(request.headers.get("x-request-id", "")).strip() or "-"
 
 
 @asynccontextmanager
@@ -136,13 +154,30 @@ app.include_router(page_objects_recorder_router, dependencies=_jwt_required)
 @app.middleware("http")
 async def _disable_allure_cache(request: Request, call_next):  # type: ignore[no-untyped-def]
     request_id = str(request.headers.get("x-request-id", "")).strip() or str(uuid.uuid4())
+    is_evie_ai_request = is_evie_ai_api_path(request.url.path)
     start = time.perf_counter()
     set_request_id(request_id)
+    if is_evie_ai_request:
+        request.state.evie_ai_trace_context = RequestTraceContext.from_request_id(
+            request_id
+        )
     body = await request.body()
     payload_preview = _preview_request_payload(body, request.headers.get("content-type", ""))
+    if is_evie_ai_request:
+        payload_preview = _evie_ai_logging_guard.execute(
+            path=request.url.path,
+            payload_preview=payload_preview,
+        )
+    safe_query = "" if is_evie_ai_request else request.url.query
+
+    body_replayed = not body
 
     async def _receive() -> dict[str, object]:
-        return {"type": "http.request", "body": body, "more_body": False}
+        nonlocal body_replayed
+        if not body_replayed:
+            body_replayed = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return {"type": "http.disconnect"}
 
     request._receive = _receive  # type: ignore[attr-defined]
     access_logger.info(
@@ -150,7 +185,7 @@ async def _disable_allure_cache(request: Request, call_next):  # type: ignore[no
         summarize_http_context(
             method=request.method,
             path=request.url.path,
-            query=request.url.query,
+            query=safe_query,
             client=request.client.host if request.client else "-",
             request_id=request_id,
             payload=payload_preview,
@@ -159,6 +194,8 @@ async def _disable_allure_cache(request: Request, call_next):  # type: ignore[no
     try:
         response: Response = await call_next(request)
     except Exception:
+        if is_evie_ai_request:
+            raise
         duration_ms = round((time.perf_counter() - start) * 1000, 2)
         access_logger.exception(
             "http_request_error %s",
@@ -179,7 +216,7 @@ async def _disable_allure_cache(request: Request, call_next):  # type: ignore[no
         summarize_http_context(
             method=request.method,
             path=request.url.path,
-            query=request.url.query,
+            query=safe_query,
             client=request.client.host if request.client else "-",
             request_id=request_id,
             status_code=response.status_code,
@@ -193,8 +230,44 @@ async def _disable_allure_cache(request: Request, call_next):  # type: ignore[no
     return response
 
 
+@app.exception_handler(EvieAiDomainError)
+async def _handle_evie_ai_domain_error(request: Request, exc: EvieAiDomainError):
+    if is_evie_ai_api_path(request.url.path):
+        access_logger.warning(
+            "evie_ai_domain_error %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.url.path,
+                client=request.client.host if request.client else "-",
+                request_id=_request_id_from(request),
+                status_code=response_for_domain_error(
+                    exc,
+                    request_id=_request_id_from(request),
+                ).status_code,
+                error=exc.code,
+            ),
+        )
+        return response_for_domain_error(exc, request_id=_request_id_from(request))
+    return await _handle_unexpected_exception(request, exc)
+
+
 @app.exception_handler(RequestValidationError)
 async def _handle_request_validation_error(request: Request, exc: RequestValidationError):
+    if is_evie_ai_api_path(request.url.path):
+        access_logger.warning(
+            "evie_ai_request_validation_error %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.url.path,
+                client=request.client.host if request.client else "-",
+                request_id=_request_id_from(request),
+                status_code=422,
+            ),
+        )
+        return response_for_request_validation_error(
+            exc,
+            request_id=_request_id_from(request),
+        )
     access_logger.warning(
         "http_request_validation_error %s",
         summarize_http_context(
@@ -212,6 +285,18 @@ async def _handle_request_validation_error(request: Request, exc: RequestValidat
 
 @app.exception_handler(HTTPException)
 async def _handle_http_exception(request: Request, exc: HTTPException):
+    if is_evie_ai_api_path(request.url.path):
+        access_logger.warning(
+            "evie_ai_http_exception %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.url.path,
+                client=request.client.host if request.client else "-",
+                request_id=_request_id_from(request),
+                status_code=exc.status_code,
+            ),
+        )
+        return response_for_http_exception(exc, request_id=_request_id_from(request))
     level = logging.WARNING if exc.status_code < 500 else logging.ERROR
     access_logger.log(
         level,
@@ -231,6 +316,18 @@ async def _handle_http_exception(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def _handle_unexpected_exception(request: Request, exc: Exception):
+    if is_evie_ai_api_path(request.url.path):
+        access_logger.error(
+            "evie_ai_unhandled_exception %s",
+            summarize_http_context(
+                method=request.method,
+                path=request.url.path,
+                client=request.client.host if request.client else "-",
+                request_id=_request_id_from(request),
+                status_code=500,
+            ),
+        )
+        return response_for_unexpected_exception(request_id=_request_id_from(request))
     request_id = str(request.headers.get("x-request-id", "")).strip() or "-"
     access_logger.exception(
         "http_request_unhandled_exception %s",

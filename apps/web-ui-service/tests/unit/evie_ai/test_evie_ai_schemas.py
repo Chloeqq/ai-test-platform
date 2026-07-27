@@ -118,6 +118,21 @@ def test_all_evie_ai_schemas_forbid_undeclared_fields() -> None:
         assert schema.model_config.get("extra") == "forbid"
 
 
+def test_evie_ai_error_schema_keeps_request_id_inside_error_body() -> None:
+    body = EvieAiErrorBody(
+        code="EVIE_DATA_INTEGRITY_ERROR",
+        domain="evie_ai",
+        stage="identity",
+        message="A stable identity is required.",
+        retryable=False,
+        request_id="request-123",
+    )
+    response = EvieAiErrorResponse(error=body)
+
+    assert response.error.request_id == "request-123"
+    assert "request_id" not in EvieAiErrorResponse.model_fields
+
+
 def test_evie_ai_schemas_contain_no_machine_execution_fields() -> None:
     for schema in SCHEMAS:
         assert FORBIDDEN_MACHINE_FIELDS.isdisjoint(schema.model_fields)
