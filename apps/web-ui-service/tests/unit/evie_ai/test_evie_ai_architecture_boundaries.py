@@ -46,7 +46,9 @@ EVIE_AI_MODULE_ROOTS = (
     SERVICE_ROOT / "app" / "schemas" / "evie_ai",
     SERVICE_ROOT / "app" / "repositories" / "evie_ai",
     SERVICE_ROOT / "app" / "policies" / "evie_ai",
+    SERVICE_ROOT / "app" / "services" / "evie_ai",
 )
+SLICE5_SERVICE_ROOT = SERVICE_ROOT / "app" / "services" / "evie_ai"
 FORBIDDEN_IMPORT_TOKENS = {
     "behavior_registry",
     "candidate",
@@ -224,3 +226,25 @@ def test_required_foreign_keys_are_explicit_and_named() -> None:
             if isinstance(constraint, ForeignKeyConstraint)
         }
         assert actual_names == expected_names
+
+
+def test_slice5_security_services_have_no_default_project_or_business_chain_dependencies() -> None:
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(SLICE5_SERVICE_ROOT.glob("*.py"))
+    ).lower()
+
+    forbidden_tokens = {
+        "ensure_project_seed",
+        "ensure_project_writable",
+        "get_project_status",
+        "default_project_code",
+        "testassetintakeservice",
+        "execution_compiler",
+        "candidate",
+        "runner",
+        "/api/evie-ai/test-assets",
+    }
+
+    assert all(token not in source for token in forbidden_tokens)
+    assert '"mall"' not in source

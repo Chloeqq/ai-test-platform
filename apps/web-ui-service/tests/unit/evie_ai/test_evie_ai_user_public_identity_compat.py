@@ -6,6 +6,8 @@ import pytest
 from app.models.user import User
 from app.routers import auth
 from app.schemas.user import UserCreate
+from app.services.evie_ai.request_actor_context import RequestActorContext
+from app.services.evie_ai.user_public_identity_service import UserPublicIdentityService
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -191,3 +193,19 @@ def test_token_subject_remains_internal_user_id_for_compatibility(
     assert captured["subject"] == "42"
     assert token.user.user_public_id == PUBLIC_USER_ID
     assert "id" not in type(token.user).model_fields
+
+
+def test_authenticated_user_builds_stable_principal_and_actor_without_internal_id() -> None:
+    user = User(
+        id=42,
+        user_public_id=PUBLIC_USER_ID,
+        username="tester",
+        hashed_password="hashed",
+        role="developer",
+        is_active=True,
+    )
+
+    principal = UserPublicIdentityService().execute(user)
+
+    assert RequestActorContext().execute(principal) == f"user:{PUBLIC_USER_ID}"
+    assert not hasattr(principal, "id")
