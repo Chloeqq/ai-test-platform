@@ -153,7 +153,7 @@ create TestAsset and flush internal PK
 -> create TestAssetVersion(version_no=1)
 -> create TestAssetSource and Requirement subtype when applicable
 -> add TestAssetContentClaim
--> set current_version_pk through the repository
+-> bind the first current_version_pk through the repository creation-time method
 -> append asset_created AuditEvent
 -> complete Idempotency Result
 -> commit
@@ -167,10 +167,13 @@ Repository 只允许 add、flush、query 或条件更新；不得 commit、rollb
 
 ```text
 version_no = 1
+row_version = 1
 review_status = pending
 conversion_status = not_started
 deleted_at = null
 ```
+
+首版本绑定属于聚合初始化：创建期 Repository 方法在确认 `current_version_pk` 尚未绑定且首版本归属该 Asset 后设置指针，但不得推进 `row_version`。因此，创建提交后的数据库记录和 `TestAssetOperationResult` 都必须返回 `row_version = 1`。现有 `TestAssetRepository.set_current_version()` 保持创建后的通用 CAS 更新语义；首次后续更新以 `expected_row_version = 1` 成功后，才将 `row_version` 推进至 `2`。
 
 创建时不得生成 ReviewRecord，不得生成 `failed` conversion status，也不得创建任何执行实体。
 
@@ -295,10 +298,11 @@ Audit 只保存公共 ID、版本号、状态、checksum、来源类型、必要
 | 文件 | 动作 | 计划职责 |
 |---|---|---|
 | `apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py` | 新增 | 唯一公开 Intake Service、同文件私有单次竞态协调、事务编排、上下文复用与稳定领域错误。 |
+| `apps/web-ui-service/app/repositories/evie_ai/test_asset_repository.py` | 修改 | 新增创建期首版本绑定 Repository 方法：校验 Version 归属且仅在 `current_version_pk` 未绑定时设置初始指针，保持 `row_version = 1`；不改变既有 `set_current_version()` 的后续 CAS 推进语义。 |
 | `apps/web-ui-service/app/repositories/evie_ai/requirement_repository.py` | 修改 | 增加最小公开 ID 对解析能力；不改变 Requirement 生命周期、事务或数据模型。 |
 | `apps/web-ui-service/tests/unit/evie_ai/conftest.py` | 修改 | 为 Intake 事务测试提供隔离 Session factory 和包含 `TestProject` 的最小测试表集合。 |
 | `apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_intake_service.py` | 新增 | 服务、回滚、重放、来源、审计和竞态测试。 |
-| `apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_repositories.py` | 修改 | 覆盖 Requirement 公开 ID/Version 解析、父子归属、软删除和项目范围。 |
+| `apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_repositories.py` | 修改 | 覆盖 Requirement 公开 ID/Version 解析、父子归属、软删除和项目范围；同时区分创建期首版本绑定保持 `row_version = 1` 与既有 `set_current_version()` 后续 CAS 从 `1` 推进至 `2`。 |
 | `apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_architecture_boundaries.py` | 修改 | 将 Slice 5 专属守卫限定到 Slice 5 文件，同时继续保护 Intake 不依赖 Candidate、Compiler、Runner、默认项目或 API path。 |
 
 不得修改：`app/core/security.py`、`app/routers/auth.py`、`app/main.py`、生产 Router、ORM、Alembic、Schema、ID 模块、Slice 5 服务、前端或架构合同。
@@ -350,7 +354,8 @@ Audit 只保存公共 ID、版本号、状态、checksum、来源类型、必要
 
 | 测试组 | 最小覆盖 | 通过标准 |
 |---|---|---|
-| 新建主链 | Manual/Requirement 新建、六个内容字段不完整、服务端 ID、首 Version、Source、Claim、初始状态和结果摘要 | 一个事务内记录完整；无机器字段或 ReviewRecord。 |
+| 新建主链 | Manual/Requirement 新建、六个内容字段不完整、服务端 ID、首 Version、Source、Claim、初始状态和结果摘要 | 一个事务内记录完整；无机器字段或 ReviewRecord；创建完成后的数据库记录及返回结果均为 `row_version = 1`。 |
+| 首版本绑定与后续 CAS | 创建期首版本绑定、创建后新的 Version 指针更新 | 创建期绑定不推进 `row_version`；后续 `set_current_version()` 以 `expected_row_version = 1` 成功后，`row_version = 2`；错误 expected version fail-closed。 |
 | 可信上下文 | ORM User、客户端 actor/channel/trace、默认 project、非法/非 active project | 全部 fail-closed；无数据库写入。 |
 | Requirement 来源 | 未知公开 ID、错误 Version 父子关系、跨项目、重复来源 | 不跨项目绑定；只为有效真实来源建子表。 |
 | 幂等 | 同键同指纹、同键异指纹、过期 CAS、失败事务后重试 | 重放原结果；不重复 Asset/Source/Audit；冲突稳定。 |
@@ -379,7 +384,7 @@ Slice 6 只有在以下全部满足时才可声明 implementation complete：
 1. `TestAssetIntakeService` 是唯一公开创建入口，且无平行保存链。
 2. 新建路径以单一事务完成全部聚合、claim、audit 和幂等结果写入。
 3. 任意中途失败不留下部分 Asset、Version、Source、Claim、Audit 或 completed result。
-4. 新建初始 review/conversion 状态、版本和删除状态符合已批准合同。
+4. 新建初始 review/conversion 状态、版本、删除状态、首版本指针和 `row_version = 1` 符合已批准合同；创建期首版本绑定不推进 row version，后续 CAS 更新才从 `1` 推进至 `2`。
 5. Requirement 的公开 ID、版本归属和项目归属均由服务端验证。
 6. actor 固定来自 TrustedUserPrincipal，channel/trace/project scope 不可由客户端覆盖。
 7. 幂等重放、冲突、过期 CAS 与结果摘要符合第 7.1 节。
@@ -394,13 +399,13 @@ Slice 6 只有在以下全部满足时才可声明 implementation complete：
 
 | ID | 风险或待决项 | 处理要求 |
 |---|---|---|
-| S6-R01 | 现有 `TestAssetRepository.set_current_version()` 会推进 `row_version`，而创建合同写明初始 `row_version = 1`。 | 编码前必须确认创建完成后对外结果是 `1` 还是 pointer 写入后的 `2`，并以批准结论调整 Repository 合同或创建路径；不得绕过 Repository 直接更新 ORM。 |
+| S6-R01 | Closed / Approved（2026-07-27）：TestAsset 创建完成后的初始 `row_version` 固定为 `1`；首版本绑定属于聚合初始化，不推进 row version。 | 新增创建期首版本绑定 Repository 方法，校验 Version 归属并仅在未绑定时设置 `current_version_pk`；不得绕过 Repository 直接更新 ORM。既有 `set_current_version()` 保持后续 CAS 更新语义，首次后续更新以 expected `1` 推进至 `2`。Intake 与 Repository 测试必须同时覆盖创建后的数据库/返回值为 `1` 及后续 CAS 为 `2`。 |
 | S6-R02 | P-04 需要可靠识别 PostgreSQL 与 SQLite 的同一命名唯一约束。 | 在实施设计和测试中固定白名单检测方式；不能以泛化异常字符串或任意 IntegrityError 重试。 |
 | S6-R03 | 每次干净重试必须重做 project scope 校验，同时不能接收原始请求或 ORM User。 | 在 Service 的类型化输入和 Session factory 注入中固定此职责；不得创建全局 Unit of Work。 |
 | S6-R04 | 当前 EvieAi repository fixture 未包含 `TestProject` 和可复用的 Session factory。 | 仅扩展测试 fixture 的最小表集合与 factory，不改生产数据库配置。 |
 | S6-R05 | 语义疑似重复是长期能力但暂无事实模型或异步合同。 | 保持非目标；不得为方便测试引入 Embedding、RAG、字段或表。 |
 
-S6-R01 是编码前必须关闭的合同冲突。其余项目可在获批实施设计中通过本计划已定义的最小边界解决，不能扩大到 Slice 7/8。
+S6-R01 已由用户明确批准并关闭。其余项目可在获批实施设计中通过本计划已定义的最小边界解决，不能扩大到 Slice 7/8。
 
 ## 15. 明确非动作
 
