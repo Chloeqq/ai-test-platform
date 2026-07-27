@@ -18,6 +18,7 @@ from app.models.evie_ai import (
     TestAssetSource,
     TestAssetVersion,
 )
+from app.models.test_project import TestProject
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -46,6 +47,7 @@ def evie_ai_engine() -> Iterator[Engine]:
             cursor.close()
 
     tables = [
+        TestProject.__table__,
         Requirement.__table__,
         RequirementVersion.__table__,
         TestAsset.__table__,
@@ -71,14 +73,22 @@ def evie_ai_engine() -> Iterator[Engine]:
 
 
 @pytest.fixture()
-def evie_ai_session(evie_ai_engine: Engine) -> Iterator[Session]:
-    session_factory = sessionmaker(
+def evie_ai_session_factory(
+    evie_ai_engine: Engine,
+) -> sessionmaker[Session]:
+    return sessionmaker(
         bind=evie_ai_engine,
         autocommit=False,
         autoflush=False,
         future=True,
     )
-    session = session_factory()
+
+
+@pytest.fixture()
+def evie_ai_session(
+    evie_ai_session_factory: sessionmaker[Session],
+) -> Iterator[Session]:
+    session = evie_ai_session_factory()
     try:
         yield session
     finally:

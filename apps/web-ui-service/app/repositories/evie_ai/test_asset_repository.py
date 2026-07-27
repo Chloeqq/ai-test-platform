@@ -16,6 +16,7 @@ from app.repositories.base import BaseRepository
 from app.repositories.evie_ai.errors import (
     CurrentVersionOwnershipError,
     OptimisticConcurrencyError,
+    RepositoryDataIntegrityError,
 )
 from app.repositories.evie_ai.source_repository import TestAssetSourceRepository
 
@@ -169,6 +170,59 @@ class TestAssetRepository(BaseRepository):
             raise OptimisticConcurrencyError(
                 aggregate_type="test_asset",
                 aggregate_id=test_asset.test_asset_id,
+                trace_id=trace_id,
+            )
+        self.db.flush()
+        self.db.refresh(test_asset)
+        return test_asset
+
+    def bind_initial_version(
+        self,
+        test_asset: TestAsset,
+        version: TestAssetVersion,
+        *,
+        updated_by: str,
+        trace_id: str | None = None,
+    ) -> TestAsset:
+        """绑定聚合创建期首版本，但不推进乐观锁版本。"""
+        if (
+            test_asset.id is None
+            or version.id is None
+            or version.test_asset_pk != test_asset.id
+        ):
+            raise CurrentVersionOwnershipError(
+                aggregate_type="test_asset",
+                aggregate_id=test_asset.test_asset_id,
+                trace_id=trace_id,
+            )
+        if version.version_no != 1:
+            raise RepositoryDataIntegrityError(
+                message="initial test asset version must have version number 1",
+                entity_id=test_asset.test_asset_id,
+                trace_id=trace_id,
+            )
+
+        result = cast(
+            CursorResult[Any],
+            self.db.execute(
+                update(TestAsset)
+                .where(
+                    TestAsset.id == test_asset.id,
+                    TestAsset.current_version_pk.is_(None),
+                    TestAsset.row_version == 1,
+                    TestAsset.deleted_at.is_(None),
+                )
+                .values(
+                    current_version_pk=version.id,
+                    updated_by=updated_by,
+                )
+                .execution_options(synchronize_session="fetch")
+            ),
+        )
+        if result.rowcount != 1:
+            raise RepositoryDataIntegrityError(
+                message="initial test asset version is already bound or invalid",
+                entity_id=test_asset.test_asset_id,
                 trace_id=trace_id,
             )
         self.db.flush()
