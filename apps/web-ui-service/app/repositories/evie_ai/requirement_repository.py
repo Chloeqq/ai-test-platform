@@ -41,6 +41,29 @@ class RequirementRepository(BaseRepository):
             )
         ).scalar_one_or_none()
 
+    def resolve_source_version(
+        self,
+        *,
+        project_code: str,
+        requirement_id: str,
+        requirement_version_id: str,
+    ) -> tuple[Requirement, RequirementVersion] | None:
+        """按公开 ID 解析同项目、未删除的 Requirement 来源。"""
+        return self.db.execute(
+            select(Requirement, RequirementVersion)
+            .join(
+                RequirementVersion,
+                RequirementVersion.requirement_pk == Requirement.id,
+            )
+            .where(
+                Requirement.project_code == project_code,
+                Requirement.requirement_id == requirement_id,
+                Requirement.deleted_at.is_(None),
+                RequirementVersion.requirement_version_id
+                == requirement_version_id,
+            )
+        ).one_or_none()
+
     def get_current_version(
         self,
         requirement_pk: int,

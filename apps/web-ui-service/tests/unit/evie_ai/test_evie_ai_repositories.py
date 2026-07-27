@@ -45,6 +45,7 @@ from app.repositories.evie_ai import (
     CurrentVersionOwnershipError,
     OptimisticConcurrencyError,
     RequirementRepository,
+    RepositoryDataIntegrityError,
     SourceOwnershipError,
 )
 from app.repositories.evie_ai import (
@@ -160,7 +161,7 @@ def test_test_asset_repository_add_query_versions_sources_and_current_version(
     )
     repository = AssetRepository(evie_ai_session)
     test_asset = repository.add(_test_asset())
-    version = repository.add_version(_test_asset_version(test_asset.id))
+    first_version = repository.add_version(_test_asset_version(test_asset.id))
     source = repository.add_source(
         _source(
             test_asset_pk=test_asset.id,
@@ -169,17 +170,28 @@ def test_test_asset_repository_add_query_versions_sources_and_current_version(
         requirement_version_pk=requirement_version.id,
     )
 
+    repository.bind_initial_version(
+        test_asset,
+        first_version,
+        updated_by="reviewer",
+    )
+    assert test_asset.current_version_pk == first_version.id
+    assert test_asset.row_version == 1
+
+    second_version = repository.add_version(
+        _test_asset_version(test_asset.id, version_no=2)
+    )
     repository.set_current_version(
         test_asset,
-        version,
+        second_version,
         expected_row_version=1,
         updated_by="reviewer",
     )
 
     assert repository.get_by_pk(test_asset.id) is test_asset
     assert repository.get_by_test_asset_id(test_asset.test_asset_id) is test_asset
-    assert repository.get_current_version(test_asset.id) is version
-    assert repository.list_versions(test_asset.id) == [version]
+    assert repository.get_current_version(test_asset.id) is second_version
+    assert repository.list_versions(test_asset.id) == [second_version, first_version]
     assert repository.list_sources(test_asset.id) == [source]
     requirement_source = evie_ai_session.execute(
         select(RequirementSourceModel)
@@ -187,8 +199,73 @@ def test_test_asset_repository_add_query_versions_sources_and_current_version(
     assert requirement_source.test_asset_source_pk == source.id
     assert requirement_source.requirement_pk == requirement.id
     assert requirement_source.requirement_version_pk == requirement_version.id
-    assert test_asset.current_version_pk == version.id
+    assert test_asset.current_version_pk == second_version.id
     assert test_asset.row_version == 2
+
+
+def test_requirement_source_resolution_enforces_public_ids_project_and_deletion(
+    evie_ai_session: Session,
+) -> None:
+    repository = RequirementRepository(evie_ai_session)
+    requirement = repository.add(_requirement())
+    version = repository.add_version(_requirement_version(requirement.id))
+
+    assert repository.resolve_source_version(
+        project_code=requirement.project_code,
+        requirement_id=requirement.requirement_id,
+        requirement_version_id=version.requirement_version_id,
+    ) == (requirement, version)
+    assert repository.resolve_source_version(
+        project_code="project-b",
+        requirement_id=requirement.requirement_id,
+        requirement_version_id=version.requirement_version_id,
+    ) is None
+    assert repository.resolve_source_version(
+        project_code=requirement.project_code,
+        requirement_id=requirement.requirement_id,
+        requirement_version_id="reqv_" + "f" * 32,
+    ) is None
+
+    requirement.deleted_at = datetime.now(UTC)
+    evie_ai_session.flush()
+    assert repository.resolve_source_version(
+        project_code=requirement.project_code,
+        requirement_id=requirement.requirement_id,
+        requirement_version_id=version.requirement_version_id,
+    ) is None
+
+
+def test_initial_asset_version_binding_requires_version_one_and_is_single_use(
+    evie_ai_session: Session,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset = repository.add(_test_asset())
+    second_version = repository.add_version(
+        _test_asset_version(test_asset.id, version_no=2)
+    )
+
+    with pytest.raises(RepositoryDataIntegrityError):
+        repository.bind_initial_version(
+            test_asset,
+            second_version,
+            updated_by="tester",
+        )
+
+    first_version = repository.add_version(_test_asset_version(test_asset.id))
+    repository.bind_initial_version(
+        test_asset,
+        first_version,
+        updated_by="tester",
+    )
+    with pytest.raises(RepositoryDataIntegrityError):
+        repository.bind_initial_version(
+            test_asset,
+            first_version,
+            updated_by="tester",
+        )
+
+    assert test_asset.current_version_pk == first_version.id
+    assert test_asset.row_version == 1
 
 
 def test_repository_queries_return_none_for_missing_or_soft_deleted_aggregates(

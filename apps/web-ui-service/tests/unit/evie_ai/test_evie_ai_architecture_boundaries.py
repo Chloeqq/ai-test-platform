@@ -48,7 +48,24 @@ EVIE_AI_MODULE_ROOTS = (
     SERVICE_ROOT / "app" / "policies" / "evie_ai",
     SERVICE_ROOT / "app" / "services" / "evie_ai",
 )
-SLICE5_SERVICE_ROOT = SERVICE_ROOT / "app" / "services" / "evie_ai"
+SLICE5_SERVICE_PATHS = tuple(
+    SERVICE_ROOT / "app" / "services" / "evie_ai" / filename
+    for filename in (
+        "project_access_authorizer.py",
+        "project_scope_service.py",
+        "request_actor_context.py",
+        "request_channel_context.py",
+        "request_trace_context.py",
+        "user_public_identity_service.py",
+    )
+)
+INTAKE_SERVICE_PATH = (
+    SERVICE_ROOT
+    / "app"
+    / "services"
+    / "evie_ai"
+    / "test_asset_intake_service.py"
+)
 FORBIDDEN_IMPORT_TOKENS = {
     "behavior_registry",
     "candidate",
@@ -231,7 +248,7 @@ def test_required_foreign_keys_are_explicit_and_named() -> None:
 def test_slice5_security_services_have_no_default_project_or_business_chain_dependencies() -> None:
     source = "\n".join(
         path.read_text(encoding="utf-8")
-        for path in sorted(SLICE5_SERVICE_ROOT.glob("*.py"))
+        for path in SLICE5_SERVICE_PATHS
     ).lower()
 
     forbidden_tokens = {
@@ -248,3 +265,47 @@ def test_slice5_security_services_have_no_default_project_or_business_chain_depe
 
     assert all(token not in source for token in forbidden_tokens)
     assert '"mall"' not in source
+
+
+def test_intake_service_preserves_natural_language_asset_boundaries() -> None:
+    source = INTAKE_SERVICE_PATH.read_text(encoding="utf-8").lower()
+    forbidden_tokens = {
+        "candidate",
+        "preview",
+        "selected_candidates",
+        "execution_compiler",
+        "runner",
+        "testcase",
+        "script_code",
+        "structured_steps",
+        "default_project_code",
+        "/api/evie-ai/test-assets",
+        "fastapi",
+        "httpexception",
+    }
+
+    assert all(token not in source for token in forbidden_tokens)
+    assert '"mall"' not in source
+
+
+def test_intake_service_is_the_only_public_intake_class() -> None:
+    definitions: list[tuple[str, str]] = []
+    application_root = SERVICE_ROOT / "app"
+
+    for path in application_root.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            if (
+                isinstance(node, ast.ClassDef)
+                and "IntakeService" in node.name
+            ):
+                definitions.append(
+                    (str(path.relative_to(SERVICE_ROOT)), node.name)
+                )
+
+    assert definitions == [
+        (
+            "app/services/evie_ai/test_asset_intake_service.py",
+            "TestAssetIntakeService",
+        )
+    ]
