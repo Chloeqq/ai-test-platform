@@ -529,6 +529,7 @@ Phase 1 closeout status: Not completed
 - Phase 1 合同已经批准并持续有效；
 - Slice 1～4 已完成对应底层层级验证；
 - Slice 5 implementation：Completed；targeted validation：Passed（56 passed）；regression attribution：0 new regressions；已通过 PR #14 合并到 `dev`；Closeout：Completed（用户明确批准）；
+- Slice 6 独立实施计划：Proposed / Pending user approval；S6-R01：Closed / Approved；Slice 6 implementation：Not started；
 - Slice 6～11 尚未实施；
 - Slice 1～4 通过不等于 Service 主链完成；
 - Slice 1～4 通过不等于 Router/API 完成；
@@ -546,7 +547,7 @@ Phase 1 closeout status: Not completed
 | Slice 3 | Accepted / Active | Verified implemented at migration test layer | 10/10 passed | Not completed | 仅现有 migration pytest 层；不是生产数据库升级证明 |
 | Slice 4 | Accepted / Active | Verified implemented at repository layer | 39/39 passed | Not completed | Repository 和 Query 层；尚无 Service 或 Router/API 证明 |
 | Slice 5 | Accepted / Active | Completed | Targeted 56 passed；EvieAi unit + integration 215 passed；0 new regressions | Completed | API 安全前置已实现并经 PR #14 合并到 `dev`；implementation commit `5186687b641e3fb2d8c93b3b54e2584d58ced789`；merge commit `bd08b802cdb28c9ffc688cc39823af2c65fa6c3a`；用户已明确批准 Slice 5 Closeout；不代表 Phase 1 Closeout |
-| Slice 6 | Accepted / Active | Not started | 无 | Not completed | Intake Service 尚未实施 |
+| Slice 6 | Accepted / Active | Not started | 无 | Not completed | 独立实施计划为 Proposed / Pending user approval；S6-R01 已 Closed / Approved；Intake Service 尚未实施 |
 | Slice 7 | Accepted / Active | Not started | 无 | Not completed | Lifecycle / Review Service 尚未实施 |
 | Slice 8 | Accepted / Active | Not started | 无 | Not completed | Router / API 尚未实施 |
 | Slice 9 | Accepted / Active | Not started | 无 | Not completed | Core 集成验收尚未实施 |
