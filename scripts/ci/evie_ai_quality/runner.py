@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from collections import Counter
@@ -371,7 +372,13 @@ def _repository_root() -> Path:
 
 def _python_binary(configured: str | None) -> str:
     if configured:
-        return configured
+        candidate = Path(configured)
+        if candidate.is_absolute():
+            return str(candidate)
+        if candidate.parent != Path("."):
+            return str((_repository_root() / candidate).resolve())
+        resolved = shutil.which(configured)
+        return resolved or configured
     candidate = _repository_root() / ".venv/bin/python"
     return str(candidate) if candidate.is_file() else sys.executable
 
