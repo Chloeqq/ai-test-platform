@@ -1,0 +1,48 @@
+name: EvieAi Code Quality Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - dev
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  evie-ai-code-quality:
+    name: evie-ai-code-quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install quality-gate dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install \
+            -r requirements-dev.txt \
+            -r apps/web-ui-service/requirements.txt
+
+      - name: Resolve comparison base
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "BASE_REF=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "BASE_REF=${{ github.event.before }}" >> "$GITHUB_ENV"
+          else
+            echo "BASE_REF=origin/dev" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run EvieAi zero-new-violations gate
+        run: make evie-ai-quality-gate

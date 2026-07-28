@@ -25,3 +25,9 @@ repos:
         language: system
         pass_filenames: false
         files: (^shared_backend/|^apps/ai-orchestrator/src/services/)
+      - id: evie-ai-code-quality
+        name: EvieAi zero-new-violations gate
+        entry: scripts/qa/run-evie-ai-quality-gate.sh --staged
+        language: system
+        pass_filenames: false
+        always_run: true
