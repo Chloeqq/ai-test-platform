@@ -76,13 +76,14 @@ def _run_gate(
     python_bin: str,
     arguments: argparse.Namespace,
 ) -> int:
+    current = _scan_baseline_scope(scan_root, python_bin)
     baseline = _trusted_baseline(
         git_root,
         scan_root,
         python_bin,
         arguments,
+        head_violations=current,
     )
-    current = _scan_baseline_scope(scan_root, python_bin)
     changed = changed_quality_files(
         git_root,
         scan_root=scan_root,
@@ -105,40 +106,97 @@ def _trusted_baseline(
     scan_root: Path,
     python_bin: str,
     arguments: argparse.Namespace,
+    *,
+    head_violations: list[Violation],
 ) -> Baseline:
     relative_path = arguments.baseline
     current, current_text = _load_current_baseline(scan_root, relative_path)
-    trusted_ref = (
-        "HEAD"
-        if arguments.staged
-        else merge_base(
-            git_root,
-            arguments.base_ref,
-        )
-    )
+    trusted_ref = _trusted_ref(git_root, arguments)
     trusted_text = text_file_at_ref(git_root, trusted_ref, relative_path)
     if trusted_text is None:
-        if arguments.staged:
-            raise BaselineError(f"Missing trusted baseline {relative_path} at HEAD")
-        return _validate_bootstrap_baseline(
-            git_root,
-            trusted_ref,
-            current,
-            python_bin,
+        return _bootstrap_baseline(
+            git_root=git_root,
+            trusted_ref=trusted_ref,
+            relative_path=relative_path,
+            current=current,
+            python_bin=python_bin,
+            staged=arguments.staged,
         )
+    return _verify_existing_baseline(
+        git_root=git_root,
+        trusted_ref=trusted_ref,
+        trusted_text=trusted_text,
+        relative_path=relative_path,
+        current=current,
+        current_text=current_text,
+        python_bin=python_bin,
+        head_violations=head_violations,
+    )
+
+
+def _verify_existing_baseline(
+    *,
+    git_root: Path,
+    trusted_ref: str,
+    trusted_text: str,
+    relative_path: str,
+    current: Baseline,
+    current_text: str,
+    python_bin: str,
+    head_violations: list[Violation],
+) -> Baseline:
     trusted = Baseline.from_text(
         trusted_text,
         source=f"{trusted_ref}:{relative_path}",
     )
-    if current_text != trusted_text:
-        raise BaselineError(
-            _baseline_change_report(
-                trusted_ref=trusted_ref,
-                trusted=trusted,
-                current=current,
-            )
+    with ref_snapshot(git_root, trusted_ref) as base_root:
+        base_violations = _scan_baseline_scope(base_root, python_bin)
+    removed = _validate_baseline_transition(
+        trusted_ref=trusted_ref,
+        trusted=trusted,
+        current=current,
+        trusted_text=trusted_text,
+        current_text=current_text,
+        base_violations=base_violations,
+        head_violations=head_violations,
+    )
+    if removed:
+        print(
+            "[evie-ai-quality] safe baseline shrink verified against "
+            f"{trusted_ref}: {len(trusted.violations)} -> "
+            f"{len(current.violations)}"
         )
-    return trusted
+    else:
+        print(f"[evie-ai-quality] unchanged baseline verified against {trusted_ref}")
+    return current
+
+
+def _bootstrap_baseline(
+    *,
+    git_root: Path,
+    trusted_ref: str,
+    relative_path: str,
+    current: Baseline,
+    python_bin: str,
+    staged: bool,
+) -> Baseline:
+    if staged:
+        raise BaselineError(f"Missing trusted baseline {relative_path} at HEAD")
+    return _validate_bootstrap_baseline(
+        git_root,
+        trusted_ref,
+        current,
+        python_bin,
+    )
+
+
+def _trusted_ref(
+    git_root: Path,
+    arguments: argparse.Namespace,
+) -> str:
+    if arguments.staged:
+        return "HEAD"
+    return merge_base(git_root, arguments.base_ref)
 
 
 def _load_current_baseline(
@@ -181,20 +239,169 @@ def _validate_bootstrap_baseline(
     return current
 
 
-def _baseline_change_report(
+def _validate_baseline_transition(
     *,
     trusted_ref: str,
     trusted: Baseline,
     current: Baseline,
-) -> str:
-    comparison = compare_violations(
+    trusted_text: str,
+    current_text: str,
+    base_violations: list[Violation],
+    head_violations: list[Violation],
+) -> tuple[Violation, ...]:
+    _require_snapshot_match(
+        label="Base",
+        ref=trusted_ref,
+        baseline=trusted,
+        scanned=base_violations,
+    )
+
+    if current_text == trusted_text:
+        _require_snapshot_match(
+            label="Head",
+            ref="working snapshot",
+            baseline=current,
+            scanned=head_violations,
+        )
+        return ()
+
+    return _validate_baseline_shrink(
+        trusted_ref=trusted_ref,
+        trusted=trusted,
+        current=current,
+        base_violations=base_violations,
+        head_violations=head_violations,
+    )
+
+
+def _validate_baseline_shrink(
+    *,
+    trusted_ref: str,
+    trusted: Baseline,
+    current: Baseline,
+    base_violations: list[Violation],
+    head_violations: list[Violation],
+) -> tuple[Violation, ...]:
+    transition = compare_violations(
         list(current.violations),
         list(trusted.violations),
     )
-    return (
-        f"Baseline differs from trusted ref {trusted_ref}. "
-        "Baseline changes are blocked in normal PRs.\n" + _render_comparison(comparison)
+    _require_strict_baseline_subset(
+        trusted=trusted,
+        current=current,
+        transition=transition,
     )
+    _require_removed_violations_absent(transition.resolved, head_violations)
+    _require_snapshot_match(
+        label="Head",
+        ref="working snapshot",
+        baseline=current,
+        scanned=head_violations,
+    )
+    _require_no_new_head_violations(
+        trusted_ref=trusted_ref,
+        base_violations=base_violations,
+        head_violations=head_violations,
+    )
+    return transition.resolved
+
+
+def _require_strict_baseline_subset(
+    *,
+    trusted: Baseline,
+    current: Baseline,
+    transition: Comparison,
+) -> None:
+    if transition.new:
+        raise BaselineError(
+            "Baseline growth, replacement, reclassification, or fingerprint "
+            "changes are forbidden.\n" + _render_comparison(transition)
+        )
+    if not transition.resolved:
+        raise BaselineError(
+            "Baseline metadata or serialization changed without a strict "
+            "violation-set shrink"
+        )
+    if current.tools != trusted.tools:
+        raise BaselineError("Baseline tool metadata changed during shrink")
+    _require_retained_details(trusted, current)
+
+
+def _require_no_new_head_violations(
+    *,
+    trusted_ref: str,
+    base_violations: list[Violation],
+    head_violations: list[Violation],
+) -> None:
+    head_change = compare_violations(head_violations, base_violations)
+    if head_change.new:
+        raise BaselineError(
+            "Head scan contains violations that were not present in the "
+            f"verified Base snapshot {trusted_ref}.\n" + _render_comparison(head_change)
+        )
+
+
+def _require_snapshot_match(
+    *,
+    label: str,
+    ref: str,
+    baseline: Baseline,
+    scanned: list[Violation],
+) -> None:
+    comparison = compare_violations(scanned, list(baseline.violations))
+    if not comparison.passed:
+        raise BaselineError(
+            f"{label} baseline does not match its actual scan at {ref}.\n"
+            + _render_comparison(comparison)
+        )
+    _require_violation_details(
+        label=label,
+        baseline=list(baseline.violations),
+        scanned=scanned,
+    )
+
+
+def _require_violation_details(
+    *,
+    label: str,
+    baseline: list[Violation],
+    scanned: list[Violation],
+) -> None:
+    baseline_details = Counter((item.key, item.fix) for item in baseline)
+    scanned_details = Counter((item.key, item.fix) for item in scanned)
+    if baseline_details != scanned_details:
+        raise BaselineError(
+            f"{label} baseline retained violation details or fingerprints "
+            "do not match its actual scan"
+        )
+
+
+def _require_retained_details(
+    trusted: Baseline,
+    current: Baseline,
+) -> None:
+    trusted_details = Counter((item.key, item.fix) for item in trusted.violations)
+    current_details = Counter((item.key, item.fix) for item in current.violations)
+    changed = current_details - trusted_details
+    if changed:
+        raise BaselineError(
+            "Retained baseline rule, path, classification, fingerprint, or "
+            "repair direction changed"
+        )
+
+
+def _require_removed_violations_absent(
+    removed: tuple[Violation, ...],
+    head_violations: list[Violation],
+) -> None:
+    removed_keys = Counter(item.key for item in removed)
+    still_present = [item for item in head_violations if removed_keys[item.key] > 0]
+    if still_present:
+        rendered = "\n".join(item.render() for item in still_present[:10])
+        raise BaselineError(
+            "Baseline entries may be removed only after their violations "
+            f"disappear from the Head scan:\n{rendered}"
+        )
 
 
 def _render_comparison(comparison: Comparison) -> str:

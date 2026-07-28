@@ -13,9 +13,16 @@ import pytest
 from scripts.ci.evie_ai_quality import tool_rules
 from scripts.ci.evie_ai_quality.ast_rules import scan_ast_rules
 from scripts.ci.evie_ai_quality.baseline import Baseline, BaselineError
-from scripts.ci.evie_ai_quality.git_snapshots import staged_snapshot
+from scripts.ci.evie_ai_quality.git_snapshots import (
+    GitSnapshotError,
+    merge_base,
+    staged_snapshot,
+)
 from scripts.ci.evie_ai_quality.model import Violation
-from scripts.ci.evie_ai_quality.runner import _trusted_baseline
+from scripts.ci.evie_ai_quality.runner import (
+    _trusted_baseline,
+    _validate_baseline_transition,
+)
 from scripts.ci.evie_ai_quality.scope import (
     GitChange,
     _parse_name_status_z,
@@ -33,7 +40,10 @@ from scripts.ci.evie_ai_quality.tool_rules import (
 BASELINE_PATH = "scripts/ci/evie_ai_quality_baseline.json"
 
 
-def test_trusted_baseline_rejects_added_exemption(tmp_path: Path) -> None:
+def test_trusted_baseline_rejects_added_exemption(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     root = _git_repository(tmp_path)
     baseline = _baseline((_violation(),))
     _write_baseline(root, baseline)
@@ -46,6 +56,10 @@ def test_trusted_baseline_rejects_added_exemption(tmp_path: Path) -> None:
         ),
     )
     _write_baseline(root, growing)
+    monkeypatch.setattr(
+        "scripts.ci.evie_ai_quality.runner._scan_baseline_scope",
+        lambda *_args: list(baseline.violations),
+    )
 
     with pytest.raises(BaselineError, match="added exemptions: 1"):
         _trusted_baseline(
@@ -53,10 +67,14 @@ def test_trusted_baseline_rejects_added_exemption(tmp_path: Path) -> None:
             root,
             sys.executable,
             _arguments(base_ref="HEAD"),
+            head_violations=list(growing.violations),
         )
 
 
-def test_trusted_baseline_rejects_metadata_replacement(tmp_path: Path) -> None:
+def test_trusted_baseline_rejects_metadata_replacement(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     root = _git_repository(tmp_path)
     baseline = _baseline((_violation(),))
     _write_baseline(root, baseline)
@@ -65,6 +83,10 @@ def test_trusted_baseline_rejects_metadata_replacement(tmp_path: Path) -> None:
         root,
         replace(baseline, generated_at="2026-07-29T00:00:00+00:00"),
     )
+    monkeypatch.setattr(
+        "scripts.ci.evie_ai_quality.runner._scan_baseline_scope",
+        lambda *_args: list(baseline.violations),
+    )
 
     with pytest.raises(BaselineError, match="metadata or serialization changed"):
         _trusted_baseline(
@@ -72,7 +94,168 @@ def test_trusted_baseline_rejects_metadata_replacement(tmp_path: Path) -> None:
             root,
             sys.executable,
             _arguments(base_ref="HEAD"),
+            head_violations=list(baseline.violations),
         )
+
+
+def test_safe_baseline_shrink_77_to_50_passes() -> None:
+    base_violations = tuple(
+        _violation(symbol=f"violation_{index}") for index in range(77)
+    )
+    head_violations = base_violations[:50]
+    removed = _validate_transition(
+        trusted=_baseline(base_violations),
+        current=_baseline(head_violations),
+        base_scan=list(base_violations),
+        head_scan=list(head_violations),
+    )
+
+    assert len(removed) == 27
+
+
+def test_unchanged_baseline_passes() -> None:
+    baseline = _baseline((_violation(),))
+
+    removed = _validate_transition(
+        trusted=baseline,
+        current=baseline,
+        base_scan=list(baseline.violations),
+        head_scan=list(baseline.violations),
+        changed=False,
+    )
+
+    assert removed == ()
+
+
+def test_resolved_violation_can_be_removed() -> None:
+    resolved = _violation(symbol="resolved")
+    retained = _violation(symbol="retained")
+
+    removed = _validate_transition(
+        trusted=_baseline((resolved, retained)),
+        current=_baseline((retained,)),
+        base_scan=[resolved, retained],
+        head_scan=[retained],
+    )
+
+    assert removed == (resolved,)
+
+
+def test_removing_violation_that_still_exists_fails() -> None:
+    resolved = _violation(symbol="resolved")
+    retained = _violation(symbol="retained")
+
+    with pytest.raises(BaselineError, match="only after their violations disappear"):
+        _validate_transition(
+            trusted=_baseline((resolved, retained)),
+            current=_baseline((retained,)),
+            base_scan=[resolved, retained],
+            head_scan=[resolved, retained],
+        )
+
+
+def test_baseline_growth_fails() -> None:
+    retained = _violation(symbol="retained")
+    added = _violation(symbol="added")
+
+    with pytest.raises(BaselineError, match="growth, replacement"):
+        _validate_transition(
+            trusted=_baseline((retained,)),
+            current=_baseline((retained, added)),
+            base_scan=[retained],
+            head_scan=[retained, added],
+        )
+
+
+def test_replacing_old_exemption_fails() -> None:
+    old = _violation(symbol="old")
+    replacement = _violation(symbol="replacement")
+
+    with pytest.raises(BaselineError, match="growth, replacement"):
+        _validate_transition(
+            trusted=_baseline((old,)),
+            current=_baseline((replacement,)),
+            base_scan=[old],
+            head_scan=[replacement],
+        )
+
+
+def test_reclassifying_exemption_fails() -> None:
+    original = _violation(rule="EQA001")
+    reclassified = _violation(rule="EQA002")
+
+    with pytest.raises(BaselineError, match="reclassification"):
+        _validate_transition(
+            trusted=_baseline((original,)),
+            current=_baseline((reclassified,)),
+            base_scan=[original],
+            head_scan=[reclassified],
+        )
+
+
+def test_modifying_exemption_fingerprint_fails() -> None:
+    original = _violation(symbol="original")
+    tampered = _violation(symbol="tampered")
+
+    with pytest.raises(BaselineError, match="fingerprint"):
+        _validate_transition(
+            trusted=_baseline((original,)),
+            current=_baseline((tampered,)),
+            base_scan=[original],
+            head_scan=[tampered],
+        )
+
+
+def test_modifying_retained_repair_direction_fails() -> None:
+    original = _violation()
+    changed = replace(original, fix="hide the violation")
+    resolved = _violation(symbol="resolved")
+
+    with pytest.raises(BaselineError, match="repair direction changed"):
+        _validate_transition(
+            trusted=_baseline((original, resolved)),
+            current=_baseline((changed,)),
+            base_scan=[original, resolved],
+            head_scan=[changed],
+        )
+
+
+def test_head_baseline_must_match_head_scan() -> None:
+    violation = _violation()
+
+    with pytest.raises(BaselineError, match="Head baseline does not match"):
+        _validate_transition(
+            trusted=_baseline((violation,)),
+            current=_baseline((violation,)),
+            base_scan=[violation],
+            head_scan=[],
+            changed=False,
+        )
+
+
+def test_base_baseline_must_match_base_scan() -> None:
+    violation = _violation()
+
+    with pytest.raises(BaselineError, match="Base baseline does not match"):
+        _validate_transition(
+            trusted=_baseline((violation,)),
+            current=_baseline((violation,)),
+            base_scan=[],
+            head_scan=[violation],
+            changed=False,
+        )
+
+
+def test_baseline_parser_failure_is_fail_closed() -> None:
+    with pytest.raises(BaselineError, match="Invalid baseline JSON"):
+        Baseline.from_text("{", source="broken-baseline.json")
+
+
+def test_merge_base_failure_is_fail_closed(tmp_path: Path) -> None:
+    root = _git_repository(tmp_path)
+
+    with pytest.raises(GitSnapshotError, match="merge-base"):
+        merge_base(root, "missing-base")
 
 
 def test_staged_snapshot_scans_index_not_worktree(tmp_path: Path) -> None:
@@ -278,6 +461,29 @@ def _arguments(*, base_ref: str) -> Namespace:
         staged=False,
         write_baseline=False,
         python_bin=sys.executable,
+    )
+
+
+def _validate_transition(
+    *,
+    trusted: Baseline,
+    current: Baseline,
+    base_scan: list[Violation],
+    head_scan: list[Violation],
+    changed: bool = True,
+) -> tuple[Violation, ...]:
+    trusted_text = json.dumps(trusted.to_dict(), sort_keys=True)
+    current_text = (
+        json.dumps(current.to_dict(), sort_keys=True) if changed else trusted_text
+    )
+    return _validate_baseline_transition(
+        trusted_ref="base-commit",
+        trusted=trusted,
+        current=current,
+        trusted_text=trusted_text,
+        current_text=current_text,
+        base_violations=base_scan,
+        head_violations=head_scan,
     )
 
 

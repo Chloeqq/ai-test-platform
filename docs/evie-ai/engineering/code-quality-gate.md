@@ -86,9 +86,25 @@ path:line: RULE: message | fix: repair direction
 scripts/ci/evie_ai_quality_baseline.json
 ```
 
-常规 CI 从 PR merge-base 读取受信 baseline，不信任 PR 当前版本的
-baseline。同一 PR 对 baseline 的新增、删除、替换、统计或元数据修改均会
-fail-closed，并输出新增豁免、删除豁免或序列化变化。
+常规 CI 从 PR merge-base 读取受信 Base baseline，并从工作树或 Git index
+快照读取 Head baseline。门禁会分别在 Base 和 Head 快照执行完整扫描。
+
+Baseline 不变时，Base baseline、Base 扫描、Head baseline 和 Head 扫描的
+违规集合必须一致。Baseline 发生变化时，只允许经过验证的单调收缩，并且必须
+同时满足：
+
+- Head baseline 是 Base baseline 的严格子集；
+- 没有新增、替换或重分类豁免；
+- 保留项的规则、路径、分类、指纹和修复方向不变；
+- 每个删除项在 Head 扫描中已经不存在；
+- Base baseline 与 Base 快照扫描完全一致；
+- Head baseline 与 Head 快照扫描完全一致；
+- Head 扫描相对 Base 扫描没有新增违规；
+- 工具版本没有在收缩中被替换。
+
+仅修改统计、元数据、序列化、行号或工具版本而没有严格收缩违规集合，仍会
+fail-closed。Base 或 Head 的 Git 快照、baseline 解析、Ruff、format、Mypy
+或 AST 扫描任一步失败，也会 fail-closed。
 
 首次引入 baseline 时，merge-base 中尚不存在该文件。该 bootstrap 只在以下
 条件全部满足时通过：
@@ -107,9 +123,8 @@ PYTHON_BIN=.venv/bin/python \
   --write-baseline
 ```
 
-基线写入器会拒绝任何新增违规；正常 PR 门禁仍会拒绝候选 baseline 的任何
-变化。后续确需收缩历史基线时，必须使用单独批准的 baseline 治理流程，不得
-与业务变更混合。
+基线写入器会拒绝任何新增违规。后续确需收缩历史基线时，必须获得明确批准，
+并由上述 Base/Head 双快照算法证明删除项已经解决；不得与无关业务变更混合。
 
 不得通过手工编辑 baseline、全局 `noqa`、宽泛 ignore、排除新文件或降低
 规则强度绕过门禁。
