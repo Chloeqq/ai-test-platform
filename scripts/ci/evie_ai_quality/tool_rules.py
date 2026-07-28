@@ -305,9 +305,15 @@ def _require_consistent_diagnostics(
 ) -> None:
     if result.returncode == 1 and not violations:
         raise QualityToolError(
-            f"{name} reported violations but produced no parseable diagnostics"
+            f"{name} reported violations but produced no parseable diagnostics: "
+            f"{_diagnostic_output(result)}"
         )
     if result.returncode == 0 and violations:
         raise QualityToolError(
             f"{name} returned success while reporting {len(violations)} violation(s)"
         )
+
+
+def _diagnostic_output(result: subprocess.CompletedProcess[str]) -> str:
+    output = (result.stdout + result.stderr).strip()
+    return output or "<empty output>"
