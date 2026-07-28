@@ -376,7 +376,7 @@ def _python_binary(configured: str | None) -> str:
         if candidate.is_absolute():
             return str(candidate)
         if candidate.parent != Path("."):
-            return str((_repository_root() / candidate).resolve())
+            return str(_repository_root() / candidate)
         resolved = shutil.which(configured)
         return resolved or configured
     candidate = _repository_root() / ".venv/bin/python"
