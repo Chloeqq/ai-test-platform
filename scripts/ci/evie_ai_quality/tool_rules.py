@@ -9,6 +9,7 @@ import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
+from json import JSONDecodeError
 from pathlib import Path
 
 from .model import Violation
@@ -17,6 +18,7 @@ _MYPY_LINE = re.compile(
     r"^(?P<path>.+?):(?P<line>\d+): error: "
     r"(?P<message>.*?)(?:  \[(?P<code>[^\]]+)\])?$"
 )
+_MYPY_NOTE = re.compile(r"^.+?:\d+: note: .+$")
 _FORMAT_LINE = re.compile(r"^Would reformat: (?P<path>.+)$")
 
 
@@ -51,7 +53,9 @@ def scan_ruff(
     result = _run(command, root)
     if result.returncode not in {0, 1}:
         raise QualityToolError(_tool_failure("Ruff", result))
-    return _ruff_violations(root, result.stdout)
+    violations = _ruff_violations(root, result.stdout)
+    _require_consistent_diagnostics("Ruff", result, violations)
+    return violations
 
 
 def scan_format(
@@ -73,7 +77,16 @@ def scan_format(
     result = _run(command, root)
     if result.returncode not in {0, 1}:
         raise QualityToolError(_tool_failure("Ruff format", result))
-    paths = _format_paths(result.stdout + result.stderr)
+    output = result.stdout + result.stderr
+    paths = _format_paths(output)
+    if result.returncode == 1 and not paths:
+        raise QualityToolError(
+            "Ruff format reported violations but produced no parseable diagnostics"
+        )
+    if result.returncode == 0 and paths:
+        raise QualityToolError(
+            "Ruff format returned success while reporting files to reformat"
+        )
     return [_format_violation(root, path, python_bin=python_bin) for path in paths]
 
 
@@ -95,7 +108,9 @@ def scan_mypy(
         )
     if result.returncode not in {0, 1}:
         raise QualityToolError(_tool_failure("Mypy", result))
-    return _mypy_violations(root, result.stdout + result.stderr)
+    violations = _mypy_violations(root, result.stdout + result.stderr)
+    _require_consistent_diagnostics("Mypy", result, violations)
+    return violations
 
 
 def tool_versions(python_bin: str, root: Path) -> ToolVersions:
@@ -129,22 +144,34 @@ def _run_mypy(
 
 
 def _ruff_violations(root: Path, output: str) -> list[Violation]:
-    payload = json.loads(output or "[]")
+    try:
+        payload = json.loads(output or "[]")
+    except JSONDecodeError as exc:
+        raise QualityToolError(f"Ruff emitted malformed JSON: {exc}") from exc
+    if not isinstance(payload, list):
+        raise QualityToolError("Ruff JSON diagnostics must be a list")
     violations: list[Violation] = []
-    for item in payload:
-        path = _normalize_path(root, str(item["filename"]))
-        code = str(item["code"])
-        line = int(item["location"]["row"])
-        violations.append(
-            Violation(
-                rule=f"RUFF:{code}",
-                path=path,
-                line=line,
-                message=str(item["message"]),
-                fix=f"Run `ruff check --fix {path}` and review the change.",
-                symbol=_ruff_fix_digest(item.get("fix")),
+    for index, item in enumerate(payload):
+        try:
+            if not isinstance(item, dict) or not isinstance(item["location"], dict):
+                raise TypeError("diagnostic and location must be objects")
+            path = _normalize_path(root, str(item["filename"]))
+            code = str(item["code"])
+            line = int(item["location"]["row"])
+            violations.append(
+                Violation(
+                    rule=f"RUFF:{code}",
+                    path=path,
+                    line=line,
+                    message=str(item["message"]),
+                    fix=f"Run `ruff check --fix {path}` and review the change.",
+                    symbol=_ruff_fix_digest(item.get("fix")),
+                )
             )
-        )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise QualityToolError(
+                f"Ruff diagnostic {index} is malformed: {exc}"
+            ) from exc
     return sorted(violations)
 
 
@@ -171,6 +198,10 @@ def _format_violation(
     if result.returncode not in {0, 1}:
         raise QualityToolError(_tool_failure("Ruff format diff", result))
     output = result.stdout + result.stderr
+    if not output.strip():
+        raise QualityToolError(
+            f"Ruff format diff for {normalized} produced empty output"
+        )
     digest = hashlib.sha256(output.encode("utf-8")).hexdigest()[:16]
     return Violation(
         rule="FORMAT",
@@ -184,21 +215,28 @@ def _format_violation(
 
 def _mypy_violations(root: Path, output: str) -> list[Violation]:
     violations: list[Violation] = []
+    unparsed: list[str] = []
     for line in output.splitlines():
         match = _MYPY_LINE.match(line.strip())
-        if not match:
-            continue
-        path = _normalize_path(root, match.group("path"))
-        code = match.group("code") or "error"
-        violations.append(
-            Violation(
-                rule=f"MYPY:{code}",
-                path=path,
-                line=int(match.group("line")),
-                message=match.group("message"),
-                fix="Add explicit types or narrow the value without ignores.",
+        if match:
+            path = _normalize_path(root, match.group("path"))
+            code = match.group("code") or "error"
+            violations.append(
+                Violation(
+                    rule=f"MYPY:{code}",
+                    path=path,
+                    line=int(match.group("line")),
+                    message=match.group("message"),
+                    fix="Add explicit types or narrow the value without ignores.",
+                )
             )
-        )
+            continue
+        stripped = line.strip()
+        if stripped and not _MYPY_NOTE.match(stripped):
+            unparsed.append(stripped)
+    if unparsed:
+        preview = "\n".join(unparsed[:5])
+        raise QualityToolError(f"Mypy emitted unparseable diagnostics:\n{preview}")
     return sorted(violations)
 
 
@@ -217,7 +255,7 @@ def _normalize_path(root: Path, raw_path: str) -> str:
     path = Path(raw_path)
     if path.is_absolute():
         try:
-            return path.relative_to(root).as_posix()
+            return path.resolve().relative_to(root.resolve()).as_posix()
         except ValueError:
             return path.as_posix()
     return path.as_posix()
@@ -229,14 +267,20 @@ def _run(
     *,
     environment: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command,
-        cwd=root,
-        env=environment,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        return subprocess.run(
+            command,
+            cwd=root,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        executable = command[0] if command else "<unknown>"
+        raise QualityToolError(
+            f"Unable to start quality tool {executable!r}: {exc}"
+        ) from exc
 
 
 def _version(command: tuple[str, ...], root: Path) -> str:
@@ -252,3 +296,18 @@ def _tool_failure(
 ) -> str:
     output = (result.stdout + result.stderr).strip()
     return f"{name} failed with exit {result.returncode}: {output}"
+
+
+def _require_consistent_diagnostics(
+    name: str,
+    result: subprocess.CompletedProcess[str],
+    violations: list[Violation],
+) -> None:
+    if result.returncode == 1 and not violations:
+        raise QualityToolError(
+            f"{name} reported violations but produced no parseable diagnostics"
+        )
+    if result.returncode == 0 and violations:
+        raise QualityToolError(
+            f"{name} returned success while reporting {len(violations)} violation(s)"
+        )

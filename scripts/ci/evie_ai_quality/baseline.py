@@ -7,6 +7,7 @@ import subprocess
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Self
 
@@ -20,6 +21,12 @@ from .model import Violation, compare_violations
 from .tool_rules import ToolVersions
 
 SCHEMA_VERSION = 1
+BASELINE_THRESHOLDS = {
+    "max_function_lines": MAX_FUNCTION_LINES,
+    "max_complexity": MAX_COMPLEXITY,
+    "max_parameters": MAX_PARAMETERS,
+    "max_nesting": MAX_NESTING,
+}
 
 
 class BaselineError(RuntimeError):
@@ -37,21 +44,31 @@ class Baseline:
     def load(cls, path: Path) -> Self:
         if not path.is_file():
             raise BaselineError(f"Missing quality baseline: {path}")
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        _validate_schema(payload, path)
+        return cls.from_text(path.read_text(encoding="utf-8"), source=str(path))
+
+    @classmethod
+    def from_text(cls, text: str, *, source: str) -> Self:
+        try:
+            payload = json.loads(text)
+        except JSONDecodeError as exc:
+            raise BaselineError(f"Invalid baseline JSON in {source}: {exc}") from exc
+        _validate_schema(payload, source)
         tools = payload["tools"]
-        return cls(
-            source_commit=str(payload["source_commit"]),
-            generated_at=str(payload["generated_at"]),
-            tools=ToolVersions(
-                python=str(tools["python"]),
-                ruff=str(tools["ruff"]),
-                mypy=str(tools["mypy"]),
-            ),
-            violations=tuple(
-                Violation.from_dict(item) for item in payload["violations"]
-            ),
-        )
+        try:
+            return cls(
+                source_commit=str(payload["source_commit"]),
+                generated_at=str(payload["generated_at"]),
+                tools=ToolVersions(
+                    python=str(tools["python"]),
+                    ruff=str(tools["ruff"]),
+                    mypy=str(tools["mypy"]),
+                ),
+                violations=tuple(
+                    Violation.from_dict(item) for item in payload["violations"]
+                ),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise BaselineError(f"Invalid baseline value in {source}: {exc}") from exc
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -63,12 +80,7 @@ class Baseline:
                 "ruff": self.tools.ruff,
                 "mypy": self.tools.mypy,
             },
-            "thresholds": {
-                "max_function_lines": MAX_FUNCTION_LINES,
-                "max_complexity": MAX_COMPLEXITY,
-                "max_parameters": MAX_PARAMETERS,
-                "max_nesting": MAX_NESTING,
-            },
+            "thresholds": BASELINE_THRESHOLDS,
             "summary": dict(sorted(violation_counts(self.violations).items())),
             "violations": [item.to_dict() for item in sorted(self.violations)],
         }
@@ -138,14 +150,56 @@ def _head_commit(root: Path) -> str:
     return result.stdout.strip()
 
 
-def _validate_schema(payload: object, path: Path) -> None:
+def _validate_schema(payload: object, source: str) -> None:
     if not isinstance(payload, dict):
-        raise BaselineError(f"Invalid baseline object: {path}")
+        raise BaselineError(f"Invalid baseline object: {source}")
     if payload.get("schema_version") != SCHEMA_VERSION:
         raise BaselineError(
-            f"Unsupported baseline schema in {path}: {payload.get('schema_version')!r}"
+            f"Unsupported baseline schema in {source}: "
+            f"{payload.get('schema_version')!r}"
         )
-    required = {"source_commit", "generated_at", "tools", "violations"}
+    required = {
+        "source_commit",
+        "generated_at",
+        "tools",
+        "thresholds",
+        "summary",
+        "violations",
+    }
     missing = required.difference(payload)
     if missing:
-        raise BaselineError(f"Baseline {path} is missing: {', '.join(sorted(missing))}")
+        raise BaselineError(
+            f"Baseline {source} is missing: {', '.join(sorted(missing))}"
+        )
+    if payload["thresholds"] != BASELINE_THRESHOLDS:
+        raise BaselineError(
+            f"Baseline thresholds in {source} do not match the quality rules"
+        )
+    violations = payload["violations"]
+    if not isinstance(violations, list):
+        raise BaselineError(f"Baseline violations in {source} must be a list")
+    parsed = _parse_violation_list(violations, source)
+    expected_summary = dict(sorted(violation_counts(parsed).items()))
+    if payload["summary"] != expected_summary:
+        raise BaselineError(
+            f"Baseline summary in {source} does not match its violations"
+        )
+
+
+def _parse_violation_list(
+    payload: list[object],
+    source: str,
+) -> list[Violation]:
+    violations: list[Violation] = []
+    for index, item in enumerate(payload):
+        if not isinstance(item, dict):
+            raise BaselineError(
+                f"Baseline violation {index} in {source} must be an object"
+            )
+        try:
+            violations.append(Violation.from_dict(item))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise BaselineError(
+                f"Invalid baseline violation {index} in {source}: {exc}"
+            ) from exc
+    return violations

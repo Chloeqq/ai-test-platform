@@ -19,6 +19,7 @@ fi
 
 "${PYTHON_BIN}" -m pytest \
   tests/unit/test_evie_ai_code_quality_gate.py \
+  tests/unit/test_evie_ai_code_quality_gate_security.py \
   -q
 
 PYTHONPATH=apps/web-ui-service \

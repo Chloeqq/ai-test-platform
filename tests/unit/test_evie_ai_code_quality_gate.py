@@ -109,6 +109,84 @@ def test_each_custom_ast_violation_is_rejected(
     assert expected_rule in {item.rule for item in violations}
 
 
+@pytest.mark.parametrize(
+    ("rule", "layer", "source"),
+    [
+        (
+            "EQA001",
+            "services",
+            "from collections.abc import Callable\n"
+            "def current_time(clock: Callable[[], object]) -> object:\n"
+            "    return clock()\n",
+        ),
+        ("EQA002", "services", "def short() -> int:\n    return 1\n"),
+        (
+            "EQA003",
+            "services",
+            "def bounded(a: int, b: int, c: int, d: int, e: int) -> int:\n"
+            "    return a + b + c + d + e\n",
+        ),
+        (
+            "EQA004",
+            "services",
+            "def simple(value: bool) -> bool:\n"
+            "    if value:\n"
+            "        return True\n"
+            "    return False\n",
+        ),
+        (
+            "EQA005",
+            "services",
+            "def shallow(a: bool, b: bool, c: bool) -> bool:\n"
+            "    if a:\n"
+            "        if b:\n"
+            "            if c:\n"
+            "                return True\n"
+            "    return False\n",
+        ),
+        (
+            "EQA006",
+            "services",
+            "from enum import Enum\n"
+            "class Role(str, Enum):\n"
+            '    ADMIN = "admin"\n'
+            "def allowed(principal: object) -> bool:\n"
+            "    return principal.role == Role.ADMIN\n",
+        ),
+        (
+            "EQA007",
+            "services",
+            "from app.errors.evie_ai import EvieAiErrorCode\n"
+            "ERROR_CODE = EvieAiErrorCode.DATA_INTEGRITY\n",
+        ),
+        (
+            "EQA008",
+            "services",
+            "def convert(value: str) -> str:\n    return value\n",
+        ),
+        (
+            "EQA009",
+            "repositories",
+            "from app.models.evie_ai import TestAsset\n",
+        ),
+        (
+            "EQA010",
+            "services",
+            "from app.policies.evie_ai.review_policy import ReviewPolicy\n",
+        ),
+    ],
+)
+def test_each_custom_ast_rule_accepts_its_compliant_form(
+    tmp_path: Path,
+    rule: str,
+    layer: str,
+    source: str,
+) -> None:
+    violations = _scan_source(tmp_path, layer, source)
+
+    assert rule not in {item.rule for item in violations}
+
+
 def test_ruff_and_format_samples_fail_with_stable_rules(
     tmp_path: Path,
 ) -> None:
