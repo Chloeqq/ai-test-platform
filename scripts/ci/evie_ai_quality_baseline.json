@@ -1,0 +1,640 @@
+{
+  "schema_version": 1,
+  "source_commit": "c4b70dbf47a4bf0f7553e72520e6058b46341a99",
+  "generated_at": "2026-07-28T04:11:45+00:00",
+  "tools": {
+    "python": "Python 3.13.2",
+    "ruff": "ruff 0.15.9",
+    "mypy": "mypy 1.20.0 (compiled: yes)"
+  },
+  "thresholds": {
+    "max_function_lines": 40,
+    "max_complexity": 10,
+    "max_parameters": 5,
+    "max_nesting": 3
+  },
+  "summary": {
+    "custom_ast": 32,
+    "format": 24,
+    "mypy": 7,
+    "ruff": 14
+  },
+  "violations": [
+    {
+      "rule": "EQA001",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 314,
+      "message": "Service calls datetime.now()/utcnow() directly",
+      "fix": "Inject and use the repository clock/provider.",
+      "symbol": ""
+    },
+    {
+      "rule": "EQA001",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 737,
+      "message": "Service calls datetime.now()/utcnow() directly",
+      "fix": "Inject and use the repository clock/provider.",
+      "symbol": ""
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/query_repository.py",
+      "line": 65,
+      "message": "list_assets has 85 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "list_assets"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/query_repository.py",
+      "line": 151,
+      "message": "get_detail has 58 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "get_detail"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/query_repository.py",
+      "line": 210,
+      "message": "list_version_history has 41 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "list_version_history"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/query_repository.py",
+      "line": 291,
+      "message": "_list_predicates has 64 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "_list_predicates"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/requirement_repository.py",
+      "line": 99,
+      "message": "set_current_version has 43 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "set_current_version"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/source_repository.py",
+      "line": 53,
+      "message": "add_requirement_source has 50 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "add_requirement_source"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/source_repository.py",
+      "line": 155,
+      "message": "list_by_asset_pks has 59 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "list_by_asset_pks"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/test_asset_repository.py",
+      "line": 132,
+      "message": "set_current_version has 46 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "set_current_version"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/test_asset_repository.py",
+      "line": 179,
+      "message": "bind_initial_version has 52 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "bind_initial_version"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 161,
+      "message": "execute has 43 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "execute"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 226,
+      "message": "_execute_transaction has 52 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "_execute_transaction"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 306,
+      "message": "_claim_idempotency has 44 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "_claim_idempotency"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 368,
+      "message": "_create_asset has 66 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "_create_asset"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 435,
+      "message": "_reuse_exact_duplicate has 73 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "_reuse_exact_duplicate"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 510,
+      "message": "_validate_inputs has 41 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "_validate_inputs"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 588,
+      "message": "_resolve_source has 51 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "_resolve_source"
+    },
+    {
+      "rule": "EQA002",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 773,
+      "message": "_result_from_record has 45 lines; maximum is 40",
+      "fix": "Split the function into single-purpose typed units.",
+      "symbol": "_result_from_record"
+    },
+    {
+      "rule": "EQA003",
+      "path": "apps/web-ui-service/app/errors/evie_ai.py",
+      "line": 45,
+      "message": "__init__ has 7 parameters; maximum is 5",
+      "fix": "Introduce a typed command, context, or configuration object.",
+      "symbol": "__init__"
+    },
+    {
+      "rule": "EQA003",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/source_repository.py",
+      "line": 235,
+      "message": "_validate_record has 6 parameters; maximum is 5",
+      "fix": "Introduce a typed command, context, or configuration object.",
+      "symbol": "_validate_record"
+    },
+    {
+      "rule": "EQA003",
+      "path": "apps/web-ui-service/app/services/evie_ai/http_error_adapter.py",
+      "line": 149,
+      "message": "_error_response has 8 parameters; maximum is 5",
+      "fix": "Introduce a typed command, context, or configuration object.",
+      "symbol": "_error_response"
+    },
+    {
+      "rule": "EQA003",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 588,
+      "message": "_resolve_source has 7 parameters; maximum is 5",
+      "fix": "Introduce a typed command, context, or configuration object.",
+      "symbol": "_resolve_source"
+    },
+    {
+      "rule": "EQA003",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 694,
+      "message": "_append_audit has 8 parameters; maximum is 5",
+      "fix": "Introduce a typed command, context, or configuration object.",
+      "symbol": "_append_audit"
+    },
+    {
+      "rule": "EQA004",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/query_repository.py",
+      "line": 291,
+      "message": "_list_predicates complexity is 12; maximum is 10",
+      "fix": "Extract explicit policies or smaller branch-specific functions.",
+      "symbol": "_list_predicates"
+    },
+    {
+      "rule": "EQA004",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/source_repository.py",
+      "line": 235,
+      "message": "_validate_record complexity is 11; maximum is 10",
+      "fix": "Extract explicit policies or smaller branch-specific functions.",
+      "symbol": "_validate_record"
+    },
+    {
+      "rule": "EQA004",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 773,
+      "message": "_result_from_record complexity is 11; maximum is 10",
+      "fix": "Extract explicit policies or smaller branch-specific functions.",
+      "symbol": "_result_from_record"
+    },
+    {
+      "rule": "EQA006",
+      "path": "apps/web-ui-service/app/services/evie_ai/project_access_authorizer.py",
+      "line": 25,
+      "message": "status or role uses magic string 'admin'",
+      "fix": "Use an authoritative Enum or centralized constant.",
+      "symbol": ""
+    },
+    {
+      "rule": "EQA006",
+      "path": "apps/web-ui-service/app/services/evie_ai/project_scope_service.py",
+      "line": 41,
+      "message": "status or role uses magic string 'active'",
+      "fix": "Use an authoritative Enum or centralized constant.",
+      "symbol": ""
+    },
+    {
+      "rule": "EQA007",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/errors.py",
+      "line": 41,
+      "message": "error code uses magic string 'EVIE_AI_CURRENT_VERSION_OWNERSHIP_MISMATCH'",
+      "fix": "Use the centralized EvieAi error-code definition.",
+      "symbol": ""
+    },
+    {
+      "rule": "EQA007",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/errors.py",
+      "line": 58,
+      "message": "error code uses magic string 'EVIE_AI_SOURCE_OWNERSHIP_MISMATCH'",
+      "fix": "Use the centralized EvieAi error-code definition.",
+      "symbol": ""
+    },
+    {
+      "rule": "EQA007",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/errors.py",
+      "line": 78,
+      "message": "error code uses magic string 'EVIE_AI_ROW_VERSION_CONFLICT'",
+      "fix": "Use the centralized EvieAi error-code definition.",
+      "symbol": ""
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/models/evie_ai/requirement.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/models/evie_ai/requirement.py` and review the change.",
+      "symbol": "7e32272a83385ecc"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/models/evie_ai/test_asset_coordination.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/models/evie_ai/test_asset_coordination.py` and review the change.",
+      "symbol": "7a5eb865bcf2f9c8"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/models/evie_ai/test_asset_governance.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/models/evie_ai/test_asset_governance.py` and review the change.",
+      "symbol": "9593530483d08feb"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/policies/evie_ai/content_fingerprint.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/policies/evie_ai/content_fingerprint.py` and review the change.",
+      "symbol": "43f5fac2a21f513d"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/policies/evie_ai/request_fingerprint.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/policies/evie_ai/request_fingerprint.py` and review the change.",
+      "symbol": "cc0cb691502c7365"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/policies/evie_ai/review_policy.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/policies/evie_ai/review_policy.py` and review the change.",
+      "symbol": "bff1f80b417b2c76"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/requirement_repository.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/repositories/evie_ai/requirement_repository.py` and review the change.",
+      "symbol": "c0a3e5f35859191a"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/schemas/evie_ai/operations.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/schemas/evie_ai/operations.py` and review the change.",
+      "symbol": "0b54536b46a7a849"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/services/evie_ai/http_error_adapter.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/services/evie_ai/http_error_adapter.py` and review the change.",
+      "symbol": "a651cbf3d856390a"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py` and review the change.",
+      "symbol": "b4fc1609d574503e"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/integration/evie_ai/test_evie_ai_api_security_contract.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/integration/evie_ai/test_evie_ai_api_security_contract.py` and review the change.",
+      "symbol": "8f83b9954084da59"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_architecture_boundaries.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_architecture_boundaries.py` and review the change.",
+      "symbol": "8993b872794f6007"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_ids.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_ids.py` and review the change.",
+      "symbol": "72d5345cc90b442a"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_intake_service.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_intake_service.py` and review the change.",
+      "symbol": "ca44fb894846a582"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_migration.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_migration.py` and review the change.",
+      "symbol": "b6b1ffd75041d1e2"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_models.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_models.py` and review the change.",
+      "symbol": "e98402a4c7410c7d"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_phase1_migration.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_phase1_migration.py` and review the change.",
+      "symbol": "f10e23511bfd6eee"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_project_scope_service.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_project_scope_service.py` and review the change.",
+      "symbol": "dbe50d4e1574dc37"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_repositories.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_repositories.py` and review the change.",
+      "symbol": "dad24cd6da52ad74"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_request_contexts.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_request_contexts.py` and review the change.",
+      "symbol": "e16cdd4ff0490baf"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_review_policy.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_review_policy.py` and review the change.",
+      "symbol": "6fca4c5f7250e48b"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_schemas.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_schemas.py` and review the change.",
+      "symbol": "7199f73573f3ba2c"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_user_public_identity_compat.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_user_public_identity_compat.py` and review the change.",
+      "symbol": "5f14cc84ded309ca"
+    },
+    {
+      "rule": "FORMAT",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_user_public_identity_service.py",
+      "line": 1,
+      "message": "file is not formatted by Ruff",
+      "fix": "Run `ruff format apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_user_public_identity_service.py` and review the change.",
+      "symbol": "e5ea988c924bf981"
+    },
+    {
+      "rule": "MYPY:arg-type",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 810,
+      "message": "Argument \"test_asset_id\" to \"TestAssetOperationResult\" has incompatible type \"str | None\"; expected \"str\"",
+      "fix": "Add explicit types or narrow the value without ignores.",
+      "symbol": ""
+    },
+    {
+      "rule": "MYPY:arg-type",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 812,
+      "message": "Argument \"created\" to \"TestAssetOperationResult\" has incompatible type \"bool | None\"; expected \"bool\"",
+      "fix": "Add explicit types or narrow the value without ignores.",
+      "symbol": ""
+    },
+    {
+      "rule": "MYPY:arg-type",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 813,
+      "message": "Argument \"reused_existing\" to \"TestAssetOperationResult\" has incompatible type \"bool | None\"; expected \"bool\"",
+      "fix": "Add explicit types or narrow the value without ignores.",
+      "symbol": ""
+    },
+    {
+      "rule": "MYPY:arg-type",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 815,
+      "message": "Argument \"row_version\" to \"TestAssetOperationResult\" has incompatible type \"int | None\"; expected \"int\"",
+      "fix": "Add explicit types or narrow the value without ignores.",
+      "symbol": ""
+    },
+    {
+      "rule": "MYPY:attr-defined",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/requirement_repository.py",
+      "line": 133,
+      "message": "\"Result[Any]\" has no attribute \"rowcount\"",
+      "fix": "Add explicit types or narrow the value without ignores.",
+      "symbol": ""
+    },
+    {
+      "rule": "MYPY:operator",
+      "path": "apps/web-ui-service/app/services/evie_ai/test_asset_intake_service.py",
+      "line": 805,
+      "message": "Unsupported operand types for > (\"int\" and \"None\")",
+      "fix": "Add explicit types or narrow the value without ignores.",
+      "symbol": ""
+    },
+    {
+      "rule": "MYPY:return-value",
+      "path": "apps/web-ui-service/app/repositories/evie_ai/requirement_repository.py",
+      "line": 52,
+      "message": "Incompatible return value type (got \"Row[tuple[Requirement, RequirementVersion]] | None\", expected \"tuple[Requirement, RequirementVersion] | None\")",
+      "fix": "Add explicit types or narrow the value without ignores.",
+      "symbol": ""
+    },
+    {
+      "rule": "RUFF:F401",
+      "path": "apps/web-ui-service/tests/integration/evie_ai/test_evie_ai_api_security_contract.py",
+      "line": 11,
+      "message": "`app.errors.evie_ai.EvieAiErrorCode` imported but unused",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/integration/evie_ai/test_evie_ai_api_security_contract.py` and review the change.",
+      "symbol": "5203befd9c493154"
+    },
+    {
+      "rule": "RUFF:F401",
+      "path": "apps/web-ui-service/tests/integration/evie_ai/test_evie_ai_api_security_contract.py",
+      "line": 11,
+      "message": "`app.errors.evie_ai.EvieAiErrorStage` imported but unused",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/integration/evie_ai/test_evie_ai_api_security_contract.py` and review the change.",
+      "symbol": "5203befd9c493154"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/app/schemas/evie_ai/base.py",
+      "line": 3,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/app/schemas/evie_ai/base.py` and review the change.",
+      "symbol": "70d774abdf213a4f"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/app/services/evie_ai/__init__.py",
+      "line": 3,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/app/services/evie_ai/__init__.py` and review the change.",
+      "symbol": "377f49001fbfa688"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/app/services/evie_ai/http_error_adapter.py",
+      "line": 3,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/app/services/evie_ai/http_error_adapter.py` and review the change.",
+      "symbol": "141c7320990c1892"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/tests/integration/evie_ai/test_evie_ai_api_security_contract.py",
+      "line": 1,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/integration/evie_ai/test_evie_ai_api_security_contract.py` and review the change.",
+      "symbol": "17d060668c6d16ce"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_http_error_adapter.py",
+      "line": 1,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_http_error_adapter.py` and review the change.",
+      "symbol": "1e064a96fc99a169"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_intake_service.py",
+      "line": 1,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_intake_service.py` and review the change.",
+      "symbol": "fd758a75cb93570d"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_project_access_authorizer.py",
+      "line": 1,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_project_access_authorizer.py` and review the change.",
+      "symbol": "1cf74a91e7e5af4f"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_project_scope_service.py",
+      "line": 1,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_project_scope_service.py` and review the change.",
+      "symbol": "8a389a8590ee05e9"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_repositories.py",
+      "line": 1,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_repositories.py` and review the change.",
+      "symbol": "7c7e37f2ced3e1f4"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_request_contexts.py",
+      "line": 1,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_request_contexts.py` and review the change.",
+      "symbol": "d8817e57763e923a"
+    },
+    {
+      "rule": "RUFF:I001",
+      "path": "apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_user_public_identity_service.py",
+      "line": 1,
+      "message": "Import block is un-sorted or un-formatted",
+      "fix": "Run `ruff check --fix apps/web-ui-service/tests/unit/evie_ai/test_evie_ai_user_public_identity_service.py` and review the change.",
+      "symbol": "f2ccddfb4b0f418f"
+    },
+    {
+      "rule": "RUFF:UP037",
+      "path": "apps/web-ui-service/app/services/evie_ai/request_trace_context.py",
+      "line": 23,
+      "message": "Remove quotes from type annotation",
+      "fix": "Run `ruff check --fix apps/web-ui-service/app/services/evie_ai/request_trace_context.py` and review the change.",
+      "symbol": "8bad8de500f49a4c"
+    }
+  ]
+}
