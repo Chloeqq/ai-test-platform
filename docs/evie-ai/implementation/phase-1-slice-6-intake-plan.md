@@ -2,22 +2,34 @@
 
 日期：2026-07-27
 
+最后更新：2026-07-29
+
 状态：
 
-Proposed / Pending user approval
+Accepted / Completed
 
 适用范围：
 
 EvieAi Phase 1 Slice 6 - TestAsset Intake Service
 
-Slice 6 implementation plan status: Proposed / Pending user approval
-Slice 6 implementation status: Not started
+Slice 6 contract status: Accepted / Completed
+Slice 6 implementation plan status: Accepted / Completed
+Slice 6 implementation status: Completed
+Slice 6 validation status: Passed
+Slice 6 regression status: 0 new regressions
+Slice 6 merge status: Completed
+Slice 6 closeout status: Completed
 Phase 1 overall status: In Progress
 Phase 1 closeout status: Not completed
 Slice 7 status: Not started
 Slice 8 status: Not started
 
-本文件仅把已批准的 Slice 6 合同拆分为可审查、可批准、可实施和可验收的计划。它不授权开始编码、创建实施分支、修改 API、执行 Migration 或进入 Slice 7/8。计划 PR 合入 `dev` 且用户明确批准实施前，Slice 6 implementation 必须保持 `Not started`。
+本文件最初将已批准的 Slice 6 合同拆分为可审查、可批准、可实施和可验收的计划。
+计划经 PR #17 合入 `dev` 并获得用户明确实施授权后，Slice 6 已按本计划完成实现、
+验证、回归归因、合并和正式 Closeout。完整证据见
+[Slice 6 Intake Closeout 报告](phase-1-slice-6-intake-closeout.md)。
+
+Slice 6 完成不授权进入 Slice 7/8，不代表 Phase 1 已完成，也不改变本计划原有范围。
 
 ## 1. 文档定位与权威关系
 
@@ -49,7 +61,7 @@ AGENTS.md
 - Slice 2/3 已提供 TestAsset、不可变 TestAssetVersion、Source、Idempotency Record、Content Claim、Audit Event 及数据库约束。
 - Slice 4 已提供 Repository、Query、Source 完整性、Idempotency CAS 和 Content Claim 访问能力。
 - Slice 5 已完成 TrustedUserPrincipal、project scope、actor/channel/trace、结构化错误和自然语言日志保护。
-- 当前不存在 `TestAssetIntakeService`；本 Slice 只补齐这一服务主链及直接测试。
+- 制定本计划时尚不存在 `TestAssetIntakeService`；后续实施仅补齐了该服务主链及其直接测试。
 
 当前已知冻结 CI 基线仍为：
 
@@ -395,7 +407,7 @@ Slice 6 只有在以下全部满足时才可声明 implementation complete：
 12. 所有新增/修改的 Slice 6 测试和必要回归通过，且无已证明的新回归。
 13. `git diff --check` 通过；禁止文件、Migration、Router/API、前端和 Slice 7/8 无改动。
 
-## 14. 风险与实施前待决项
+## 14. 风险与实施前待决项（历史记录）
 
 | ID | 风险或待决项 | 处理要求 |
 |---|---|---|
@@ -405,17 +417,21 @@ Slice 6 只有在以下全部满足时才可声明 implementation complete：
 | S6-R04 | 当前 EvieAi repository fixture 未包含 `TestProject` 和可复用的 Session factory。 | 仅扩展测试 fixture 的最小表集合与 factory，不改生产数据库配置。 |
 | S6-R05 | 语义疑似重复是长期能力但暂无事实模型或异步合同。 | 保持非目标；不得为方便测试引入 Embedding、RAG、字段或表。 |
 
-S6-R01 已由用户明确批准并关闭。其余项目可在获批实施设计中通过本计划已定义的最小边界解决，不能扩大到 Slice 7/8。
+S6-R01 已由用户明确批准并关闭。S6-R02～S6-R04 已在 Slice 6 实现和真实持久化测试中
+按本计划边界解决；S6-R05 继续作为后续 Phase 的非目标，不构成 Slice 6 Closeout 阻塞。
+这些处理均未扩大到 Slice 7/8。
 
-## 15. 明确非动作
+## 15. 原实施范围中的明确非动作
 
-- 不修改 `AGENTS.md`、ADR、ARCHITECTURE_BASELINE、Phase 1 Specification、Overall Plan 或 phase traceability 状态。
-- 不创建或修改 TestAsset API endpoint、Router、前端、Migration、ORM、Schema、ID 格式或第三方依赖。
-- 不处理 `.playwright-mcp/**`、`outputs/**`、CI-B01 或 CI-B02。
-- 不把 Slice 6 计划写成已经实施、已经验证或已经 Closeout。
-- 不宣布 Phase 1 completed、Phase 1 closeout completed、Slice 7/8 started 或 Phase 2 started。
+- Slice 6 实现未修改 `AGENTS.md`、ADR、ARCHITECTURE_BASELINE、Phase 1 Specification
+  或 Overall Plan；状态只在独立 Closeout 文档任务中更新。
+- 未创建或修改 TestAsset API endpoint、Router、前端、Migration、ORM、Schema、ID 格式
+  或第三方依赖。
+- 未处理 `.playwright-mcp/**`、`outputs/**`、CI-B01 或 CI-B02。
+- 未宣布 Phase 1 completed 或 Phase 1 closeout completed。
+- 未开始 Slice 7/8 或 Phase 2。
 
-## 16. 实施授权门禁
+## 16. 实施授权门禁（历史记录）
 
 开始 Slice 6 编码前必须同时满足：
 
@@ -425,4 +441,22 @@ S6-R01 已由用户明确批准并关闭。其余项目可在获批实施设计�
 4. 原工作区无混入的本地产物、个人文件或无关改动。
 5. 实施前重新核对当前 Git branch、HEAD、worktree、相关测试环境和 Slice 5/CI 基线。
 
-在上述门禁满足前，Slice 6 implementation status 必须保持 `Not started`。
+上述门禁已通过 PR #17、用户明确实施授权和独立 Slice 6 实施分支全部满足。
+
+## 17. Closeout 记录
+
+Slice 6 的正式 Closeout 证据记录在：
+
+- [phase-1-slice-6-intake-closeout.md](phase-1-slice-6-intake-closeout.md)
+- [phase-traceability.md](phase-traceability.md)
+
+Closeout 结论：
+
+- Implementation: Completed
+- Validation: Passed
+- Regression: 0 new regressions
+- Merge: Completed
+- Closeout: Completed
+- Phase 1 overall: In Progress
+- Phase 1 closeout: Not completed
+- Slice 7/8: Not started
