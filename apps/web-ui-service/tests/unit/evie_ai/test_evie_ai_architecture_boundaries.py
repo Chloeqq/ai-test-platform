@@ -60,11 +60,7 @@ SLICE5_SERVICE_PATHS = tuple(
     )
 )
 INTAKE_SERVICE_PATH = (
-    SERVICE_ROOT
-    / "app"
-    / "services"
-    / "evie_ai"
-    / "test_asset_intake_service.py"
+    SERVICE_ROOT / "app" / "services" / "evie_ai" / "test_asset_intake_service.py"
 )
 FORBIDDEN_IMPORT_TOKENS = {
     "behavior_registry",
@@ -123,7 +119,9 @@ def test_evie_ai_modules_do_not_import_frozen_generation_or_execution_chain() ->
             for reference in _import_references(path):
                 for token in FORBIDDEN_IMPORT_TOKENS:
                     if token in reference:
-                        violations.append((str(path.relative_to(SERVICE_ROOT)), reference))
+                        violations.append(
+                            (str(path.relative_to(SERVICE_ROOT)), reference)
+                        )
 
     assert violations == []
 
@@ -179,7 +177,9 @@ def test_evie_ai_orm_maintains_single_sources_of_truth() -> None:
     assert FORBIDDEN_ASSET_FIELDS.isdisjoint(RequirementVersion.__table__.c.keys())
 
 
-def test_version_tables_are_immutable_and_current_versions_have_no_database_fk() -> None:
+def test_version_tables_are_immutable_and_current_versions_have_no_database_fk() -> (
+    None
+):
     for model in (RequirementVersion, AssetVersionModel):
         assert "updated_at" not in model.__table__.c
         assert "updated_by" not in model.__table__.c
@@ -245,10 +245,11 @@ def test_required_foreign_keys_are_explicit_and_named() -> None:
         assert actual_names == expected_names
 
 
-def test_slice5_security_services_have_no_default_project_or_business_chain_dependencies() -> None:
+def test_slice5_security_services_have_no_default_project_or_business_chain_dependencies() -> (
+    None
+):
     source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in SLICE5_SERVICE_PATHS
+        path.read_text(encoding="utf-8") for path in SLICE5_SERVICE_PATHS
     ).lower()
 
     forbidden_tokens = {
@@ -295,13 +296,8 @@ def test_intake_service_is_the_only_public_intake_class() -> None:
     for path in application_root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in tree.body:
-            if (
-                isinstance(node, ast.ClassDef)
-                and "IntakeService" in node.name
-            ):
-                definitions.append(
-                    (str(path.relative_to(SERVICE_ROOT)), node.name)
-                )
+            if isinstance(node, ast.ClassDef) and "IntakeService" in node.name:
+                definitions.append((str(path.relative_to(SERVICE_ROOT)), node.name))
 
     assert definitions == [
         (
