@@ -185,6 +185,32 @@ class TestAssetRepository(BaseRepository):
         trace_id: str | None = None,
     ) -> TestAsset:
         """绑定聚合创建期首版本，但不推进乐观锁版本。"""
+        self._validate_initial_version(
+            test_asset,
+            version,
+            trace_id=trace_id,
+        )
+        if not self._bind_initial_pointer(
+            test_asset,
+            version,
+            updated_by=updated_by,
+        ):
+            raise RepositoryDataIntegrityError(
+                message="initial test asset version is already bound or invalid",
+                entity_id=test_asset.test_asset_id,
+                trace_id=trace_id,
+            )
+        self.db.flush()
+        self.db.refresh(test_asset)
+        return test_asset
+
+    @staticmethod
+    def _validate_initial_version(
+        test_asset: TestAsset,
+        version: TestAssetVersion,
+        *,
+        trace_id: str | None,
+    ) -> None:
         if (
             test_asset.id is None
             or version.id is None
@@ -202,6 +228,13 @@ class TestAssetRepository(BaseRepository):
                 trace_id=trace_id,
             )
 
+    def _bind_initial_pointer(
+        self,
+        test_asset: TestAsset,
+        version: TestAssetVersion,
+        *,
+        updated_by: str,
+    ) -> bool:
         result = cast(
             CursorResult[Any],
             self.db.execute(
@@ -219,12 +252,4 @@ class TestAssetRepository(BaseRepository):
                 .execution_options(synchronize_session="fetch")
             ),
         )
-        if result.rowcount != 1:
-            raise RepositoryDataIntegrityError(
-                message="initial test asset version is already bound or invalid",
-                entity_id=test_asset.test_asset_id,
-                trace_id=trace_id,
-            )
-        self.db.flush()
-        self.db.refresh(test_asset)
-        return test_asset
+        return result.rowcount == 1

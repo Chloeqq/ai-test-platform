@@ -44,8 +44,8 @@ from app.models.evie_ai import (
 from app.repositories.evie_ai import (
     CurrentVersionOwnershipError,
     OptimisticConcurrencyError,
-    RequirementRepository,
     RepositoryDataIntegrityError,
+    RequirementRepository,
     SourceOwnershipError,
 )
 from app.repositories.evie_ai import (
@@ -215,24 +215,33 @@ def test_requirement_source_resolution_enforces_public_ids_project_and_deletion(
         requirement_id=requirement.requirement_id,
         requirement_version_id=version.requirement_version_id,
     ) == (requirement, version)
-    assert repository.resolve_source_version(
-        project_code="project-b",
-        requirement_id=requirement.requirement_id,
-        requirement_version_id=version.requirement_version_id,
-    ) is None
-    assert repository.resolve_source_version(
-        project_code=requirement.project_code,
-        requirement_id=requirement.requirement_id,
-        requirement_version_id="reqv_" + "f" * 32,
-    ) is None
+    assert (
+        repository.resolve_source_version(
+            project_code="project-b",
+            requirement_id=requirement.requirement_id,
+            requirement_version_id=version.requirement_version_id,
+        )
+        is None
+    )
+    assert (
+        repository.resolve_source_version(
+            project_code=requirement.project_code,
+            requirement_id=requirement.requirement_id,
+            requirement_version_id="reqv_" + "f" * 32,
+        )
+        is None
+    )
 
     requirement.deleted_at = datetime.now(UTC)
     evie_ai_session.flush()
-    assert repository.resolve_source_version(
-        project_code=requirement.project_code,
-        requirement_id=requirement.requirement_id,
-        requirement_version_id=version.requirement_version_id,
-    ) is None
+    assert (
+        repository.resolve_source_version(
+            project_code=requirement.project_code,
+            requirement_id=requirement.requirement_id,
+            requirement_version_id=version.requirement_version_id,
+        )
+        is None
+    )
 
 
 def test_initial_asset_version_binding_requires_version_one_and_is_single_use(
@@ -424,21 +433,23 @@ def test_requirement_source_main_and_subtype_roll_back_together(
         requirement_pk=requirement.id,
         requirement_version_pk=requirement_version.id,
     )
-    assert evie_ai_session.scalar(
-        select(func.count()).select_from(AssetSourceModel)
-    ) == 1
-    assert evie_ai_session.scalar(
-        select(func.count()).select_from(RequirementSourceModel)
-    ) == 1
+    assert (
+        evie_ai_session.scalar(select(func.count()).select_from(AssetSourceModel)) == 1
+    )
+    assert (
+        evie_ai_session.scalar(select(func.count()).select_from(RequirementSourceModel))
+        == 1
+    )
 
     evie_ai_session.rollback()
 
-    assert evie_ai_session.scalar(
-        select(func.count()).select_from(AssetSourceModel)
-    ) == 0
-    assert evie_ai_session.scalar(
-        select(func.count()).select_from(RequirementSourceModel)
-    ) == 0
+    assert (
+        evie_ai_session.scalar(select(func.count()).select_from(AssetSourceModel)) == 0
+    )
+    assert (
+        evie_ai_session.scalar(select(func.count()).select_from(RequirementSourceModel))
+        == 0
+    )
 
 
 def test_caller_rollback_removes_all_uncommitted_aggregate_rows(

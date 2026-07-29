@@ -9,8 +9,14 @@ import pytest
 from app.constants.evie_ai import (
     RequirementStatus,
     RequirementVersionStatus,
+)
+from app.constants.evie_ai import (
     TestAssetAuditEventType as AuditEventType,
+)
+from app.constants.evie_ai import (
     TestAssetConversionStatus as AssetConversionStatus,
+)
+from app.constants.evie_ai import (
     TestAssetReviewStatus as AssetReviewStatus,
 )
 from app.core.id_gen import (
@@ -25,13 +31,29 @@ from app.errors.evie_ai import (
 from app.models.evie_ai import (
     Requirement,
     RequirementVersion,
+)
+from app.models.evie_ai import (
     TestAsset as AssetModel,
+)
+from app.models.evie_ai import (
     TestAssetAuditEvent as AuditEventModel,
+)
+from app.models.evie_ai import (
     TestAssetContentClaim as ContentClaimModel,
+)
+from app.models.evie_ai import (
     TestAssetIdempotencyRecord as IdempotencyRecordModel,
+)
+from app.models.evie_ai import (
     TestAssetRequirementSource as RequirementSourceModel,
+)
+from app.models.evie_ai import (
     TestAssetReviewRecord as ReviewRecordModel,
+)
+from app.models.evie_ai import (
     TestAssetSource as SourceModel,
+)
+from app.models.evie_ai import (
     TestAssetVersion as VersionModel,
 )
 from app.models.test_project import TestProject as ProjectModel
@@ -73,6 +95,11 @@ from sqlalchemy.orm import Session, sessionmaker
 PROJECT_A = "projecta"
 PROJECT_B = "projectb"
 ACTOR_PUBLIC_ID = "usr_0123456789abcdef0123456789abcdef"
+FIXED_NOW = datetime(2026, 7, 28, 8, 0, tzinfo=UTC)
+
+
+def _utc_clock() -> datetime:
+    return FIXED_NOW
 
 
 @pytest.fixture()
@@ -96,6 +123,7 @@ def intake_service(
     return IntakeService(
         evie_ai_session_factory,
         idempotency_retention_days=7,
+        clock=_utc_clock,
     )
 
 
@@ -215,6 +243,51 @@ def _write_counts(
         return {model: _count(session, model) for model in models}
 
 
+def _write_rows(
+    session_factory: sessionmaker[Session],
+) -> dict[str, tuple[dict[str, object], ...]]:
+    models = (
+        AssetModel,
+        VersionModel,
+        SourceModel,
+        RequirementSourceModel,
+        ContentClaimModel,
+        AuditEventModel,
+        IdempotencyRecordModel,
+        ReviewRecordModel,
+    )
+    with session_factory() as session:
+        return {
+            model.__tablename__: tuple(
+                dict(row)
+                for row in session.execute(
+                    select(model.__table__).order_by(model.__table__.c.id)
+                ).mappings()
+            )
+            for model in models
+        }
+
+
+def _serialized_audit_payload(event: AuditEventModel) -> str:
+    public_payload = {
+        "event_type": event.event_type,
+        "actor": event.actor,
+        "channel": event.channel,
+        "request_id": event.request_id,
+        "correlation_id": event.correlation_id,
+        "operation_type": event.operation_type,
+        "idempotency_scope_hash": event.idempotency_scope_hash,
+        "idempotency_key_hash": event.idempotency_key_hash,
+        "idempotency_generation": event.idempotency_generation,
+        "related_test_asset_version_id": event.related_test_asset_version_id,
+        "related_test_asset_source_id": event.related_test_asset_source_id,
+        "reason": event.reason,
+        "before_state_summary": event.before_state_summary,
+        "after_state_summary": event.after_state_summary,
+    }
+    return json.dumps(public_payload, ensure_ascii=False, sort_keys=True)
+
+
 def test_manual_intake_creates_complete_aggregate_with_row_version_one(
     evie_ai_session_factory: sessionmaker[Session],
     intake_service: IntakeService,
@@ -323,9 +396,7 @@ def test_requirement_intake_creates_typed_source(
         source = session.execute(select(SourceModel)).scalar_one()
         subtype = session.execute(select(RequirementSourceModel)).scalar_one()
         requirement = session.execute(
-            select(Requirement).where(
-                Requirement.requirement_id == requirement_id
-            )
+            select(Requirement).where(Requirement.requirement_id == requirement_id)
         ).scalar_one()
         requirement_version = session.execute(
             select(RequirementVersion).where(
@@ -356,9 +427,7 @@ def test_requirement_intake_rejects_invalid_source_scope_without_partial_writes(
         requirement_id = "req_" + "e" * 32
         version_id = "reqv_" + "e" * 32
     elif scenario == "wrong-parent":
-        _second_id, second_version_id = _seed_requirement(
-            evie_ai_session_factory
-        )
+        _second_id, second_version_id = _seed_requirement(evie_ai_session_factory)
         requirement_id = first_id
         version_id = second_version_id
     elif scenario == "cross-project":
@@ -460,6 +529,86 @@ def test_corrupted_idempotency_result_fails_closed(
     assert _write_counts(evie_ai_session_factory)[AssetModel] == 1
 
 
+def test_created_replay_with_row_version_two_fails_closed(
+    evie_ai_session_factory: sessionmaker[Session],
+    intake_service: IntakeService,
+    principal: TrustedUserPrincipal,
+    trace_context: RequestTraceContext,
+) -> None:
+    _seed_project(evie_ai_session_factory)
+    command = _manual_command()
+    intake_service.execute(
+        command,
+        principal=principal,
+        idempotency_key="corrupted-row-version",
+        trace_context=trace_context,
+    )
+    before = _write_counts(evie_ai_session_factory)
+    with evie_ai_session_factory.begin() as session:
+        record = session.execute(select(IdempotencyRecordModel)).scalar_one()
+        record.row_version = 2
+
+    with pytest.raises(EvieAiDomainError) as exc_info:
+        intake_service.execute(
+            command,
+            principal=principal,
+            idempotency_key="corrupted-row-version",
+            trace_context=trace_context,
+        )
+
+    assert exc_info.value.code is EvieAiErrorCode.DATA_INTEGRITY_ERROR
+    assert _write_counts(evie_ai_session_factory) == before
+
+
+def test_completed_replay_rejects_different_content_asset_without_side_effects(
+    evie_ai_session_factory: sessionmaker[Session],
+    intake_service: IntakeService,
+    principal: TrustedUserPrincipal,
+    trace_context: RequestTraceContext,
+) -> None:
+    _seed_project(evie_ai_session_factory)
+    command_a = _manual_command(title="内容 A")
+    command_b = _manual_command(title="内容 B")
+    winner_a = intake_service.execute(
+        command_a,
+        principal=principal,
+        idempotency_key="content-a-key",
+        trace_context=trace_context,
+    )
+    winner_b = intake_service.execute(
+        command_b,
+        principal=principal,
+        idempotency_key="content-b-key",
+        trace_context=trace_context,
+    )
+    assert winner_a.test_asset_id != winner_b.test_asset_id
+
+    with evie_ai_session_factory.begin() as session:
+        record_a = session.execute(
+            select(IdempotencyRecordModel).where(
+                IdempotencyRecordModel.idempotency_key == "content-a-key"
+            )
+        ).scalar_one()
+        record_a.test_asset_id = winner_b.test_asset_id
+        record_a.test_asset_version_id = winner_b.test_asset_version_id
+        record_a.row_version = winner_b.row_version
+
+    before_counts = _write_counts(evie_ai_session_factory)
+    before_rows = _write_rows(evie_ai_session_factory)
+    with pytest.raises(EvieAiDomainError) as exc_info:
+        intake_service.execute(
+            command_a,
+            principal=principal,
+            idempotency_key="content-a-key",
+            trace_context=trace_context,
+        )
+
+    assert exc_info.value.code is EvieAiErrorCode.DATA_INTEGRITY_ERROR
+    assert exc_info.value.stage is EvieAiErrorStage.INTAKE
+    assert _write_counts(evie_ai_session_factory) == before_counts
+    assert _write_rows(evie_ai_session_factory) == before_rows
+
+
 def test_expired_idempotency_record_is_reoccupied_for_a_new_request(
     evie_ai_session_factory: sessionmaker[Session],
     intake_service: IntakeService,
@@ -475,7 +624,7 @@ def test_expired_idempotency_record_is_reoccupied_for_a_new_request(
     )
     with evie_ai_session_factory.begin() as session:
         record = session.execute(select(IdempotencyRecordModel)).scalar_one()
-        record.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        record.expires_at = FIXED_NOW - timedelta(seconds=1)
 
     second = intake_service.execute(
         _manual_command(title="支付成功"),
@@ -513,11 +662,20 @@ def test_exact_duplicate_reuses_asset_and_adds_only_a_new_manual_source(
         idempotency_key="duplicate-key-2",
         trace_context=trace_context,
     )
+    before_replay = _write_counts(evie_ai_session_factory)
+    replay = intake_service.execute(
+        _manual_command(),
+        principal=principal,
+        idempotency_key="duplicate-key-2",
+        trace_context=trace_context,
+    )
 
     assert duplicate.test_asset_id == first.test_asset_id
     assert duplicate.test_asset_version_id == first.test_asset_version_id
     assert duplicate.created is False
     assert duplicate.reused_existing is True
+    assert replay == duplicate
+    assert _write_counts(evie_ai_session_factory) == before_replay
     counts = _write_counts(evie_ai_session_factory)
     assert counts[AssetModel] == 1
     assert counts[VersionModel] == 1
@@ -527,9 +685,7 @@ def test_exact_duplicate_reuses_asset_and_adds_only_a_new_manual_source(
     with evie_ai_session_factory() as session:
         event_types = list(
             session.scalars(
-                select(AuditEventModel.event_type).order_by(
-                    AuditEventModel.id
-                )
+                select(AuditEventModel.event_type).order_by(AuditEventModel.id)
             )
         )
         assert event_types == [
@@ -568,6 +724,69 @@ def test_exact_duplicate_with_same_requirement_source_does_not_add_source(
     counts = _write_counts(evie_ai_session_factory)
     assert counts[SourceModel] == 1
     assert counts[AuditEventModel] == 2
+
+
+def test_all_intake_audit_payloads_exclude_content_keys_and_sensitive_values(
+    evie_ai_session_factory: sessionmaker[Session],
+    intake_service: IntakeService,
+    principal: TrustedUserPrincipal,
+    trace_context: RequestTraceContext,
+) -> None:
+    _seed_project(evie_ai_session_factory)
+    requirement_id, version_id = _seed_requirement(evie_ai_session_factory)
+    command = _requirement_command(
+        requirement_id=requirement_id,
+        requirement_version_id=version_id,
+    )
+    intake_service.execute(
+        command,
+        principal=principal,
+        idempotency_key="audit-requirement-key",
+        trace_context=trace_context,
+    )
+    intake_service.execute(
+        _manual_command(),
+        principal=principal,
+        idempotency_key="audit-manual-key",
+        trace_context=trace_context,
+    )
+
+    with evie_ai_session_factory() as session:
+        events = list(
+            session.scalars(select(AuditEventModel).order_by(AuditEventModel.id))
+        )
+    assert [event.event_type for event in events] == [
+        AuditEventType.ASSET_CREATED.value,
+        AuditEventType.SOURCE_ADDED.value,
+        AuditEventType.EXACT_DUPLICATE_REUSED.value,
+    ]
+    payloads = [_serialized_audit_payload(event) for event in events]
+    forbidden_values = {
+        "登录成功",
+        "用户位于登录页",
+        "输入账号密码",
+        "点击登录",
+        "进入首页",
+        "用户可以登录系统",
+        "audit-requirement-key",
+        "audit-manual-key",
+    }
+    forbidden_keys = {
+        "title",
+        "precondition",
+        "natural_steps",
+        "expected_result",
+        "idempotency_key",
+        "test_asset_pk",
+        "requirement_pk",
+        "sql",
+        "token",
+        "authorization",
+        "password",
+    }
+    for payload in payloads:
+        assert all(value not in payload for value in forbidden_values)
+        assert all(f'"{key}"' not in payload.lower() for key in forbidden_keys)
 
 
 def test_content_claim_is_project_scoped(
@@ -775,6 +994,54 @@ def test_each_persistence_stage_failure_rolls_back_the_complete_transaction(
     assert set(_write_counts(evie_ai_session_factory).values()) == {0}
 
 
+def test_requirement_typed_source_failure_rolls_back_complete_intake(
+    monkeypatch: pytest.MonkeyPatch,
+    evie_ai_session_factory: sessionmaker[Session],
+    intake_service: IntakeService,
+    principal: TrustedUserPrincipal,
+    trace_context: RequestTraceContext,
+) -> None:
+    _seed_project(evie_ai_session_factory)
+    requirement_id, version_id = _seed_requirement(evie_ai_session_factory)
+    original_add = SourceRepository.add_requirement_source
+
+    def fail_after_typed_source(
+        repository: SourceRepository,
+        source: SourceModel,
+        *,
+        requirement_pk: int,
+        requirement_version_pk: int,
+        trace_id: str | None = None,
+    ) -> SourceModel:
+        original_add(
+            repository,
+            source,
+            requirement_pk=requirement_pk,
+            requirement_version_pk=requirement_version_pk,
+            trace_id=trace_id,
+        )
+        raise RuntimeError("injected requirement subtype failure")
+
+    monkeypatch.setattr(
+        SourceRepository,
+        "add_requirement_source",
+        fail_after_typed_source,
+    )
+    with pytest.raises(EvieAiDomainError) as exc_info:
+        intake_service.execute(
+            _requirement_command(
+                requirement_id=requirement_id,
+                requirement_version_id=version_id,
+            ),
+            principal=principal,
+            idempotency_key="typed-source-rollback",
+            trace_context=trace_context,
+        )
+
+    assert exc_info.value.code is EvieAiErrorCode.DATA_INTEGRITY_ERROR
+    assert set(_write_counts(evie_ai_session_factory).values()) == {0}
+
+
 def test_idempotency_unique_race_retries_with_a_fresh_session_and_replays_winner(
     monkeypatch: pytest.MonkeyPatch,
     evie_ai_session_factory: sessionmaker[Session],
@@ -835,6 +1102,7 @@ def test_idempotency_unique_race_retries_with_a_fresh_session_and_replays_winner
     retrying_service = IntakeService(
         tracking_factory,
         idempotency_retention_days=7,
+        clock=_utc_clock,
     )
     replay = retrying_service.execute(
         command,
@@ -901,6 +1169,7 @@ def test_content_claim_unique_race_retries_and_reuses_winner(
     retrying_service = IntakeService(
         tracking_factory,
         idempotency_retention_days=7,
+        clock=_utc_clock,
     )
     duplicate = retrying_service.execute(
         command,
@@ -913,6 +1182,75 @@ def test_content_claim_unique_race_retries_and_reuses_winner(
     assert duplicate.reused_existing is True
     assert len(sessions) == 2
     assert _write_counts(evie_ai_session_factory)[AssetModel] == 1
+
+
+@pytest.mark.parametrize(
+    ("repository_type", "constraint_message"),
+    (
+        (
+            IdempotencyRepository,
+            "UNIQUE constraint failed: "
+            "test_asset_idempotency_records.project_code, "
+            "test_asset_idempotency_records.operation_type, "
+            "test_asset_idempotency_records.actor_or_client_id, "
+            "test_asset_idempotency_records.idempotency_key",
+        ),
+        (
+            ContentClaimRepository,
+            "UNIQUE constraint failed: "
+            "test_asset_content_claims.project_code, "
+            "test_asset_content_claims.content_fingerprint",
+        ),
+    ),
+)
+def test_whitelisted_conflict_without_readable_winner_leaves_zero_residue(
+    repository_type: type[object],
+    constraint_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+    evie_ai_session_factory: sessionmaker[Session],
+    principal: TrustedUserPrincipal,
+    trace_context: RequestTraceContext,
+) -> None:
+    _seed_project(evie_ai_session_factory)
+    original_add = repository_type.add
+    calls = 0
+    sessions: list[Session] = []
+
+    def conflict_once(repository: object, record: object) -> object:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise IntegrityError(
+                "INSERT",
+                {},
+                sqlite3.IntegrityError(constraint_message),
+            )
+        return original_add(repository, record)
+
+    def tracking_factory() -> Session:
+        session = evie_ai_session_factory()
+        sessions.append(session)
+        return session
+
+    monkeypatch.setattr(repository_type, "add", conflict_once)
+    service = IntakeService(
+        tracking_factory,
+        idempotency_retention_days=7,
+        clock=_utc_clock,
+    )
+    with pytest.raises(EvieAiDomainError) as exc_info:
+        service.execute(
+            _manual_command(),
+            principal=principal,
+            idempotency_key="winner-unavailable",
+            trace_context=trace_context,
+        )
+
+    assert exc_info.value.code is EvieAiErrorCode.DATA_INTEGRITY_ERROR
+    assert calls == 2
+    assert len(sessions) == 2
+    assert sessions[0] is not sessions[1]
+    assert set(_write_counts(evie_ai_session_factory).values()) == {0}
 
 
 def test_non_whitelisted_integrity_error_fails_closed_without_retry(
@@ -951,6 +1289,7 @@ def test_non_whitelisted_integrity_error_fails_closed_without_retry(
     service = IntakeService(
         tracking_factory,
         idempotency_retention_days=7,
+        clock=_utc_clock,
     )
     with pytest.raises(EvieAiDomainError) as exc_info:
         service.execute(
@@ -995,6 +1334,7 @@ def test_second_whitelisted_conflict_fails_closed_after_one_retry(
     service = IntakeService(
         tracking_factory,
         idempotency_retention_days=7,
+        clock=_utc_clock,
     )
     with pytest.raises(EvieAiDomainError) as exc_info:
         service.execute(

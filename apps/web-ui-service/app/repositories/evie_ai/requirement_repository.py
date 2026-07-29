@@ -49,7 +49,7 @@ class RequirementRepository(BaseRepository):
         requirement_version_id: str,
     ) -> tuple[Requirement, RequirementVersion] | None:
         """按公开 ID 解析同项目、未删除的 Requirement 来源。"""
-        return self.db.execute(
+        row = self.db.execute(
             select(Requirement, RequirementVersion)
             .join(
                 RequirementVersion,
@@ -59,10 +59,13 @@ class RequirementRepository(BaseRepository):
                 Requirement.project_code == project_code,
                 Requirement.requirement_id == requirement_id,
                 Requirement.deleted_at.is_(None),
-                RequirementVersion.requirement_version_id
-                == requirement_version_id,
+                RequirementVersion.requirement_version_id == requirement_version_id,
             )
         ).one_or_none()
+        if row is None:
+            return None
+        requirement, version = row
+        return requirement, version
 
     def get_current_version(
         self,
