@@ -20,28 +20,34 @@ EvieAi 的核心口径：
 6. [EvieAi Phase 1 自然语言资产生命周期实施计划](./implementation/phase-1-natural-language-asset-lifecycle-plan.md)
 7. [ADR-0001：Phase 1 自然语言资产生命周期](./decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md)
 8. [EvieAi 阶段追踪矩阵](./implementation/phase-traceability.md)
-9. [EvieAi 文档清理计划](./migration/docs-cleanup-plan.md)
-10. [旧链冻结清单](./migration/legacy-chain-freeze-list.md)
+9. [EvieAi Phase 1 Slice 6 Intake Closeout](./implementation/phase-1-slice-6-intake-closeout.md)
+10. [EvieAi 文档清理计划](./migration/docs-cleanup-plan.md)
+11. [旧链冻结清单](./migration/legacy-chain-freeze-list.md)
 
 ## 当前阶段
 
-当前处于 EvieAi Phase 1 核心与补充合同均已批准、Slice 0 权威文档已合并、
-Slice 1 允许从最新 `dev` 启动的状态。
+当前准确状态：
 
-- C-01 数据库前向兼容阻塞已通过 PR #4 合并并复验。
-- D-01～D-14 已于 2026-07-15 获得用户明确批准。
-- A-01～A-11 已于 2026-07-15 获得用户明确批准并写入 ADR、规格合同和实施计划。
-- P-01～P-09 已闭合；A-11 固定 `User.user_public_id` 与 `user:<user_public_id>` actor 合同。
-- ORM、Migration、Service 和 API 必须按实施计划逐切片审查，不得一次性越过门禁。
-- Requirement 生命周期属于 Phase 1，但作为 Asset Lifecycle Core 之后的独立切片。
+- Phase 1 overall status: In Progress
+- Phase 1 closeout status: Not completed
+- Slice 6 implementation: Completed
+- Slice 6 closeout: Completed
+- Slice 7/8: Not started
+
+Slice 6 已完成统一 Intake Service、针对性验证、回归归因和合并收口；完整状态和证据以
+[阶段追踪矩阵](./implementation/phase-traceability.md)及
+[Slice 6 Intake Closeout 报告](./implementation/phase-1-slice-6-intake-closeout.md)为准。
+
+Slice 6 完成不代表 Phase 1 完成，也不授权开始 Slice 7/8 或 Phase 2。ORM、Migration、
+Service 和 API 仍必须按实施计划逐切片审查，不得一次性越过门禁。
 
 历史预检报告位于：
 
 - [2026-07-14 Phase 1 自然语言资产生命周期预检](./implementation/2026-07-14_phase-1-natural-language-asset-lifecycle-preflight.md)
 
-预检报告用于保留分析证据；正式实施口径以 `Approved` 规格合同和 `Approved`
-实施计划为准。A-01～A-11 与 P-01～P-09 均已闭合；PR #5 已合并到
-`dev@adb2b2b`，Slice 1 可以按计划独立启动。
+预检报告用于保留 2026-07-14 时点的分析证据；正式实施口径以 `Approved` 规格合同、
+`Approved` 实施计划和当前 [阶段追踪矩阵](./implementation/phase-traceability.md)为准，
+不得将历史入口条件解释为当前 Slice 状态。
 
 ## 本地参考资料
 

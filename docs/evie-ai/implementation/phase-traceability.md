@@ -1,7 +1,7 @@
 # EvieAi 阶段追踪矩阵
 
 创建日期：2026-07-12
-最后更新：2026-07-27
+最后更新：2026-07-29
 状态：Authoritative
 适用范围：EvieAi 完整目标能力、阶段实施边界、交付物追踪、验收证据和架构偏差检查
 
@@ -28,6 +28,8 @@
 - `docs/evie-ai/engineering/coding-standards.md`
 - `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-specification.md`
 - `docs/evie-ai/implementation/phase-1-natural-language-asset-lifecycle-plan.md`
+- `docs/evie-ai/implementation/phase-1-slice-6-intake-plan.md`
+- `docs/evie-ai/implementation/phase-1-slice-6-intake-closeout.md`
 - `docs/evie-ai/decisions/ADR-0001-phase1-natural-language-asset-lifecycle.md`
 - `docs/evie-ai/reference/2026-07-18_evie-ai-target-architecture-v2.mmd`
 - `docs/evie-ai/reference/2026-07-18_evie-ai-target-architecture-v2.png`
@@ -518,7 +520,7 @@ Phase 0 不允许包含：
 
 以上内容记录的是 2026-07-15 文档批准时点的历史实施快照，不代表 2026-07-18 的当前实时实施状态。
 
-### 6.3.1 当前状态（2026-07-27）
+### 6.3.1 当前状态（2026-07-29）
 
 Phase 1 contract status: Accepted / Active
 Phase 1 overall status: In Progress
@@ -529,8 +531,9 @@ Phase 1 closeout status: Not completed
 - Phase 1 合同已经批准并持续有效；
 - Slice 1～4 已完成对应底层层级验证；
 - Slice 5 implementation：Completed；targeted validation：Passed（56 passed）；regression attribution：0 new regressions；已通过 PR #14 合并到 `dev`；Closeout：Completed（用户明确批准）；
-- Slice 6 独立实施计划：Proposed / Pending user approval；S6-R01：Closed / Approved；Slice 6 implementation：Not started；
-- Slice 6～11 尚未实施；
+- Slice 6 contract：Accepted / Completed；implementation：Completed；validation：Passed；regression attribution：0 new regressions；merge：Completed；Closeout：Completed；
+- Slice 6 已通过 PR #18 完成初始实现，并通过 PR #21 完成 Closeout 阻塞修复后合入 `dev`；完整证据见 [Slice 6 Intake Closeout 报告](phase-1-slice-6-intake-closeout.md)；
+- Slice 7～11 尚未实施；
 - Slice 1～4 通过不等于 Service 主链完成；
 - Slice 1～4 通过不等于 Router/API 完成；
 - 当前没有满足 Asset Lifecycle Core 后端 Closeout；
@@ -547,7 +550,7 @@ Phase 1 closeout status: Not completed
 | Slice 3 | Accepted / Active | Verified implemented at migration test layer | 10/10 passed | Not completed | 仅现有 migration pytest 层；不是生产数据库升级证明 |
 | Slice 4 | Accepted / Active | Verified implemented at repository layer | 39/39 passed | Not completed | Repository 和 Query 层；尚无 Service 或 Router/API 证明 |
 | Slice 5 | Accepted / Active | Completed | Targeted 56 passed；EvieAi unit + integration 215 passed；0 new regressions | Completed | API 安全前置已实现并经 PR #14 合并到 `dev`；implementation commit `5186687b641e3fb2d8c93b3b54e2584d58ced789`；merge commit `bd08b802cdb28c9ffc688cc39823af2c65fa6c3a`；用户已明确批准 Slice 5 Closeout；不代表 Phase 1 Closeout |
-| Slice 6 | Accepted / Active | Not started | 无 | Not completed | 独立实施计划为 Proposed / Pending user approval；S6-R01 已 Closed / Approved；Intake Service 尚未实施 |
+| Slice 6 | Accepted / Completed | Completed | Targeted 82 passed；Repository 14 passed；EvieAi unit + integration 261 passed；Quality Gate passed；0 new regressions | Completed | Intake Service 已实现；PR #18 初始实现、PR #21 Closeout 阻塞修复均已合入 `dev`；[Closeout 报告](phase-1-slice-6-intake-closeout.md)；不代表 Phase 1 Closeout |
 | Slice 7 | Accepted / Active | Not started | 无 | Not completed | Lifecycle / Review Service 尚未实施 |
 | Slice 8 | Accepted / Active | Not started | 无 | Not completed | Router / API 尚未实施 |
 | Slice 9 | Accepted / Active | Not started | 无 | Not completed | Core 集成验收尚未实施 |
@@ -598,7 +601,6 @@ Asset Lifecycle Core 后端 Closeout 至少依赖：
 
 当前主要阻塞：
 
-- Slice 6 Intake Service；
 - Slice 7 Lifecycle / Review Service；
 - Slice 8 Router / API；
 - Slice 9 Core 集成验收。
@@ -737,9 +739,14 @@ Contract status 表示某个 Slice 或能力已经进入已批准的 Phase 1 合
 
 ```text
 Accepted / Active
+Accepted / Completed
 ```
 
-它表示合同已经批准并持续有效，不等于实现完成或 Closeout 完成。
+`Accepted / Active` 表示合同已经批准并持续有效，不等于实现完成或 Closeout 完成。
+
+`Accepted / Completed` 表示对应 Slice 的合同已被接受，且该 Slice 已具备完整实现、验证、
+回归归因、合并和用户明确 Closeout 决策；它不代表 Phase 1 合同已经结束或 Phase 1
+Closeout 已完成。
 
 ### 9.2 Implementation status
 
