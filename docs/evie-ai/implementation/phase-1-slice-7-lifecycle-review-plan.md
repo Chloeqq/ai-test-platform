@@ -305,6 +305,24 @@ public ID、operation、status、duration 和 error code。不得记录自然语
 
 计划实现时只允许下列文件；若发现必须修改本表外文件，必须停止并请求计划补正。
 
+### 13.1 Repository 变更
+
+Repository 只增加第 4 节列出的受限持久化原语：锁定或条件读取、current version 推进、审核
+状态 CAS、删除/恢复 CAS，以及恢复专用的 Claim acquire。所有方法必须验证聚合关系和
+`project_code`，只执行 query/add/flush/受限条件 update，不包含领域编排、Clock、日志、
+`commit` 或 `rollback`。不得把“读取已删除 Asset 的 current Version”暴露成一般查询能力。
+
+### 13.2 Service 变更
+
+两个新增 Service 各自只拥有其领域的公开命令和私有编排辅助步骤：
+
+- Lifecycle：create version、restore historical version、delete、restore；
+- Review：approve、reject、reopen。
+
+它们使用明确类型化的既有输入、注入的 Session factory/Clock/retention 配置和已批准的
+Repository/Policy/context 服务。它们不共享大而模糊的 util，不导入 Intake 私有函数，也不
+承担 Router、Schema、HTTP、AI、Compiler 或 Runner 职责。
+
 | 文件 | 变更类型 | 职责 |
 |---|---|---|
 | `apps/web-ui-service/app/services/evie_ai/test_asset_lifecycle_service.py` | 新增 | 唯一 Lifecycle 公开编排、事务、幂等、版本/删除/恢复事实校验。 |
@@ -402,6 +420,19 @@ failed、errors、skipped、warnings、失败 node ID、首个异常和归一化
 CI-B02 是独立的 `apps/ai-orchestrator/src/app.py` 缺失 collection failure。Slice 7 必须证明
 新增失败为 0，而非修改或掩盖这些基线问题。
 
+### 15.2 负向证明
+
+新增测试必须证明关键保护确实生效，而不只是测试成功路径：
+
+- 移除或破坏 Version 与 Asset 的同聚合校验时，跨 Asset 历史恢复和非 current 审核测试必须失败；
+- 移除 `expected_row_version` 条件时，陈旧 row version 和并发 mutation 测试必须失败；
+- 移除恢复前的 Claim acquire 或其唯一冲突处理时，恢复冲突和零残留测试必须失败；
+- 移除 idempotency 指纹比较或 replay 返回前校验时，同 key 异内容/损坏 winner 测试必须失败；
+- 移除 Audit 敏感字段过滤时，禁止字段矩阵测试必须失败；
+- 删除 AST 禁止导入规则时，故意的 Candidate/Compiler/Runner import 样例必须被守卫检出。
+
+这构成 mutation test 的等价负向证明；不要求在本 Slice 引入新的 mutation-testing 第三方依赖。
+
 ## 16. 质量门禁与架构守卫
 
 Slice 7 的 merge gate 是 required check `evie-ai-code-quality`。实现分支必须满足：
@@ -463,6 +494,17 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 | S7-R03 | 审核与转换状态容易被实现为同一字段或同一命令副作用。 | 通过独立 Service、Policy、CAS 和测试确保 Review 不改 conversion，Version 才按矩阵映射。 | 不阻塞；违反时阻塞 Closeout。 |
 | S7-R04 | SQLite 并发测试可能无法替代未来完整多数据库压力验证。 | Slice 7 使用真实 SQLite 事务和确定性 CAS/唯一约束测试；不声称替代后续集成/数据库验证。 | 不阻塞本 Slice；结果如不稳定则阻塞其验证。 |
 | S7-R05 | Slice 8 API 参数、HTTP 映射和前端交互尚未开始。 | 明确保留给 Slice 8；Service 仅返回类型化领域结果/错误，不预设 HTTP 行为。 | 不阻塞 Slice 7。 |
+
+### 18.1 Deferred Decisions
+
+以下决定明确延期，不由 Slice 7 计划或实现自行决定：
+
+1. Slice 8 的 HTTP 路径、请求/响应 Schema 绑定、HTTP status 和 API 兼容策略；
+2. 前端资产中心的编辑、审核、删除和恢复交互，以及产品原型如何映射为界面行为；
+3. Slice 10 Requirement Lifecycle 的版本、审核、删除和恢复规则；
+4. Slice 11 及完整 Phase 1 的治理、收口条件和最终用户 Closeout；
+5. PostgreSQL 压力/多节点并发验收、生命周期事件对外投递及保留策略；
+6. Asset-to-Case、资源绑定、Compiler、TestCase、Runner 和执行报告的后续合同。
 
 以下任一情况发生时必须停止实现并发起计划补正：需要 ORM/Schema/Migration、需要新增错误码或
 状态、需要改变 Slice 5/6 合同、需要 HTTP/Router/前端、需要默认项目或身份回退、需要引入新
