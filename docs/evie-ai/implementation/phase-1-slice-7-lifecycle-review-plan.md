@@ -1,7 +1,7 @@
 # EvieAi Phase 1 Slice 7 Lifecycle / Review 实施计划
 
 日期：2026-07-31
-计划状态：Proposed / Pending user approval
+计划状态：Approved / Ready for implementation
 Phase 1 合同状态：Accepted / Active
 Slice 7 合同状态：Accepted / Active
 Slice 7 实施状态：Not started
@@ -114,7 +114,7 @@ ADR-0002
 以下内容不在本计划、实现或验证范围内：
 
 - Router、HTTP API、Request/Response Schema、HTTP 状态映射和前端；它们属于 Slice 8 或独立前端工作；
-- Slice 6 Intake 行为、Slice 10 Requirement Lifecycle、Slice 11 治理、Slice 8、Phase 2 及以后；
+- Slice 6 Intake 行为、Slice 10 Requirement Lifecycle、Slice 11 前端资产中心及相关产品实现、Slice 8、Phase 2 及以后；
 - AI 生产者、Candidate、Preview、语义去重、RAG、Embedding；
 - Asset-to-Case、Intent IR、Binding、Compiler、TestCase、Runner、报告和执行；
 - ORM、Migration、数据回填、旧链删除或 CI-B01/CI-B02 修复；
@@ -347,10 +347,14 @@ TrustedUserPrincipal
 - soft delete；
 - restore deleted asset。
 
-每个命令在返回前只能明确给出 success 或稳定领域错误。成功结果必须包含最新的
-`test_asset_id`、适用时的 current/new `test_asset_version_id`、最新 `row_version`、最新
-review/deletion 状态、已写入的 Audit 事实和已完成的 idempotency result。事务必须已经完整
-commit；失败则必须完整 rollback。不得返回 `processing` 后由后台任务修改这些核心业务事实。
+每个命令在返回前只能明确给出 success 或稳定领域错误。Audit Event 和 completed idempotency
+result 必须在同一事务内持久化、flush 并完成最终校验；Service 只能在统一 commit 成功后返回。
+
+Service 对外领域结果只包含第 7 节已批准的 public `test_asset_id`、适用时的
+`test_asset_version_id` 或 `test_asset_review_record_id`、`changed`、最新 `row_version` 和受控的
+review/deletion 状态。不得返回内部 ORM PK、完整 Audit payload、IdempotencyRecord、原始 key、
+generation 或内部 winner 数据。失败则必须完整 rollback；不得返回 `processing` 后由后台任务修改
+这些核心业务事实。
 
 ### 11.2 术语边界
 
