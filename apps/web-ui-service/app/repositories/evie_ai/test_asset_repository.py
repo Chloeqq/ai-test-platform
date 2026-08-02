@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import case, select, update
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.sql.dml import Update
+from sqlalchemy.sql.elements import ColumnElement
 
+from app.constants.evie_ai import (
+    TestAssetConversionStatus,
+    TestAssetReviewStatus,
+)
 from app.models.evie_ai import (
     TestAsset,
     TestAssetSource,
@@ -19,6 +26,17 @@ from app.repositories.evie_ai.errors import (
     RepositoryDataIntegrityError,
 )
 from app.repositories.evie_ai.source_repository import TestAssetSourceRepository
+
+_VERSION_ADVANCEABLE_CONVERSION_STATUSES = (
+    TestAssetConversionStatus.NOT_STARTED.value,
+    TestAssetConversionStatus.BLOCKED.value,
+    TestAssetConversionStatus.SUCCEEDED.value,
+    TestAssetConversionStatus.STALE.value,
+)
+_VERSION_STALE_CONVERSION_STATUSES = (
+    TestAssetConversionStatus.SUCCEEDED.value,
+    TestAssetConversionStatus.STALE.value,
+)
 
 
 class TestAssetRepository(BaseRepository):
@@ -175,6 +193,156 @@ class TestAssetRepository(BaseRepository):
         self.db.flush()
         self.db.refresh(test_asset)
         return test_asset
+
+    def advance_current_version(
+        self,
+        *,
+        project_code: str,
+        test_asset_id: str,
+        version: TestAssetVersion,
+        expected_row_version: int,
+        updated_by: str,
+    ) -> bool:
+        """原子推进 current Version，并按已批准规则重置资产状态。"""
+        if version.id is None:
+            return False
+        statement = self._build_current_version_update(
+            project_code=project_code,
+            test_asset_id=test_asset_id,
+            version_id=version.id,
+            expected_row_version=expected_row_version,
+            updated_by=updated_by,
+        )
+        return self._execute_conditional_update(statement)
+
+    def compare_and_set_review_status(
+        self,
+        *,
+        project_code: str,
+        test_asset_id: str,
+        expected_row_version: int,
+        review_status: TestAssetReviewStatus,
+        updated_by: str,
+    ) -> bool:
+        """在 active 资产上条件更新审核状态，不触及转换状态。"""
+        statement = (
+            update(TestAsset)
+            .where(
+                TestAsset.project_code == project_code,
+                TestAsset.test_asset_id == test_asset_id,
+                TestAsset.row_version == expected_row_version,
+                TestAsset.deleted_at.is_(None),
+            )
+            .values(
+                review_status=review_status.value,
+                row_version=TestAsset.row_version + 1,
+                updated_by=updated_by,
+            )
+        )
+        return self._execute_conditional_update(statement)
+
+    def compare_and_set_deleted_at(
+        self,
+        *,
+        project_code: str,
+        test_asset_id: str,
+        expected_row_version: int,
+        deleted_at: datetime | None,
+        updated_by: str,
+    ) -> bool:
+        """仅在当前删除状态匹配时执行软删除或恢复 CAS。"""
+        statement = update(TestAsset).where(
+            TestAsset.project_code == project_code,
+            TestAsset.test_asset_id == test_asset_id,
+            TestAsset.row_version == expected_row_version,
+        )
+        if deleted_at is None:
+            statement = statement.where(TestAsset.deleted_at.is_not(None))
+        else:
+            statement = statement.where(TestAsset.deleted_at.is_(None))
+        statement = statement.values(
+            deleted_at=deleted_at,
+            row_version=TestAsset.row_version + 1,
+            updated_by=updated_by,
+        )
+        return self._execute_conditional_update(statement)
+
+    def get_deleted_current_version_for_restore(
+        self,
+        *,
+        project_code: str,
+        test_asset_id: str,
+    ) -> TestAssetVersion | None:
+        """仅为恢复流程锁定并读取已删除资产的 current Version。"""
+        statement = (
+            select(TestAssetVersion)
+            .join(TestAsset, TestAsset.current_version_pk == TestAssetVersion.id)
+            .where(
+                TestAsset.project_code == project_code,
+                TestAsset.test_asset_id == test_asset_id,
+                TestAsset.deleted_at.is_not(None),
+                TestAssetVersion.test_asset_pk == TestAsset.id,
+            )
+            .with_for_update()
+        )
+        return self.db.execute(statement).scalar_one_or_none()
+
+    def _build_current_version_update(
+        self,
+        *,
+        project_code: str,
+        test_asset_id: str,
+        version_id: int,
+        expected_row_version: int,
+        updated_by: str,
+    ) -> Update:
+        return (
+            update(TestAsset)
+            .where(
+                TestAsset.project_code == project_code,
+                TestAsset.test_asset_id == test_asset_id,
+                TestAsset.row_version == expected_row_version,
+                TestAsset.deleted_at.is_(None),
+                self._version_belongs_to_asset(version_id),
+                TestAsset.conversion_status.in_(
+                    _VERSION_ADVANCEABLE_CONVERSION_STATUSES
+                ),
+            )
+            .values(
+                current_version_pk=version_id,
+                review_status=TestAssetReviewStatus.PENDING.value,
+                conversion_status=case(
+                    (
+                        TestAsset.conversion_status.in_(
+                            _VERSION_STALE_CONVERSION_STATUSES
+                        ),
+                        TestAssetConversionStatus.STALE.value,
+                    ),
+                    else_=TestAssetConversionStatus.NOT_STARTED.value,
+                ),
+                row_version=TestAsset.row_version + 1,
+                updated_by=updated_by,
+            )
+        )
+
+    def _execute_conditional_update(self, statement: Update) -> bool:
+        result = cast(
+            CursorResult[object],
+            self.db.execute(statement.execution_options(synchronize_session="fetch")),
+        )
+        self.db.flush()
+        return result.rowcount == 1
+
+    @staticmethod
+    def _version_belongs_to_asset(version_id: int) -> ColumnElement[bool]:
+        return (
+            select(TestAssetVersion.id)
+            .where(
+                TestAssetVersion.id == version_id,
+                TestAssetVersion.test_asset_pk == TestAsset.id,
+            )
+            .exists()
+        )
 
     def bind_initial_version(
         self,
