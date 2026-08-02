@@ -46,11 +46,12 @@ ADR-0002
 | Domain commands / Inputs and outputs / command idempotency | 第 7 节。 |
 | State transition matrix / Version semantics / Review semantics / Delete-restore semantics | 第 8--9 节。 |
 | Transaction boundaries / Concurrency and CAS / Authorization and project scope | 第 10 节。 |
-| Error model / Audit and observability | 第 11--12 节。 |
-| Repository changes / Service changes / Approved implementation file scope | 第 13 节。 |
-| Delivery tasks / Test matrix / Quality gate / Regression baseline | 第 14--16 节。 |
-| Review gates / Rollback strategy / Acceptance criteria | 第 17 节。 |
-| Risks / Open questions / Deferred decisions | 第 18 节。 |
+| Execution model: synchronous, async I/O and background processing | 第 11 节。 |
+| Error model / Audit and observability | 第 12--13 节。 |
+| Repository changes / Service changes / Approved implementation file scope | 第 14 节。 |
+| Delivery tasks / Test matrix / Quality gate / Regression baseline | 第 15--17 节。 |
+| Review gates / Rollback strategy / Acceptance criteria | 第 18 节。 |
+| Risks / Open questions / Deferred decisions | 第 19 节。 |
 
 ## 2. Objective
 
@@ -117,6 +118,8 @@ ADR-0002
 - AI 生产者、Candidate、Preview、语义去重、RAG、Embedding；
 - Asset-to-Case、Intent IR、Binding、Compiler、TestCase、Runner、报告和执行；
 - ORM、Migration、数据回填、旧链删除或 CI-B01/CI-B02 修复；
+- AsyncSession 迁移、双 Repository 栈、BackgroundTasks、Celery、RQ、Queue、Worker、Outbox、
+  事件总线或任何外部网络副作用；
 - 质量门禁逻辑、质量 baseline、工具版本、阈值、exclude、ignore 或 `noqa` 豁免修改；
 - 任何默认 `project_code`、项目自动创建、客户端身份覆盖、内部 PK 暴露或全局 Session。
 
@@ -293,7 +296,120 @@ TrustedUserPrincipal
 - 不允许默认项目、自动创建 Project、根据内部 PK/用户名/email 回退或客户端指定 actor/channel。
 - 不暴露内部 ORM PK；审计和结果只使用已批准的 public IDs 与受控状态摘要。
 
-## 11. 错误模型
+## 11. Execution Model: Synchronous, Async I/O and Background Processing
+
+### 11.1 固定执行结论
+
+**Execution model decision: Synchronous domain execution approved.**
+
+以下 Slice 7 领域命令必须同步执行，并在调用返回前完成唯一的数据库事务：
+
+- create version；
+- restore historical version；
+- approve；
+- reject；
+- reopen；
+- soft delete；
+- restore deleted asset。
+
+每个命令在返回前只能明确给出 success 或稳定领域错误。成功结果必须包含最新的
+`test_asset_id`、适用时的 current/new `test_asset_version_id`、最新 `row_version`、最新
+review/deletion 状态、已写入的 Audit 事实和已完成的 idempotency result。事务必须已经完整
+commit；失败则必须完整 rollback。不得返回 `processing` 后由后台任务修改这些核心业务事实。
+
+### 11.2 术语边界
+
+| 术语 | 本计划定义 | Slice 7 结论 |
+|---|---|---|
+| Synchronous domain command | 调用方等待最终领域结果；Service 在返回前完成或回滚单一事务。 | 所有七个 Slice 7 写命令必须采用此模式。 |
+| Async I/O | Python/FastAPI 的 `async` / `await` 实现方式；它本身不表示请求提前返回或事务在后台继续。 | 当前不采用；未来 Slice 8 如使用 `async def`，必须单独明确安全适配方式。 |
+| Background job | 请求先返回，Worker 在后续执行任务并写事实。 | 不得用于 Slice 7 核心领域事实。 |
+
+不得将 `async def`、非阻塞 I/O、队列排队或任务 Worker 误写为并发控制、事务完成或幂等保证。
+
+### 11.3 当前数据库访问模型与适配边界
+
+当前批准的实现使用 SQLAlchemy synchronous `Session`：
+
+- `app/core/database.py` 以 `create_engine` 和 `sessionmaker` 创建 `SessionLocal`；
+- `app/repositories/base.py` 的 Repository 仅接收同步 `Session`；
+- `TestAssetIntakeService` 接收 `Callable[[], Session]`，并以 `with session.begin()` 在返回前
+  完成事务；
+- 现有 `app/services/evie_ai/**` 和 `app/repositories/evie_ai/**` 未使用 `AsyncSession`。
+
+Slice 7 必须沿用这一同步 Session 模型。不得为了“支持异步”全面迁移 Session、同时维护同步/异步
+两套 Repository，或在同步事务中跨 `await` 调用外部服务。未来 Slice 8 如选择 `async def`
+Router，必须在 Slice 8 合同中定义它如何安全调用既有同步领域事务；不得反向改变 Slice 7
+Service、Repository 或事务边界。
+
+### 11.4 并发原则
+
+异步执行不能代替并发控制。每个同步写命令仍必须依赖：
+
+- `expected_row_version`；
+- aggregate 条件更新和 CAS；
+- 数据库唯一约束；
+- 原子 content claim replace/acquire；
+- trusted project scope；
+- current version 验证；
+- commit 前的最终事实校验。
+
+任务排队、串行调用或请求重试不得让基于陈旧事实的第二个业务命令自动成功。row-version、
+Version、Review、delete/restore 和 Claim 冲突必须按照第 10 节与第 12 节的稳定领域错误
+fail-closed。
+
+### 11.5 禁止后台化的核心事实
+
+以下事实必须在同一个同步事务内持久化，禁止交给 Background job 延迟写入：
+
+- `TestAssetVersion`；
+- current-version binding；
+- `review_status`；
+- `ReviewRecord`；
+- `deleted_at`；
+- Content Claim；
+- `row_version`；
+- successful Audit Event；
+- idempotency completed result。
+
+### 11.6 Deferred Post-Commit Side Effects
+
+notification、search indexing、analytics、external audit export、webhook 和 data-warehouse event
+可在未来作为 post-commit side effect 另行设计，但 Slice 7 不实现它们。核心事务不得调用外部
+网络服务，也不得新增 Outbox、Queue、Worker、任务表或事件总线；这些都需要独立批准合同。
+
+### 11.7 超时、取消与失败语义
+
+1. 数据库超时、锁异常或未分类持久化异常必须使 `with session.begin()` 退出并 rollback；不得
+   提交部分事实。实现只使用已批准的稳定领域错误，不能为了超时新增自由错误码。
+2. `expected_row_version`、唯一 Claim 或状态条件冲突必须由相应 CAS/约束转换为受控领域失败；
+   不得用自动业务重试把陈旧命令变成成功。
+3. 调用在 commit 前被取消、抛出异常或终止时，Idempotency 不得完成，事务必须 rollback；同 key
+   之后可以按既有合同安全重试。
+4. commit 成功后若响应中断，调用方必须使用相同 idempotency key 重放以读取已持久化 winner，
+   不得再次执行业务命令。
+5. 任何 final fact validation 在 commit 前失败时，Version、ReviewRecord、Audit、Claim 和
+   Idempotency result 必须共同回滚。
+
+### 11.8 执行模型测试与架构守卫
+
+本计划的测试与架构守卫必须额外证明：
+
+1. concurrent create version 仅一个有效 Version/current-pointer/claim 结果成功；
+2. concurrent review transition 仅一个 ReviewRecord 和一次状态推进成功；
+3. review versus delete race 与 restore versus create-version race 都返回稳定结果且无部分事实；
+4. transaction timeout/锁失败、commit 前异常和 final fact validation 异常均完整 rollback；
+5. repeated client submission 仅由同 key replay 返回 winner，不重复写 Version、ReviewRecord 或 Audit；
+6. cancelled invocation before commit 不留下 completed idempotency 或其他核心事实；
+7. 新 Service 在事务内不执行 external I/O；
+8. AST 守卫拒绝 `FastAPI BackgroundTasks`、Celery、RQ、queue producer、worker module、
+   HTTP client、AI service 和 external notification service import；
+9. 移除 CAS 条件后的并发测试必须失败，作为 mutation-proof 等价负向证据。
+
+这些测试使用现有真实 SQLite/SQLAlchemy fixture；若无法以当前测试基础设施可靠模拟 timeout 或
+取消，则必须在实施前发起计划补正，而不是用 mock 或 skip 代替事务事实证明。
+
+## 12. 错误模型
 
 Slice 7 只产生既有结构化领域异常和 stage，不定义 HTTP 映射：
 
@@ -315,9 +431,9 @@ Slice 7 只产生既有结构化领域异常和 stage，不定义 HTTP 映射：
 不得使用 `HTTPException`、自由文本、`TypeError` 或数据库原始异常替代领域错误；不得把
 预期冲突转为 500 或将意外完整性错误伪装为成功。
 
-## 12. Audit 与可观测性设计
+## 13. Audit 与可观测性设计
 
-### 12.1 事件矩阵
+### 13.1 事件矩阵
 
 | 成功业务结果 | Audit event | 必填受控事实 | 禁止记录 |
 |---|---|---|---|
@@ -333,24 +449,24 @@ Slice 7 只产生既有结构化领域异常和 stage，不定义 HTTP 映射：
 所有 `before_state_summary` / `after_state_summary` 只允许固定、受控字段；不得把 `dict` 作为
 未约束业务协议传递或写入任意请求内容。
 
-### 12.2 日志
+### 13.2 日志
 
 日志使用既有结构化日志工具，只记录 `trace_id`、`request_id`、`project_code`、asset/version
 public ID、operation、status、duration 和 error code。不得记录自然语言测试步骤、预期结果、
 审查全文、原始 idempotency key、Authorization、Cookie、Token 或数据库内部主键。
 
-## 13. 批准实施文件范围
+## 14. 批准实施文件范围
 
 计划实现时只允许下列文件；若发现必须修改本表外文件，必须停止并请求计划补正。
 
-### 13.1 Repository 变更
+### 14.1 Repository 变更
 
 Repository 只增加第 4 节列出的受限持久化原语：锁定或条件读取、current version 推进、审核
 状态 CAS、删除/恢复 CAS，以及恢复专用的 Claim acquire。所有方法必须验证聚合关系和
 `project_code`，只执行 query/add/flush/受限条件 update，不包含领域编排、Clock、日志、
 `commit` 或 `rollback`。不得把“读取已删除 Asset 的 current Version”暴露成一般查询能力。
 
-### 13.2 Service 变更
+### 14.2 Service 变更
 
 两个新增 Service 各自只拥有其领域的公开命令和私有编排辅助步骤：
 
@@ -377,7 +493,7 @@ Repository/Policy/context 服务。它们不共享大而模糊的 util，不导�
 Slice 6 文件、Model、Schema、Migration、Router、前端、`id_gen.py`、常量、错误码、
 Review Policy、Request Fingerprint、质量 baseline、Workflow 或 Ruleset。
 
-## 14. 交付任务与评审门
+## 15. 交付任务与评审门
 
 | 任务 | 目标 | 允许生产文件 | 核心验收 |
 |---|---|---|---|
@@ -387,13 +503,13 @@ Review Policy、Request Fingerprint、质量 baseline、Workflow 或 Ruleset。
 | S7-T04 | 实现新版本与历史恢复。 | `test_asset_lifecycle_service.py` | 不可变 Version、no-op、状态映射、原子 claim replace、历史恢复创建新 Version、CAS。 |
 | S7-T05 | 实现 Review Service。 | `test_asset_review_service.py` | 仅 current Version、合法 approve/reject/reopen、Review Record insert-only、审核和 conversion 分离。 |
 | S7-T06 | 实现 delete/restore。 | `test_asset_lifecycle_service.py` | 删除释放 claim；恢复先拿 claim 后清 deleted；冲突/重放/失败全部 fail-closed。 |
-| S7-T07 | 增加真实数据库、事务、架构与回归测试，并完成门禁和失败归因。 | 计划内测试文件 | 所有关键失败零残留；新增违规与新增回归均为 0。 |
+| S7-T07 | 增加真实数据库、同步执行模型、事务、并发、架构与回归测试，并完成门禁和失败归因。 | 计划内测试文件 | 超时/取消/commit 前失败零残留；无后台核心事实；新增违规与新增回归均为 0。 |
 
 每个任务完成后必须先进行局部审查和目标测试；不得将 S7-T01 至 T07 混成不可审查的大型提交。
 任何新增模型、Schema、Migration、API、错误码或权限规则需求都是 stop condition，而不是本计划
 可自行扩大范围的事项。
 
-## 15. 测试矩阵与验收标准
+## 16. 测试矩阵与验收标准
 
 | 类别 | 必测场景 | 持久化断言 | 计划测试节点 |
 |---|---|---|---|
@@ -404,15 +520,16 @@ Review Policy、Request Fingerprint、质量 baseline、Workflow 或 Ruleset。
 | scope/identity | inactive Project、non-admin、跨项目 Asset/Version/Review/Claim、缺失/非法 principal。 | 业务表无写入；不泄露跨项目事实。 | 两个 Service 测试，复用 Slice 5 fixtures。 |
 | 幂等 | 每种写操作的同 key 同指纹 replay、同 key 异指纹 conflict、过期 generation CAS、winner 不可读。 | replay 不新增 Version/Review/Audit/Claim/Source；损坏 winner fail-closed。 | Lifecycle/Review Service 测试。 |
 | 并发/事务 | 并发同 row、并发 Version、Claim replace/reacquire、Review CAS。 | 失败后 Asset、Version、Source、Claim、Review、Audit、Idempotency 无局部残留。 | 真实 SQLite/SQLAlchemy 测试及 Repository 测试。 |
+| 执行模型 | create-version/review/delete/restore race、数据库 timeout/锁失败、commit 前取消或异常、final fact validation 异常、同 key 重复提交。 | 全部核心事实同步 commit 或 rollback；无 completed winner 或成功 Audit 残留；重放不重复写入。 | `test_evie_ai_lifecycle_service.py`、`test_evie_ai_review_service.py`。 |
 | Audit 安全 | 所有事件类型和 replay/no-op。 | 不含正文、原始 key、内部 PK、SQL、token、凭据、Session、异常或堆栈。 | 两个 Service 测试。 |
-| 架构边界 | 新 Service 的 imports、自然语言字段、禁止旧链。 | AST 不出现 Candidate/Preview/Compiler/Runner/TestCase/Router 依赖。 | `test_evie_ai_architecture_boundaries.py` |
+| 架构边界 | 新 Service 的 imports、自然语言字段、禁止旧链、后台和外部 I/O 依赖。 | AST 不出现 Candidate/Preview/Compiler/Runner/TestCase/Router、BackgroundTasks/Celery/RQ/queue/worker/HTTP client/AI/notification 依赖。 | `test_evie_ai_architecture_boundaries.py` |
 | Repository | 受限 CAS、deleted current read、claim restore operation。 | Runtime 返回类型一致；Repository 无 commit/rollback。 | `test_evie_ai_repositories.py`、`test_evie_ai_coordination_repositories.py` |
 
 除 mock 调用验证外，上表所有 aggregate 一致性、重放、冲突和回滚场景必须使用现有真实
 SQLite/SQLAlchemy fixture。测试不得通过宽泛 `pytest.raises(Exception)`、skip、降低断言或
 修改无关 fixture 制造假阳性。
 
-### 15.1 执行命令
+### 16.1 执行命令
 
 使用已激活且现有的项目虚拟环境执行以下命令；不得为 Slice 7 安装或升级依赖：
 
@@ -458,7 +575,7 @@ failed、errors、skipped、warnings、失败 node ID、首个异常和归一化
 CI-B02 是独立的 `apps/ai-orchestrator/src/app.py` 缺失 collection failure。Slice 7 必须证明
 新增失败为 0，而非修改或掩盖这些基线问题。
 
-### 15.2 负向证明
+### 16.2 负向证明
 
 新增测试必须证明关键保护确实生效，而不只是测试成功路径：
 
@@ -471,7 +588,7 @@ CI-B02 是独立的 `apps/ai-orchestrator/src/app.py` 缺失 collection failure�
 
 这构成 mutation test 的等价负向证明；不要求在本 Slice 引入新的 mutation-testing 第三方依赖。
 
-## 16. 质量门禁与架构守卫
+## 17. 质量门禁与架构守卫
 
 Slice 7 的 merge gate 是 required check `evie-ai-code-quality`。实现分支必须满足：
 
@@ -483,14 +600,15 @@ Slice 7 的 merge gate 是 required check `evie-ai-code-quality`。实现分支�
 4. 新增/修改 Service 不直接调用 `datetime.now()` / `utcnow()`、不使用核心 `Any`、不使用
    magic status/error string，不扩大函数长度、复杂度、参数数量或嵌套违规；
 5. 新架构守卫证明 Lifecycle/Review Service 不导入 Candidate、Preview、TestPointPlan、
-   structurer、execution compiler、ContractValidator、Runner、TestCase 或 Router；
+   structurer、execution compiler、ContractValidator、Runner、TestCase、Router、BackgroundTasks、
+   Celery、RQ、queue producer、worker module、HTTP client、AI service 或 notification service；
 6. 工具缺失、解析异常、空/畸形输出、Git 快照异常或 baseline 比较异常都必须 fail-closed；
 7. PR 只在 `evie-ai-code-quality` 成功且无新增质量违规后可评审；CI-B01、CI-B02 仅可作为
    已归因历史失败记录，不能被修复、忽略或设为 required。
 
-## 17. 交付、回滚与 Closeout 门
+## 18. 交付、回滚与 Closeout 门
 
-### 17.1 Review Gates
+### 18.1 Review Gates
 
 | Gate | 进入条件 | 必须核验 | 不满足时的处理 |
 |---|---|---|---|
@@ -498,9 +616,9 @@ Slice 7 的 merge gate 是 required check `evie-ai-code-quality`。实现分支�
 | Pre-implementation review | 用户明确批准计划；从最新干净 `dev` 创建独立实施分支。 | 基线、允许文件、禁止文件、配置、唯一事实源、事务和测试计划。 | 合同/范围不一致时停止并请求补正。 |
 | Increment review | 每个 S7-T0x 的最小实现单元完成。 | 对应真实 SQLite 测试、Repository 无 commit/rollback、无直接 ORM 更新、架构守卫。 | 不合并后续任务；先修复当前单元。 |
 | PR review | 所有 S7-T0x 和完整测试矩阵完成。 | required quality check、zero new violations、完整 web-ui 与干净基线失败签名对比。 | 新回归、质量失败或范围异常时阻塞合并。 |
-| Closeout review | 实现 PR 已合并且独立只读审计完成。 | 第 17.4 节验收证据、PR/commit/测试/回归归因和用户批准。 | Slice 7 Closeout 保持 `Not completed`。 |
+| Closeout review | 实现 PR 已合并且独立只读审计完成。 | 第 18.4 节验收证据、PR/commit/测试/回归归因和用户批准。 | Slice 7 Closeout 保持 `Not completed`。 |
 
-### 17.2 交付节奏
+### 18.2 交付节奏
 
 1. 用户批准本计划后，从最新干净 `dev` 创建独立 Slice 7 实施分支。
 2. 每个 S7-T0x 以最小可审查单元实现和验证；生产与对应测试保持同一逻辑提交。
@@ -508,7 +626,7 @@ Slice 7 的 merge gate 是 required check `evie-ai-code-quality`。实现分支�
 4. 实现合并后执行独立只读审查；所有验收项有真实证据后，才可提出 Slice 7 Closeout 文档。
 5. 用户明确批准 Closeout 前，Slice 7 Closeout 保持 `Not completed`。
 
-### 17.3 回滚策略
+### 18.3 回滚策略
 
 - 本 Slice 不含 Migration；因此不得以修改历史版本、直接数据库更新或删除审计记录作为回滚手段。
 - 在未合并 PR 阶段，回滚采用丢弃/反转该独立分支的未合并实现，由 Git 历史处理。
@@ -517,12 +635,12 @@ Slice 7 的 merge gate 是 required check `evie-ai-code-quality`。实现分支�
 - 业务数据纠正只能通过后续已批准的生命周期操作或受审计的专项迁移/运维程序进行；后者不属于
   Slice 7 自动授权范围。
 
-### 17.4 Slice 7 验收标准
+### 18.4 Slice 7 验收标准
 
 Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 
 - 两个唯一 Service 已实现，且不存在平行 Lifecycle/Review 写入口；
-- 第 8--12 节所有状态、不可变、事务、并发、权限、幂等、错误和审计合同均有真实持久化证据；
+- 第 8--13 节所有状态、不可变、事务、并发、权限、幂等、同步执行、错误和审计合同均有真实持久化证据；
 - 新版本、历史恢复、审核、删除、恢复、replay、冲突和失败回滚矩阵通过；
 - 无 Router/API、前端、ORM、Migration、Candidate、Preview、Compiler、Runner、TestCase 或
   Slice 8 变更；
@@ -533,9 +651,9 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 上述条件不宣告 Phase 1 完成；完整 Phase 1 Closeout 仍受 Slice 8、Slice 9 及后续合同和
 用户决策约束。
 
-## 18. 风险、Open Questions 与 Deferred Decisions
+## 19. 风险、Open Questions 与 Deferred Decisions
 
-### 18.1 Risks
+### 19.1 Risks
 
 | ID | 风险或待决策 | 处理方式 | 是否阻塞本计划 |
 |---|---|---|---|
@@ -545,7 +663,7 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 | S7-R04 | SQLite 并发测试可能无法替代未来完整多数据库压力验证。 | Slice 7 使用真实 SQLite 事务和确定性 CAS/唯一约束测试；不声称替代后续集成/数据库验证。 | 不阻塞本 Slice；结果如不稳定则阻塞其验证。 |
 | S7-R05 | Slice 8 API 参数、HTTP 映射和前端交互尚未开始。 | 明确保留给 Slice 8；Service 仅返回类型化领域结果/错误，不预设 HTTP 行为。 | 不阻塞 Slice 7。 |
 
-### 18.2 Open Questions
+### 19.2 Open Questions
 
 1. 产品原型最终基线的权威文件路径或可审查副本是什么；它是否引入任何不在 D-04、D-06、
    D-07、D-08、D-10 中的后端行为？在获得该证据前，Slice 7 仅实施本文件已有合同。
@@ -557,7 +675,7 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 这些问题均不得改变本计划已明确的状态、事务、权限或错误边界；若答案要求改变它们，必须先
 进行计划补正和用户批准。
 
-### 18.3 Deferred Decisions
+### 19.3 Deferred Decisions
 
 以下决定明确延期，不由 Slice 7 计划或实现自行决定：
 
@@ -572,7 +690,7 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 状态、需要改变 Slice 5/6 合同、需要 HTTP/Router/前端、需要默认项目或身份回退、需要引入新
 依赖、需要修改 quality baseline、或发现产品决策与本计划已接受合同冲突。
 
-## 19. Final Planning Decision
+## 20. Final Planning Decision
 
 技术合同、当前模型、既有 Repository、Slice 5/6 基础和质量门禁均足以形成可审批的 Slice 7
 实施计划。产品原型最终基线文件在干净仓库中不可定位已被记录为 S7-R01，但不影响本计划中
