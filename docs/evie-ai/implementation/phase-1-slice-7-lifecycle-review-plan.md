@@ -9,8 +9,8 @@ Slice 7 Closeout 状态：Not completed
 
 ## 1. 文档定位与状态边界
 
-本计划将已接受的 Phase 1 `Lifecycle 和 Review Service` 合同拆解为可审查的后端实施工作，
-不授权实现。本文件不改变任何已接受的架构、模型、Schema、Migration、API 或前端合同。
+本计划获得用户批准并合并后，授权按照第 14 节批准文件范围和 S7-T01 至 S7-T07 的顺序实施，
+但不授权任何超范围实现。本文件不改变任何已接受的架构、模型、Schema、Migration、API 或前端合同。
 
 - 基线：`origin/dev@91ecd1b43d38d67d4c8a25fac634a1664bfe2208`。
 - Slice 6 Closeout：Completed；本计划只复用其可信身份、项目作用域、actor/channel/trace、
@@ -73,7 +73,7 @@ ADR-0002
 | [ARCHITECTURE_BASELINE](../ARCHITECTURE_BASELINE.md) | 自然语言资产域拥有资产、版本、来源、审核、审计、幂等和生命周期事实；Asset-to-Case 是唯一 NL 到 machine 边界。 | Slice 7 只能处理自然语言资产生命周期，不能提前开始转换。 |
 | [Phase 1 Specification](phase-1-natural-language-asset-lifecycle-specification.md) | 规定两个唯一 Service、版本不可变、审核状态机、软删除、内容声明、幂等、审计和 admin-only 项目范围。 | 以该文件的状态、事务、错误和持久化合同为实现依据。 |
 | [Phase 1 Overall Plan](phase-1-natural-language-asset-lifecycle-plan.md) | Slice 7 名称为 `Lifecycle 和 Review Service`；Slice 8 才是 Router/API。 | 只实施本计划的 Service/Repository/test 层，不创建 Router、Schema 或前端。 |
-| [Phase Traceability](phase-traceability.md) | Slice 7：`Accepted / Active`、`Not started`；Slice 8：`Not started`；Phase 1 仍进行中。 | 本文件保持计划待批准，不修改实施或 Closeout 状态。 |
+| [Phase Traceability](phase-traceability.md) | Slice 7：`Accepted / Active`、`Not started`；Slice 8：`Not started`；Phase 1 仍进行中。 | 计划已批准；Slice 7 implementation status 保持 `Not started`，直到实施代码首次提交。 |
 | [Slice 6 Intake Plan](phase-1-slice-6-intake-plan.md) 与 [Slice 6 Closeout](phase-1-slice-6-intake-closeout.md) | 可信 principal、项目作用域、actor/channel/trace、幂等、内容指纹、事务回滚和审计安全基础已交付。 | 必须复用公开基础；不得复制或导入 Intake 私有实现。 |
 | [Coding Standards](../engineering/coding-standards.md) 与 [Code Quality Gate](../engineering/code-quality-gate.md) | Service 拥有事务；Repository 不 commit/rollback；使用注入 Clock；zero new violations。 | Slice 7 新增和修改代码必须通过 `evie-ai-code-quality`，不得扩大 baseline。 |
 
@@ -740,4 +740,4 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 实施计划。产品原型最终基线文件在干净仓库中不可定位已被记录为 S7-R01，但不影响本计划中
 完全由已接受 Phase 1 合同确定的后端生命周期和审核边界。
 
-**Planning conclusion: Ready for Slice 7 plan review.**
+**Planning conclusion: Ready for Slice 7 implementation.**
