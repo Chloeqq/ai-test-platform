@@ -190,46 +190,63 @@ reason 都进入指纹，因此不是以 Slice 6 Intake 的创建机制替代审
 
 ## 8. 状态转换矩阵
 
-### 8.1 review_status
+### 8.1 Review Status Transition Matrix
 
-| 当前状态 | 命令 | 目标状态 | 条件 | 记录 |
-|---|---|---|---|---|
-| `pending` | approve | `approved` | 目标必须为 current version；资产未删除；CAS 成功。 | 新增 immutable `ReviewRecord`、`review_changed` Audit、row version +1。 |
-| `pending` | reject | `rejected` | 同上，且遵守既有 comment/reason Policy。 | 同上。 |
-| `approved` | reopen | `pending` | 必须提供非空 reopen reason；目标为 current version；CAS 成功。 | 同上。 |
-| `rejected` | reopen | `pending` | 必须提供非空 reopen reason；目标为 current version；CAS 成功。 | 同上。 |
-| 任意其他组合 | review command | 无变化 | 直接使用 `EVIE_INVALID_REVIEW_TRANSITION` fail-closed。 | 不新增 Review/Audit/Idempotency 成功结果。 |
+审核只改变 `review_status`；它不创建 Version、不改变自然语言正文、不改变 `conversion_status`，
+也不执行 delete/restore。下表以既有 `review_policy` 和 Specification D-07/A-08 为唯一依据。
 
-审核状态与转换状态完全分离。审核命令不得创建版本、更新自然语言内容或直接改变
-`conversion_status`。
+| Current state | Command | Preconditions | Resulting state | row_version behavior | ReviewRecord behavior | Audit behavior | Error on rejection | Contract evidence |
+|---|---|---|---|---|---|---|---|---|
+| `pending` | approve | Asset active；target 是 current Version；`expected_row_version` 匹配。 | `approved` | CAS 成功后 +1。 | 插入一条 immutable record，action=`approve`。 | 一条 `review_changed`。 | 无；前置失败按对应行。 | Specification 8、8.1；`review_policy.py` transitions。 |
+| `pending` | reject | Asset active；target 是 current Version；`expected_row_version` 匹配；reason 非空。 | `rejected` | CAS 成功后 +1。 | 插入一条 immutable record，action=`reject`。 | 一条 `review_changed`。 | 缺 reason 或其他非法转换：`EVIE_INVALID_REVIEW_TRANSITION`。 | Specification 8、8.1；`review_policy.py` reason policy。 |
+| `approved` | reopen | Asset active；target 是 current Version；`expected_row_version` 匹配；reopen reason 非空。 | `pending` | CAS 成功后 +1。 | 插入一条 immutable record，action=`reopen`。 | 一条 `review_changed`。 | 缺 reason：`EVIE_INVALID_REVIEW_TRANSITION`。 | Specification 8、8.1；`review_policy.py` transitions。 |
+| `rejected` | reopen | Asset active；target 是 current Version；`expected_row_version` 匹配；reopen reason 非空。 | `pending` | CAS 成功后 +1。 | 插入一条 immutable record，action=`reopen`。 | 一条 `review_changed`。 | 缺 reason：`EVIE_INVALID_REVIEW_TRANSITION`。 | Specification 8、8.1；`review_policy.py` transitions。 |
+| `pending` | reopen | 无合法 Policy transition。 | 无变化。 | 不变。 | 不新增。 | 不新增。 | `EVIE_INVALID_REVIEW_TRANSITION`。 | Specification 8；`review_policy.py` transitions。 |
+| `approved` | approve | 无合法 Policy transition。 | 无变化。 | 不变。 | 不新增。 | 不新增。 | `EVIE_INVALID_REVIEW_TRANSITION`。 | Specification 8.1。 |
+| `rejected` | reject | 无合法 Policy transition。 | 无变化。 | 不变。 | 不新增。 | 不新增。 | `EVIE_INVALID_REVIEW_TRANSITION`。 | Specification 8.1。 |
+| `approved` | reject | 无合法 Policy transition。 | 无变化。 | 不变。 | 不新增。 | 不新增。 | `EVIE_INVALID_REVIEW_TRANSITION`。 | Specification 8；`review_policy.py` transitions。 |
+| `rejected` | approve | 无合法 Policy transition。 | 无变化。 | 不变。 | 不新增。 | 不新增。 | `EVIE_INVALID_REVIEW_TRANSITION`。 | Specification 8；`review_policy.py` transitions。 |
+| 任意 review status，Asset deleted | approve/reject/reopen | A-08 先校验 Asset 未删除。 | 无变化。 | 不变。 | 不新增。 | 不新增。 | `EVIE_ASSET_DELETED`。 | Specification 8.1 step 1；D-08。 |
+| 任意 review status，target 非 current Version | approve/reject/reopen | Asset active，但 target 不等于 `current_version_pk`。 | 无变化。 | 不变。 | 不新增。 | 不新增。 | `EVIE_REVIEW_VERSION_NOT_CURRENT`。 | Specification 8、8.1 steps 2--9。 |
+| 任意 active review status | create version | 内容变化、Asset active、非 `processing`，Version/Claim CAS 成功。 | 新 current Version 为 `pending`。 | Version/current-pointer mutation 成功后 +1。 | 不创建虚假 ReviewRecord。 | 一条 `version_created`。 | 按第 8.2 节；不适用 review transition。 | Specification 7、8；Specification 8 明确新版本 reset pending。 |
+| 任意 active review status | restore historical version | 指定历史 Version 属于同一 Asset；reason、CAS 和 Claim 条件成立。 | 新 current Version 为 `pending`。 | Version/current-pointer mutation 成功后 +1。 | 不创建虚假 ReviewRecord。 | 一条 `version_restored`。 | 按第 8.2 节；不适用 review transition。 | Specification 7、8；Specification 8 明确新版本 reset pending。 |
 
-### 8.2 创建新版本或历史恢复后的状态
+相同 Idempotency-Key 且相同 fingerprint 的审核命令直接返回其已持久化 winner，不再次执行上表的
+状态转换、不插入新的 ReviewRecord 或 Audit。不同 key 对已经完成的同一最终转换，仍按上表返回
+`EVIE_INVALID_REVIEW_TRANSITION`。
 
-| 前置条件 | 版本结果 | review_status | conversion_status | 禁止行为 |
-|---|---|---|---|---|
-| 当前资产 active，内容与 current 的规范化指纹不同，当前 conversion 为 `not_started` 或 `blocked` | 创建 `version_no + 1`，更新 current pointer | `pending` | `not_started` | 不修改旧版本；不得新建来源。 |
-| 当前资产 active，内容不同，当前 conversion 为 `succeeded` 或 `stale` | 同上 | `pending` | `stale` | 不直接清除历史执行事实或创建 TestCase。 |
-| 当前资产 active，历史版本属于同一资产且 restore reason 合法 | 复制历史自然语言内容为全新 `version_no + 1` | `pending` | 按上两条映射 | 不把 pointer 指向历史 Version。 |
-| 当前 conversion 为 `processing` | 无变化 | 无变化 | 无变化 | 返回 `EVIE_ASSET_STATE_CONFLICT`；不编辑。 |
-| 资产已删除 | 无变化 | 无变化 | 无变化 | 返回 `EVIE_ASSET_DELETED`；不编辑。 |
-| 规范化内容与 current 相同 | 不创建版本，返回 current | 保持 | 保持 | 不 bump row version、不写 Audit、不产生伪版本。 |
+### 8.2 Version and Conversion Status Rules
 
-`conversion_status` 合法值仅为 `not_started`、`processing`、`blocked`、`succeeded`、`stale`；
-Slice 7 不得引入 `failed` 或任意自由字符串。除 `processing` 和已删除资产外，不额外发明
-内容编辑禁令；所有实际转换由既有 Policy 与合同决定。
+| Preconditions and command | Version result | review_status | conversion_status | row_version / Audit | Stable rejection and evidence |
+|---|---|---|---|---|---|
+| Asset active；create version 内容与 current 规范化 fingerprint 不同；current conversion=`not_started` 或 `blocked`。 | 创建 `version_no + 1` 并切换 current pointer。 | `pending`。 | `not_started`。 | +1；`version_created`。 | Specification 7 D-06。 |
+| Asset active；create version 内容不同；current conversion=`succeeded` 或 `stale`。 | 创建 `version_no + 1` 并切换 current pointer。 | `pending`。 | `stale`。 | +1；`version_created`。 | Specification 7 D-06。 |
+| Asset active；restore historical version；目标历史 Version 属于同一 Asset；reason、CAS、Claim 条件成立。 | 复制历史自然语言内容为全新 `version_no + 1`；不得重指历史 Version。 | `pending`。 | 按该资产当前 conversion 的上述 D-06 映射。 | +1；`version_restored`。 | Specification 7 D-06、Specification 8。 |
+| current conversion=`processing`；create/restore historical version。 | 无 Version 或 pointer 变化。 | 不变。 | 不变。 | 不变；无 Audit。 | `EVIE_ASSET_STATE_CONFLICT`；Specification 7 D-06。 |
+| Asset deleted；create/restore historical version。 | 无 Version 或 pointer 变化。 | 不变。 | 不变。 | 不变；无 Audit。 | `EVIE_ASSET_DELETED`；Specification 7 D-06、D-08。 |
+| 规范化内容与 current 相同；create version。 | 不创建伪 Version，返回 current。 | 保持。 | 保持。 | 不 bump row；无 Audit。 | Specification 7 D-06。 |
 
-### 8.3 删除与恢复
+合法 `conversion_status` 仅为 `not_started`、`processing`、`blocked`、`succeeded`、`stale`；
+不得引入 `failed`。除 D-06 已明确的 `processing` 和 deleted 限制外，本计划不凭一般经验新增
+内容编辑禁令。
 
-| 当前状态 | 命令 | 结果 | Claim 规则 | 审计与幂等 |
-|---|---|---|---|---|
-| active | delete | 设置 `deleted_at`，row version +1；保留 current/source/review/version。 | 在同一事务中释放该资产的 current content claim。 | `asset_deleted`；成功 idempotency 结果在提交后完成。 |
-| deleted | delete with new key | 无变化，`EVIE_ASSET_STATE_CONFLICT`。 | 无变化。 | 不新增成功 Audit。 |
-| deleted | restore | 先重新获取 current content claim，再清除 `deleted_at`，row version +1。 | 若其他 active asset 已持有 fingerprint，返回 `EVIE_RESTORE_DUPLICATE_CONFLICT`。 | `asset_restored`；不创建版本。 |
-| active | restore with new key | 无变化，稳定状态冲突。 | 无变化。 | 不新增成功 Audit。 |
-| 任意状态 | 相同 idempotency key 与相同 fingerprint | 返回已完成原结果。 | 不重复释放/获取 claim。 | 不新增 Version、Review、Audit、Source 或 Claim。 |
+### 8.3 Asset Delete / Restore Matrix
 
-删除和恢复不改变 `review_status`、`conversion_status`、current version 内容或版本号。删除后，
-版本创建和审核被禁止；恢复不会自动审核或重新转换。
+删除和恢复只改变 `deleted_at`、Claim 与 `row_version`，不创建内容 Version，也不改变
+`review_status`、`conversion_status` 或 current Version 内容。每个输入组合只有以下一个稳定结果：
+
+| Asset state / idempotency input | Command | Result | row_version / Claim | Audit / completed winner | Stable error and evidence |
+|---|---|---|---|---|---|
+| 任意原命令已成功；相同 scope/key 且相同 fingerprint | delete 或 restore replay | 返回原已持久化 delete/restore 结果。 | 不再改变 row 或 Claim。 | 不新增 Audit；读取同一 completed winner。 | Specification 5 D-04、Specification 9 D-08。 |
+| 任意相同 scope/key，但 fingerprint 不同 | delete 或 restore | 无业务执行。 | 不变。 | 不新增 Audit/winner。 | `EVIE_IDEMPOTENCY_CONFLICT`；Specification 5 D-04。 |
+| Asset deleted；new key | delete | 无业务执行。 | 不变；不重复 release Claim。 | 不新增 Audit/winner。 | `EVIE_ASSET_STATE_CONFLICT`；Specification 9 D-08 的“不同 key 重复删除返回 409 状态冲突”。 |
+| Asset active；new key | restore | 无业务执行。 | 不变；不 acquire Claim。 | 不新增 Audit/winner。 | `EVIE_ASSET_STATE_CONFLICT`；Specification 9 D-08 的“不同 key 重复恢复返回 409 状态冲突”。 |
+| Asset deleted；new key | restore | 先获取 current content Claim，再清除 `deleted_at`。 | CAS 成功后 +1；Claim 已恢复。 | 一条 `asset_restored`；同一事务内完成 winner。 | 若 Claim 被其他 active Asset 占用：`EVIE_RESTORE_DUPLICATE_CONFLICT`；Specification 6.3、9。 |
+| 已由前次 restore 变为 active；new key | restore | 无业务执行。 | 不变。 | 不新增 Audit/winner。 | `EVIE_ASSET_STATE_CONFLICT`；Specification 9 D-08。 |
+| Asset active；new key | delete | 设置 `deleted_at`，保留 current/source/review/version。 | CAS 成功后 +1；同一事务 release current Claim。 | 一条 `asset_deleted`；同一事务内完成 winner。 | 无；前置/CAS 失败按第 10、12 节。 | Specification 6.3、9 D-08。 |
+
+删除后 create-version、restore-historical-version 和所有 review command 由第 8.1/8.2 节拒绝；
+恢复不会自动审核、重新转换、复制来源或创建新 Version。
 
 ## 9. 版本、审核、删除与恢复的不可变事实
 
@@ -250,15 +267,33 @@ Slice 7 不得引入 `failed` 或任意自由字符串。除 `processing` 和已
 
 ### 10.1 事务边界
 
-每次首次执行的公开写操作只使用一个 Service 拥有的 `with session.begin()` 事务。以下事实
-必须共同提交或共同回滚：
+每次首次执行的公开写操作只使用一个 Service 拥有的 `with session.begin()` 事务。该事务的顺序
+固定为：
+
+1. 创建或以 generation CAS 重新占用 pending/in-progress Idempotency coordination；
+2. 写入或条件更新业务事实；
+3. 写入适用的 Version、ReviewRecord 与 Claim；
+4. 写入成功 Audit Event；
+5. 写入 completed idempotency result 和 winner public result summary；
+6. `flush` 后执行所有关系、scope、row-version、Claim、winner 与返回事实校验；
+7. 仅在全部校验成功后由同一个 `session.begin()` 统一 commit；Service 仅在 commit 成功后返回。
+
+这里的 pending/in-progress 仅表示现有 `TestAssetIdempotencyRecord.completed_at is None` 的协调
+记录，不新增状态字段、任务表或后台执行协议。
+
+因此下列事实必须共同提交或共同回滚：
 
 - Asset 条件更新、Version 创建或 current pointer 更新；
 - Claim 替换、释放或恢复前重获；
 - Review Record；
 - Audit Event；
-- Idempotency Claim/Result/Generation 状态；
+- pending/in-progress Idempotency coordination、completed result 与 winner public result；
 - 操作结果的提交前一致性校验。
+
+`TestAssetIdempotencyRepository.add()` 和 `.complete()` 已在同一同步 Session 内工作，且自身不
+commit/rollback；Slice 7 必须沿用这一模型。不得在业务 commit 后启动第二个事务补写 completed
+winner。若 `.complete()` 未更新一条期望 generation 记录，或最终 winner 无法读取/验证，必须在
+第一个事务内 fail-closed 并 rollback。
 
 Repository 只查询、`add`、`flush` 或执行受限条件更新；不得 `commit`、`rollback`、持有全局
 Session、吞掉异常或启动独立事务。任何不可读 winner、丢失 Version、错误项目关系、损坏结果、
@@ -380,7 +415,7 @@ notification、search indexing、analytics、external audit export、webhook 和
 
 ### 11.7 超时、取消与失败语义
 
-1. 数据库超时、锁异常或未分类持久化异常必须使 `with session.begin()` 退出并 rollback；不得
+1. 数据库 timeout、deadlock、lock conflict 或未分类持久化异常必须使 `with session.begin()` 退出并 rollback；不得
    提交部分事实。实现只使用已批准的稳定领域错误，不能为了超时新增自由错误码。
 2. `expected_row_version`、唯一 Claim 或状态条件冲突必须由相应 CAS/约束转换为受控领域失败；
    不得用自动业务重试把陈旧命令变成成功。
@@ -390,6 +425,10 @@ notification、search indexing、analytics、external audit export、webhook 和
    不得再次执行业务命令。
 5. 任何 final fact validation 在 commit 前失败时，Version、ReviewRecord、Audit、Claim 和
    Idempotency result 必须共同回滚。
+6. 不得自动重试结果未知的完整领域事务；只有既有、受限的 idempotency generation CAS 接管可按
+   合同执行，且仍必须在新事务内重新校验 scope 与 winner 事实。
+7. HTTP request cancellation、disconnect 行为和 future `async def` Router 对同步 Service 的适配
+   明确延期至 Slice 8；Slice 7 不引入异步请求或后台执行语义。
 
 ### 11.8 执行模型测试与架构守卫
 
@@ -403,13 +442,13 @@ notification、search indexing、analytics、external audit export、webhook 和
 6. cancelled invocation before commit 不留下 completed idempotency 或其他核心事实；
 7. 新 Service 在事务内不执行 external I/O；
 8. AST 守卫拒绝 `FastAPI BackgroundTasks`、Celery、RQ、queue producer、worker module、
-   HTTP client、AI service 和 external notification service import；
+   `httpx`、`requests`、`aiohttp`、AI service 和 external notification service import；
 9. 移除 CAS 条件后的并发测试必须失败，作为 mutation-proof 等价负向证据。
 
 这些测试使用现有真实 SQLite/SQLAlchemy fixture；若无法以当前测试基础设施可靠模拟 timeout 或
 取消，则必须在实施前发起计划补正，而不是用 mock 或 skip 代替事务事实证明。
 
-## 12. 错误模型
+## 12. Error Model
 
 Slice 7 只产生既有结构化领域异常和 stage，不定义 HTTP 映射：
 
@@ -431,7 +470,7 @@ Slice 7 只产生既有结构化领域异常和 stage，不定义 HTTP 映射：
 不得使用 `HTTPException`、自由文本、`TypeError` 或数据库原始异常替代领域错误；不得把
 预期冲突转为 500 或将意外完整性错误伪装为成功。
 
-## 13. Audit 与可观测性设计
+## 13. Audit and Observability
 
 ### 13.1 事件矩阵
 
@@ -657,7 +696,7 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 
 | ID | 风险或待决策 | 处理方式 | 是否阻塞本计划 |
 |---|---|---|---|
-| S7-R01 | 干净基线中未能定位“Phase 0--1 产品决策与目标原型最终基线”文件。 | 计划不从缺失原型推导后端规则；实施授权前将文件位置或内容补入产品评审证据。 | 不阻塞本技术计划；若实施需依赖其新增业务规则则阻塞实现。 |
+| S7-R01 | 已批准的产品原型最终基线当前不在 `origin/dev` 的权威文档中。 | Slice 7 不从外部原型创造领域规则；在 Slice 8/11 前，单独建立产品决策、Figma Frame 与实现追踪文档。后端规则只来自 Phase 1 Specification 和仓库权威合同。 | 不阻塞本技术计划；若实施需依赖其新增业务规则则阻塞实现。 |
 | S7-R02 | 已有 Content Claim `add` 只接受 active Asset，而 restore 需要先重新获取 Claim。 | 仅增加第 4 节规定的受限恢复操作，并用跨项目/非 deleted/非 current/冲突测试限制。 | 不阻塞；是 S7-T02 的核心验收。 |
 | S7-R03 | 审核与转换状态容易被实现为同一字段或同一命令副作用。 | 通过独立 Service、Policy、CAS 和测试确保 Review 不改 conversion，Version 才按矩阵映射。 | 不阻塞；违反时阻塞 Closeout。 |
 | S7-R04 | SQLite 并发测试可能无法替代未来完整多数据库压力验证。 | Slice 7 使用真实 SQLite 事务和确定性 CAS/唯一约束测试；不声称替代后续集成/数据库验证。 | 不阻塞本 Slice；结果如不稳定则阻塞其验证。 |
@@ -666,7 +705,8 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 ### 19.2 Open Questions
 
 1. 产品原型最终基线的权威文件路径或可审查副本是什么；它是否引入任何不在 D-04、D-06、
-   D-07、D-08、D-10 中的后端行为？在获得该证据前，Slice 7 仅实施本文件已有合同。
+   D-07、D-08、D-10 中的后端行为？在获得该证据前，Slice 7 仅实施本文件已有合同，且
+   Slice 8/11 不得省略产品决策、Figma Frame 和实现追踪的独立治理记录。
 2. Slice 8 未来如何将服务结果绑定到既有 HTTP 错误 envelope 与公开响应 Schema，不由 Slice 7
    预先决定。
 3. 后续多数据库/多节点并发验收的环境、负载和成功阈值由哪份 Phase 1 后续合同定义，不由
