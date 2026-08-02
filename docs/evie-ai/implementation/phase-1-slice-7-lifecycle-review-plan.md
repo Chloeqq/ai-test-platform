@@ -37,6 +37,21 @@ ADR-0002
 但该产品原型最终基线文件未出现在干净 `origin/dev` 的可定位文档中。本计划不从缺失文件
 推导新的后端规则；它只采用本计划列出的、已由 Phase 1 合同明确的技术边界。
 
+### 1.1 Required Planning Content Index
+
+| 必需主题 | 本文位置 |
+|---|---|
+| Status / Objective / Contract evidence / Current implementation facts | 第 1--4 节。 |
+| In scope / Explicitly out of scope | 第 5--6 节。 |
+| Domain commands / Inputs and outputs / command idempotency | 第 7 节。 |
+| State transition matrix / Version semantics / Review semantics / Delete-restore semantics | 第 8--9 节。 |
+| Transaction boundaries / Concurrency and CAS / Authorization and project scope | 第 10 节。 |
+| Error model / Audit and observability | 第 11--12 节。 |
+| Repository changes / Service changes / Approved implementation file scope | 第 13 节。 |
+| Delivery tasks / Test matrix / Quality gate / Regression baseline | 第 14--16 节。 |
+| Review gates / Rollback strategy / Acceptance criteria | 第 17 节。 |
+| Risks / Open questions / Deferred decisions | 第 18 节。 |
+
 ## 2. Objective
 
 在不创建 HTTP API、前端页面、机器执行工件或新数据模型的前提下，实施两个唯一的后端
@@ -149,6 +164,27 @@ username、email、内部 `User.id` 或客户端字段推断：
 `TestAssetIntakeService` 继续是唯一新资产创建入口。Lifecycle / Review 服务不得通过任意
 辅助函数、Repository 直调、Router 或批处理入口创建新的 `TestAsset`。
 
+### 7.4 逐命令幂等边界
+
+所有下列命令都受 D-04 约束，必须使用 `project_code + operation_type + actor_or_client_id +
+idempotency_key` 作用域。相同 scope/key 且 request fingerprint 相同，必须返回已持久化的原
+业务结果；不同 fingerprint 必须返回 `EVIE_IDEMPOTENCY_CONFLICT`。completed replay 必须读取
+并验证 winner 的公开结果，不能仅因幂等记录存在便返回成功。失败事务不得保留 completed
+winner，过期 generation 仅按既有 Idempotency Repository CAS 接管。
+
+| 命令 | Idempotency key | operation type 和指纹受控字段 | Replay 结果与 winner | expected_row_version / CAS | 合同证据 |
+|---|---|---|---|---|---|
+| create version | 必填 | `create_version`；asset public ID、expected row version、规范化六项自然语言内容、规范化 optional reason。 | 原 Asset/新或 current Version public ID、`changed`、row version；winner result 必须持久化。 | 必填；Asset/Version/Claim CAS，row 冲突不自动重试。 | Specification 5、7、7.1；`request_fingerprint.py` `CreateVersionFingerprintInput`。 |
+| restore historical version | 必填 | `restore_historical_version`；asset public ID、历史 Version public ID、expected row version、规范化必填 reason。 | 原 Asset/新 Version public ID、`changed`、row version；winner result 必须持久化。 | 必填；只创建新 Version，不重指历史 Version。 | Specification 5、7；`RestoreHistoricalVersionFingerprintInput`。 |
+| approve | 必填 | `review_asset`；asset/version public ID、expected row version、`approve`、规范化 comment/reason。 | 原审核状态、Review Record public ID、row version；winner result 必须持久化。 | 必填；审核状态 CAS；不同 key 的重复最终转换是非法转换。 | Specification 5、8、8.1；`ReviewAssetFingerprintInput`。 |
+| reject | 必填 | `review_asset`；asset/version public ID、expected row version、`reject`、规范化 comment/reason。 | 原审核状态、Review Record public ID、row version；winner result 必须持久化。 | 必填；审核状态 CAS。 | Specification 5、8、8.1；`ReviewAssetFingerprintInput`。 |
+| reopen | 必填 | `review_asset`；asset/version public ID、expected row version、`reopen`、规范化 comment/reason。 | 原审核状态、Review Record public ID、row version；winner result 必须持久化。 | 必填；Policy 要求 reason，审核状态 CAS。 | Specification 5、8、8.1；`ReviewAssetFingerprintInput`。 |
+| delete | 必填 | `delete_asset`；asset public ID、expected row version、规范化必填 reason。 | 原 Asset public ID、`deleted=true`、row version；winner result 必须持久化。 | 必填；删除状态 CAS 与 Claim release 同事务。 | Specification 5、9；`DeleteAssetFingerprintInput`。 |
+| restore | 必填 | `restore_asset`；asset public ID、expected row version、规范化必填 reason。 | 原 Asset public ID、`deleted=false`、row version；winner result 必须持久化。 | 必填；先 Claim acquire，再恢复状态 CAS。 | Specification 5、9；`RestoreAssetFingerprintInput`。 |
+
+`approve`、`reject` 和 `reopen` 共享 `review_asset` operation type，但其 action、comment 和
+reason 都进入指纹，因此不是以 Slice 6 Intake 的创建机制替代审核合同。
+
 ## 8. 状态转换矩阵
 
 ### 8.1 review_status
@@ -184,7 +220,7 @@ Slice 7 不得引入 `failed` 或任意自由字符串。除 `processing` 和已
 | 当前状态 | 命令 | 结果 | Claim 规则 | 审计与幂等 |
 |---|---|---|---|---|
 | active | delete | 设置 `deleted_at`，row version +1；保留 current/source/review/version。 | 在同一事务中释放该资产的 current content claim。 | `asset_deleted`；成功 idempotency 结果在提交后完成。 |
-| deleted | delete with new key | 无变化，`EVIE_ASSET_DELETED` 或既有状态冲突语义。 | 无变化。 | 不新增成功 Audit。 |
+| deleted | delete with new key | 无变化，`EVIE_ASSET_STATE_CONFLICT`。 | 无变化。 | 不新增成功 Audit。 |
 | deleted | restore | 先重新获取 current content claim，再清除 `deleted_at`，row version +1。 | 若其他 active asset 已持有 fingerprint，返回 `EVIE_RESTORE_DUPLICATE_CONFLICT`。 | `asset_restored`；不创建版本。 |
 | active | restore with new key | 无变化，稳定状态冲突。 | 无变化。 | 不新增成功 Audit。 |
 | 任意状态 | 相同 idempotency key 与相同 fingerprint | 返回已完成原结果。 | 不重复释放/获取 claim。 | 不新增 Version、Review、Audit、Source 或 Claim。 |
@@ -263,7 +299,9 @@ Slice 7 只产生既有结构化领域异常和 stage，不定义 HTTP 映射：
 
 | 场景 | Error code | Stage | 语义 |
 |---|---|---|---|
-| 缺失/非 active Project 或非 admin scope | `EVIE_PROJECT_NOT_FOUND`、`EVIE_PROJECT_INACTIVE`、`EVIE_PROJECT_SCOPE_FORBIDDEN` | `PROJECT_SCOPE` / `AUTHORIZATION` | 在任何业务写入前 fail-closed。 |
+| project_code 缺失或格式非法 | `EVIE_REQUEST_VALIDATION_ERROR` | `REQUEST_VALIDATION` | 复用 `ProjectScopeService`，在任何业务写入前 fail-closed。 |
+| Project 不存在或非 active | `EVIE_PROJECT_NOT_FOUND`、`EVIE_PROJECT_INACTIVE` | `REQUEST_VALIDATION` | 复用 `ProjectScopeService`，不创建默认 Project。 |
+| 非 active global admin | `EVIE_PROJECT_SCOPE_FORBIDDEN` | `AUTHORIZATION` | 复用 `ProjectAccessAuthorizer`；不执行后续业务写入。 |
 | Asset 不存在或项目不匹配 | `EVIE_ASSET_NOT_FOUND` | `LIFECYCLE` / `REVIEW` | 不透露跨项目存在性。 |
 | 删除资产尝试编辑/审核 | `EVIE_ASSET_DELETED` | `LIFECYCLE` / `REVIEW` | 不修改任何事实。 |
 | `processing` 版本编辑、非法 delete/restore 状态 | `EVIE_ASSET_STATE_CONFLICT` | `LIFECYCLE` | 不创建 Version/Audit。 |
@@ -271,7 +309,7 @@ Slice 7 只产生既有结构化领域异常和 stage，不定义 HTTP 映射：
 | Version 不存在、非同一 asset 或非 current review target | `EVIE_VERSION_NOT_FOUND`、`EVIE_VERSION_SCOPE_MISMATCH`、`EVIE_REVIEW_VERSION_NOT_CURRENT` | `LIFECYCLE` / `REVIEW` | 不创建 Record/Audit。 |
 | 非法审核转换 | `EVIE_INVALID_REVIEW_TRANSITION` | `REVIEW` | 使用 Policy；重复新 key 不产生成功 Audit。 |
 | 内容 claim 冲突 | `EVIE_EXACT_DUPLICATE_CONFLICT`、`EVIE_RESTORE_DUPLICATE_CONFLICT` | `LIFECYCLE` | 保留旧 Claim，不产生局部 Version 或恢复。 |
-| 缺失 key 或指纹不匹配 | `EVIE_IDEMPOTENCY_KEY_REQUIRED`、`EVIE_IDEMPOTENCY_CONFLICT` | `IDEMPOTENCY` | 不执行第二次业务副作用。 |
+| 缺失 key 或指纹不匹配 | `EVIE_IDEMPOTENCY_KEY_REQUIRED`、`EVIE_IDEMPOTENCY_CONFLICT` | Lifecycle 命令使用 `LIFECYCLE`；review 命令使用 `REVIEW` | 不执行第二次业务副作用。 |
 | 不可读 winner、损坏/跨项目结果、关系或 checksum 不一致 | `EVIE_DATA_INTEGRITY_ERROR` | `LIFECYCLE` / `REVIEW` / `PERSISTENCE` | 回滚并给出安全、无敏感数据的错误。 |
 
 不得使用 `HTTPException`、自由文本、`TypeError` 或数据库原始异常替代领域错误；不得把
@@ -452,7 +490,17 @@ Slice 7 的 merge gate 是 required check `evie-ai-code-quality`。实现分支�
 
 ## 17. 交付、回滚与 Closeout 门
 
-### 17.1 交付节奏
+### 17.1 Review Gates
+
+| Gate | 进入条件 | 必须核验 | 不满足时的处理 |
+|---|---|---|---|
+| Plan review | 本文件 PR 已完成合同、符号、状态和文件范围审计。 | 所有第 1.1 节主题可定位；无未定义 error/stage/event/policy；Scope 不含 Slice 8。 | 修正计划；不得创建实施分支。 |
+| Pre-implementation review | 用户明确批准计划；从最新干净 `dev` 创建独立实施分支。 | 基线、允许文件、禁止文件、配置、唯一事实源、事务和测试计划。 | 合同/范围不一致时停止并请求补正。 |
+| Increment review | 每个 S7-T0x 的最小实现单元完成。 | 对应真实 SQLite 测试、Repository 无 commit/rollback、无直接 ORM 更新、架构守卫。 | 不合并后续任务；先修复当前单元。 |
+| PR review | 所有 S7-T0x 和完整测试矩阵完成。 | required quality check、zero new violations、完整 web-ui 与干净基线失败签名对比。 | 新回归、质量失败或范围异常时阻塞合并。 |
+| Closeout review | 实现 PR 已合并且独立只读审计完成。 | 第 17.4 节验收证据、PR/commit/测试/回归归因和用户批准。 | Slice 7 Closeout 保持 `Not completed`。 |
+
+### 17.2 交付节奏
 
 1. 用户批准本计划后，从最新干净 `dev` 创建独立 Slice 7 实施分支。
 2. 每个 S7-T0x 以最小可审查单元实现和验证；生产与对应测试保持同一逻辑提交。
@@ -460,7 +508,7 @@ Slice 7 的 merge gate 是 required check `evie-ai-code-quality`。实现分支�
 4. 实现合并后执行独立只读审查；所有验收项有真实证据后，才可提出 Slice 7 Closeout 文档。
 5. 用户明确批准 Closeout 前，Slice 7 Closeout 保持 `Not completed`。
 
-### 17.2 回滚策略
+### 17.3 回滚策略
 
 - 本 Slice 不含 Migration；因此不得以修改历史版本、直接数据库更新或删除审计记录作为回滚手段。
 - 在未合并 PR 阶段，回滚采用丢弃/反转该独立分支的未合并实现，由 Git 历史处理。
@@ -469,7 +517,7 @@ Slice 7 的 merge gate 是 required check `evie-ai-code-quality`。实现分支�
 - 业务数据纠正只能通过后续已批准的生命周期操作或受审计的专项迁移/运维程序进行；后者不属于
   Slice 7 自动授权范围。
 
-### 17.3 Slice 7 验收标准
+### 17.4 Slice 7 验收标准
 
 Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 
@@ -485,7 +533,9 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 上述条件不宣告 Phase 1 完成；完整 Phase 1 Closeout 仍受 Slice 8、Slice 9 及后续合同和
 用户决策约束。
 
-## 18. 风险、待决策与停止条件
+## 18. 风险、Open Questions 与 Deferred Decisions
+
+### 18.1 Risks
 
 | ID | 风险或待决策 | 处理方式 | 是否阻塞本计划 |
 |---|---|---|---|
@@ -495,7 +545,19 @@ Slice 7 只有同时满足以下条件，才可进入 Closeout 审计：
 | S7-R04 | SQLite 并发测试可能无法替代未来完整多数据库压力验证。 | Slice 7 使用真实 SQLite 事务和确定性 CAS/唯一约束测试；不声称替代后续集成/数据库验证。 | 不阻塞本 Slice；结果如不稳定则阻塞其验证。 |
 | S7-R05 | Slice 8 API 参数、HTTP 映射和前端交互尚未开始。 | 明确保留给 Slice 8；Service 仅返回类型化领域结果/错误，不预设 HTTP 行为。 | 不阻塞 Slice 7。 |
 
-### 18.1 Deferred Decisions
+### 18.2 Open Questions
+
+1. 产品原型最终基线的权威文件路径或可审查副本是什么；它是否引入任何不在 D-04、D-06、
+   D-07、D-08、D-10 中的后端行为？在获得该证据前，Slice 7 仅实施本文件已有合同。
+2. Slice 8 未来如何将服务结果绑定到既有 HTTP 错误 envelope 与公开响应 Schema，不由 Slice 7
+   预先决定。
+3. 后续多数据库/多节点并发验收的环境、负载和成功阈值由哪份 Phase 1 后续合同定义，不由
+   SQLite 单元集成测试推断。
+
+这些问题均不得改变本计划已明确的状态、事务、权限或错误边界；若答案要求改变它们，必须先
+进行计划补正和用户批准。
+
+### 18.3 Deferred Decisions
 
 以下决定明确延期，不由 Slice 7 计划或实现自行决定：
 
