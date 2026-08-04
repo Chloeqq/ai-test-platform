@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 
@@ -37,6 +38,15 @@ _VERSION_STALE_CONVERSION_STATUSES = (
     TestAssetConversionStatus.SUCCEEDED.value,
     TestAssetConversionStatus.STALE.value,
 )
+
+
+@dataclass(frozen=True)
+class ReviewStatusCasInput:
+    """审核状态条件更新的类型化输入。"""
+
+    expected_review_status: TestAssetReviewStatus
+    new_review_status: TestAssetReviewStatus
+    updated_by: str
 
 
 class TestAssetRepository(BaseRepository):
@@ -221,10 +231,9 @@ class TestAssetRepository(BaseRepository):
         project_code: str,
         test_asset_id: str,
         expected_row_version: int,
-        review_status: TestAssetReviewStatus,
-        updated_by: str,
+        status_update: ReviewStatusCasInput,
     ) -> bool:
-        """在 active 资产上条件更新审核状态，不触及转换状态。"""
+        """在 active 资产的指定审核状态上执行受限 CAS。"""
         statement = (
             update(TestAsset)
             .where(
@@ -232,11 +241,12 @@ class TestAssetRepository(BaseRepository):
                 TestAsset.test_asset_id == test_asset_id,
                 TestAsset.row_version == expected_row_version,
                 TestAsset.deleted_at.is_(None),
+                TestAsset.review_status == status_update.expected_review_status.value,
             )
             .values(
-                review_status=review_status.value,
+                review_status=status_update.new_review_status.value,
                 row_version=TestAsset.row_version + 1,
-                updated_by=updated_by,
+                updated_by=status_update.updated_by,
             )
         )
         return self._execute_conditional_update(statement)

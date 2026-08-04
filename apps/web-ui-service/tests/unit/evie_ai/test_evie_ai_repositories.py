@@ -51,6 +51,7 @@ from app.repositories.evie_ai import (
 from app.repositories.evie_ai import (
     TestAssetRepository as AssetRepository,
 )
+from app.repositories.evie_ai.test_asset_repository import ReviewStatusCasInput
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -143,6 +144,33 @@ def _bound_test_asset(
         updated_by="tester",
     )
     return test_asset, version
+
+
+def _asset_state(
+    test_asset: AssetModel,
+) -> tuple[int | None, str, str, int, datetime | None, str]:
+    deleted_at = test_asset.deleted_at
+    if deleted_at is not None:
+        deleted_at = deleted_at.replace(tzinfo=None)
+    return (
+        test_asset.current_version_pk,
+        test_asset.review_status,
+        test_asset.conversion_status,
+        test_asset.row_version,
+        deleted_at,
+        test_asset.updated_by,
+    )
+
+
+def _review_status_update(
+    expected_review_status: AssetReviewStatus,
+    new_review_status: AssetReviewStatus,
+) -> ReviewStatusCasInput:
+    return ReviewStatusCasInput(
+        expected_review_status=expected_review_status,
+        new_review_status=new_review_status,
+        updated_by="reviewer",
+    )
 
 
 def test_requirement_repository_add_query_versions_and_current_version(
@@ -474,8 +502,119 @@ def test_lifecycle_cas_does_not_update_cross_project_asset(
     assert test_asset.row_version == 1
 
 
-def test_review_status_cas_preserves_conversion_status(
+@pytest.mark.parametrize(
+    "conversion_status",
+    (
+        AssetConversionStatus.NOT_STARTED,
+        AssetConversionStatus.BLOCKED,
+    ),
+)
+def test_lifecycle_current_version_cas_resets_pending_conversion_status(
     evie_ai_session: Session,
+    conversion_status: AssetConversionStatus,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset, _ = _bound_test_asset(
+        repository,
+        asset_code=f"ASSET-LIFECYCLE-{conversion_status.value}",
+    )
+    test_asset.review_status = AssetReviewStatus.APPROVED.value
+    test_asset.conversion_status = conversion_status.value
+    next_version = repository.add_version(
+        _test_asset_version(test_asset.id, version_no=2)
+    )
+
+    assert repository.advance_current_version(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        version=next_version,
+        expected_row_version=1,
+        updated_by="reviewer",
+    )
+
+    evie_ai_session.refresh(test_asset)
+    assert test_asset.current_version_pk == next_version.id
+    assert test_asset.review_status == AssetReviewStatus.PENDING.value
+    assert test_asset.conversion_status == AssetConversionStatus.NOT_STARTED.value
+    assert test_asset.row_version == 2
+
+
+def test_lifecycle_current_version_cas_rejects_missing_asset_or_version(
+    evie_ai_session: Session,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset, _ = _bound_test_asset(
+        repository,
+        asset_code="ASSET-LIFECYCLE-MISSING",
+    )
+    next_version = repository.add_version(
+        _test_asset_version(test_asset.id, version_no=2)
+    )
+    state_before = _asset_state(test_asset)
+
+    assert not repository.advance_current_version(
+        project_code="project-a",
+        test_asset_id="ta_missing",
+        version=next_version,
+        expected_row_version=1,
+        updated_by="reviewer",
+    )
+    assert not repository.advance_current_version(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        version=_test_asset_version(test_asset.id, version_no=3),
+        expected_row_version=1,
+        updated_by="reviewer",
+    )
+
+    evie_ai_session.refresh(test_asset)
+    assert _asset_state(test_asset) == state_before
+
+
+@pytest.mark.parametrize(
+    ("conversion_status", "deleted_at"),
+    (
+        (AssetConversionStatus.PROCESSING, None),
+        (AssetConversionStatus.NOT_STARTED, datetime(2026, 8, 2, tzinfo=UTC)),
+    ),
+)
+def test_lifecycle_current_version_cas_rejects_processing_or_deleted_asset(
+    evie_ai_session: Session,
+    conversion_status: AssetConversionStatus,
+    deleted_at: datetime | None,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset, _ = _bound_test_asset(
+        repository,
+        asset_code=f"ASSET-LIFECYCLE-{conversion_status.value}",
+    )
+    test_asset.conversion_status = conversion_status.value
+    test_asset.deleted_at = deleted_at
+    next_version = repository.add_version(
+        _test_asset_version(test_asset.id, version_no=2)
+    )
+    evie_ai_session.flush()
+    state_before = _asset_state(test_asset)
+
+    assert not repository.advance_current_version(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        version=next_version,
+        expected_row_version=1,
+        updated_by="reviewer",
+    )
+
+    evie_ai_session.refresh(test_asset)
+    assert _asset_state(test_asset) == state_before
+
+
+@pytest.mark.parametrize(
+    "new_review_status",
+    (AssetReviewStatus.APPROVED, AssetReviewStatus.REJECTED),
+)
+def test_review_status_cas_updates_pending_asset(
+    evie_ai_session: Session,
+    new_review_status: AssetReviewStatus,
 ) -> None:
     repository = AssetRepository(evie_ai_session)
     test_asset, _ = _bound_test_asset(
@@ -489,21 +628,165 @@ def test_review_status_cas_preserves_conversion_status(
         project_code="project-a",
         test_asset_id=test_asset.test_asset_id,
         expected_row_version=1,
-        review_status=AssetReviewStatus.APPROVED,
-        updated_by="reviewer",
+        status_update=_review_status_update(
+            AssetReviewStatus.PENDING,
+            new_review_status,
+        ),
     )
+
+    evie_ai_session.refresh(test_asset)
+    assert test_asset.review_status == new_review_status.value
+    assert test_asset.conversion_status == AssetConversionStatus.SUCCEEDED.value
+    assert test_asset.row_version == 2
+
+
+@pytest.mark.parametrize(
+    ("current_review_status", "expected_review_status"),
+    (
+        (AssetReviewStatus.APPROVED, AssetReviewStatus.PENDING),
+        (AssetReviewStatus.REJECTED, AssetReviewStatus.PENDING),
+        (AssetReviewStatus.PENDING, AssetReviewStatus.APPROVED),
+    ),
+)
+def test_review_status_cas_requires_matching_current_status(
+    evie_ai_session: Session,
+    current_review_status: AssetReviewStatus,
+    expected_review_status: AssetReviewStatus,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset, _ = _bound_test_asset(
+        repository,
+        asset_code=f"ASSET-REVIEW-{current_review_status.value}",
+    )
+    test_asset.review_status = current_review_status.value
+    test_asset.conversion_status = AssetConversionStatus.SUCCEEDED.value
+    evie_ai_session.flush()
+    state_before = _asset_state(test_asset)
+
     assert not repository.compare_and_set_review_status(
         project_code="project-a",
         test_asset_id=test_asset.test_asset_id,
         expected_row_version=1,
-        review_status=AssetReviewStatus.REJECTED,
+        status_update=_review_status_update(
+            expected_review_status,
+            AssetReviewStatus.REJECTED,
+        ),
+    )
+
+    evie_ai_session.refresh(test_asset)
+    assert _asset_state(test_asset) == state_before
+
+
+def test_review_status_cas_rejects_stale_row_version(
+    evie_ai_session: Session,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset, _ = _bound_test_asset(
+        repository,
+        asset_code="ASSET-REVIEW-STALE",
+    )
+    state_before = _asset_state(test_asset)
+
+    assert not repository.compare_and_set_review_status(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        expected_row_version=2,
+        status_update=_review_status_update(
+            AssetReviewStatus.PENDING,
+            AssetReviewStatus.APPROVED,
+        ),
+    )
+
+    evie_ai_session.refresh(test_asset)
+    assert _asset_state(test_asset) == state_before
+
+
+def test_review_status_cas_rejects_cross_project_or_missing_asset(
+    evie_ai_session: Session,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset, _ = _bound_test_asset(
+        repository,
+        asset_code="ASSET-REVIEW-SCOPE",
+        project_code="project-b",
+    )
+    state_before = _asset_state(test_asset)
+    status_update = _review_status_update(
+        AssetReviewStatus.PENDING,
+        AssetReviewStatus.APPROVED,
+    )
+
+    assert not repository.compare_and_set_review_status(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        expected_row_version=1,
+        status_update=status_update,
+    )
+    assert not repository.compare_and_set_review_status(
+        project_code="project-a",
+        test_asset_id="ta_missing",
+        expected_row_version=1,
+        status_update=status_update,
+    )
+
+    evie_ai_session.refresh(test_asset)
+    assert _asset_state(test_asset) == state_before
+
+
+def test_review_status_cas_rejects_deleted_asset_without_changes(
+    evie_ai_session: Session,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset, _ = _bound_test_asset(
+        repository,
+        asset_code="ASSET-REVIEW-DELETED",
+    )
+    assert repository.compare_and_set_deleted_at(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        expected_row_version=1,
+        deleted_at=datetime(2026, 8, 2, tzinfo=UTC),
+        updated_by="reviewer",
+    )
+    state_before = _asset_state(test_asset)
+
+    assert not repository.compare_and_set_review_status(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        expected_row_version=2,
+        status_update=_review_status_update(
+            AssetReviewStatus.PENDING,
+            AssetReviewStatus.APPROVED,
+        ),
+    )
+
+    evie_ai_session.refresh(test_asset)
+    assert _asset_state(test_asset) == state_before
+
+
+def test_deleted_at_cas_rejects_stale_row_without_changing_asset(
+    evie_ai_session: Session,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset, _ = _bound_test_asset(
+        repository,
+        asset_code="ASSET-DELETED-STALE",
+    )
+    test_asset.review_status = AssetReviewStatus.APPROVED.value
+    test_asset.conversion_status = AssetConversionStatus.SUCCEEDED.value
+    evie_ai_session.flush()
+    state_before = _asset_state(test_asset)
+
+    assert not repository.compare_and_set_deleted_at(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        expected_row_version=2,
+        deleted_at=datetime(2026, 8, 2, tzinfo=UTC),
         updated_by="reviewer",
     )
 
     evie_ai_session.refresh(test_asset)
-    assert test_asset.review_status == AssetReviewStatus.APPROVED.value
-    assert test_asset.conversion_status == AssetConversionStatus.SUCCEEDED.value
-    assert test_asset.row_version == 2
+    assert _asset_state(test_asset) == state_before
 
 
 def test_deleted_current_version_is_available_only_to_restore_query(
@@ -521,6 +804,13 @@ def test_deleted_current_version_is_available_only_to_restore_query(
         test_asset_id=test_asset.test_asset_id,
         expected_row_version=1,
         deleted_at=deleted_at,
+        updated_by="reviewer",
+    )
+    assert not repository.compare_and_set_deleted_at(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        expected_row_version=2,
+        deleted_at=datetime(2026, 8, 3, tzinfo=UTC),
         updated_by="reviewer",
     )
     assert (
@@ -552,10 +842,88 @@ def test_deleted_current_version_is_available_only_to_restore_query(
         deleted_at=None,
         updated_by="reviewer",
     )
+    assert not repository.compare_and_set_deleted_at(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        expected_row_version=3,
+        deleted_at=None,
+        updated_by="reviewer",
+    )
 
     evie_ai_session.refresh(test_asset)
     assert test_asset.deleted_at is None
     assert test_asset.row_version == 3
+
+
+def test_deleted_current_version_restore_query_hides_ineligible_assets(
+    evie_ai_session: Session,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    active_asset, _ = _bound_test_asset(
+        repository,
+        asset_code="ASSET-RESTORE-ACTIVE",
+    )
+    deleted_asset, _ = _bound_test_asset(
+        repository,
+        asset_code="ASSET-RESTORE-OTHER-PROJECT",
+        project_code="project-b",
+    )
+    assert repository.compare_and_set_deleted_at(
+        project_code="project-b",
+        test_asset_id=deleted_asset.test_asset_id,
+        expected_row_version=1,
+        deleted_at=datetime(2026, 8, 2, tzinfo=UTC),
+        updated_by="reviewer",
+    )
+
+    assert (
+        repository.get_deleted_current_version_for_restore(
+            project_code="project-a",
+            test_asset_id=active_asset.test_asset_id,
+        )
+        is None
+    )
+    assert (
+        repository.get_deleted_current_version_for_restore(
+            project_code="project-a",
+            test_asset_id=deleted_asset.test_asset_id,
+        )
+        is None
+    )
+    assert (
+        repository.get_deleted_current_version_for_restore(
+            project_code="project-b",
+            test_asset_id="ta_missing",
+        )
+        is None
+    )
+
+
+def test_deleted_current_version_restore_query_fails_closed_without_pointer(
+    evie_ai_session: Session,
+) -> None:
+    repository = AssetRepository(evie_ai_session)
+    test_asset, _ = _bound_test_asset(
+        repository,
+        asset_code="ASSET-RESTORE-BROKEN-POINTER",
+    )
+    assert repository.compare_and_set_deleted_at(
+        project_code="project-a",
+        test_asset_id=test_asset.test_asset_id,
+        expected_row_version=1,
+        deleted_at=datetime(2026, 8, 2, tzinfo=UTC),
+        updated_by="reviewer",
+    )
+    test_asset.current_version_pk = None
+    evie_ai_session.flush()
+
+    assert (
+        repository.get_deleted_current_version_for_restore(
+            project_code="project-a",
+            test_asset_id=test_asset.test_asset_id,
+        )
+        is None
+    )
 
 
 def test_source_requirement_version_must_belong_to_requirement(
