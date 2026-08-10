@@ -7,7 +7,11 @@ from typing import Any, cast
 from sqlalchemy import delete, select, update
 from sqlalchemy.engine import CursorResult
 
-from app.models.evie_ai import TestAsset, TestAssetContentClaim
+from app.models.evie_ai import (
+    TestAsset,
+    TestAssetContentClaim,
+    TestAssetVersion,
+)
 from app.repositories.base import BaseRepository
 from app.repositories.evie_ai.errors import RepositoryDataIntegrityError
 
@@ -30,6 +34,65 @@ class TestAssetContentClaimRepository(BaseRepository):
         self.db.add(claim)
         self.db.flush()
         return claim
+
+    def acquire_for_deleted_asset_restore(
+        self,
+        *,
+        project_code: str,
+        test_asset_id: str,
+        test_asset_version_id: str,
+        content_fingerprint: str,
+    ) -> TestAssetContentClaim | None:
+        """仅为已删除资产恢复重新获取其 current content claim。"""
+        asset = self._get_deleted_asset_for_restore(
+            project_code=project_code,
+            test_asset_id=test_asset_id,
+            test_asset_version_id=test_asset_version_id,
+            content_fingerprint=content_fingerprint,
+        )
+        if asset is None:
+            return None
+
+        if self.get_by_test_asset_pk(asset.id, for_update=True) is not None:
+            raise RepositoryDataIntegrityError(
+                message="deleted test asset must not retain a content claim",
+                entity_id=test_asset_id,
+            )
+
+        claim = TestAssetContentClaim(
+            test_asset_pk=asset.id,
+            project_code=project_code,
+            content_fingerprint=content_fingerprint,
+        )
+        self.db.add(claim)
+        self.db.flush()
+        return claim
+
+    def _get_deleted_asset_for_restore(
+        self,
+        *,
+        project_code: str,
+        test_asset_id: str,
+        test_asset_version_id: str,
+        content_fingerprint: str,
+    ) -> TestAsset | None:
+        statement = (
+            select(TestAsset)
+            .join(
+                TestAssetVersion,
+                TestAsset.current_version_pk == TestAssetVersion.id,
+            )
+            .where(
+                TestAsset.project_code == project_code,
+                TestAsset.test_asset_id == test_asset_id,
+                TestAsset.deleted_at.is_not(None),
+                TestAssetVersion.test_asset_version_id == test_asset_version_id,
+                TestAssetVersion.test_asset_pk == TestAsset.id,
+                TestAssetVersion.content_checksum == content_fingerprint,
+            )
+            .with_for_update()
+        )
+        return self.db.execute(statement).scalar_one_or_none()
 
     def get_by_project_and_fingerprint(
         self,
