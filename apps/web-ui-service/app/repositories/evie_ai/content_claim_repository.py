@@ -76,6 +76,7 @@ class TestAssetContentClaimRepository(BaseRepository):
         test_asset_version_id: str,
         content_fingerprint: str,
     ) -> TestAsset | None:
+        """锁定并读取满足恢复 Claim 前置条件的已删除资产。"""
         statement = (
             select(TestAsset)
             .join(

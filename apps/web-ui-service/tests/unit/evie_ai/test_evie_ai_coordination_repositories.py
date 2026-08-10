@@ -49,6 +49,7 @@ def _bound_asset(
     project_code: str = PROJECT_CODE,
     content_fingerprint: str | None = None,
 ) -> tuple[AssetModel, AssetVersionModel]:
+    """构造带首版本和 current pointer 的真实测试资产。"""
     repository = AssetRepository(session)
     asset = repository.add(make_asset(project_code=project_code))
     version = make_asset_version(asset.id)
@@ -62,6 +63,7 @@ def _bound_asset(
 def _asset_state(
     asset: AssetModel,
 ) -> tuple[int | None, str, str, int, datetime | None]:
+    """提取恢复 Claim 拒绝路径中不得改变的聚合事实。"""
     deleted_at = asset.deleted_at
     if deleted_at is not None:
         deleted_at = deleted_at.replace(tzinfo=None)
@@ -81,6 +83,7 @@ def _assert_restore_acquire_has_no_side_effects(
     state_before: tuple[int | None, str, str, int, datetime | None],
     claim_count_before: int,
 ) -> None:
+    """重新读取数据库并断言拒绝恢复 Claim 时没有持久化副作用。"""
     session.expire_all()
     asset = session.get(AssetModel, asset_pk)
     assert asset is not None
@@ -324,6 +327,7 @@ def test_content_claim_unique_conflict_preserves_existing_claim_after_rollback(
 def test_restore_only_claim_acquire_accepts_deleted_current_version(
     evie_ai_session: Session,
 ) -> None:
+    """已删除资产仅可为 current Version 的匹配指纹重新占用 Claim。"""
     asset_repository = AssetRepository(evie_ai_session)
     asset, version = _bound_asset(evie_ai_session)
     assert asset_repository.compare_and_set_deleted_at(
@@ -357,6 +361,7 @@ def test_restore_only_claim_acquire_accepts_deleted_current_version(
 def test_restore_only_claim_acquire_rejects_active_asset_without_side_effects(
     evie_ai_session: Session,
 ) -> None:
+    """活动资产不得通过恢复专用入口绕过普通 Claim 规则。"""
     asset, version = _bound_asset(evie_ai_session)
     state_before = _asset_state(asset)
 
@@ -385,6 +390,7 @@ def test_restore_only_claim_acquire_hides_cross_project_and_missing_assets(
     project_code: str,
     test_asset_id: str | None,
 ) -> None:
+    """跨项目和不存在资产统一返回 None，且不泄露或写入任何事实。"""
     asset_repository = AssetRepository(evie_ai_session)
     asset, version = _bound_asset(evie_ai_session)
     assert asset_repository.compare_and_set_deleted_at(
@@ -415,6 +421,7 @@ def test_restore_only_claim_acquire_hides_cross_project_and_missing_assets(
 def test_restore_only_claim_acquire_rejects_historical_version_without_side_effects(
     evie_ai_session: Session,
 ) -> None:
+    """历史 Version 不能作为 deleted Asset 的恢复 Claim 来源。"""
     asset_repository = AssetRepository(evie_ai_session)
     asset, historical_version = _bound_asset(evie_ai_session)
     current_version = asset_repository.add_version(
@@ -455,6 +462,7 @@ def test_restore_only_claim_acquire_rejects_historical_version_without_side_effe
 def test_restore_only_claim_acquire_rejects_foreign_version_without_side_effects(
     evie_ai_session: Session,
 ) -> None:
+    """其他资产的 Version 不能为目标资产获取恢复 Claim。"""
     asset_repository = AssetRepository(evie_ai_session)
     asset, _ = _bound_asset(evie_ai_session)
     other_asset, other_version = _bound_asset(evie_ai_session)
@@ -487,6 +495,7 @@ def test_restore_only_claim_acquire_rejects_foreign_version_without_side_effects
 def test_restore_only_claim_acquire_rejects_corrupted_current_pointer(
     evie_ai_session: Session,
 ) -> None:
+    """损坏 current pointer 必须 fail-closed，不能生成新的 Claim。"""
     asset_repository = AssetRepository(evie_ai_session)
     asset, _ = _bound_asset(evie_ai_session)
     _, foreign_version = _bound_asset(evie_ai_session)
@@ -520,6 +529,7 @@ def test_restore_only_claim_acquire_rejects_corrupted_current_pointer(
 def test_restore_only_claim_acquire_rejects_mismatched_fingerprint(
     evie_ai_session: Session,
 ) -> None:
+    """调用方指纹必须严格匹配 current Version 的已存 checksum。"""
     asset_repository = AssetRepository(evie_ai_session)
     asset, version = _bound_asset(evie_ai_session)
     assert asset_repository.compare_and_set_deleted_at(
@@ -550,6 +560,7 @@ def test_restore_only_claim_acquire_rejects_mismatched_fingerprint(
 def test_restore_only_claim_acquire_preserves_foreign_claim_on_unique_conflict(
     evie_ai_session: Session,
 ) -> None:
+    """唯一冲突必须保留其他活动资产已经占用的 Claim。"""
     asset_repository = AssetRepository(evie_ai_session)
     restoring_asset, restoring_version = _bound_asset(evie_ai_session)
     owner_asset, _ = _bound_asset(
@@ -598,6 +609,7 @@ def test_restore_only_claim_acquire_preserves_foreign_claim_on_unique_conflict(
 def test_restore_only_claim_acquire_rejects_retained_deleted_asset_claim(
     evie_ai_session: Session,
 ) -> None:
+    """已删除资产残留自身 Claim 属于数据完整性错误，不是幂等成功。"""
     asset, version = _bound_asset(evie_ai_session)
     claim_repository = ContentClaimRepository(evie_ai_session)
     claim_repository.add(
